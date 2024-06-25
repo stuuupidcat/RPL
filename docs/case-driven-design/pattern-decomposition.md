@@ -67,7 +67,7 @@ fn_name: {ident | p(self, _)}
 t: ident
 
 p3: pat(fn_name, T, t) = 
-    pub fn $fn_name <..., $T:Debug, ...> (..., $t: $T, ...) {
+    pub fn $fn_name <$T> ($t: $T) {
         println!("{:?}", $t);
     }
 ```
