@@ -20,3 +20,54 @@ fn f<A, B:Debug>(a: A, b: B) {
 ```
 
 ## 设计
+
+问题分解：
+
+- 函数
+- 满足 trait bound 的范型参数
+
+可能产生的问题：
+
+1. `Debug` or `std::fmt::Debug`? 如何处理？
+2. 像refinement type一样的约束在哪儿写？
+3. pat的类型是否有意义？
+4. `where $T:Debug` 能否匹配 `where T1:Debug + Clone`？能否匹配`where T1:Debug, T2:Clone`？
+
+```rust
+// func_trait_bound.pat
+
+T: type
+G: GArgs // type | lifetime
+fn_name: ident
+
+p1: pat(fn_name, T) =
+    pub fn $fn_name <$T:Debug> (...) {...}
+
+p2: pat(fn_name, T) =
+    pub fn $fn_name <..., $T, ...> (...)
+    where $T:Debug {
+        ...
+    }
+
+p2_: pat(fn_name, T) =
+    pub fn $fn_name <$G> (...) 
+    where $T:only!(Debug)
+    {
+        ...
+    }
+
+p: pat(fn_name, T) = p1 | p2
+```
+
+```rust
+use p in func_trait_bound.pat
+
+T: {type | p(_, self)}
+fn_name: {ident | p(self, _)}
+t: ident
+
+p3: pat(fn_name, T, t) = 
+    pub fn $fn_name <..., $T:Debug, ...> (..., $t: $T, ...) {
+        println!("{:?}", $t);
+    }
+```
