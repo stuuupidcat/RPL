@@ -1,8 +1,8 @@
-# 模式分解 (pattern-decomposition)
+# smart or stupid
 
 ## 任务
 
-设计语法，完成如下任务，并在其中使用模式分解。
+设计语法，完成如下任务
 
 匹配一个函数，其满足如下条件：
 
@@ -39,37 +39,49 @@ fn f<A, B:Debug>(a: A, b: B) {
 > 3. pattern 应该是有类型的，比如一个 item 类型的 pattern 就不太能插在表达式里；但是这种类型上的意义其实可以不用着急做检测，因为错误的本来就匹配不到结果；结论是可以不做类型
 > 4. where 的结构类似 struct 中的元组（即：未写出的可能存在，写出的不保证顺序），所以你问的两个问题的答案应该都是肯定的；如果要强制否定的话需要引入特别的语法，例如 where T!: Debug 表示 T 就只有 Debug，不能有别的，这种情况下第一个匹配不成立，第二个匹配依然成立（! 的写法可以讨论，only!()?)
 
-```rust
-// func_trait_bound.pat
 
-T: type
-G: GArgs // type | lifetime
-fn_name: ident
+### 方案一：
 
-p1: pat(fn_name, T) =
-    pub fn $fn_name <$T:Debug> (...) {...}
+原则：提供内置函数描述有关Rust trait的模式，以提高其特殊性：
 
-p2: pat(fn_name, T) =
-    pub fn $fn_name <$G:GArgs> (...)
-    where $T:Debug {
-        ...
-    }
-
-// p2 对应着问题 4，且引入了一些新的问题：
-// 注意到：G可能为空，即范型参数T由函数外层可能存在的impl引入。
-
-p: pat(fn_name, T) = p1 | p2
-```
-
-```rust
-use p in func_trait_bound.pat
-
-T: {type | p(_, self)}
-fn_name: {ident | p(self, _)}
+````Rust
 t: ident
+T: type
+func: ident
 
-p3: pat(fn_name, T, t) =
-    pub fn $fn_name <$T> ($t: $T) {
-        println!("{:?}", $t);
-    }
+p = ```rust
+    pub fn $func<$$(_:GArgs)>($t:$T) {
+        assert_impl!($T, Debug)
+    	println!("{:?}", $t);    
+	}
 ```
+````
+
+### 方案二：
+
+一个更具通用性的方案：
+
+````rust
+t: ident
+T: type
+func: ident
+
+p1 = ```rust
+	pub fn $func<$T:Debug>($t:$T) {
+    	println!("{:?}", $t);    
+	}
+```
+
+p2 = ```rust
+	pub fn $func<$T>($t:$T) 
+	where
+		$T:Debug
+	{
+		println!("{:?}", $t); 
+	}
+```
+
+p = p1 | p2
+
+````
+
