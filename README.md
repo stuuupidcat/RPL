@@ -1,2 +1,2 @@
-# Fyna 🐱
-A pattern language for Rust.
+# RPL
+Rust Pattern Language.
