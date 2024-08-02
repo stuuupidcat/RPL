@@ -1,0 +1,79 @@
+[workspace]
+members = [
+    "crates/rpl_driver",
+    "crates/rpl_interface",
+    "crates/rpl_patterns",
+    "./"
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+description = "Rust Pattern Language"
+publish = false
+license = "MIT OR Apache-2.0"
+keywords = ["Bug detection"]
+repository = "https://github.com/stuuupidcat/RPL"
+
+[workspace.dependencies]
+rpl_driver = { path = "./crates/rpl_driver" }
+rpl_interface = { path = "./crates/rpl_interface" }
+rpl_patterns = { path = "./crates/rpl_patterns" }
+rustc_tools_util = "0.3.0"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.7.3"
+arrayvec = { version = "0.7", default-features = false }
+itertools = "0.12"
+rustc-semver = "1.1"
+walkdir = "2.3"
+quote = "1.0"
+syn = "2.0"
+tracing = "0.1.28"
+
+[package]
+name = "rpl"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "cargo-rpl"
+test = false
+path = "src/main.rs"
+
+[[bin]]
+name = "rpl-driver"
+path = "src/driver.rs"
+
+[dependencies]
+rpl_interface = { workspace = true }
+rustc_tools_util = { workspace = true }
+color-print = "0.3.4"
+anstream = "0.6.0"
+
+[dev-dependencies]
+ui_test = "0.22.2"
+tester = "0.9"
+regex = "1.5"
+toml = { workspace = true }
+walkdir = { workspace = true }
+# This is used by the `collect-metadata` alias.
+filetime = "0.2"
+itertools = "0.12"
+
+# UI test dependencies
+if_chain = "1.0"
+quote = { workspace = true }
+serde = { workspace = true }
+syn = { workspace = true, features = ["full"] }
+futures = "0.3"
+parking_lot = "0.12"
+tracing = { workspace = true }
+log = "0.4"
+
+[package.metadata.rust-analyzer]
+# This package uses #[feature(rustc_private)]
+rustc_private = true
+
+[[test]]
+name = "compile-test"
+harness = false
