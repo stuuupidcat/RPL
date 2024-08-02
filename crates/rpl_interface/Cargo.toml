@@ -1,0 +1,18 @@
+[package]
+name = "rpl_interface"
+version.workspace = true
+description.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[dependencies]
+rpl_driver = { workspace = true }
+rpl_patterns = { workspace = true }
+
+[features]
+
+[package.metadata.rust-analyzer]
+# This crate uses #[feature(rustc_private)]
+rustc_private = true
