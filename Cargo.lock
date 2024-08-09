@@ -850,8 +850,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rpl_mir_pattern"
+version = "0.1.0"
+
+[[package]]
 name = "rpl_patterns"
 version = "0.1.0"
+dependencies = [
+ "rpl_mir_pattern",
+]
 
 [[package]]
 name = "rustc-demangle"

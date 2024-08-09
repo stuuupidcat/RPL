@@ -1,23 +1,36 @@
-error: it is unsound to cast any type to a slice
-  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:12:1
+error: it is unsound to cast any slice `&[T]` to a byte slice `&[u8]`
+  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:22:13
    |
-LL |   pub trait ComponentBytes<T: Copy + Send + Sync + 'static>
-   |   ^  - help: change this trait to an `unsafe` trait: `unsafe`
-   |  _|
-   | |
-LL | | where
-LL | |     Self: ComponentSlice<T>,
-LL | | {
-...  |
-LL | |     fn as_bytes(&self) -> &[u8] {
-   | |     --------------------------- method `as_bytes` casts `&self` to `&[u8]`
-...  |
-LL | |     fn as_bytes_mut(&mut self) -> &mut [u8] {
-   | |     --------------------------------------- method `as_bytes_mut` casts `&mut self` to `&mut [u8]`
-...  |
-LL | |     }
-LL | | }
-   | |_^
+LL | /             core::slice::from_raw_parts(
+LL | |
+LL | |                 slice.as_ptr() as *const _,
+LL | |                 slice.len() * core::mem::size_of::<T>(),
+LL | |             )
+   | |_____________^
+   |
+note: trying to cast from this value of `&[T]` type
+  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:19:21
+   |
+LL |         let slice = self.as_slice();
+   |                     ^^^^^^^^^^^^^^^
 
-error: aborting due to 1 previous error
+error: it is unsound to cast any slice `&mut [T]` to a byte slice `&mut [u8]`
+  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:34:9
+   |
+LL | /         unsafe {
+LL | |
+LL | |             core::slice::from_raw_parts_mut(
+LL | |                 slice.as_mut_ptr() as *mut _,
+LL | |                 slice.len() * core::mem::size_of::<T>(),
+LL | |             )
+LL | |         }
+   | |_________^
+   |
+note: trying to cast from this value of `&mut [T]` type
+  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:32:21
+   |
+LL |         let slice = self.as_mut_slice();
+   |                     ^^^^^^^^^^^^^^^^^^^
+
+error: aborting due to 2 previous errors
 
