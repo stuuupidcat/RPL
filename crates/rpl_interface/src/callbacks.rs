@@ -106,7 +106,7 @@ impl rustc_driver::Callbacks for RplCallbacks {
         // Detecting side effects depends on some phases of MIR optimizations.
         // Analyzing unused assigments of non-volatile variables depends on an unoptimized version of
         // iterators.
-        config.opts.unstable_opts.mir_opt_level = Some(2);
+        config.opts.unstable_opts.mir_opt_level = Some(3);
 
         // Disable flattening and inlining of format_args!(), so the HIR matches with the AST.
         config.opts.unstable_opts.flatten_format_args = false;
