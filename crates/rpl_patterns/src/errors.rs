@@ -1,22 +1,29 @@
-use rustc_macros::{Diagnostic, Subdiagnostic};
-use rustc_span::{Span, Symbol};
+use rustc_errors::IntoDiagArg;
+use rustc_macros::Diagnostic;
+use rustc_middle::ty::{self, Ty};
+use rustc_span::Span;
 
 #[derive(Diagnostic)]
-#[diag(rpl_patterns_unsound_as_bytes_trait)]
-pub struct UnsoundAsBytesTrait {
+#[diag(rpl_patterns_unsound_slice_cast)]
+pub struct UnsoundSliceCast<'tcx> {
+    #[note]
+    pub cast_from: Span,
     #[primary_span]
-    pub span: Span,
-    #[subdiagnostic]
-    pub as_bytes: Vec<UnsoundAsBytesMethod>,
-    #[suggestion(code = " unsafe")]
-    pub unsafe_sugg: Span,
+    pub cast_to: Span,
+    pub ty: Ty<'tcx>,
+    pub mutability: Mutability,
 }
 
-#[derive(Subdiagnostic)]
-#[label(rpl_patterns_unsound_as_bytes_method)]
-pub struct UnsoundAsBytesMethod {
-    #[primary_span]
-    pub span: Span,
-    pub name: Symbol,
-    pub ref_mutbly: &'static str,
+pub struct Mutability(ty::Mutability);
+
+impl From<ty::Mutability> for Mutability {
+    fn from(mutability: ty::Mutability) -> Self {
+        Self(mutability)
+    }
+}
+
+impl IntoDiagArg for Mutability {
+    fn into_diag_arg(self) -> rustc_errors::DiagArgValue {
+        self.0.prefix_str().into_diag_arg()
+    }
 }
