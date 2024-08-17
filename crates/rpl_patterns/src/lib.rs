@@ -19,10 +19,11 @@ use rustc_middle::ty::TyCtxt;
 pub(crate) mod errors;
 
 mod cve_2020_25016;
+mod cve_2020_35873;
 
 rustc_fluent_macro::fluent_messages! { "../messages.en.ftl" }
 
-static ALL_PATTERNS: &[fn(TyCtxt<'_>, ItemId)] = &[cve_2020_25016::check_item];
+static ALL_PATTERNS: &[fn(TyCtxt<'_>, ItemId)] = &[cve_2020_25016::check_item, cve_2020_35873::check_item];
 
 pub fn check_item(tcx: TyCtxt<'_>, item: ItemId) {
     rustc_data_structures::sync::par_for_each_in(ALL_PATTERNS, |check| check(tcx, item))

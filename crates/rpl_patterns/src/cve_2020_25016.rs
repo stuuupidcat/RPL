@@ -54,27 +54,24 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
             let mut mcx = CheckMirCtxt::new(self.tcx, body);
             let pattern = pattern(self.tcx, &mut mcx.patterns);
             mcx.check();
-            use std::ops::ControlFlow::{Break, Continue};
-            let match_span = |pat| {
-                mcx.patterns.try_for_matched_patterns(pat, |mat| match mat.span(body) {
-                    Some(span) => Break(span),
-                    None => Continue(()),
-                })
-            };
+            let match_span = |pat| mcx.patterns.first_matched_span(body, pat);
             let cast_from = match_span(pattern.cast_from);
             let cast_from_mut = match_span(pattern.cast_from_mut);
             let cast_to = match_span(pattern.cast_to);
             let cast_to_mut = match_span(pattern.cast_to_mut);
-            let ty = mcx.patterns.try_for_matched_types(pattern.ty_var, |ty| {
-                if !ty.is_primitive() && is_all_safe_trait(self.tcx, self.tcx.predicates_of(def_id), ty) {
-                    return Break(ty);
-                }
-                Continue(())
-            });
+            let ty = mcx
+                .patterns
+                .try_for_matched_types(pattern.ty_var, |ty| {
+                    if !ty.is_primitive() && is_all_safe_trait(self.tcx, self.tcx.predicates_of(def_id), ty) {
+                        return Err(ty);
+                    }
+                    Ok(())
+                })
+                .err();
             debug!(?cast_from, ?cast_from_mut, ?cast_to, ?cast_to_mut, ?ty);
-            if let Break(ty) = ty {
-                if let Break(cast_from) = cast_from
-                    && let Break(cast_to) = cast_to
+            if let Some(ty) = ty {
+                if let Some(cast_from) = cast_from
+                    && let Some(cast_to) = cast_to
                 {
                     self.tcx.dcx().emit_err(crate::errors::UnsoundSliceCast {
                         cast_from,
@@ -82,8 +79,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
                         ty,
                         mutability: ty::Mutability::Not.into(),
                     });
-                } else if let Break(cast_from) = cast_from_mut
-                    && let Break(cast_to) = cast_to_mut
+                } else if let Some(cast_from) = cast_from_mut
+                    && let Some(cast_to) = cast_to_mut
                 {
                     self.tcx.dcx().emit_err(crate::errors::UnsoundSliceCast {
                         cast_from,
@@ -165,10 +162,10 @@ fn pattern<'tcx>(tcx: TyCtxt<'tcx>, patterns: &mut pat::Patterns<'tcx>) -> Patte
     let to_mut_raw_slice = patterns.mk_local(u8_slice_mut_ptr_ty);
     let to_slice = patterns.mk_local(u8_slice_ref_ty).into_place();
     let to_mut_slice = patterns.mk_local(u8_slice_mut_ty).into_place();
-    let from_slice_deref = patterns.mk_place(tcx, from_slice, &[mir::ProjectionElem::Deref]);
-    let from_mut_slice_deref = patterns.mk_place(tcx, from_mut_slice, &[mir::ProjectionElem::Deref]);
-    let to_raw_slice_deref = patterns.mk_place(tcx, to_raw_slice, &[mir::ProjectionElem::Deref]);
-    let to_mut_raw_slice_deref = patterns.mk_place(tcx, to_mut_raw_slice, &[mir::ProjectionElem::Deref]);
+    let from_slice_deref = patterns.mk_place(from_slice, (tcx, &[pat::PlaceElem::Deref]));
+    let from_mut_slice_deref = patterns.mk_place(from_mut_slice, (tcx, &[pat::PlaceElem::Deref]));
+    let to_raw_slice_deref = patterns.mk_place(to_raw_slice, (tcx, &[pat::PlaceElem::Deref]));
+    let to_mut_raw_slice_deref = patterns.mk_place(to_mut_raw_slice, (tcx, &[pat::PlaceElem::Deref]));
 
     let cast_from = patterns.mk_init(from_slice);
     let cast_from_mut = patterns.mk_init(from_mut_slice);
