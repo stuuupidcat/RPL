@@ -21,7 +21,10 @@ extern crate tracing;
 
 pub mod pattern;
 
+use std::iter::zip;
+
 use rustc_index::bit_set::BitSet;
+use rustc_index::Idx;
 use rustc_middle::ty::TyCtxt;
 use rustc_middle::{mir, ty};
 
@@ -45,11 +48,40 @@ impl<'tcx> CheckMirCtxt<'tcx> {
     pub fn check(&mut self) {
         self.check_args();
         let mut visited = BitSet::new_empty(self.body.basic_blocks.len());
-        for (block, block_data) in self.body.basic_blocks.iter_enumerated() {
-            if !visited.insert(block) {
+        let mut block = Some(mir::START_BLOCK);
+        let next_block = |b: mir::BasicBlock| {
+            if b.as_usize() + 1 == self.body.basic_blocks.len() {
+                mir::START_BLOCK
+            } else {
+                b.plus(1)
+            }
+        };
+        let mut num_visited = 0;
+        while let Some(b) = block {
+            if !visited.insert(b) {
+                debug!("skip visited block {b:?}");
+                block = Some(next_block(b));
                 continue;
             }
-            self.check_block(block, block_data);
+            let matched = self.check_block(b).is_some();
+            let &mut b = block.insert(match self.body[b].terminator().edges() {
+                mir::TerminatorEdges::None => next_block(b),
+                mir::TerminatorEdges::Single(next) => next,
+                mir::TerminatorEdges::Double(next, _) => next,
+                mir::TerminatorEdges::AssignOnReturn { return_: &[next], .. } => next,
+                _ => next_block(b),
+                // mir::TerminatorEdges::AssignOnReturn { .. } => todo!(),
+                // mir::TerminatorEdges::SwitchInt { targets, discr } => todo!(),
+            });
+            debug!("jump to block {b:?}");
+            if matched {
+                visited.remove(b);
+            }
+            num_visited += 1;
+            if num_visited >= self.body.basic_blocks.len() {
+                debug!("all blocks has been visited");
+                break;
+            }
         }
     }
 
@@ -66,22 +98,18 @@ impl<'tcx> CheckMirCtxt<'tcx> {
         }
     }
 
-    #[instrument(level = "info", skip_all, fields(?block))]
-    fn check_block(
-        &mut self,
-        block: mir::BasicBlock,
-        block_data: &'tcx mir::BasicBlockData<'tcx>,
-    ) -> Option<mir::TerminatorEdges<'tcx, 'tcx>> {
-        debug!("BasicBlock: {}", {
+    #[instrument(level = "info", skip(self))]
+    fn check_block(&mut self, block: mir::BasicBlock) -> Option<pat::MatchIdx> {
+        info!("BasicBlock: {}", {
             let mut buffer = Vec::new();
             mir::pretty::write_basic_block(self.tcx, block, self.body, &mut |_, _| Ok(()), &mut buffer).unwrap();
             String::from_utf8_lossy(&buffer).into_owned()
         });
-        for (statement_index, statement) in block_data.statements.iter().enumerate() {
+        for (statement_index, statement) in self.body[block].statements.iter().enumerate() {
             let location = mir::Location { block, statement_index };
             self.check_statement(location, statement);
         }
-        self.check_terminator(block, block_data.terminator())
+        self.check_terminator(block, self.body[block].terminator())
     }
 
     fn check_statement(&mut self, location: mir::Location, statement: &mir::Statement<'tcx>) {
@@ -91,14 +119,16 @@ impl<'tcx> CheckMirCtxt<'tcx> {
         &mut self,
         block: mir::BasicBlock,
         terminator: &'tcx mir::Terminator<'tcx>,
-    ) -> Option<mir::TerminatorEdges<'tcx, 'tcx>> {
-        self.match_terminator(block, terminator).map(|_| terminator.edges())
+    ) -> Option<pat::MatchIdx> {
+        self.match_terminator(block, terminator)
     }
 }
 
 impl<'tcx> CheckMirCtxt<'tcx> {
     pub fn match_local(&self, pat: pat::LocalIdx, local: mir::Local) -> bool {
-        self.patterns.match_local(self.tcx, self.body, pat, local)
+        let matched = self.patterns.match_local(self.tcx, self.body, pat, local);
+        debug!(?pat, ?local, matched, "match_local");
+        matched
     }
     pub fn match_place(&self, pat: pat::Place<'tcx>, place: mir::Place<'tcx>) -> bool {
         self.match_place_ref(pat, place.as_ref())
@@ -107,7 +137,7 @@ impl<'tcx> CheckMirCtxt<'tcx> {
         self.patterns.match_place_ref(self.tcx, self.body, pat, place)
     }
 
-    #[instrument(level = "debug", skip(self))]
+    #[instrument(level = "info", skip(self))]
     pub fn match_statement(
         &mut self,
         location: mir::Location,
@@ -134,14 +164,14 @@ impl<'tcx> CheckMirCtxt<'tcx> {
             if !matched {
                 continue;
             }
-            debug!("{pat:?} {:?} matched", pattern.kind);
+            info!("matched {pat:?}: {:?}", pattern.kind);
             let new_mat = self.patterns.add_match(pat, pat::MatchKind::Statement(location));
             _ = mat.get_or_insert(new_mat);
         }
         mat
     }
 
-    #[instrument(level = "debug", skip(self, terminator), fields(terminator = ?terminator.kind))]
+    #[instrument(level = "info", skip(self, terminator), fields(terminator = ?terminator.kind))]
     pub fn match_terminator(
         &mut self,
         block: mir::BasicBlock,
@@ -149,29 +179,51 @@ impl<'tcx> CheckMirCtxt<'tcx> {
     ) -> Option<pat::MatchIdx> {
         let mut mat = None;
         for (pat, pattern) in self.patterns.ready_patterns() {
-            match pattern.kind {
-                pat::PatternKind::Init(local_pat) => match terminator.kind {
+            let target = match &pattern.kind {
+                &pat::PatternKind::Init(local_pat) => match terminator.kind {
                     mir::TerminatorKind::Call {
                         destination,
                         target: Some(target),
                         ..
-                    } => {
-                        if destination
-                            .as_local()
-                            .is_some_and(|local| self.match_local(local_pat, local))
-                        {
-                            debug!("{pat:?} {:?} matched", pattern.kind);
-                            let new_mat = self
-                                .patterns
-                                .add_match(pat, pat::MatchKind::Terminator(block, Some(target)));
-                            _ = mat.get_or_insert(new_mat);
-                        }
-                    },
+                    } => destination
+                        .as_local()
+                        .is_some_and(|local| self.match_local(local_pat, local))
+                        .then_some(target),
                     _ => continue,
                 },
-                pat::PatternKind::Terminator(_) => todo!(),
+                pat::PatternKind::Terminator(terminator_pat) => match (terminator_pat, &terminator.kind) {
+                    (
+                        &pattern::TerminatorKind::Call {
+                            func: ref func_pat,
+                            args: ref args_pat,
+                            destination: destination_pat,
+                        },
+                        &mir::TerminatorKind::Call {
+                            ref func,
+                            box ref args,
+                            target: Some(target),
+                            destination,
+                            ..
+                        },
+                    ) => (self.match_operand(func_pat, func)
+                        && self.match_operands(args_pat, args)
+                        && self.match_place(destination_pat, destination))
+                    .then_some(target),
+                    (
+                        &pattern::TerminatorKind::Drop { place: place_pat },
+                        &mir::TerminatorKind::Drop { place, target, .. },
+                    ) => self.match_place(place_pat, place).then_some(target),
+                    _ => continue,
+                },
                 _ => continue,
             };
+            if let Some(target) = target {
+                info!("matched {pat:?}: {:?}", pattern.kind);
+                let new_mat = self
+                    .patterns
+                    .add_match(pat, pat::MatchKind::Terminator(block, Some(target)));
+                _ = mat.get_or_insert(new_mat);
+            }
         }
         mat
     }
@@ -183,7 +235,7 @@ impl<'tcx> CheckMirCtxt<'tcx> {
                 &pat::Rvalue::Len(place_pat),
                 &mir::Rvalue::UnaryOp(mir::UnOp::PtrMetadata, mir::Operand::Copy(place)),
             ) => {
-                if let [mir::ProjectionElem::Deref, projection @ ..] = place_pat.projection {
+                if let [pat::PlaceElem::Deref, projection @ ..] = place_pat.projection {
                     let place_pat = pat::Place {
                         local: place_pat.local,
                         projection,
@@ -193,7 +245,7 @@ impl<'tcx> CheckMirCtxt<'tcx> {
                 false
             },
             (&pat::Rvalue::UnaryOp(mir::UnOp::PtrMetadata, pat::Copy(place_pat)), &mir::Rvalue::Len(place)) => {
-                if let [mir::ProjectionElem::Deref, projection @ ..] = place.as_ref().projection {
+                if let [mir::PlaceElem::Deref, projection @ ..] = place.as_ref().projection {
                     let place = mir::PlaceRef {
                         local: place.local,
                         projection,
@@ -247,7 +299,7 @@ impl<'tcx> CheckMirCtxt<'tcx> {
             },
             _ => return false,
         };
-        debug!(matched, "matching {pat:?} with {rvalue:?}");
+        debug!(?pat, ?rvalue, matched, "match_rvalue");
         matched
     }
 
@@ -255,15 +307,52 @@ impl<'tcx> CheckMirCtxt<'tcx> {
         let matched = match (pat, operand) {
             (&pat::Operand::Copy(place_pat), &mir::Operand::Copy(place))
             | (&pat::Operand::Move(place_pat), &mir::Operand::Move(place)) => self.match_place(place_pat, place),
-            (pat::Operand::Constant(_), mir::Operand::Constant(_)) => todo!(),
+            (pat::Operand::Constant(konst_pat), mir::Operand::Constant(box konst)) => {
+                self.match_const_operand(konst_pat, konst.const_)
+            },
             _ => return false,
         };
-        debug!(matched, "matching {pat:?} with {operand:?}");
+        debug!(?pat, ?operand, matched, "match_operand");
         matched
     }
 
-    fn match_agg_kind(&self, agg_kind_pat: &pat::AggKind<'tcx>, agg_kind: &mir::AggregateKind<'tcx>) -> bool {
-        self.patterns.match_agg_kind(self.tcx, agg_kind_pat, agg_kind)
+    pub fn match_const_operand(&self, pat: &pat::ConstOperand<'tcx>, operand: mir::Const<'tcx>) -> bool {
+        match (pat, operand) {
+            (&pat::ConstOperand::Ty(ty_pat, konst_pat), mir::Const::Ty(ty, konst)) => {
+                self.match_ty(ty_pat, ty) && self.match_const(konst_pat, konst)
+            },
+            (&pat::ConstOperand::Val(value_pat, ty_pat), mir::Const::Val(value, ty)) => {
+                self.match_const_value(value_pat, value) && self.match_ty(ty_pat, ty)
+            },
+            _ => false,
+        }
+    }
+
+    pub fn match_const_value(&self, pat: pat::ConstValue, value: mir::ConstValue<'tcx>) -> bool {
+        match (pat, value) {
+            (pattern::ConstValue::Scalar(scalar_pat), mir::ConstValue::Scalar(scalar)) => scalar_pat == scalar,
+            (pattern::ConstValue::ZeroSized, mir::ConstValue::ZeroSized) => true,
+            _ => false,
+        }
+    }
+
+    pub fn match_operands(
+        &self,
+        pat: &pat::List<pat::Operand<'tcx>>,
+        operands: &[rustc_span::source_map::Spanned<mir::Operand<'tcx>>],
+    ) -> bool {
+        match pat.mode {
+            pat::ListMatchMode::Ordered => {
+                pat.data.len() == operands.len()
+                    && zip(&pat.data, operands)
+                        .all(|(operand_pat, operand)| self.match_operand(operand_pat, &operand.node))
+            },
+            pat::ListMatchMode::Unordered => todo!(),
+        }
+    }
+
+    fn match_agg_kind(&self, pat: &pat::AggKind<'tcx>, agg_kind: &mir::AggregateKind<'tcx>) -> bool {
+        self.patterns.match_agg_kind(self.tcx, pat, agg_kind)
     }
 
     fn match_ty(&self, ty_pat: pat::Ty<'tcx>, ty: ty::Ty<'tcx>) -> bool {

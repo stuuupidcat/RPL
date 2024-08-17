@@ -34,6 +34,9 @@ pub trait PatternVisitor<'tcx>: Sized {
     fn visit_const(&mut self, konst: Const<'tcx>) {
         konst.visit_with(self);
     }
+    fn visit_generic_args(&mut self, args: GenericArgsRef<'tcx>) {
+        args.visit_with(self);
+    }
     fn visit_generic_arg(&mut self, arg: GenericArgKind<'tcx>) {
         arg.visit_with(self);
     }
@@ -87,10 +90,23 @@ impl<'tcx> PatternSuperVisitable<'tcx> for Ty<'tcx> {
                 vis.visit_ty(ty);
             },
             &TyKind::RawPtr(ty, _) => vis.visit_ty(ty),
-            TyKind::Adt(_, args) => args.iter().for_each(|&arg| vis.visit_generic_arg(arg)),
+            &TyKind::Adt(_, args) => vis.visit_generic_args(args),
             TyKind::Uint(_) | TyKind::Int(_) | TyKind::Float(_) => {},
-            TyKind::FnDef(path) | TyKind::Alias(_, path) => vis.visit_path(path),
+            &TyKind::FnDef(ref path, args) => {
+                vis.visit_path(path);
+                vis.visit_generic_args(args);
+            },
+            &TyKind::Alias(_, ref path, args) => {
+                vis.visit_path(path);
+                vis.visit_generic_args(args);
+            },
         }
+    }
+}
+
+impl<'tcx> PatternSuperVisitable<'tcx> for GenericArgsRef<'tcx> {
+    fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
+        self.iter().for_each(|&arg| vis.visit_generic_arg(arg));
     }
 }
 
@@ -110,7 +126,7 @@ impl<'tcx> PatternSuperVisitable<'tcx> for GenericArgKind<'tcx> {
     fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
         match *self {
             GenericArgKind::Lifetime(_region) => {},
-            GenericArgKind::Ty(ty) => vis.visit_ty(ty),
+            GenericArgKind::Type(ty) => vis.visit_ty(ty),
             GenericArgKind::Const(konst) => vis.visit_const(konst),
         }
     }
@@ -189,13 +205,19 @@ impl<'tcx> PatternSuperVisitable<'tcx> for StatementKind<'tcx> {
 
 impl<'tcx> PatternSuperVisitable<'tcx> for TerminatorKind<'tcx> {
     fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
-        match self {
-            TerminatorKind::Call { func, args } => {
+        match *self {
+            TerminatorKind::Call {
+                ref func,
+                ref args,
+                destination,
+            } => {
                 vis.visit_operand(func);
                 for arg in &args.data {
                     vis.visit_operand(arg);
                 }
+                vis.visit_place(destination);
             },
+            TerminatorKind::Drop { place } => vis.visit_place(place),
         }
     }
 }
