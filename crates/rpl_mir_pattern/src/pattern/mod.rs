@@ -296,7 +296,7 @@ pub enum ConstKind<'tcx> {
 pub enum AggKind<'tcx> {
     Array(Ty<'tcx>),
     Tuple,
-    Adt(ItemPath<'tcx>, Symbol, GenericArgsRef<'tcx>, Option<Field>),
+    Adt(ItemPath<'tcx>, Option<Symbol>, GenericArgsRef<'tcx>, Option<Field>),
     RawPtr(Ty<'tcx>, mir::Mutability),
 }
 
@@ -887,12 +887,21 @@ impl<'tcx> Patterns<'tcx> {
                 &AggKind::Adt(path, variant_name, args_pat, field),
                 &mir::AggregateKind::Adt(def_id, variant_idx, args, _, field_idx),
             ) if self.match_item_path(tcx, path, def_id) => {
-                let variant = tcx.adt_def(def_id).variant(variant_idx);
-                variant.name == variant_name
+                let adt = tcx.adt_def(def_id);
+                let variant = adt.variant(variant_idx);
+                let variant_matched = match variant_name {
+                    None => {
+                        variant_idx.as_u32() == 0 && matches!(adt.adt_kind(), ty::AdtKind::Struct | ty::AdtKind::Union)
+                    },
+                    Some(name) => variant.name == name,
+                };
+                variant_matched
                     && self.match_generic_args(tcx, args_pat, args)
                     && match (field, field_idx) {
                         (None, None) => true,
-                        (Some(Field::Named(name)), Some(field_idx)) => variant.fields[field_idx].name == name,
+                        (Some(Field::Named(name)), Some(field_idx)) => {
+                            adt.is_union() && variant.fields[field_idx].name == name
+                        },
                         _ => false,
                     }
             },

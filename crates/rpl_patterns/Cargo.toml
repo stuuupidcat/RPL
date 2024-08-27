@@ -8,7 +8,7 @@ keywords.workspace = true
 edition.workspace = true
 
 [dependencies]
-rpl_mir_pattern = { workspace = true }
+rpl_mir_pattern.workspace = true
 
 [features]
 
