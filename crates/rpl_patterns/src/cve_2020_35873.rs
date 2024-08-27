@@ -73,16 +73,16 @@ struct Pattern {
 /// let cstring   : CString       = ...                                      ;
 /// let non_null  : NonNull<[u8]> = (((cstring.inner).0).pointer)            ;
 /// let uslice_ptr: *const [u8]   = (non_null.pointer)                       ;
-/// // let cstr      : *const CStr   = uslice_ptr as *const CStr (PtrToPtr)     ;
-/// // let islice    : *const [i8]   = &raw const ((*cstr).inner)               ;
+/// let cstr      : *const CStr   = uslice_ptr as *const CStr (PtrToPtr)     ;
+/// /*
 /// let uslice    : &[u8]         = &(*uslice_ptr)                           ;
 /// let cstr      : &CStr         = from_bytes___rt_impl(move uslice)        ;
+/// */
 /// let islice    : *const [i8]   = &raw const ((*cstr).inner)               ;
 /// let iptr      : *const i8     = move islice as *const i8 (PtrToPtr)      ;
 /// drop(cstring)                                                            ;
 /// let s         : i32           = ...                                      ;
-/// let iptr2     : *const i8     = iptr                                     ;
-/// let ret       : i32           = sqlite3session_attach(move s, move iptr2);
+/// let ret       : i32           = sqlite3session_attach(move s, move iptr) ;
 /// ```
 fn pattern<'tcx>(tcx: TyCtxt<'tcx>, patterns: &mut pat::Patterns<'tcx>) -> Pattern {
     let cstr_ty = patterns.mk_adt_ty(tcx, (tcx, &[sym::core, sym::ffi, sym::c_str, sym::CStr]), &[]);
