@@ -105,7 +105,7 @@ struct Pattern {
 
 /// patterns:
 /// ```ignore
-/// let from_slice: &[T];
+/// let from_slice: &[T] = ...;
 /// let from_raw_slice: *const [T] = &raw const *from_slice;
 /// let from_len: usize = Len(from_slice);
 /// let ty_size: usize = SizeOf($T);
