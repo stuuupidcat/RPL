@@ -142,6 +142,6 @@ impl rustc_driver::Callbacks for RplCallbacks {
             });
         });
         */
-        rustc_driver::Compilation::Stop
+        rustc_driver::Compilation::Continue
     }
 }

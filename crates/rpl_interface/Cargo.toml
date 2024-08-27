@@ -8,8 +8,8 @@ keywords.workspace = true
 edition.workspace = true
 
 [dependencies]
-rpl_driver = { workspace = true }
-rpl_patterns = { workspace = true }
+rpl_driver.workspace = true
+rpl_patterns.workspace = true
 
 [features]
 
