@@ -48,6 +48,8 @@ pub(crate) enum ParseError {
     UnexpectedCrateInPath,
     #[error("`crate` cannot be used standalone in a path")]
     CrateAloneInPath,
+    #[error("type declaration with generic arguments are not supported")]
+    TypeWithGenericsNotSupported,
 }
 
 impl Parse for Region {
@@ -74,6 +76,36 @@ impl Parse for Mutability {
         Ok(match input.parse()? {
             None => Mutability::Not,
             Some(mutability) => Mutability::Mut(mutability),
+        })
+    }
+}
+
+impl Parse for TypeOrAny {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        Ok(if input.peek(Token![...]) {
+            TypeOrAny::Any(input.parse()?)
+        } else {
+            TypeOrAny::Type(input.parse()?)
+        })
+    }
+}
+
+impl Parse for TypeDecl {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let tk_type = input.parse()?;
+        let ident = input.parse()?;
+        if input.peek(Token![<]) {
+            return Err(input.error(ParseError::TypeWithGenericsNotSupported));
+        }
+        let tk_eq = input.parse()?;
+        let ty = input.parse()?;
+        let tk_semi = input.parse()?;
+        Ok(TypeDecl {
+            tk_type,
+            ident,
+            tk_eq,
+            ty,
+            tk_semi,
         })
     }
 }
@@ -368,7 +400,7 @@ impl Type {
         let content;
         let bracket = syn::bracketed!(content in input);
         let ty = content.parse()?;
-        Ok(if input.peek(Token![;]) {
+        Ok(if content.peek(Token![;]) {
             let tk_semi = content.parse()?;
             let len = content.parse()?;
             Type::Array(TypeArray {
@@ -661,18 +693,6 @@ impl Parse for RvalueDiscriminant {
     }
 }
 
-impl Parse for StructField {
-    fn parse(input: ParseStream<'_>) -> Result<Self> {
-        Ok(StructField {
-            ident: input.parse()?,
-            operand: input
-                .peek(Token![:])
-                .then(|| Result::Ok((input.parse()?, input.parse()?)))
-                .transpose()?,
-        })
-    }
-}
-
 impl Parse for StructFields {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let content;
@@ -835,7 +855,7 @@ impl Parse for Drop {
 impl Parse for Statement {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         Ok(if input.peek(Token![type]) {
-            Statement::TypeVar(input.parse()?)
+            Statement::TypeDecl(input.parse()?)
         } else if input.peek(Token![use]) {
             Statement::UsePath(input.parse()?)
         } else if input.peek(Token![let]) {

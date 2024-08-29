@@ -1,0 +1,17 @@
+[package]
+name = "rpl_macros"
+version.workspace = true
+description.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+rpl_mir_pattern_syntax.workspace = true
+rpl_mir_pattern_expand.workspace = true
+syn.workspace = true
+quote.workspace = true

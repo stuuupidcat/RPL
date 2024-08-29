@@ -2,12 +2,13 @@ use std::iter::zip;
 use std::ops::Try;
 
 use rustc_data_structures::sync::Lock;
+use rustc_hash::FxHashMap;
 use rustc_hir::def::CtorKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::definitions::DefPathData;
 use rustc_hir::LangItem;
 use rustc_index::bit_set::{GrowableBitSet, HybridBitSet};
-use rustc_index::IndexVec;
+use rustc_index::{IndexSlice, IndexVec};
 use rustc_middle::ty::TyCtxt;
 use rustc_middle::{mir, ty};
 use rustc_span::symbol::kw;
@@ -62,12 +63,50 @@ rustc_index::newtype_index! {
     pub struct MatchIdx {}
 }
 
-#[derive(Default)]
+pub struct PrimitiveTypes<'tcx> {
+    pub u8: Ty<'tcx>,
+    pub u16: Ty<'tcx>,
+    pub u32: Ty<'tcx>,
+    pub u64: Ty<'tcx>,
+    pub u128: Ty<'tcx>,
+    pub usize: Ty<'tcx>,
+    pub i8: Ty<'tcx>,
+    pub i16: Ty<'tcx>,
+    pub i32: Ty<'tcx>,
+    pub i64: Ty<'tcx>,
+    pub i128: Ty<'tcx>,
+    pub isize: Ty<'tcx>,
+    pub bool: Ty<'tcx>,
+    pub str: Ty<'tcx>,
+}
+
+impl<'tcx> PrimitiveTypes<'tcx> {
+    fn new(tcx: TyCtxt<'tcx>) -> Self {
+        Self {
+            u8: Ty(tcx.arena.dropless.alloc(TyKind::Uint(ty::UintTy::U8))),
+            u16: Ty(tcx.arena.dropless.alloc(TyKind::Uint(ty::UintTy::U16))),
+            u32: Ty(tcx.arena.dropless.alloc(TyKind::Uint(ty::UintTy::U32))),
+            u64: Ty(tcx.arena.dropless.alloc(TyKind::Uint(ty::UintTy::U64))),
+            u128: Ty(tcx.arena.dropless.alloc(TyKind::Uint(ty::UintTy::U128))),
+            usize: Ty(tcx.arena.dropless.alloc(TyKind::Uint(ty::UintTy::Usize))),
+            i8: Ty(tcx.arena.dropless.alloc(TyKind::Int(ty::IntTy::I8))),
+            i16: Ty(tcx.arena.dropless.alloc(TyKind::Int(ty::IntTy::I16))),
+            i32: Ty(tcx.arena.dropless.alloc(TyKind::Int(ty::IntTy::I32))),
+            i64: Ty(tcx.arena.dropless.alloc(TyKind::Int(ty::IntTy::I64))),
+            i128: Ty(tcx.arena.dropless.alloc(TyKind::Int(ty::IntTy::I128))),
+            isize: Ty(tcx.arena.dropless.alloc(TyKind::Int(ty::IntTy::Isize))),
+            bool: Ty(tcx.arena.dropless.alloc(TyKind::Bool)),
+            str: Ty(tcx.arena.dropless.alloc(TyKind::Str)),
+        }
+    }
+}
+
 pub struct Patterns<'tcx> {
     pub local_count: usize,
     pub locals: IndexVec<LocalIdx, Local<'tcx>>,
     pub patterns: IndexVec<PatternIdx, Pattern<'tcx>>,
     pub matches: Lock<IndexVec<MatchIdx, Match<'tcx>>>,
+    pub primitive_types: PrimitiveTypes<'tcx>,
 }
 
 pub struct Match<'tcx> {
@@ -148,16 +187,8 @@ pub enum PlaceElem<'tcx> {
     Deref,
     Field(Field),
     Index(LocalIdx),
-    ConstantIndex {
-        offset: u64,
-        min_length: u64,
-        from_end: bool,
-    },
-    Subslice {
-        from: u64,
-        to: u64,
-        from_end: bool,
-    },
+    ConstantIndex { offset: u64, from_end: bool },
+    Subslice { from: u64, to: u64, from_end: bool },
     Downcast(Symbol),
     OpaqueCast(Ty<'tcx>),
     Subtype(Ty<'tcx>),
@@ -213,7 +244,7 @@ pub enum Rvalue<'tcx> {
     NullaryOp(mir::NullOp<'tcx>, Ty<'tcx>),
     UnaryOp(mir::UnOp, Operand<'tcx>),
     Discriminant(Place<'tcx>),
-    Aggregate(AggKind<'tcx>, IndexVec<FieldIdx, Operand<'tcx>>),
+    Aggregate(AggKind<'tcx>, Box<[Operand<'tcx>]>),
     ShallowInitBox(Operand<'tcx>, Ty<'tcx>),
     CopyForDeref(Place<'tcx>),
 }
@@ -226,8 +257,8 @@ pub enum Operand<'tcx> {
 
 #[derive(Clone, Copy)]
 pub enum RegionKind {
+    ReAny,
     ReStatic,
-    ReErased,
 }
 
 pub struct List<T, M = ListMatchMode> {
@@ -296,14 +327,14 @@ pub enum ConstKind<'tcx> {
 pub enum AggKind<'tcx> {
     Array(Ty<'tcx>),
     Tuple,
-    Adt(ItemPath<'tcx>, Option<Symbol>, GenericArgsRef<'tcx>, Option<Field>),
+    Adt(ItemPath<'tcx>, GenericArgsRef<'tcx>, Option<Box<[Symbol]>>),
     RawPtr(Ty<'tcx>, mir::Mutability),
 }
 
 #[derive(Clone, Copy)]
 pub enum Field {
     Named(Symbol),
-    Relative(FieldIdx),
+    Unnamed(FieldIdx),
 }
 
 impl From<&str> for Field {
@@ -326,7 +357,7 @@ impl From<u32> for Field {
 
 impl From<FieldIdx> for Field {
     fn from(field: FieldIdx) -> Self {
-        Field::Relative(field)
+        Field::Unnamed(field)
     }
 }
 
@@ -433,6 +464,8 @@ pub enum TyKind<'tcx> {
     Uint(ty::UintTy),
     Int(ty::IntTy),
     Float(ty::FloatTy),
+    Bool,
+    Str,
     FnDef(Path<'tcx>, GenericArgsRef<'tcx>),
     Alias(ty::AliasTyKind, Path<'tcx>, GenericArgsRef<'tcx>),
 }
@@ -471,8 +504,14 @@ impl<'tcx> Pattern<'tcx> {
 }
 
 impl<'tcx> Patterns<'tcx> {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(tcx: TyCtxt<'tcx>) -> Self {
+        Self {
+            local_count: Default::default(),
+            locals: Default::default(),
+            patterns: Default::default(),
+            matches: Default::default(),
+            primitive_types: PrimitiveTypes::new(tcx),
+        }
     }
     pub fn first_matched_span(&self, body: &mir::Body<'tcx>, pat: PatternIdx) -> Option<Span> {
         self.try_for_matched_patterns(pat, |mat| mat.span(body).map_or(Ok(()), Err))
@@ -500,8 +539,7 @@ impl<'tcx> Patterns<'tcx> {
     pub fn new_const_var(&mut self) -> ConstVarIdx {
         ConstVarIdx::from_u32(self.patterns.push(Pattern::new(PatternKind::ConstVar)).as_u32())
     }
-    pub fn mk_var_ty(&mut self, tcx: TyCtxt<'tcx>) -> Ty<'tcx> {
-        let ty_var = self.new_ty_var();
+    pub fn mk_var_ty(&mut self, tcx: TyCtxt<'tcx>, ty_var: TyVarIdx) -> Ty<'tcx> {
         self.mk_ty(tcx, TyKind::TyVar(ty_var))
     }
     pub fn mk_item_path(&self, tcx: TyCtxt<'tcx>, path: &[&str]) -> ItemPath<'tcx> {
@@ -518,7 +556,22 @@ impl<'tcx> Patterns<'tcx> {
             TyKind::Adt(ItemPath(path.into_arena()), GenericArgsRef(generics.into_arena())),
         )
     }
-    pub fn mk_ty(&self, tcx: TyCtxt<'tcx>, kind: TyKind<'tcx>) -> Ty<'tcx> {
+    pub fn mk_slice_ty(&self, tcx: TyCtxt<'tcx>, ty: Ty<'tcx>) -> Ty<'tcx> {
+        self.mk_ty(tcx, TyKind::Slice(ty))
+    }
+    pub fn mk_ref_ty(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        region: RegionKind,
+        ty: Ty<'tcx>,
+        mutability: mir::Mutability,
+    ) -> Ty<'tcx> {
+        self.mk_ty(tcx, TyKind::Ref(region, ty, mutability))
+    }
+    pub fn mk_raw_ptr_ty(&self, tcx: TyCtxt<'tcx>, ty: Ty<'tcx>, mutability: mir::Mutability) -> Ty<'tcx> {
+        self.mk_ty(tcx, TyKind::RawPtr(ty, mutability))
+    }
+    fn mk_ty(&self, tcx: TyCtxt<'tcx>, kind: TyKind<'tcx>) -> Ty<'tcx> {
         Ty((tcx, kind).into_arena())
     }
     pub fn mk_local(&mut self, ty: Ty<'tcx>) -> LocalIdx {
@@ -543,6 +596,7 @@ impl<'tcx> Patterns<'tcx> {
         let pat = self
             .patterns
             .push(Pattern::with_deps_set(PatternKind::Statement(statement), children));
+        info!("{pat:?}: {:?}", self.patterns[pat].kind);
         self.update_deps(pat);
         pat
     }
@@ -669,7 +723,7 @@ impl<'tcx> Patterns<'tcx> {
         pat: Place<'tcx>,
         place: mir::PlaceRef<'tcx>,
     ) -> bool {
-        use self::Field::{Named, Relative};
+        use self::Field::{Named, Unnamed};
         use mir::tcx::PlaceTy;
         use mir::ProjectionElem::*;
         let place_proj_and_ty = place
@@ -690,7 +744,7 @@ impl<'tcx> Patterns<'tcx> {
                         };
                         match (variant.ctor, field) {
                             (None, Named(name)) => variant.ctor.is_none() && variant.fields[idx].name == name,
-                            (Some((CtorKind::Fn, _)), Relative(idx_pat)) => idx_pat == idx,
+                            (Some((CtorKind::Fn, _)), Unnamed(idx_pat)) => idx_pat == idx,
                             _ => false,
                         }
                     },
@@ -698,29 +752,20 @@ impl<'tcx> Patterns<'tcx> {
                     (
                         _,
                         PlaceElem::ConstantIndex {
-                            offset: lhs0,
-                            min_length: lhs1,
+                            offset: offset_pat,
                             from_end: from_end_pat,
                         },
-                        ConstantIndex {
-                            offset: rhs0,
-                            min_length: rhs1,
-                            from_end,
-                        },
-                    )
-                    | (
+                        ConstantIndex { offset, from_end, .. },
+                    ) => (offset_pat, from_end_pat) == (offset, from_end),
+                    (
                         _,
                         PlaceElem::Subslice {
-                            from: lhs0,
-                            to: lhs1,
+                            from: from_pat,
+                            to: to_pat,
                             from_end: from_end_pat,
                         },
-                        Subslice {
-                            from: rhs0,
-                            to: rhs1,
-                            from_end,
-                        },
-                    ) => (lhs0, lhs1, from_end_pat) == (rhs0, rhs1, from_end),
+                        Subslice { from, to, from_end },
+                    ) => (from_pat, to_pat, from_end_pat) == (from, to, from_end),
                     (ty::Adt(adt, _), PlaceElem::Downcast(sym), Downcast(_, idx)) => {
                         adt.is_enum() && adt.variant(idx).name == sym
                     },
@@ -754,7 +799,8 @@ impl<'tcx> Patterns<'tcx> {
             (TyKind::Int(ty_pat), ty::Int(ty)) => ty_pat == ty,
             (TyKind::Float(ty_pat), ty::Float(ty)) => ty_pat == ty,
             (TyKind::Adt(path, args_pat), ty::Adt(adt, args)) => {
-                self.match_item_path(tcx, path, adt.did()) && self.match_generic_args(tcx, args_pat, args)
+                matches!(self.match_item_path(tcx, path, adt.did()), Some([]))
+                    && self.match_generic_args(tcx, args_pat, args)
             },
             (TyKind::FnDef(path, args_pat), ty::FnDef(def_id, args)) => {
                 self.match_path(tcx, path, def_id) && self.match_generic_args(tcx, args_pat, args)
@@ -772,7 +818,7 @@ impl<'tcx> Patterns<'tcx> {
 
     pub fn match_path(&self, tcx: TyCtxt<'tcx>, path: Path<'tcx>, def_id: DefId) -> bool {
         let matched = match path {
-            Path::Item(path) => self.match_item_path(tcx, path, def_id),
+            Path::Item(path) => matches!(self.match_item_path(tcx, path, def_id), Some([])),
             Path::TypeRelative(ty, name) => {
                 tcx.item_name(def_id) == name
                     && tcx
@@ -785,9 +831,9 @@ impl<'tcx> Patterns<'tcx> {
         matched
     }
 
-    pub fn match_item_path(&self, tcx: TyCtxt<'tcx>, path: ItemPath<'tcx>, def_id: DefId) -> bool {
+    pub fn match_item_path(&self, tcx: TyCtxt<'tcx>, path: ItemPath<'tcx>, def_id: DefId) -> Option<&[Symbol]> {
         let &[krate, ref in_crate @ ..] = path.0 else {
-            return false;
+            return None;
         };
         let def_path = tcx.def_path(def_id);
         let matched = match def_path.krate {
@@ -803,9 +849,9 @@ impl<'tcx> Patterns<'tcx> {
         let matched = matched
             && std::iter::zip(pat_iter.by_ref(), iter.by_ref())
                 .all(|(&path, data)| data.data.get_opt_name().is_some_and(|name| name == path));
-        let matched = matched && pat_iter.next().is_none() && iter.next().is_none();
+        let matched = matched && iter.next().is_none();
         debug!(?path, ?def_id, matched, "match_item_path");
-        matched
+        matched.then_some(pat_iter.as_slice())
     }
 
     pub fn match_generic_args(
@@ -848,67 +894,124 @@ impl<'tcx> Patterns<'tcx> {
     pub fn match_const_operand(
         &self,
         tcx: TyCtxt<'tcx>,
-        konst_pat: ConstOperand<'tcx>,
+        konst_pat: &ConstOperand<'tcx>,
         konst: mir::Const<'tcx>,
     ) -> bool {
         match (konst_pat, konst) {
-            (ConstOperand::Ty(ty_pat, konst_pat), mir::Const::Ty(ty, konst)) => {
+            (&ConstOperand::Ty(ty_pat, konst_pat), mir::Const::Ty(ty, konst)) => {
                 self.match_ty(tcx, ty_pat, ty) && self.match_const(tcx, konst_pat, konst)
             },
-            (ConstOperand::Val(value_pat, ty_pat), mir::Const::Val(value, ty)) => {
+            (&ConstOperand::Val(value_pat, ty_pat), mir::Const::Val(value, ty)) => {
                 self.match_const_value(value_pat, value) && self.match_ty(tcx, ty_pat, ty)
             },
             _ => false,
         }
     }
-    pub fn match_const_value(&self, konst_pat: ConstValue, konst: mir::ConstValue<'tcx>) -> bool {
-        match (konst_pat, konst) {
+    pub fn match_const_value(&self, pat: ConstValue, konst: mir::ConstValue<'tcx>) -> bool {
+        match (pat, konst) {
             (ConstValue::Scalar(scalar_pat), mir::ConstValue::Scalar(scalar)) => scalar_pat == scalar,
             (ConstValue::ZeroSized, mir::ConstValue::ZeroSized) => true,
             _ => false,
         }
     }
-    pub fn match_region(&self, region_pat: RegionKind, region: ty::Region<'tcx>) -> bool {
+    pub fn match_region(&self, pat: RegionKind, region: ty::Region<'tcx>) -> bool {
         matches!(
-            (region_pat, region.kind()),
-            (RegionKind::ReStatic, ty::RegionKind::ReStatic) | (RegionKind::ReErased, _)
+            (pat, region.kind()),
+            (RegionKind::ReStatic, ty::RegionKind::ReStatic) | (RegionKind::ReAny, _)
         )
     }
-    pub fn match_agg_kind(
+    pub fn match_aggregate(
         &self,
         tcx: TyCtxt<'tcx>,
+        body: &mir::Body<'tcx>,
         agg_kind_pat: &AggKind<'tcx>,
+        operands_pat: &[Operand<'tcx>],
         agg_kind: &mir::AggregateKind<'tcx>,
+        operands: &IndexSlice<FieldIdx, mir::Operand<'tcx>>,
     ) -> bool {
         match (agg_kind_pat, agg_kind) {
-            (&AggKind::Array(ty_pat), &mir::AggregateKind::Array(ty)) => self.match_ty(tcx, ty_pat, ty),
-            (AggKind::Tuple, mir::AggregateKind::Tuple) => true,
+            (&AggKind::Array(ty_pat), &mir::AggregateKind::Array(ty)) => {
+                self.match_ty(tcx, ty_pat, ty) && self.match_agg_operands(tcx, body, operands_pat, &operands.raw)
+            },
+            (AggKind::Tuple, mir::AggregateKind::Tuple) => {
+                self.match_agg_operands(tcx, body, operands_pat, &operands.raw)
+            },
             (
-                &AggKind::Adt(path, variant_name, args_pat, field),
+                &AggKind::Adt(path, args_pat, ref fields),
                 &mir::AggregateKind::Adt(def_id, variant_idx, args, _, field_idx),
-            ) if self.match_item_path(tcx, path, def_id) => {
+            ) if let Some(remainder) = self.match_item_path(tcx, path, def_id) => {
                 let adt = tcx.adt_def(def_id);
                 let variant = adt.variant(variant_idx);
-                let variant_matched = match variant_name {
-                    None => {
+                let variant_matched = match remainder {
+                    [] => {
                         variant_idx.as_u32() == 0 && matches!(adt.adt_kind(), ty::AdtKind::Struct | ty::AdtKind::Union)
                     },
-                    Some(name) => variant.name == name,
+                    &[name] => variant.name == name,
+                    _ => false,
                 };
-                variant_matched
-                    && self.match_generic_args(tcx, args_pat, args)
-                    && match (field, field_idx) {
-                        (None, None) => true,
-                        (Some(Field::Named(name)), Some(field_idx)) => {
-                            adt.is_union() && variant.fields[field_idx].name == name
-                        },
-                        _ => false,
-                    }
+                let generics_matched = self.match_generic_args(tcx, args_pat, args);
+                let fields_matched = match (fields, field_idx) {
+                    (None, None) => {
+                        variant.ctor.is_some() && self.match_agg_operands(tcx, body, operands_pat, &operands.raw)
+                    },
+                    (&Some(box [name]), Some(field_idx)) => adt.is_union() && variant.fields[field_idx].name == name,
+                    (Some(box ref names), None) => {
+                        let indices = names
+                            .iter()
+                            .enumerate()
+                            .map(|(idx, &name)| (name, idx))
+                            .collect::<FxHashMap<_, _>>();
+                        variant.ctor.is_none()
+                            && operands_pat.len() == operands.len()
+                            && operands.iter_enumerated().all(|(idx, operand)| {
+                                indices
+                                    .get(&variant.fields[idx].name)
+                                    .is_some_and(|&idx| self.match_operand(tcx, body, &operands_pat[idx], operand))
+                            })
+                    },
+                    _ => false,
+                };
+                variant_matched && generics_matched && fields_matched
             },
             (&AggKind::RawPtr(ty_pat, mutability_pat), &mir::AggregateKind::RawPtr(ty, mutability)) => {
-                self.match_ty(tcx, ty_pat, ty) && mutability_pat == mutability
+                self.match_ty(tcx, ty_pat, ty)
+                    && mutability_pat == mutability
+                    && self.match_agg_operands(tcx, body, operands_pat, &operands.raw)
             },
             _ => false,
         }
+    }
+
+    fn match_agg_operands(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        body: &mir::Body<'tcx>,
+        operands_pat: &[Operand<'tcx>],
+        operands: &[mir::Operand<'tcx>],
+    ) -> bool {
+        operands_pat.len() == operands.len()
+            && core::iter::zip(operands_pat, operands)
+                .all(|(operand_pat, operand)| self.match_operand(tcx, body, operand_pat, operand))
+    }
+
+    pub fn match_operand(
+        &self,
+        tcx: TyCtxt<'tcx>,
+        body: &mir::Body<'tcx>,
+        pat: &Operand<'tcx>,
+        operand: &mir::Operand<'tcx>,
+    ) -> bool {
+        let matched = match (pat, operand) {
+            (&Operand::Copy(place_pat), &mir::Operand::Copy(place))
+            | (&Operand::Move(place_pat), &mir::Operand::Move(place)) => {
+                self.match_place_ref(tcx, body, place_pat, place.as_ref())
+            },
+            (Operand::Constant(konst_pat), mir::Operand::Constant(box konst)) => {
+                self.match_const_operand(tcx, konst_pat, konst.const_)
+            },
+            _ => return false,
+        };
+        debug!(?pat, ?operand, matched, "match_operand");
+        matched
     }
 }

@@ -850,8 +850,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "rpl_macros"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "rpl_mir_pattern_expand",
+ "rpl_mir_pattern_syntax",
+ "syn",
+]
+
+[[package]]
 name = "rpl_mir_pattern"
 version = "0.1.0"
+
+[[package]]
+name = "rpl_mir_pattern_expand"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "rpl_mir_pattern_syntax",
+ "syn",
+ "thiserror",
+]
 
 [[package]]
 name = "rpl_mir_pattern_syntax"
@@ -867,6 +888,7 @@ dependencies = [
 name = "rpl_patterns"
 version = "0.1.0"
 dependencies = [
+ "rpl_macros",
  "rpl_mir_pattern",
 ]
 

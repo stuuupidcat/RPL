@@ -91,7 +91,7 @@ impl<'tcx> PatternSuperVisitable<'tcx> for Ty<'tcx> {
             },
             &TyKind::RawPtr(ty, _) => vis.visit_ty(ty),
             &TyKind::Adt(_, args) => vis.visit_generic_args(args),
-            TyKind::Uint(_) | TyKind::Int(_) | TyKind::Float(_) => {},
+            TyKind::Uint(_) | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str | TyKind::Bool => {},
             &TyKind::FnDef(ref path, args) => {
                 vis.visit_path(path);
                 vis.visit_generic_args(args);
