@@ -23,11 +23,7 @@ fn fmt_projection<'tcx>(f: &mut fmt::Formatter<'_>, place: Place<'tcx>, proj: &P
         PlaceElem::Deref => write!(f, "(*{place:?})"),
         PlaceElem::Field(field) => write!(f, "({place:?}.{field:?})"),
         PlaceElem::Index(local) => write!(f, "({place:?}[{local:?}])"),
-        &PlaceElem::ConstantIndex {
-            offset,
-            min_length: _,
-            from_end,
-        } => {
+        &PlaceElem::ConstantIndex { offset, from_end } => {
             if from_end {
                 write!(f, "({place:?}[{offset}])")
             } else {
@@ -104,6 +100,8 @@ impl<'tcx> fmt::Debug for TyKind<'tcx> {
             Self::Uint(uint) => uint.fmt(f),
             Self::Int(int) => int.fmt(f),
             Self::Float(float) => float.fmt(f),
+            Self::Bool => f.write_str("bool"),
+            Self::Str => f.write_str("str"),
             Self::FnDef(path, args) => write!(f, "{path:?}{args:?}"),
             Self::Alias(_alias_kind, path, args) => write!(f, "{path:?}{args:?}"),
         }
@@ -137,7 +135,7 @@ impl fmt::Debug for RegionKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ReStatic => f.write_str("'static"),
-            Self::ReErased => f.write_str("'_"),
+            Self::ReAny => f.write_str("'_"),
         }
     }
 }
@@ -146,7 +144,7 @@ impl fmt::Display for RegionKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ReStatic => f.write_str("'static"),
-            Self::ReErased => Ok(()),
+            Self::ReAny => Ok(()),
         }
     }
 }
@@ -217,7 +215,7 @@ impl fmt::Debug for Field {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Named(sym) => write!(f, "{sym}"),
-            Self::Relative(field) => field.fmt(f),
+            Self::Unnamed(field) => field.fmt(f),
         }
     }
 }

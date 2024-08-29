@@ -49,6 +49,7 @@ pub(crate) mod kw {
     syn::custom_keyword!(from);
 }
 
+#[derive(Clone, Copy)]
 pub struct Region {
     span: Span,
     pub kind: RegionKind,
@@ -56,15 +57,16 @@ pub struct Region {
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
+    #[derive(Clone, Copy)]
     pub enum RegionKind {
-        ReErased(Token!(_)),
+        ReAny(Token!(_)),
         ReStatic(Token![static]),
     }
 }
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
-    #[derive(Default)]
+    #[derive(Default, Clone, Copy)]
     pub enum Mutability {
         #[default]
         Not,
@@ -74,6 +76,7 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse, From)]
+    #[derive(Clone, Copy)]
     pub enum PtrMutability {
         Const(Token![const]),
         Mut(Token![mut]),
@@ -81,16 +84,27 @@ auto_derive! {
 }
 
 auto_derive! {
-    #[auto_derive(ToTokens, Parse)]
-    pub struct TypeVar {
+    #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
+    pub enum TypeOrAny {
+        Any(Token![...]),
+        Type(Type),
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens)]
+    #[derive(Clone)]
+    pub struct TypeDecl {
         tk_type: Token![type],
         pub ident: Ident,
-        eq: Token![=],
-        tk_dots: Token![...],
+        tk_eq: Token![=],
+        pub ty: TypeOrAny,
         tk_semi: Token![;],
     }
 }
 
+#[derive(Clone)]
 pub struct TypeArray {
     bracket: token::Bracket,
     pub ty: Box<Type>,
@@ -121,24 +135,28 @@ pub struct TypeFnPtr {
 }
 */
 
+#[derive(Clone)]
 pub struct TypeGroup {
-    group: token::Group,
+    tk_group: token::Group,
     pub ty: Box<Type>,
 }
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse, From)]
+    #[derive(Clone, Copy)]
     pub struct TypeNever {
         tk_bang: Token![!],
     }
 
 }
 
+#[derive(Clone)]
 pub struct TypeParen {
     paren: token::Paren,
     pub ty: Box<Type>,
 }
 
+#[derive(Clone)]
 pub struct QSelf {
     tk_lt: Token![<],
     pub ty: Box<Type>,
@@ -147,6 +165,7 @@ pub struct QSelf {
     tk_gt: Token![>],
 }
 
+#[derive(Clone)]
 pub struct GenericConst {
     brace: Option<token::Brace>,
     pub konst: Const,
@@ -154,6 +173,7 @@ pub struct GenericConst {
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
     pub enum GenericArgument {
         /// A region argument.
         Region(Region),
@@ -167,6 +187,7 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens)]
+    #[derive(Clone)]
     pub struct AngleBracketedGenericArguments {
         tk_colon2: Option<Token![::]>,
         tk_lt: Token![<],
@@ -175,11 +196,13 @@ auto_derive! {
     }
 }
 
+#[derive(Clone)]
 pub enum ReturnType {
     Default,
     Type(Token![->], Box<Type>),
 }
 
+#[derive(Clone)]
 pub struct ParenthesizedGenericArguments {
     paren: token::Paren,
     /// `(A, B)`
@@ -190,6 +213,7 @@ pub struct ParenthesizedGenericArguments {
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
     pub enum PathArguments {
         None,
         /// The `<'a, T>` in `std::slice::iter<'a, T>`.
@@ -202,14 +226,25 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse, From)]
+    #[derive(Clone)]
     pub enum IdentOrCrate {
         Crate(Token![crate]),
         Ident(Ident),
     }
 }
 
+impl IdentOrCrate {
+    pub fn as_ident(&self) -> Option<&Ident> {
+        match self {
+            IdentOrCrate::Ident(ident) => Some(ident),
+            IdentOrCrate::Crate(_) => None,
+        }
+    }
+}
+
 auto_derive! {
     #[auto_derive(ToTokens)]
+    #[derive(Clone)]
     pub struct PathSegment {
         pub ident: IdentOrCrate,
         pub arguments: PathArguments,
@@ -218,13 +253,26 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens)]
+    #[derive(Clone)]
     pub struct Path {
         pub leading_colon: Option<Token![::]>,
         pub segments: Punctuated<PathSegment, Token![::]>,
     }
-
 }
 
+impl Path {
+    pub fn as_ident(&self) -> Option<&Ident> {
+        if self.leading_colon.is_some() || self.segments.len() != 1 || self.segments.trailing_punct() {
+            return None;
+        }
+        self.ident()
+    }
+    pub fn ident(&self) -> Option<&Ident> {
+        self.segments.last()?.ident.as_ident()
+    }
+}
+
+#[derive(Clone)]
 pub struct TypePath {
     pub qself: Option<QSelf>,
     pub path: Path,
@@ -232,6 +280,7 @@ pub struct TypePath {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
     pub struct TypePtr {
         tk_star: Token![*],
         pub mutability: PtrMutability,
@@ -242,6 +291,7 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens)]
+    #[derive(Clone)]
     pub struct TypeReference {
         tk_and: Token![&],
         pub region: Option<Region>,
@@ -251,11 +301,13 @@ auto_derive! {
 
 }
 
+#[derive(Clone)]
 pub struct TypeSlice {
     bracket: token::Bracket,
     pub ty: Box<Type>,
 }
 
+#[derive(Clone)]
 pub struct TypeTuple {
     paren: token::Paren,
     pub tys: Punctuated<Type, Token![,]>,
@@ -263,6 +315,7 @@ pub struct TypeTuple {
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
     pub enum Type {
         /// A fixed size array type: `[T; n]`.
         Array(TypeArray),
@@ -301,11 +354,13 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse, From)]
+    #[derive(Clone)]
     pub struct PlaceLocal {
         pub local: Ident,
     }
 }
 
+#[derive(Clone)]
 pub struct PlaceParen {
     paren: token::Paren,
     pub place: Box<Place>,
@@ -313,6 +368,7 @@ pub struct PlaceParen {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
     pub struct PlaceDeref {
         tk_star: Token![*],
         pub place: Box<Place>,
@@ -321,6 +377,7 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens)]
+    #[derive(Clone)]
     pub struct PlaceField {
         pub place: Box<Place>,
         tk_dot: Token![.],
@@ -328,12 +385,14 @@ auto_derive! {
     }
 }
 
+#[derive(Clone)]
 pub struct PlaceIndex {
     pub place: Box<Place>,
     bracket: token::Bracket,
     pub index: Ident,
 }
 
+#[derive(Clone)]
 pub struct PlaceConstIndex {
     pub place: Box<Place>,
     bracket: token::Bracket,
@@ -341,6 +400,7 @@ pub struct PlaceConstIndex {
     pub index: syn::Index,
 }
 
+#[derive(Clone)]
 pub struct PlaceSubslice {
     pub place: Box<Place>,
     bracket: token::Bracket,
@@ -352,6 +412,7 @@ pub struct PlaceSubslice {
 
 auto_derive! {
     #[auto_derive(ToTokens)]
+    #[derive(Clone)]
     pub struct PlaceDowncast {
         pub place: Box<Place>,
         tk_as: Token![as],
@@ -362,6 +423,7 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
     pub enum Place {
         /// `local`
         Local(PlaceLocal),
@@ -411,6 +473,7 @@ impl Place {
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
     pub enum Const {
         Lit(syn::Lit),
         Path(TypePath),
@@ -419,6 +482,7 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse, From)]
+    #[derive(Clone)]
     pub struct OperandCopy {
         pub place: Place,
     }
@@ -427,6 +491,7 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
     pub struct OperandMove {
         tk_move: Token![move],
         pub place: Place,
@@ -436,19 +501,21 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
     pub enum Operand {
         Copy(OperandCopy),
         Move(OperandMove),
-        ConstOperand(Const),
+        Constant(Const),
     }
-
 }
 
+#[derive(Clone)]
 pub struct RvalueUse {
     paren: Option<token::Paren>,
     pub operand: Operand,
 }
 
+#[derive(Clone)]
 pub struct RvalueRepeat {
     bracket: token::Bracket,
     pub operand: Operand,
@@ -458,6 +525,7 @@ pub struct RvalueRepeat {
 
 auto_derive! {
     #[auto_derive(ToTokens)]
+    #[derive(Clone)]
     pub struct RvalueRef {
         tk_and: Token![&],
         pub region: Option<Region>,
@@ -469,6 +537,7 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
     pub struct RvalueAddrOf {
         tk_and: Token![&],
         kw_raw: kw::raw,
@@ -478,20 +547,23 @@ auto_derive! {
 
 }
 
+#[derive(Clone)]
 pub struct RvalueLen {
     kw_len: kw::Len,
     paren: token::Paren,
-    place: Place,
+    pub place: Place,
 }
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse, From)]
+    #[derive(Clone, Copy)]
     pub enum CastKind {
         PtrToPtr(kw::PtrToPtr),
     }
 
 }
 
+#[derive(Clone)]
 pub struct RvalueCast {
     pub operand: Operand,
     tk_as: Token![as],
@@ -502,6 +574,7 @@ pub struct RvalueCast {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse, From)]
+    #[derive(Clone, Copy)]
     pub enum BinOp {
         Add(kw::Add),
         Sub(kw::Sub),
@@ -511,6 +584,7 @@ auto_derive! {
     }
 }
 
+#[derive(Clone)]
 pub struct RvalueBinOp {
     pub op: BinOp,
     paren: token::Paren,
@@ -521,6 +595,7 @@ pub struct RvalueBinOp {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse, From)]
+    #[derive(Clone, Copy)]
     pub enum NullOp {
         SizeOf(kw::SizeOf),
         AlignOf(kw::AlignOf),
@@ -529,14 +604,16 @@ auto_derive! {
 
 }
 
+#[derive(Clone)]
 pub struct RvalueNullOp {
     pub op: NullOp,
     paren: token::Paren,
-    pub ty: syn::Type,
+    pub ty: Type,
 }
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse, From)]
+    #[derive(Clone, Copy)]
     pub enum UnOp {
         Neg(kw::Neg),
         Not(kw::Not),
@@ -545,18 +622,21 @@ auto_derive! {
 
 }
 
+#[derive(Clone)]
 pub struct RvalueUnOp {
     pub op: UnOp,
     paren: token::Paren,
     pub operand: Operand,
 }
 
+#[derive(Clone)]
 pub struct RvalueDiscriminant {
     kw_discr: kw::Discriminant,
     paren: token::Paren,
     pub place: Place,
 }
 
+#[derive(Clone)]
 pub struct AggregateArray {
     bracket: token::Bracket,
     pub ty: Box<Type>,
@@ -568,16 +648,23 @@ pub struct AggregateArray {
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
     pub struct AggregateTuple {
         pub operands: ParenthesizedOperands,
     }
 }
 
-pub struct StructField {
-    pub ident: Ident,
-    pub operand: Option<(Token![:], Operand)>,
+auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct StructField {
+        pub ident: Ident,
+        tk_colon: Token![:],
+        pub operand: Operand,
+    }
 }
 
+#[derive(Clone)]
 pub struct StructFields {
     brace: token::Brace,
     pub fields: Punctuated<StructField, Token![,]>,
@@ -585,12 +672,14 @@ pub struct StructFields {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
     pub struct AggregateAdt {
         pub adt: Path,
         pub fields: StructFields,
     }
 }
 
+#[derive(Clone)]
 pub struct AggregateRawPtr {
     pub ty: TypePtr,
     kw_from: kw::from,
@@ -602,6 +691,7 @@ pub struct AggregateRawPtr {
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
     pub enum RvalueAggregate {
         Array(AggregateArray),
         Tuple(AggregateTuple),
@@ -613,6 +703,7 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
     pub enum Rvalue {
         Use(RvalueUse),
         Repeat(RvalueRepeat),
@@ -631,16 +722,19 @@ auto_derive! {
 
 }
 
+#[derive(Clone)]
 pub struct ParenthesizedOperands {
     paren: token::Paren,
     pub operands: Punctuated<Operand, Token![,]>,
 }
 
+#[derive(Clone)]
 pub struct BracketedOperands {
     bracket: token::Bracket,
     pub operands: Punctuated<Operand, Token![,]>,
 }
 
+#[derive(Clone)]
 pub struct BracedOperands {
     brace: token::Brace,
     pub operands: Punctuated<Operand, Token![,]>,
@@ -649,6 +743,7 @@ pub struct BracedOperands {
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
     pub enum CallOperands {
         Ordered(ParenthesizedOperands),
         Unordered(BracedOperands),
@@ -657,6 +752,7 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
     pub struct Call {
         pub func: Operand,
         pub operands: CallOperands,
@@ -665,6 +761,7 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
     pub enum RvalueOrCall {
         Rvalue(Rvalue),
         Call(Call),
@@ -674,6 +771,7 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
     pub struct UsePath {
         tk_use: Token![use],
         pub path: Path,
@@ -683,12 +781,13 @@ auto_derive! {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
     pub struct LocalDecl {
         tk_let: Token![let],
         tk_mut: Option<Token![mut]>,
         pub ident: Ident,
         tk_colon: Token![:],
-        pub ty: syn::Type,
+        pub ty: Type,
         tk_eq: Token![=],
         pub rvalue_or_call: RvalueOrCall,
         tk_semi: Token![;],
@@ -703,6 +802,7 @@ impl LocalDecl {
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
     pub struct Assign {
         pub place: Place,
         tk_eq: Token![=],
@@ -711,6 +811,7 @@ auto_derive! {
     }
 }
 
+#[derive(Clone)]
 pub struct Drop {
     kw_drop: kw::drop,
     paren: token::Paren,
@@ -720,8 +821,9 @@ pub struct Drop {
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
     pub enum Statement {
-        TypeVar(TypeVar),
+        TypeDecl(TypeDecl),
         UsePath(UsePath),
         LocalDecl(LocalDecl),
         Assign(Assign),

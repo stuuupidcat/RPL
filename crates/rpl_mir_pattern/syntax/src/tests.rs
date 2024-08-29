@@ -23,27 +23,37 @@ fn test_fail<T: Parse + ToTokens>(input: impl ToTokens, msg: impl ToString) {
 }
 
 macro_rules! pass {
-    ($test_struct:ident!( $( $tt:tt )* )) => {
+    ($test_struct:ident!( $( $tt:tt )* ) $(,)?) => {
         test_pass::<$test_struct>(quote!($($tt)*));
     };
-    ($test_struct:ident!{ $( $tt:tt )* }) => {
-        test_pass::<$test_struct>(quote!($($tt)*));
+    ($test_struct:ident!{ $( $tt:tt )* } $(,)?) => {
+        pass!($test_struct!( $($tt)* ));
     };
-    ($test_struct:ident![ $( $tt:tt )* ]) => {
-        test_pass::<$test_struct>(quote!($($tt)*));
+    ($test_struct:ident![ $( $tt:tt )* ] $(,)?) => {
+        pass!($test_struct!( $($tt)* ));
     };
 }
 
 macro_rules! fail {
-    ($test_struct:ident!( $( $tt:tt )* ), $msg:expr) => {
+    ($test_struct:ident!( $( $tt:tt )* ), $msg:expr $(,)?) => {
         test_fail::<$test_struct>(quote!($($tt)*), $msg);
     };
-    ($test_struct:ident!{ $( $tt:tt )* }, $msg:expr) => {
-        test_fail::<$test_struct>(quote!($($tt)*), $msg);
+    ($test_struct:ident!{ $( $tt:tt )* }, $msg:expr $(,)?) => {
+        fail!($test_struct!( $($tt)* ), $msg);
     };
-    ($test_struct:ident![ $( $tt:tt )* ], $msg:expr) => {
-        test_fail::<$test_struct>(quote!($($tt)*), $msg);
+    ($test_struct:ident![ $( $tt:tt )* ], $msg:expr $(,)?) => {
+        fail!($test_struct!( $($tt)* ), $msg);
     };
+}
+
+#[test]
+#[rustfmt::skip]
+fn test_type_decl() {
+    pass!(TypeDecl!( type SliceT = [T]; ));
+    fail!(
+        TypeDecl!( type SliceT<T> = [T]; ),
+        ParseError::TypeWithGenericsNotSupported
+    );
 }
 
 #[test]
@@ -73,6 +83,7 @@ fn test_path() {
 #[test]
 fn test_type() {
     pass!(Type!(*const u8));
+    pass!(Type!([T]));
     #[rustfmt::skip]
     pass!(Type!(< <core::ffi::c_str::CStr>::from_bytes_with_nul_unchecked>::___rt_impl));
 
@@ -141,6 +152,8 @@ fn test_assign() {
 #[test]
 fn test_statement() {
     pass!(Statement!( type T = ...; ));
+    #[rustfmt::skip]
+    pass!(Statement!( type SliceT = [T]; ));
     pass!(Statement!( let x: u32 = 0; ));
     pass!(Statement!( *x = y.0; ));
     pass!(Statement!( *x = std::mem::take(move y); ));
@@ -153,32 +166,49 @@ fn test_mir_pattern() {
     pass!(MirPattern!());
     pass!(MirPattern! {
         type T = ...;
-        let from_slice: &[T] = ...;
-        let from_raw_slice: *const [T] = &raw const *from_slice;
+        type SliceT = [T];
+        type RefSliceT = &SliceT;
+        type PtrSliceT = *const SliceT;
+        type PtrU8 = *const u8;
+        type SliceU8 = [u8];
+        type PtrSliceU8 = *const SliceU8;
+        type RefSliceU8 = &SliceU8;
+
+        let from_slice: SliceT = ...;
+        let from_raw_slice: PtrSliceT = &raw const *from_slice;
         let from_len: usize = Len(from_slice);
         let ty_size: usize = SizeOf(T);
-        let to_ptr: *const u8 = from_ptr as *const u8 (PtrToPtr);
+        let to_ptr: PtrU8 = from_ptr as PtrU8 (PtrToPtr);
         let to_len: usize = Mul(from_len, ty_size);
-        let to_raw_slice: *const [u8] = *const [u8] from (to_ptr, t_len);
-        let to_slice: &[u8] = &*to_raw_slice;
+        let to_raw_slice: PtrSliceU8 = *const SliceU8 from (to_ptr, t_len);
+        let to_slice: RefSliceU8 = &*to_raw_slice;
     });
     pass!(MirPattern! {
         use core::ffi::c_str::CString;
         use core::ffi::c_str::Cstr;
-        use core::ptr::non_null::Cstr;
+        use core::ptr::non_null::NonNull;
+        use crate::ffi::sqlite3session_attach;
+
+        type NonNullSliceU8 = NonNull<[u8]>;
+        type PtrSliceU8 = *const [u8];
+        type RefSliceU8 = &[u8];
+        type PtrCStr = *const CStr;
+        type RefCStr = &CStr;
+        type PtrSliceI8 = *const [i8];
+        type PtrI8 = *const i8;
 
         let cstring: CString = ...;
-        let non_null: NonNull<[u8]> = (((cstring.inner).0).pointer);
-        let uslice_ptr: *const [u8] = (non_null.pointer);
-        let cstr: *const CStr = uslice_ptr as *const CStr (PtrToPtr);
+        let non_null: NonNullSliceU8 = (((cstring.inner).0).pointer);
+        let uslice_ptr: PtrSliceU8 = (non_null.pointer);
+        let cstr: PtrCStr = uslice_ptr as PtrCStr (PtrToPtr);
         // /*
-        let uslice: &[u8] = &(*uslice_ptr);
-        let cstr: &CStr = < <CStr>::from_bytes_with_nul_unchecked>::___rt_impl(move uslice);
+        let uslice: RefSliceU8 = &(*uslice_ptr);
+        let cstr: RefCStr = < <CStr>::from_bytes_with_nul_unchecked>::___rt_impl(move uslice);
         // */
-        let islice: *const [i8] = &raw const ((*cstr).inner);
-        let iptr: *const i8 = move islice as *const i8 (PtrToPtr);
+        let islice: PtrSliceI8 = &raw const ((*cstr).inner);
+        let iptr: PtrI8 = move islice as PtrI8 (PtrToPtr);
         drop(cstring);
         let s: i32 = ...;
-        let ret: i32 = crate::ffi::sqlite3session_attach(move s, move iptr);
+        let ret: i32 = sqlite3session_attach(move s, move iptr);
     });
 }

@@ -36,7 +36,7 @@ macro_rules! ToTokens {
 impl AsRef<str> for Region {
     fn as_ref(&self) -> &str {
         match self.kind {
-            RegionKind::ReErased(_) => "'_",
+            RegionKind::ReAny(_) => "'_",
             RegionKind::ReStatic(_) => "'static",
         }
     }
@@ -76,7 +76,7 @@ impl ToTokens for TypeSlice {
 
 impl ToTokens for TypeGroup {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.group.surround(tokens, |tokens| self.ty.to_tokens(tokens));
+        self.tk_group.surround(tokens, |tokens| self.ty.to_tokens(tokens));
     }
 }
 
@@ -253,16 +253,6 @@ impl ToTokens for AggregateArray {
         });
         self.kw_from.to_tokens(tokens);
         self.operands.to_tokens(tokens);
-    }
-}
-
-impl ToTokens for StructField {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.ident.to_tokens(tokens);
-        if let Some((tk_colon, operand)) = &self.operand {
-            tk_colon.to_tokens(tokens);
-            operand.to_tokens(tokens);
-        }
     }
 }
 
