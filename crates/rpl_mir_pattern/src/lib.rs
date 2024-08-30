@@ -8,8 +8,10 @@
 #![feature(try_trait_v2)]
 
 extern crate rustc_data_structures;
+extern crate rustc_driver;
 extern crate rustc_errors;
 extern crate rustc_fluent_macro;
+extern crate rustc_hash;
 extern crate rustc_hir;
 extern crate rustc_index;
 extern crate rustc_macros;
@@ -24,9 +26,10 @@ pub mod pattern;
 use std::iter::zip;
 
 use rustc_index::bit_set::BitSet;
-use rustc_index::Idx;
+use rustc_index::{Idx, IndexSlice};
 use rustc_middle::ty::TyCtxt;
 use rustc_middle::{mir, ty};
+use rustc_target::abi::FieldIdx;
 
 pub use crate::pattern as pat;
 
@@ -41,7 +44,7 @@ impl<'tcx> CheckMirCtxt<'tcx> {
         Self {
             tcx,
             body,
-            patterns: Default::default(),
+            patterns: pat::Patterns::new(tcx),
         }
     }
     #[instrument(level = "info", skip(self), fields(def_id = ?self.body.source.def_id()))]
@@ -289,10 +292,7 @@ impl<'tcx> CheckMirCtxt<'tcx> {
                 op_pat == op && self.match_operand(operand_pat, operand)
             },
             (pat::Rvalue::Aggregate(agg_kind_pat, operands_pat), mir::Rvalue::Aggregate(box agg_kind, operands)) => {
-                self.match_agg_kind(agg_kind_pat, agg_kind)
-                    && operands_pat.len() == operands.len()
-                    && core::iter::zip(operands_pat, operands)
-                        .all(|(operand_pat, operand)| self.match_operand(operand_pat, operand))
+                self.match_aggregate(agg_kind_pat, operands_pat, agg_kind, operands)
             },
             (&pat::Rvalue::ShallowInitBox(ref operand_pat, ty_pat), &mir::Rvalue::ShallowInitBox(ref operand, ty)) => {
                 self.match_operand(operand_pat, operand) && self.match_ty(ty_pat, ty)
@@ -304,36 +304,15 @@ impl<'tcx> CheckMirCtxt<'tcx> {
     }
 
     pub fn match_operand(&self, pat: &pat::Operand<'tcx>, operand: &mir::Operand<'tcx>) -> bool {
-        let matched = match (pat, operand) {
-            (&pat::Operand::Copy(place_pat), &mir::Operand::Copy(place))
-            | (&pat::Operand::Move(place_pat), &mir::Operand::Move(place)) => self.match_place(place_pat, place),
-            (pat::Operand::Constant(konst_pat), mir::Operand::Constant(box konst)) => {
-                self.match_const_operand(konst_pat, konst.const_)
-            },
-            _ => return false,
-        };
-        debug!(?pat, ?operand, matched, "match_operand");
-        matched
+        self.patterns.match_operand(self.tcx, self.body, pat, operand)
     }
 
     pub fn match_const_operand(&self, pat: &pat::ConstOperand<'tcx>, operand: mir::Const<'tcx>) -> bool {
-        match (pat, operand) {
-            (&pat::ConstOperand::Ty(ty_pat, konst_pat), mir::Const::Ty(ty, konst)) => {
-                self.match_ty(ty_pat, ty) && self.match_const(konst_pat, konst)
-            },
-            (&pat::ConstOperand::Val(value_pat, ty_pat), mir::Const::Val(value, ty)) => {
-                self.match_const_value(value_pat, value) && self.match_ty(ty_pat, ty)
-            },
-            _ => false,
-        }
+        self.patterns.match_const_operand(self.tcx, pat, operand)
     }
 
     pub fn match_const_value(&self, pat: pat::ConstValue, value: mir::ConstValue<'tcx>) -> bool {
-        match (pat, value) {
-            (pattern::ConstValue::Scalar(scalar_pat), mir::ConstValue::Scalar(scalar)) => scalar_pat == scalar,
-            (pattern::ConstValue::ZeroSized, mir::ConstValue::ZeroSized) => true,
-            _ => false,
-        }
+        self.patterns.match_const_value(pat, value)
     }
 
     pub fn match_operands(
@@ -351,8 +330,15 @@ impl<'tcx> CheckMirCtxt<'tcx> {
         }
     }
 
-    fn match_agg_kind(&self, pat: &pat::AggKind<'tcx>, agg_kind: &mir::AggregateKind<'tcx>) -> bool {
-        self.patterns.match_agg_kind(self.tcx, pat, agg_kind)
+    fn match_aggregate(
+        &self,
+        agg_kind_pat: &pat::AggKind<'tcx>,
+        operands_pat: &[pat::Operand<'tcx>],
+        agg_kind: &mir::AggregateKind<'tcx>,
+        operands: &IndexSlice<FieldIdx, mir::Operand<'tcx>>,
+    ) -> bool {
+        self.patterns
+            .match_aggregate(self.tcx, self.body, agg_kind_pat, operands_pat, agg_kind, operands)
     }
 
     fn match_ty(&self, ty_pat: pat::Ty<'tcx>, ty: ty::Ty<'tcx>) -> bool {

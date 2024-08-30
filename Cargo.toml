@@ -2,7 +2,10 @@
 members = [
     "crates/rpl_driver",
     "crates/rpl_interface",
+    "crates/rpl_macros",
     "crates/rpl_mir_pattern",
+    "crates/rpl_mir_pattern/expand",
+    "crates/rpl_mir_pattern/syntax",
     "crates/rpl_patterns",
     "./"
 ]
@@ -19,7 +22,10 @@ repository = "https://github.com/stuuupidcat/RPL"
 [workspace.dependencies]
 rpl_driver = { path = "./crates/rpl_driver" }
 rpl_interface = { path = "./crates/rpl_interface" }
+rpl_macros = { path = "./crates/rpl_macros" }
 rpl_mir_pattern = { path = "./crates/rpl_mir_pattern" }
+rpl_mir_pattern_expand = { path = "./crates/rpl_mir_pattern/expand" }
+rpl_mir_pattern_syntax = { path = "./crates/rpl_mir_pattern/syntax" }
 rpl_patterns = { path = "./crates/rpl_patterns" }
 rustc_tools_util = "0.3.0"
 serde = { version = "1.0", features = ["derive"] }
@@ -29,8 +35,10 @@ itertools = "0.12"
 rustc-semver = "1.1"
 walkdir = "2.3"
 quote = "1.0"
-syn = "2.0"
+syn = { version = "2.0", features = ["full"] }
+proc-macro2 = "1.0"
 tracing = "0.1.28"
+thiserror = "1.0"
 
 [package]
 name = "rpl"
@@ -47,8 +55,8 @@ name = "rpl-driver"
 path = "src/driver.rs"
 
 [dependencies]
-rpl_interface = { workspace = true }
-rustc_tools_util = { workspace = true }
+rpl_interface.workspace = true
+rustc_tools_util.workspace = true
 color-print = "0.3.4"
 anstream = "0.6.0"
 
@@ -56,20 +64,20 @@ anstream = "0.6.0"
 ui_test = "0.22.2"
 tester = "0.9"
 regex = "1.5"
-toml = { workspace = true }
-walkdir = { workspace = true }
+toml.workspace = true
+walkdir.workspace = true
 # This is used by the `collect-metadata` alias.
 filetime = "0.2"
 itertools = "0.12"
 
 # UI test dependencies
 if_chain = "1.0"
-quote = { workspace = true }
-serde = { workspace = true }
+quote.workspace = true
+serde.workspace = true
 syn = { workspace = true, features = ["full"] }
 futures = "0.3"
 parking_lot = "0.12"
-tracing = { workspace = true }
+tracing.workspace = true
 log = "0.4"
 
 [package.metadata.rust-analyzer]

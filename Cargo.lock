@@ -504,9 +504,9 @@ checksum = "ce23b50ad8242c51a442f3ff322d56b02f08852c77e4c0b4d3fd684abc89c683"
 
 [[package]]
 name = "indexmap"
-version = "2.2.6"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "168fb715dda47215e360912c096649d23d58bf392ac62f73919e831745e40f26"
+checksum = "93ead53efc7ea8ed3cfb0c79fc8023fbb782a5432b52830b6518941cebe6505c"
 dependencies = [
  "equivalent",
  "hashbrown",
@@ -850,13 +850,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "rpl_macros"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "rpl_mir_pattern_expand",
+ "rpl_mir_pattern_syntax",
+ "syn",
+]
+
+[[package]]
 name = "rpl_mir_pattern"
 version = "0.1.0"
+
+[[package]]
+name = "rpl_mir_pattern_expand"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "rpl_mir_pattern_syntax",
+ "syn",
+ "thiserror",
+]
+
+[[package]]
+name = "rpl_mir_pattern_syntax"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "thiserror",
+]
 
 [[package]]
 name = "rpl_patterns"
 version = "0.1.0"
 dependencies = [
+ "rpl_macros",
  "rpl_mir_pattern",
 ]
 

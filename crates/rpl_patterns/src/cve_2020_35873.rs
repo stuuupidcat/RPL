@@ -73,16 +73,16 @@ struct Pattern {
 /// let cstring   : CString       = ...                                      ;
 /// let non_null  : NonNull<[u8]> = (((cstring.inner).0).pointer)            ;
 /// let uslice_ptr: *const [u8]   = (non_null.pointer)                       ;
-/// // let cstr      : *const CStr   = uslice_ptr as *const CStr (PtrToPtr)     ;
-/// // let islice    : *const [i8]   = &raw const ((*cstr).inner)               ;
+/// let cstr      : *const CStr   = uslice_ptr as *const CStr (PtrToPtr)     ;
+/// /*
 /// let uslice    : &[u8]         = &(*uslice_ptr)                           ;
 /// let cstr      : &CStr         = from_bytes___rt_impl(move uslice)        ;
+/// */
 /// let islice    : *const [i8]   = &raw const ((*cstr).inner)               ;
 /// let iptr      : *const i8     = move islice as *const i8 (PtrToPtr)      ;
 /// drop(cstring)                                                            ;
 /// let s         : i32           = ...                                      ;
-/// let iptr2     : *const i8     = iptr                                     ;
-/// let ret       : i32           = sqlite3session_attach(move s, move iptr2);
+/// let ret       : i32           = sqlite3session_attach(move s, move iptr) ;
 /// ```
 fn pattern<'tcx>(tcx: TyCtxt<'tcx>, patterns: &mut pat::Patterns<'tcx>) -> Pattern {
     let cstr_ty = patterns.mk_adt_ty(tcx, (tcx, &[sym::core, sym::ffi, sym::c_str, sym::CStr]), &[]);
@@ -92,31 +92,28 @@ fn pattern<'tcx>(tcx: TyCtxt<'tcx>, patterns: &mut pat::Patterns<'tcx>) -> Patte
         &[],
     );
 
-    let u8_ty = patterns.mk_ty(tcx, pat::TyKind::Uint(ty::UintTy::U8));
-    let u8_slice_ty = patterns.mk_ty(tcx, pat::TyKind::Slice(u8_ty));
-    // let u8_slice_ref_ty = patterns.mk_ty(
-    //     tcx,
-    //     pat::TyKind::Ref(pat::RegionKind::ReErased, u8_slice_ty, ty::Mutability::Not),
+    let u8_ty = patterns.primitive_types.u8;
+    let u8_slice_ty = patterns.mk_slice_ty(tcx, u8_ty);
+    // let u8_slice_ref_ty = patterns.mk_ref_ty(
+    //     tcx, pat::RegionKind::ReErased, u8_slice_ty, ty::Mutability::Not,
     // );
-    let u8_slice_ptr_ty = patterns.mk_ty(tcx, pat::TyKind::RawPtr(u8_slice_ty, mir::Mutability::Not));
+    let u8_slice_ptr_ty = patterns.mk_raw_ptr_ty(tcx, u8_slice_ty, mir::Mutability::Not);
     let non_null_u8_slice_ty = patterns.mk_adt_ty(
         tcx,
         (tcx, &[sym::core, sym::ptr, Symbol::intern("non_null"), sym::NonNull]),
         (tcx, &[u8_slice_ty.into()]),
     );
 
-    let i32_ty = patterns.mk_ty(tcx, pat::TyKind::Int(ty::IntTy::I32));
+    let i32_ty = patterns.primitive_types.i32;
+    let i8_ty = patterns.primitive_types.i8;
+    let i8_ptr_ty = patterns.mk_raw_ptr_ty(tcx, i8_ty, mir::Mutability::Not);
+    let i8_slice_ty = patterns.mk_slice_ty(tcx, i8_ty);
+    let i8_slice_ptr_ty = patterns.mk_raw_ptr_ty(tcx, i8_slice_ty, mir::Mutability::Not);
 
-    let i8_ty = patterns.mk_ty(tcx, pat::TyKind::Int(ty::IntTy::I8));
-    let i8_ptr_ty = patterns.mk_ty(tcx, pat::TyKind::RawPtr(i8_ty, mir::Mutability::Not));
-    let i8_slice_ty = patterns.mk_ty(tcx, pat::TyKind::Slice(i8_ty));
-    let i8_slice_ptr_ty = patterns.mk_ty(tcx, pat::TyKind::RawPtr(i8_slice_ty, mir::Mutability::Not));
-
-    // let cstr_ref_ty = patterns.mk_ty(
-    //     tcx,
-    //     pat::TyKind::Ref(pat::RegionKind::ReErased, cstr_ty, mir::Mutability::Not),
+    // let cstr_ref_ty = patterns.mk_ref_ty(
+    //     tcx, pat::RegionKind::ReErased, cstr_ty, mir::Mutability::Not,
     // );
-    let cstr_ptr_ty = patterns.mk_ty(tcx, pat::TyKind::RawPtr(cstr_ty, mir::Mutability::Not));
+    let cstr_ptr_ty = patterns.mk_raw_ptr_ty(tcx, cstr_ty, mir::Mutability::Not);
 
     let cstring_local = patterns.mk_local(cstring_ty);
     let non_null_local = patterns.mk_local(non_null_u8_slice_ty);
