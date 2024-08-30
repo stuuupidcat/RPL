@@ -39,5 +39,5 @@ CVE-2021-38190,invariant,
 CVE-2021-45707,complex,linux-api-trick
 CVE-2021-45710,complex,race
 CVE-2022-23639,pattern,hir(type-transmute)
-CVE-2023-41051,invariant,
-CVE-2023-28448,complex,implementation
+CVE-2023-28448,invariant,
+CVE-2023-41051,complex,implementation
