@@ -68,7 +68,7 @@ fn test_mir_pattern() {
             let SliceT_ty = patterns.mk_slice_ty(tcx, T_ty);
             let RefSliceT_ty = patterns.mk_ref_ty(
                 tcx,
-                ::rpl_mir_pattern::pat::RegionKind::ReAny,
+                ::rpl_mir::pat::RegionKind::ReAny,
                 SliceT_ty,
                 ::rustc_middle::mir::Mutability::Not
             );
@@ -81,7 +81,7 @@ fn test_mir_pattern() {
                 tcx, SliceU8_ty, ::rustc_middle::mir::Mutability::Not);
             let RefSliceU8_ty = patterns.mk_ref_ty(
                 tcx,
-                ::rpl_mir_pattern::pat::RegionKind::ReAny,
+                ::rpl_mir::pat::RegionKind::ReAny,
                 SliceU8_ty,
                 ::rustc_middle::mir::Mutability::Not
             );
@@ -90,52 +90,52 @@ fn test_mir_pattern() {
             let from_raw_slice_local = patterns.mk_local(PtrSliceT_ty);
             let from_raw_slice_stmt = patterns.mk_assign(
                 from_raw_slice_local.into_place(),
-                ::rpl_mir_pattern::pat::Rvalue::AddressOf(
+                ::rpl_mir::pat::Rvalue::AddressOf(
                     ::rustc_middle::mir::Mutability::Not,
                     patterns.mk_place(
                         from_slice_local,
-                        (tcx, &[::rpl_mir_pattern::pat::PlaceElem::Deref,])
+                        (tcx, &[::rpl_mir::pat::PlaceElem::Deref,])
                     )
                 )
             );
             let from_len_local = patterns.mk_local(patterns.primitive_types.usize);
             let from_len_stmt = patterns.mk_assign(
                 from_len_local.into_place(),
-                ::rpl_mir_pattern::pat::Rvalue::Len(from_slice_local.into_place())
+                ::rpl_mir::pat::Rvalue::Len(from_slice_local.into_place())
             );
             let ty_size_local = patterns.mk_local(patterns.primitive_types.usize);
             let ty_size_stmt = patterns.mk_assign(
                 ty_size_local.into_place(),
-                ::rpl_mir_pattern::pat::Rvalue::NullaryOp(::rustc_middle::mir::NullOp::SizeOf, T_ty)
+                ::rpl_mir::pat::Rvalue::NullaryOp(::rustc_middle::mir::NullOp::SizeOf, T_ty)
             );
             let to_ptr_local = patterns.mk_local(PtrU8_ty);
             let to_ptr_stmt = patterns.mk_assign(
                 to_ptr_local.into_place(),
-                ::rpl_mir_pattern::pat::Rvalue::Cast(
+                ::rpl_mir::pat::Rvalue::Cast(
                     ::rustc_middle::mir::CastKind::PtrToPtr,
-                    ::rpl_mir_pattern::pat::Copy(from_ptr_local.into_place()),
+                    ::rpl_mir::pat::Copy(from_ptr_local.into_place()),
                     PtrU8_ty
                 )
             );
             let to_len_local = patterns.mk_local(patterns.primitive_types.usize);
             let to_len_stmt = patterns.mk_assign(
                 to_len_local.into_place(),
-                ::rpl_mir_pattern::pat::Rvalue::BinaryOp(
+                ::rpl_mir::pat::Rvalue::BinaryOp(
                     ::rustc_middle::mir::BinOp::Mul,
                     Box::new([
-                        ::rpl_mir_pattern::pat::Copy(from_len_local.into_place()),
-                        ::rpl_mir_pattern::pat::Copy(ty_size_local.into_place())
+                        ::rpl_mir::pat::Copy(from_len_local.into_place()),
+                        ::rpl_mir::pat::Copy(ty_size_local.into_place())
                     ])
                 )
             );
             let to_raw_slice_local = patterns.mk_local(PtrSliceU8_ty);
             let to_raw_slice_stmt = patterns.mk_assign(
                 to_raw_slice_local.into_place(),
-                ::rpl_mir_pattern::pat::Rvalue::Aggregate(
-                    ::rpl_mir_pattern::pat::AggKind::RawPtr(SliceU8_ty, ::rustc_middle::mir::Mutability::Not),
+                ::rpl_mir::pat::Rvalue::Aggregate(
+                    ::rpl_mir::pat::AggKind::RawPtr(SliceU8_ty, ::rustc_middle::mir::Mutability::Not),
                     [
-                        ::rpl_mir_pattern::pat::Copy(to_ptr_local.into_place()),
-                        ::rpl_mir_pattern::pat::Copy(t_len_local.into_place())
+                        ::rpl_mir::pat::Copy(to_ptr_local.into_place()),
+                        ::rpl_mir::pat::Copy(t_len_local.into_place())
                     ]
                     .into_iter()
                     .collect()
@@ -144,10 +144,10 @@ fn test_mir_pattern() {
             let to_slice_local = patterns.mk_local(RefSliceU8_ty);
             let to_slice_stmt = patterns.mk_assign(
                 to_slice_local.into_place(),
-                ::rpl_mir_pattern::pat::Rvalue::Ref(
-                    ::rpl_mir_pattern::pat::RegionKind::ReAny,
+                ::rpl_mir::pat::Rvalue::Ref(
+                    ::rpl_mir::pat::RegionKind::ReAny,
                     ::rustc_middle::mir::BorrowKind::Shared,
-                    patterns.mk_place(to_raw_slice_local, (tcx, &[::rpl_mir_pattern::pat::PlaceElem::Deref,]))
+                    patterns.mk_place(to_raw_slice_local, (tcx, &[::rpl_mir::pat::PlaceElem::Deref,]))
                 )
             );
         },

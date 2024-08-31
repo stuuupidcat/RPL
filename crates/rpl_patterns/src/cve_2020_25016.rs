@@ -7,7 +7,7 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::{sym, Span, Symbol};
 
-use rpl_mir_pattern::{pat, CheckMirCtxt};
+use rpl_mir::{pat, CheckMirCtxt};
 
 #[instrument(level = "info", skip(tcx))]
 pub fn check_item(tcx: TyCtxt<'_>, item_id: hir::ItemId) {

@@ -7,7 +7,7 @@ use rustc_middle::{mir, ty};
 use rustc_span::symbol::kw;
 use rustc_span::{sym, Span, Symbol};
 
-use rpl_mir_pattern::{pat, CheckMirCtxt};
+use rpl_mir::{pat, CheckMirCtxt};
 
 #[instrument(level = "info", skip(tcx))]
 pub fn check_item(tcx: TyCtxt<'_>, item_id: hir::ItemId) {

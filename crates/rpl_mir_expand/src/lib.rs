@@ -4,7 +4,7 @@
 #![feature(if_let_guard)]
 #![feature(impl_trait_in_fn_trait_return)]
 
-extern crate rpl_mir_pattern_syntax as syntax;
+extern crate rpl_mir_syntax as syntax;
 
 extern crate rustc_data_structures;
 extern crate rustc_driver;

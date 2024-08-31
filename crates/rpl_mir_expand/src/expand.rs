@@ -363,7 +363,7 @@ impl ToTokens for Expand<'_, &CallOperands> {
 
 impl ToTokens for Expand<'_, &Rvalue> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        quote_each_token!(tokens ::rpl_mir_pattern::pat::Rvalue::);
+        quote_each_token!(tokens ::rpl_mir::pat::Rvalue::);
         match self.value {
             Rvalue::Use(RvalueUse { operand, .. }) => {
                 let operand = self.expand(operand);
@@ -432,7 +432,7 @@ impl ToTokens for Expand<'_, &Rvalue> {
 
 impl ToTokens for Expand<'_, &Operand> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        quote_each_token!(tokens ::rpl_mir_pattern::pat::);
+        quote_each_token!(tokens ::rpl_mir::pat::);
         match self.value {
             Operand::Copy(OperandCopy { place, .. }) => {
                 let place = self.expand(place);
@@ -463,7 +463,7 @@ impl ToTokens for Expand<'_, Projections<'_>> {
         if let Place::Local(_) = self.value.0 {
             return;
         }
-        quote_each_token!(tokens ::rpl_mir_pattern::pat::PlaceElem::);
+        quote_each_token!(tokens ::rpl_mir::pat::PlaceElem::);
         let inner = match self.value.0 {
             Place::Local(_) => return,
             Place::Paren(PlaceParen { box place, .. }) => place,
@@ -514,7 +514,7 @@ impl ToTokens for Expand<'_, Projections<'_>> {
 
 impl ToTokens for Expand<'_, &syn::Member> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        quote_each_token!(tokens ::rpl_mir_pattern::pat::Field::);
+        quote_each_token!(tokens ::rpl_mir::pat::Field::);
         match self.value {
             syn::Member::Named(name) => {
                 let name = self.expand(name.as_symbol());
@@ -552,7 +552,7 @@ impl ToTokens for Expand<'_, IdentSymbol<'_>> {
 
 impl ToTokens for Expand<'_, &RvalueAggregate> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        quote_each_token!(tokens ::rpl_mir_pattern::pat::AggKind::);
+        quote_each_token!(tokens ::rpl_mir::pat::AggKind::);
         match self.value {
             RvalueAggregate::Array(AggregateArray { box ty, operands, .. }) => {
                 let ty = self.expand(ty);
@@ -599,7 +599,7 @@ impl ToTokens for Expand<'_, &Path> {
 
 impl ToTokens for Expand<'_, RegionKind> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        quote_each_token!(tokens ::rpl_mir_pattern::pat::RegionKind::);
+        quote_each_token!(tokens ::rpl_mir::pat::RegionKind::);
         match self.value {
             RegionKind::ReAny(_) => quote_token!(ReAny tokens),
             RegionKind::ReStatic(_) => quote_token!(ReStatic tokens),

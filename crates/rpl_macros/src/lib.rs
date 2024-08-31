@@ -1,8 +1,8 @@
 use proc_macro::TokenStream;
 use quote::ToTokens;
 
-extern crate rpl_mir_pattern_expand as expand;
-extern crate rpl_mir_pattern_syntax as syntax;
+extern crate rpl_mir_expand as expand;
+extern crate rpl_mir_syntax as syntax;
 
 #[proc_macro_attribute]
 pub fn mir_pattern(_attribute: TokenStream, input: TokenStream) -> TokenStream {
