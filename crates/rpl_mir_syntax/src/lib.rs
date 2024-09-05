@@ -16,7 +16,13 @@ mod parse;
 #[cfg(test)]
 mod tests;
 
+pub use parse::ParseError;
+
 pub(crate) mod kw {
+    // Metadata
+    syn::custom_keyword!(meta);
+    syn::custom_keyword!(ty);
+
     // Statement
     syn::custom_keyword!(drop);
 
@@ -84,22 +90,13 @@ auto_derive! {
 }
 
 auto_derive! {
-    #[auto_derive(ToTokens, From)]
-    #[derive(Clone)]
-    pub enum TypeOrAny {
-        Any(Token![...]),
-        Type(Type),
-    }
-}
-
-auto_derive! {
     #[auto_derive(ToTokens)]
     #[derive(Clone)]
     pub struct TypeDecl {
         tk_type: Token![type],
         pub ident: Ident,
         tk_eq: Token![=],
-        pub ty: TypeOrAny,
+        pub ty: Type,
         tk_semi: Token![;],
     }
 }
@@ -314,6 +311,15 @@ pub struct TypeTuple {
 }
 
 auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct TypeVar {
+        tk_dollar: Token![$],
+        pub ident: Ident,
+    }
+}
+
+auto_derive! {
     #[auto_derive(ToTokens, From)]
     #[derive(Clone)]
     pub enum Type {
@@ -349,6 +355,9 @@ auto_derive! {
         // TraitObject(TypeTraitObject),
         /// A tuple type: `(A, B, C, String)`.
         Tuple(TypeTuple),
+
+        /// A `TyVar` from `meta!($T:ty)`.
+        TyVar(TypeVar),
     }
 }
 
@@ -831,6 +840,47 @@ auto_derive! {
     }
 }
 
-pub struct MirPattern {
+#[derive(Clone)]
+pub enum DelimiterKind {
+    Brace(token::Brace),
+    Paren(token::Paren),
+    Bracket(token::Bracket),
+}
+
+#[derive(Clone)]
+pub struct MacroDelimiter {
+    kind: syn::MacroDelimiter,
+    tk_semi: Option<Token![;]>,
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens, Parse, From)]
+    #[derive(Clone, Copy)]
+    pub enum MetaKind {
+        Ty(kw::ty),
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct MetaItem {
+        tk_dollar: Token![$],
+        pub ident: Ident,
+        tk_colon: Token![:],
+        pub kind: MetaKind,
+    }
+}
+
+#[derive(Clone)]
+pub struct Meta {
+    pub kw_meta: kw::meta,
+    tk_bang: Token![!],
+    delim: MacroDelimiter,
+    pub items: Punctuated<MetaItem, Token![,]>,
+}
+
+pub struct Mir {
+    pub metas: Vec<Meta>,
     pub statements: Vec<Statement>,
 }

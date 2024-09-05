@@ -37,7 +37,7 @@ macro_rules! Parse {
 }
 
 #[derive(thiserror::Error, Debug)]
-pub(crate) enum ParseError {
+pub enum ParseError {
     #[error("unrecognized region {0}, expect `'static` or `'_`")]
     UnrecognizedRegion(String),
     #[error("expect `{{` or `(`")]
@@ -50,6 +50,8 @@ pub(crate) enum ParseError {
     CrateAloneInPath,
     #[error("type declaration with generic arguments are not supported")]
     TypeWithGenericsNotSupported,
+    #[error("expect `(`, `[`, or `{{")]
+    ExpectDelimiter,
 }
 
 impl Parse for Region {
@@ -76,16 +78,6 @@ impl Parse for Mutability {
         Ok(match input.parse()? {
             None => Mutability::Not,
             Some(mutability) => Mutability::Mut(mutability),
-        })
-    }
-}
-
-impl Parse for TypeOrAny {
-    fn parse(input: ParseStream<'_>) -> Result<Self> {
-        Ok(if input.peek(Token![...]) {
-            TypeOrAny::Any(input.parse()?)
-        } else {
-            TypeOrAny::Type(input.parse()?)
         })
     }
 }
@@ -427,6 +419,8 @@ impl Parse for Type {
             Ok(Type::Reference(input.parse()?))
         } else if input.peek(Token![!]) {
             Ok(Type::Never(input.parse()?))
+        } else if input.peek(Token![$]) {
+            Ok(Type::TyVar(input.parse()?))
         } else {
             Ok(Type::Path(input.parse()?))
         }
@@ -868,12 +862,64 @@ impl Parse for Statement {
     }
 }
 
-impl Parse for MirPattern {
+impl MacroDelimiter {
+    pub fn brace(brace: token::Brace) -> Self {
+        Self {
+            kind: syn::MacroDelimiter::Brace(brace),
+            tk_semi: None,
+        }
+    }
+    pub fn bracket(bracket: token::Bracket, tk_semi: Token![;]) -> Self {
+        Self {
+            kind: syn::MacroDelimiter::Bracket(bracket),
+            tk_semi: Some(tk_semi),
+        }
+    }
+    pub fn paren(paren: token::Paren, tk_semi: Token![;]) -> Self {
+        Self {
+            kind: syn::MacroDelimiter::Paren(paren),
+            tk_semi: Some(tk_semi),
+        }
+    }
+}
+
+#[macro_export]
+macro_rules! macro_delimiter {
+    ($content:ident in $input:expr) => {
+        if $input.peek(::syn::token::Paren) {
+            $crate::MacroDelimiter::paren(::syn::parenthesized!($content in $input), $input.parse()?)
+        } else if $input.peek(::syn::token::Bracket) {
+            $crate::MacroDelimiter::bracket(::syn::bracketed!($content in $input), $input.parse()?)
+        } else if $input.peek(::syn::token::Brace) {
+            $crate::MacroDelimiter::brace(::syn::braced!($content in $input))
+        } else {
+            return Err($input.error($crate::ParseError::ExpectDelimiter));
+        }
+    }
+}
+
+impl Parse for Meta {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let content;
+        Ok(Meta {
+            kw_meta: input.parse()?,
+            tk_bang: input.parse()?,
+            delim: macro_delimiter!(content in input),
+            items: Punctuated::parse_terminated(&content)?,
+        })
+    }
+}
+
+impl Parse for Mir {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let mut metas = Vec::new();
+        while input.peek(kw::meta) {
+            metas.push(input.parse()?);
+        }
         let mut statements = Vec::new();
         while !input.is_empty() {
             statements.push(input.parse()?);
         }
-        Ok(MirPattern { statements })
+        Ok(Mir { metas, statements })
     }
 }

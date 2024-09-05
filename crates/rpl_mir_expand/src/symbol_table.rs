@@ -1,13 +1,17 @@
 use std::panic::panic_any;
 
-use proc_macro2::{Group, Span, TokenStream};
+use proc_macro2::TokenStream;
 use rustc_hash::FxHashMap;
 use syn::Ident;
-use syntax::{Path, Type};
+use syntax::{MetaItem, MetaKind, Path, Type};
 
 #[derive(thiserror::Error, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum ResolveError {
+    #[error("type or path `${0}` is already declared")]
+    TypeVarAlreadyDeclared(String),
+    #[error("type variable `${0}` is not declared")]
+    TypeVarNotDeclared(String),
     #[error("type or path named by `{0}` is already declared")]
     TypeOrAlreadyDeclared(String),
     #[error("type or path named by `{0}` is not declared")]
@@ -20,10 +24,10 @@ pub(crate) enum ResolveError {
 pub struct SymbolTable {
     locals: FxHashMap<Ident, Type>,
     types: FxHashMap<Ident, TypeKind>,
+    ty_vars: FxHashMap<Ident, MetaItem>,
 }
 
 pub enum TypeKind {
-    TyVar(Span),
     Type(Type),
     Path(Path),
 }
@@ -43,11 +47,6 @@ impl From<Path> for TypeKind {
 impl quote::ToTokens for TypeKind {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self {
-            &TypeKind::TyVar(span) => {
-                let mut group = Group::new(proc_macro2::Delimiter::None, TokenStream::new());
-                group.set_span(span);
-                group.to_tokens(tokens);
-            },
             TypeKind::Type(ty) => ty.to_tokens(tokens),
             TypeKind::Path(path) => path.to_tokens(tokens),
         }
@@ -66,12 +65,29 @@ impl SymbolTable {
                 ))
             })
     }
-    pub fn add_ty_var(&mut self, ident: Ident) {
-        let span = ident.span();
-        self.add_type_impl(ident, TypeKind::TyVar(span));
+    pub fn add_ty_var(&mut self, meta_item: MetaItem) {
+        assert!(matches!(meta_item.kind, MetaKind::Ty(_)));
+        let ident = meta_item.ident.clone();
+        self.ty_vars
+            .try_insert(ident.clone(), meta_item)
+            .map(|_| {})
+            .unwrap_or_else(|entry| {
+                panic_any(syn::Error::new_spanned(
+                    entry.entry.get(),
+                    ResolveError::TypeVarAlreadyDeclared(ident.to_string()),
+                ))
+            })
     }
     pub fn add_type(&mut self, ident: Ident, ty: Type) {
         self.add_type_impl(ident, ty.into());
+    }
+    pub fn get_ty_var(&self, ident: &Ident) -> &MetaItem {
+        self.ty_vars.get(ident).unwrap_or_else(|| {
+            panic_any(syn::Error::new(
+                ident.span(),
+                ResolveError::TypeVarNotDeclared(ident.to_string()),
+            ))
+        })
     }
     pub fn get_type(&self, ident: &Ident) -> &TypeKind {
         self.types.get(ident).unwrap_or_else(|| {

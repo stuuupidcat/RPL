@@ -11,9 +11,13 @@ where
     let value: T = syn::parse2(input).unwrap();
     let tcx = syn::parse_quote!(tcx);
     let patterns = syn::parse_quote!(patterns);
-    let expanded = std::panic::catch_unwind(|| crate::expand_impl(&tcx, &patterns, &value))
-        .map_err(|err| err.downcast::<syn::Error>().unwrap())
-        .unwrap();
+    let expanded = std::panic::catch_unwind(|| {
+        let mut tokens = TokenStream::new();
+        crate::expand_impl(&value, &tcx, &patterns, &mut tokens);
+        tokens
+    })
+    .map_err(|err| err.downcast::<syn::Error>().unwrap())
+    .unwrap();
     assert_eq!(expanded.to_string(), output.to_string());
 }
 
@@ -30,9 +34,9 @@ macro_rules! pass {
 }
 
 #[test]
-fn test_type_decl() {
+fn test_ty_var() {
     pass!(
-        TypeDecl!( type T = ...; ),
+        MetaItem!( $T:ty ),
         quote! {
             let T_ty_var = patterns.new_ty_var();
             let T_ty = patterns.mk_var_ty(tcx, T_ty_var);
@@ -43,9 +47,9 @@ fn test_type_decl() {
 #[test]
 fn test_mir_pattern() {
     pass!(
-        MirPattern! {
-            type T = ...;
-            type SliceT = [T];
+        Mir! {
+            meta!($T:ty);
+            type SliceT = [$T];
             type RefSliceT = &SliceT;
             type PtrSliceT = *const SliceT;
             type PtrU8 = *const u8;
@@ -56,7 +60,7 @@ fn test_mir_pattern() {
             let from_slice: SliceT = ...;
             let from_raw_slice: PtrSliceT = &raw const *from_slice;
             let from_len: usize = Len(from_slice);
-            let ty_size: usize = SizeOf(T);
+            let ty_size: usize = SizeOf($T);
             let to_ptr: PtrU8 = from_ptr as PtrU8 (PtrToPtr);
             let to_len: usize = Mul(from_len, ty_size);
             let to_raw_slice: PtrSliceU8 = *const SliceU8 from (to_ptr, t_len);

@@ -150,10 +150,16 @@ fn test_assign() {
 }
 
 #[test]
+fn test_meta() {
+    pass!(Meta!(meta!($T:ty); ));
+    pass!(Meta!(meta![$T:ty, $U:ty]; ));
+    pass!(Meta!(meta! { $T:ty, $U:ty, }));
+}
+
+#[test]
 fn test_statement() {
-    pass!(Statement!( type T = ...; ));
     #[rustfmt::skip]
-    pass!(Statement!( type SliceT = [T]; ));
+    pass!(Statement!( type SliceT = [$T]; ));
     pass!(Statement!( let x: u32 = 0; ));
     pass!(Statement!( *x = y.0; ));
     pass!(Statement!( *x = std::mem::take(move y); ));
@@ -163,10 +169,10 @@ fn test_statement() {
 
 #[test]
 fn test_mir_pattern() {
-    pass!(MirPattern!());
-    pass!(MirPattern! {
-        type T = ...;
-        type SliceT = [T];
+    pass!(Mir!());
+    pass!(Mir! {
+        meta!($T:ty);
+        type SliceT = [$T];
         type RefSliceT = &SliceT;
         type PtrSliceT = *const SliceT;
         type PtrU8 = *const u8;
@@ -177,13 +183,13 @@ fn test_mir_pattern() {
         let from_slice: SliceT = ...;
         let from_raw_slice: PtrSliceT = &raw const *from_slice;
         let from_len: usize = Len(from_slice);
-        let ty_size: usize = SizeOf(T);
+        let ty_size: usize = SizeOf($T);
         let to_ptr: PtrU8 = from_ptr as PtrU8 (PtrToPtr);
         let to_len: usize = Mul(from_len, ty_size);
         let to_raw_slice: PtrSliceU8 = *const SliceU8 from (to_ptr, t_len);
         let to_slice: RefSliceU8 = &*to_raw_slice;
     });
-    pass!(MirPattern! {
+    pass!(Mir! {
         use core::ffi::c_str::CString;
         use core::ffi::c_str::Cstr;
         use core::ptr::non_null::NonNull;

@@ -104,20 +104,20 @@ struct Pattern {
 
 #[rpl_macros::mir_pattern]
 fn pattern<'tcx>(tcx: TyCtxt<'tcx>, patterns: &mut pat::Patterns<'tcx>) -> Pattern {
-    mir_pattern! {
-        type T = ...;
+    mir! {
+        meta!($T:ty);
 
-        let from_slice: &[T] = ...;
-        let from_slice_mut: &mut [T] = ...;
+        let from_slice: &[$T] = ...;
+        let from_slice_mut: &mut [$T] = ...;
 
-        let from_raw: *const [T] = &raw const *from_slice;
-        let from_raw_mut: *mut [T] = &raw mut *from_slice_mut;
+        let from_raw: *const [$T] = &raw const *from_slice;
+        let from_raw_mut: *mut [$T] = &raw mut *from_slice_mut;
 
         let from_len: usize = Len(*from_slice);
         let from_len_mut: usize = Len(*from_slice_mut);
 
-        let ty_size: usize = SizeOf(T);
-        let ty_size_mut: usize = SizeOf(T);
+        let ty_size: usize = SizeOf($T);
+        let ty_size_mut: usize = SizeOf($T);
 
         let to_ptr: *const u8 = from_raw as *const u8 (PtrToPtr);
         let to_ptr_mut: *mut u8 = from_raw_mut as *mut u8 (PtrToPtr);

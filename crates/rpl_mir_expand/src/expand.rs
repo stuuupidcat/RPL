@@ -13,18 +13,28 @@ pub(crate) struct ExpandCtxt<'ecx> {
     patterns: &'ecx Ident,
 }
 
-#[cfg(test)]
-pub(crate) fn expand_impl<T>(tcx: &Ident, patterns: &Ident, value: T) -> TokenStream
+pub(crate) fn expand_impl<T>(value: T, tcx: &Ident, patterns: &Ident, tokens: &mut TokenStream)
 where
     for<'ecx> Expand<'ecx, T>: ToTokens,
 {
     let ecx = ExpandCtxt::new(tcx, patterns);
-    ecx.expand(value).to_token_stream()
+    ecx.expand(value).to_tokens(tokens);
 }
 
 pub fn expand(mir_pattern: MirPatternFn) -> TokenStream {
     std::panic::catch_unwind(|| mir_pattern.into_token_stream())
         .unwrap_or_else(|err| err.downcast::<syn::Error>().unwrap().into_compile_error())
+}
+
+static PARAM_TCX: &str = "tcx";
+static PARAM_PATTERNS: &str = "patterns";
+
+pub fn expand_mir(mir: Mir) -> TokenStream {
+    let tcx = syn::Ident::new(PARAM_TCX, proc_macro2::Span::call_site());
+    let patterns = syn::Ident::new(PARAM_PATTERNS, proc_macro2::Span::call_site());
+    let mut tokens = TokenStream::new();
+    expand_impl(&mir, &tcx, &patterns, &mut tokens);
+    tokens
 }
 
 trait ExpandIdent: Sized + std::borrow::Borrow<Ident> + Into<Ident> {
@@ -146,36 +156,64 @@ impl<'a, T: 'a, P: 'a> PairsExt<'a, T, P> for Pairs<'a, T, P> {
 
 impl ToTokens for MirPatternFn {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.vis.to_tokens(tokens);
-        self.tk_fn.to_tokens(tokens);
-        self.ident.to_tokens(tokens);
-        self.generics.to_tokens(tokens);
-        self.paren.surround(tokens, |tokens| {
-            self.tcx.to_tokens(tokens);
-            self.tk_colon1.to_tokens(tokens);
-            self.tcx_ty.to_tokens(tokens);
-            self.tk_comma1.to_tokens(tokens);
-            self.patterns.to_tokens(tokens);
-            self.tk_colon2.to_tokens(tokens);
-            self.patterns_ty.to_tokens(tokens);
-            self.tk_comma2.to_tokens(tokens);
-        });
-        self.tk_arrow.to_tokens(tokens);
-        self.ret.to_tokens(tokens);
-        self.brace.surround(tokens, |tokens| {
-            let ecx = ExpandCtxt::new(&self.tcx, &self.patterns);
-            ecx.expand(&self.mir_pattern).to_tokens(tokens);
-            for stmt in &self.stmts {
-                stmt.to_tokens(tokens);
+        let syn::ItemFn {
+            attrs,
+            vis,
+            sig,
+            block: box syn::Block { brace_token, stmts },
+        } = &self.item_fn;
+        for attr in attrs {
+            attr.to_tokens(tokens);
+        }
+        vis.to_tokens(tokens);
+        sig.to_tokens(tokens);
+        let tcx_and_patterns = self.tcx_and_patterns();
+        brace_token.surround(tokens, |tokens| {
+            for stmt in stmts {
+                if let Some((tcx, patterns)) = tcx_and_patterns
+                    && let Some(mir) = self
+                        .stmt_is_macro_mir(stmt)
+                        .unwrap_or_else(|err| std::panic::panic_any(err))
+                {
+                    expand_impl(&mir, tcx, patterns, tokens);
+                } else {
+                    stmt.to_tokens(tokens);
+                }
             }
         });
     }
 }
 
-impl ToTokens for Expand<'_, &MirPattern> {
+impl ToTokens for Expand<'_, &Mir> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let statements = self.value.statements.iter().map(|statement| self.expand(statement));
-        quote_each_token!(tokens #(#statements)*);
+        let Mir { metas, statements } = &self.value;
+        let metas = metas.iter().map(|meta| self.expand(meta));
+        let statements = statements.iter().map(|statement| self.expand(statement));
+        quote_each_token!(tokens #(#metas)* #(#statements)*);
+    }
+}
+
+impl ToTokens for Expand<'_, &MetaItem> {
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        let ExpandCtxt { tcx, patterns, symbols } = self.ecx;
+        let MetaItem { ident, kind, .. } = &self.value;
+        match kind {
+            MetaKind::Ty(_) => {
+                let ty_ident = ident.as_ty();
+                let ty_var_ident = ident.as_ty_var();
+                symbols.lock().add_ty_var(self.value.clone());
+                quote_each_token!(tokens
+                    let #ty_var_ident = #patterns.new_ty_var();
+                    let #ty_ident = #patterns.mk_var_ty(#tcx, #ty_var_ident);
+                );
+            },
+        }
+    }
+}
+
+impl ToTokens for Expand<'_, &Meta> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.expand_punctuated(&self.value.items).to_tokens(tokens);
     }
 }
 
@@ -193,25 +231,12 @@ impl ToTokens for Expand<'_, &Statement> {
 
 impl ToTokens for Expand<'_, &TypeDecl> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { tcx, patterns, symbols } = self.ecx;
+        let ExpandCtxt { symbols, .. } = self.ecx;
         let TypeDecl { ident, ty, .. } = self.value;
-        match ty {
-            TypeOrAny::Any(_) => {
-                let ty_ident = ident.as_ty();
-                let ty_var_ident = ident.as_ty_var();
-                symbols.lock().add_ty_var(ident.clone());
-                quote_each_token!(tokens
-                    let #ty_var_ident = #patterns.new_ty_var();
-                    let #ty_ident = #patterns.mk_var_ty(#tcx, #ty_var_ident);
-                );
-            },
-            TypeOrAny::Type(ty) => {
-                let ty_ident = ident.as_ty();
-                symbols.lock().add_type(ident.clone(), ty.clone());
-                let ty = self.expand(ty);
-                quote_each_token!(tokens let #ty_ident = #ty;);
-            },
-        };
+        let ty_ident = ident.as_ty();
+        symbols.lock().add_type(ident.clone(), ty.clone());
+        let ty = self.expand(ty);
+        quote_each_token!(tokens let #ty_ident = #ty;);
     }
 }
 impl ToTokens for Expand<'_, &UsePath> {
@@ -351,6 +376,7 @@ impl ToTokens for Expand<'_, &Type> {
                 quote_each_token!(tokens #patterns.mk_slice_ty(#tcx, #ty));
             },
             Type::Tuple(_) => todo!(),
+            Type::TyVar(TypeVar { ident, .. }) => ident.as_ty().to_tokens(tokens),
         }
     }
 }
