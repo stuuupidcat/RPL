@@ -213,7 +213,7 @@ impl ToTokens for Expand<'_, &MetaItem> {
 
 impl ToTokens for Expand<'_, &Meta> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.expand_punctuated(&self.value.items).to_tokens(tokens);
+        self.expand_punctuated(&self.value.meta.content).to_tokens(tokens);
     }
 }
 

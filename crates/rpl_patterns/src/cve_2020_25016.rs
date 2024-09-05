@@ -107,8 +107,8 @@ fn pattern<'tcx>(tcx: TyCtxt<'tcx>, patterns: &mut pat::Patterns<'tcx>) -> Patte
     mir! {
         meta!($T:ty);
 
-        let from_slice: &[$T] = ...;
-        let from_slice_mut: &mut [$T] = ...;
+        let from_slice: &[$T] = any!();
+        let from_slice_mut: &mut [$T] = any!();
 
         let from_raw: *const [$T] = &raw const *from_slice;
         let from_raw_mut: *mut [$T] = &raw mut *from_slice_mut;

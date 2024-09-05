@@ -30,6 +30,7 @@ pub(crate) mod kw {
     syn::custom_keyword!(Len);
     syn::custom_keyword!(Discriminant);
     syn::custom_keyword!(raw);
+    syn::custom_keyword!(any);
 
     // CastKind
     syn::custom_keyword!(PtrToPtr);
@@ -768,13 +769,35 @@ auto_derive! {
     }
 }
 
+pub struct Macro<K, C, P = parse::ParseParse> {
+    kw: K,
+    tk_bang: Token![!],
+    delim: syn::MacroDelimiter,
+    pub content: C,
+    parse: P,
+}
+
+impl<K: Clone, C: Clone, P: Clone> Clone for Macro<K, C, P> {
+    fn clone(&self) -> Self {
+        Self {
+            kw: self.kw.clone(),
+            tk_bang: self.tk_bang,
+            delim: self.delim.clone(),
+            content: self.content.clone(),
+            parse: self.parse.clone(),
+        }
+    }
+}
+
+pub type AnyValue = Macro<kw::any, syn::parse::Nothing>;
+
 auto_derive! {
     #[auto_derive(ToTokens, From)]
     #[derive(Clone)]
     pub enum RvalueOrCall {
         Rvalue(Rvalue),
         Call(Call),
-        Any(Token![...]),
+        Any(AnyValue),
     }
 }
 
@@ -840,19 +863,6 @@ auto_derive! {
     }
 }
 
-#[derive(Clone)]
-pub enum DelimiterKind {
-    Brace(token::Brace),
-    Paren(token::Paren),
-    Bracket(token::Bracket),
-}
-
-#[derive(Clone)]
-pub struct MacroDelimiter {
-    kind: syn::MacroDelimiter,
-    tk_semi: Option<Token![;]>,
-}
-
 auto_derive! {
     #[auto_derive(ToTokens, Parse, From)]
     #[derive(Clone, Copy)]
@@ -872,12 +882,12 @@ auto_derive! {
     }
 }
 
-#[derive(Clone)]
-pub struct Meta {
-    pub kw_meta: kw::meta,
-    tk_bang: Token![!],
-    delim: MacroDelimiter,
-    pub items: Punctuated<MetaItem, Token![,]>,
+auto_derive! {
+    #[auto_derive(ToTokens)]
+    pub struct Meta {
+        pub meta: Macro<kw::meta, Punctuated<MetaItem, Token![,]>, parse::PunctuatedParseTerminated>,
+        tk_semi: Option<Token![;]>,
+    }
 }
 
 pub struct Mir {

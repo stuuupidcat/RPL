@@ -303,22 +303,16 @@ impl ToTokens for Drop {
     }
 }
 
-impl MacroDelimiter {
-    pub fn surround<F: FnOnce(&mut TokenStream)>(&self, tokens: &mut TokenStream, f: F) {
-        match self.kind {
-            syn::MacroDelimiter::Brace(brace) => brace.surround(tokens, f),
-            syn::MacroDelimiter::Paren(paren) => paren.surround(tokens, f),
-            syn::MacroDelimiter::Bracket(bracket) => bracket.surround(tokens, f),
-        }
-        self.tk_semi.to_tokens(tokens);
-    }
-}
-
-impl ToTokens for Meta {
+impl<K: ToTokens, C: ToTokens, P> ToTokens for Macro<K, C, P> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.kw_meta.to_tokens(tokens);
+        self.kw.to_tokens(tokens);
         self.tk_bang.to_tokens(tokens);
-        self.delim.surround(tokens, |tokens| self.items.to_tokens(tokens));
+        let inner = |tokens: &mut _| self.content.to_tokens(tokens);
+        match self.delim {
+            syn::MacroDelimiter::Paren(paren) => paren.surround(tokens, inner),
+            syn::MacroDelimiter::Brace(brace) => brace.surround(tokens, inner),
+            syn::MacroDelimiter::Bracket(bracket) => bracket.surround(tokens, inner),
+        }
     }
 }
 

@@ -57,7 +57,7 @@ fn test_mir_pattern() {
             type PtrSliceU8 = *const SliceU8;
             type RefSliceU8 = &SliceU8;
 
-            let from_slice: SliceT = ...;
+            let from_slice: SliceT = any!();
             let from_raw_slice: PtrSliceT = &raw const *from_slice;
             let from_len: usize = Len(from_slice);
             let ty_size: usize = SizeOf($T);

@@ -822,7 +822,7 @@ impl Parse for RvalueOrCall {
             Ok(Rvalue::parse_array_like(input)?.into())
         } else if input.peek(Token![&]) {
             Ok(Rvalue::parse_ref_or_address_of(input)?.into())
-        } else if input.peek(Token![...]) {
+        } else if input.peek(kw::any) {
             Ok(RvalueOrCall::Any(input.parse()?))
         } else if input.peek(Token![<]) {
             Ok(RvalueOrCall::Call(input.parse()?))
@@ -862,51 +862,42 @@ impl Parse for Statement {
     }
 }
 
-impl MacroDelimiter {
-    pub fn brace(brace: token::Brace) -> Self {
-        Self {
-            kind: syn::MacroDelimiter::Brace(brace),
-            tk_semi: None,
-        }
-    }
-    pub fn bracket(bracket: token::Bracket, tk_semi: Token![;]) -> Self {
-        Self {
-            kind: syn::MacroDelimiter::Bracket(bracket),
-            tk_semi: Some(tk_semi),
-        }
-    }
-    pub fn paren(paren: token::Paren, tk_semi: Token![;]) -> Self {
-        Self {
-            kind: syn::MacroDelimiter::Paren(paren),
-            tk_semi: Some(tk_semi),
-        }
-    }
-}
-
 #[macro_export]
 macro_rules! macro_delimiter {
     ($content:ident in $input:expr) => {
         if $input.peek(::syn::token::Paren) {
-            $crate::MacroDelimiter::paren(::syn::parenthesized!($content in $input), $input.parse()?)
+            ::syn::MacroDelimiter::Paren(::syn::parenthesized!($content in $input))
         } else if $input.peek(::syn::token::Bracket) {
-            $crate::MacroDelimiter::bracket(::syn::bracketed!($content in $input), $input.parse()?)
+            ::syn::MacroDelimiter::Bracket(::syn::bracketed!($content in $input))
         } else if $input.peek(::syn::token::Brace) {
-            $crate::MacroDelimiter::brace(::syn::braced!($content in $input))
+            ::syn::MacroDelimiter::Brace(::syn::braced!($content in $input))
         } else {
             return Err($input.error($crate::ParseError::ExpectDelimiter));
         }
     }
 }
 
-impl Parse for Meta {
+impl<K: Parse, C, P: ParseFn<C>> Parse for Macro<K, C, P> {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let content;
-        Ok(Meta {
-            kw_meta: input.parse()?,
+        Ok(Macro {
+            kw: input.parse()?,
             tk_bang: input.parse()?,
             delim: macro_delimiter!(content in input),
-            items: Punctuated::parse_terminated(&content)?,
+            content: P::parse(&content)?,
+            parse: P::default(),
         })
+    }
+}
+
+impl Parse for Meta {
+    fn parse(input: ParseStream) -> Result<Self> {
+        let meta: Macro<_, _, _> = input.parse()?;
+        let tk_semi = match meta.delim {
+            syn::MacroDelimiter::Paren(_) | syn::MacroDelimiter::Bracket(_) => Some(input.parse()?),
+            syn::MacroDelimiter::Brace(_) => input.parse()?,
+        };
+        Ok(Meta { meta, tk_semi })
     }
 }
 
@@ -921,5 +912,27 @@ impl Parse for Mir {
             statements.push(input.parse()?);
         }
         Ok(Mir { metas, statements })
+    }
+}
+
+#[derive(Default, Clone, Copy)]
+pub struct ParseParse;
+
+#[derive(Default, Clone, Copy)]
+pub struct PunctuatedParseTerminated;
+
+pub trait ParseFn<T>: Default {
+    fn parse(input: ParseStream<'_>) -> Result<T>;
+}
+
+impl<T: Parse> ParseFn<T> for ParseParse {
+    fn parse(input: ParseStream<'_>) -> Result<T> {
+        input.parse()
+    }
+}
+
+impl<T: Parse, P: Parse> ParseFn<Punctuated<T, P>> for PunctuatedParseTerminated {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Punctuated<T, P>> {
+        Punctuated::parse_terminated(input)
     }
 }
