@@ -1,5 +1,5 @@
 [package]
-name = "rpl_mir_pattern_expand"
+name = "rpl_mir_expand"
 version.workspace = true
 description.workspace = true
 repository.workspace = true
@@ -12,7 +12,7 @@ quote.workspace = true
 syn.workspace = true
 proc-macro2.workspace = true
 thiserror.workspace = true
-rpl_mir_pattern_syntax.workspace = true
+rpl_mir_syntax.workspace = true
 
 [features]
 

@@ -1,8 +1,11 @@
-name: CI
+name: Rust CI
 
 on:
   push:
     branches: [ dev ]
+    paths-ignore:
+      - 'docs/**'
+      - 'README.md'
   pull_request:
     branches: [ master ]
 

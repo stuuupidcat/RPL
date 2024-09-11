@@ -303,8 +303,24 @@ impl ToTokens for Drop {
     }
 }
 
-impl ToTokens for MirPattern {
+impl<K: ToTokens, C: ToTokens, P> ToTokens for Macro<K, C, P> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.kw.to_tokens(tokens);
+        self.tk_bang.to_tokens(tokens);
+        let inner = |tokens: &mut _| self.content.to_tokens(tokens);
+        match self.delim {
+            syn::MacroDelimiter::Paren(paren) => paren.surround(tokens, inner),
+            syn::MacroDelimiter::Brace(brace) => brace.surround(tokens, inner),
+            syn::MacroDelimiter::Bracket(bracket) => bracket.surround(tokens, inner),
+        }
+    }
+}
+
+impl ToTokens for Mir {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        for meta in &self.metas {
+            meta.to_tokens(tokens);
+        }
         for statement in &self.statements {
             statement.to_tokens(tokens);
         }
