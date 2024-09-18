@@ -3,9 +3,9 @@ members = [
     "crates/rpl_driver",
     "crates/rpl_interface",
     "crates/rpl_macros",
-    "crates/rpl_mir_pattern",
-    "crates/rpl_mir_pattern/expand",
-    "crates/rpl_mir_pattern/syntax",
+    "crates/rpl_mir",
+    "crates/rpl_mir_expand",
+    "crates/rpl_mir_syntax",
     "crates/rpl_patterns",
     "./"
 ]
@@ -23,9 +23,9 @@ repository = "https://github.com/stuuupidcat/RPL"
 rpl_driver = { path = "./crates/rpl_driver" }
 rpl_interface = { path = "./crates/rpl_interface" }
 rpl_macros = { path = "./crates/rpl_macros" }
-rpl_mir_pattern = { path = "./crates/rpl_mir_pattern" }
-rpl_mir_pattern_expand = { path = "./crates/rpl_mir_pattern/expand" }
-rpl_mir_pattern_syntax = { path = "./crates/rpl_mir_pattern/syntax" }
+rpl_mir = { path = "./crates/rpl_mir" }
+rpl_mir_expand = { path = "./crates/rpl_mir_expand" }
+rpl_mir_syntax = { path = "./crates/rpl_mir_syntax" }
 rpl_patterns = { path = "./crates/rpl_patterns" }
 rustc_tools_util = "0.3.0"
 serde = { version = "1.0", features = ["derive"] }

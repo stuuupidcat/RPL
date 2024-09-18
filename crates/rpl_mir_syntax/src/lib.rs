@@ -16,7 +16,13 @@ mod parse;
 #[cfg(test)]
 mod tests;
 
+pub use parse::ParseError;
+
 pub(crate) mod kw {
+    // Metadata
+    syn::custom_keyword!(meta);
+    syn::custom_keyword!(ty);
+
     // Statement
     syn::custom_keyword!(drop);
 
@@ -24,6 +30,7 @@ pub(crate) mod kw {
     syn::custom_keyword!(Len);
     syn::custom_keyword!(Discriminant);
     syn::custom_keyword!(raw);
+    syn::custom_keyword!(any);
 
     // CastKind
     syn::custom_keyword!(PtrToPtr);
@@ -84,22 +91,13 @@ auto_derive! {
 }
 
 auto_derive! {
-    #[auto_derive(ToTokens, From)]
-    #[derive(Clone)]
-    pub enum TypeOrAny {
-        Any(Token![...]),
-        Type(Type),
-    }
-}
-
-auto_derive! {
     #[auto_derive(ToTokens)]
     #[derive(Clone)]
     pub struct TypeDecl {
         tk_type: Token![type],
         pub ident: Ident,
         tk_eq: Token![=],
-        pub ty: TypeOrAny,
+        pub ty: Type,
         tk_semi: Token![;],
     }
 }
@@ -314,6 +312,15 @@ pub struct TypeTuple {
 }
 
 auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct TypeVar {
+        tk_dollar: Token![$],
+        pub ident: Ident,
+    }
+}
+
+auto_derive! {
     #[auto_derive(ToTokens, From)]
     #[derive(Clone)]
     pub enum Type {
@@ -349,6 +356,9 @@ auto_derive! {
         // TraitObject(TypeTraitObject),
         /// A tuple type: `(A, B, C, String)`.
         Tuple(TypeTuple),
+
+        /// A `TyVar` from `meta!($T:ty)`.
+        TyVar(TypeVar),
     }
 }
 
@@ -759,13 +769,35 @@ auto_derive! {
     }
 }
 
+pub struct Macro<K, C, P = parse::ParseParse> {
+    kw: K,
+    tk_bang: Token![!],
+    delim: syn::MacroDelimiter,
+    pub content: C,
+    parse: P,
+}
+
+impl<K: Clone, C: Clone, P: Clone> Clone for Macro<K, C, P> {
+    fn clone(&self) -> Self {
+        Self {
+            kw: self.kw.clone(),
+            tk_bang: self.tk_bang,
+            delim: self.delim.clone(),
+            content: self.content.clone(),
+            parse: self.parse.clone(),
+        }
+    }
+}
+
+pub type AnyValue = Macro<kw::any, syn::parse::Nothing>;
+
 auto_derive! {
     #[auto_derive(ToTokens, From)]
     #[derive(Clone)]
     pub enum RvalueOrCall {
         Rvalue(Rvalue),
         Call(Call),
-        Any(Token![...]),
+        Any(AnyValue),
     }
 }
 
@@ -831,6 +863,34 @@ auto_derive! {
     }
 }
 
-pub struct MirPattern {
+auto_derive! {
+    #[auto_derive(ToTokens, Parse, From)]
+    #[derive(Clone, Copy)]
+    pub enum MetaKind {
+        Ty(kw::ty),
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct MetaItem {
+        tk_dollar: Token![$],
+        pub ident: Ident,
+        tk_colon: Token![:],
+        pub kind: MetaKind,
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens)]
+    pub struct Meta {
+        pub meta: Macro<kw::meta, Punctuated<MetaItem, Token![,]>, parse::PunctuatedParseTerminated>,
+        tk_semi: Option<Token![;]>,
+    }
+}
+
+pub struct Mir {
+    pub metas: Vec<Meta>,
     pub statements: Vec<Statement>,
 }
