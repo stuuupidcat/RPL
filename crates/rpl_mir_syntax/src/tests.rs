@@ -2,6 +2,7 @@ use crate::*;
 
 use crate::parse::ParseError;
 
+use pretty_assertions::assert_eq;
 use quote::{quote, ToTokens};
 use syn::parse::Parse;
 
@@ -97,9 +98,9 @@ fn test_place() {
     pass!(Place!(x));
     pass!(Place!(x.0));
     pass!(Place!((*x.0)));
-    pass!(Place!((*x.0)[2]));
+    pass!(Place!((*x.0)[2 of 3]));
     pass!(Place!((*x.0)[y]));
-    pass!(Place!((*x.0)[-3]));
+    pass!(Place!((*x.0)[-3 of 4]));
     pass!(Place!((*x.0)[1..3]));
     pass!(Place!((*x.0)[1..-3]));
 

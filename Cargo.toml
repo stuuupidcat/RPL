@@ -39,6 +39,7 @@ syn = { version = "2.0", features = ["full"] }
 proc-macro2 = "1.0"
 tracing = "0.1.28"
 thiserror = "1.0"
+pretty_assertions = "1.4"
 
 [package]
 name = "rpl"

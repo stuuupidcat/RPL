@@ -162,6 +162,8 @@ impl ToTokens for PlaceConstIndex {
         self.bracket.surround(tokens, |tokens| {
             self.from_end.to_tokens(tokens);
             self.index.to_tokens(tokens);
+            self.kw_of.to_tokens(tokens);
+            self.min_length.to_tokens(tokens);
         });
     }
 }
