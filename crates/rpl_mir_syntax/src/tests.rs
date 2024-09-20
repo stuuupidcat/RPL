@@ -62,20 +62,22 @@ fn test_path() {
     pass!(Path!(std::mem::take));
     pass!(Path!(Vec<T>));
     pass!(Path!(core::ffi::c_str::CStr));
+    pass!(Path!($crate::ffi::sqlite3session_attach));
     pass!(TypePath!(<Vec<T> >));
     pass!(TypePath!(<Vec<T> as Clone>::clone));
+    pass!(TypePath!(<$crate::alloc::Vec<T> as Clone>::clone));
+    pass!(TypePath!(<Vec<T> as $crate::clone::Clone>::clone));
+    pass!(TypePath!(<$crate::alloc::Vec<T> as $crate::clone::Clone>::clone));
     pass!(TypePath!(<core::ffi::c_str::CStr>));
     pass!(TypePath!(<core::ffi::c_str::CStr>::from_bytes_with_nul_unchecked));
     #[rustfmt::skip]
     pass!(TypePath!(< <core::ffi::c_str::CStr>::from_bytes_with_nul_unchecked>::___rt_impl));
 
-    fail!(Path!(crate::crate), ParseError::UnexpectedCrateInPath);
-    fail!(Path!(std::crate), ParseError::UnexpectedCrateInPath);
-    fail!(
-        Path!(crate),
-        format!("unexpected end of input, {}", ParseError::CrateAloneInPath)
-    );
-    fail!(Path!(crate::), "unexpected end of input, expected identifier");
+    fail!(Path!(crate::crate), "expected identifier, found keyword `crate`");
+    fail!(Path!($crate::crate), "expected identifier, found keyword `crate`");
+    fail!(Path!(std::crate), "expected identifier, found keyword `crate`");
+    fail!(Path!($crate), format!("expected `::`"));
+    fail!(Path!($crate::), "unexpected end of input, expected identifier");
     fail!(Path!(from_ptr as), "unexpected token");
     fail!(TypePath!(from_ptr as), "unexpected token");
 }
@@ -108,7 +110,7 @@ fn test_place() {
 fn test_operand() {
     pass!(Operand!(std::mem::take));
     pass!(Operand!(move y));
-    fail!(Operand!(from_ptr as), "unexpected token");
+    fail!(Operand!(copy from_ptr as), "unexpected token");
 }
 
 #[test]
@@ -120,9 +122,9 @@ fn test_rvalue() {
     pass!(RvalueOrCall!(&mut y));
     pass!(RvalueOrCall!(&raw const *x));
     pass!(RvalueOrCall!(&raw mut *y));
-    pass!(RvalueOrCall!([i32; _] from [0, 1, 2, 3, 4]));
-    pass!(RvalueOrCall!((0, 1, 2, 3, 4)));
-    pass!(RvalueOrCall!(Test { x: 0 }));
+    pass!(RvalueOrCall!([i32; _] from [const 0, const 1, const 2, const 3, const 4]));
+    pass!(RvalueOrCall!((const 0, const 1, const 2, const 3, const 4)));
+    pass!(RvalueOrCall!(Test { x: const 0 }));
     pass!(RvalueOrCall!(*const [i32] from (ptr, meta)));
 
     fail!(
@@ -140,8 +142,8 @@ fn test_call() {
     #[rustfmt::skip]
     pass!(RvalueOrCall!( < <core::ffi::c_str::CStr>::from_bytes_with_nul_unchecked>::___rt_impl(move uslice) ));
 
-    pass!(Call!( crate::ffi::sqlite3session_attach(move s, move iptr) ));
-    pass!(RvalueOrCall!( crate::ffi::sqlite3session_attach(move s, move iptr) ));
+    pass!(Call!( $crate::ffi::sqlite3session_attach(move s, move iptr) ));
+    pass!(RvalueOrCall!( $crate::ffi::sqlite3session_attach(move s, move iptr) ));
 }
 
 #[test]
@@ -160,8 +162,8 @@ fn test_meta() {
 fn test_statement() {
     #[rustfmt::skip]
     pass!(Statement!( type SliceT = [$T]; ));
-    pass!(Statement!( let x: u32 = 0; ));
-    pass!(Statement!( *x = y.0; ));
+    pass!(Statement!( let x: u32 = const 0_usize; ));
+    pass!(Statement!( *x = copy y.0; ));
     pass!(Statement!( *x = std::mem::take(move y); ));
     pass!(Statement!( drop(y[x]); ));
     pass!(Statement!( let to_ptr: *const u8 = from_ptr as *const u8 (PtrToPtr); ));
@@ -193,7 +195,7 @@ fn test_mir_pattern() {
         use core::ffi::c_str::CString;
         use core::ffi::c_str::Cstr;
         use core::ptr::non_null::NonNull;
-        use crate::ffi::sqlite3session_attach;
+        use $crate::ffi::sqlite3session_attach;
 
         type NonNullSliceU8 = NonNull<[u8]>;
         type PtrSliceU8 = *const [u8];
@@ -204,9 +206,9 @@ fn test_mir_pattern() {
         type PtrI8 = *const i8;
 
         let cstring: CString = any!();
-        let non_null: NonNullSliceU8 = (((cstring.inner).0).pointer);
-        let uslice_ptr: PtrSliceU8 = (non_null.pointer);
-        let cstr: PtrCStr = uslice_ptr as PtrCStr (PtrToPtr);
+        let non_null: NonNullSliceU8 = copy (((cstring.inner).0).pointer);
+        let uslice_ptr: PtrSliceU8 = copy (non_null.pointer);
+        let cstr: PtrCStr = copy uslice_ptr as PtrCStr (PtrToPtr);
         // /*
         let uslice: RefSliceU8 = &(*uslice_ptr);
         let cstr: RefCStr = < <CStr>::from_bytes_with_nul_unchecked>::___rt_impl(move uslice);

@@ -26,6 +26,9 @@ pub(crate) mod kw {
     // Statement
     syn::custom_keyword!(drop);
 
+    // Operand
+    syn::custom_keyword!(copy);
+
     // Rvalue
     syn::custom_keyword!(Len);
     syn::custom_keyword!(Discriminant);
@@ -223,29 +226,31 @@ auto_derive! {
 }
 
 auto_derive! {
-    #[auto_derive(ToTokens, Parse, From)]
+    #[auto_derive(Parse, ToTokens)]
     #[derive(Clone)]
-    pub enum IdentOrCrate {
-        Crate(Token![crate]),
-        Ident(Ident),
+    pub struct PathSegment {
+        pub ident: Ident,
+        pub arguments: PathArguments,
     }
 }
 
-impl IdentOrCrate {
-    pub fn as_ident(&self) -> Option<&Ident> {
-        match self {
-            IdentOrCrate::Ident(ident) => Some(ident),
-            IdentOrCrate::Crate(_) => None,
-        }
+auto_derive! {
+    #[auto_derive(Parse, ToTokens)]
+    #[derive(Clone, Copy)]
+    pub struct PathCrate {
+        tk_dollar: Token![$],
+        pub tk_crate: Token![crate],
+        colon: Token![::],
     }
 }
 
 auto_derive! {
     #[auto_derive(ToTokens)]
-    #[derive(Clone)]
-    pub struct PathSegment {
-        pub ident: IdentOrCrate,
-        pub arguments: PathArguments,
+    #[derive(Clone, Copy)]
+    pub enum PathLeading {
+        None,
+        Colon(Token![::]),
+        Crate(PathCrate),
     }
 }
 
@@ -253,20 +258,21 @@ auto_derive! {
     #[auto_derive(ToTokens)]
     #[derive(Clone)]
     pub struct Path {
-        pub leading_colon: Option<Token![::]>,
+        pub leading: PathLeading,
         pub segments: Punctuated<PathSegment, Token![::]>,
     }
 }
 
 impl Path {
     pub fn as_ident(&self) -> Option<&Ident> {
-        if self.leading_colon.is_some() || self.segments.len() != 1 || self.segments.trailing_punct() {
+        let PathLeading::None = self.leading else { return None };
+        if self.segments.len() != 1 || self.segments.trailing_punct() {
             return None;
         }
         self.ident()
     }
     pub fn ident(&self) -> Option<&Ident> {
-        self.segments.last()?.ident.as_ident()
+        Some(&self.segments.last()?.ident)
     }
 }
 
@@ -482,18 +488,28 @@ impl Place {
 }
 
 auto_derive! {
-    #[auto_derive(ToTokens, From)]
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct ConstLit {
+        tk_const: Token![const],
+        pub lit: syn::Lit,
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens)]
     #[derive(Clone)]
     pub enum Const {
-        Lit(syn::Lit),
+        Lit(ConstLit),
         Path(TypePath),
     }
 }
 
 auto_derive! {
-    #[auto_derive(ToTokens, Parse, From)]
+    #[auto_derive(ToTokens, Parse)]
     #[derive(Clone)]
     pub struct OperandCopy {
+        kw_copy: kw::copy,
         pub place: Place,
     }
 

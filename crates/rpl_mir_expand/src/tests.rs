@@ -61,9 +61,9 @@ fn test_mir_pattern() {
             let from_raw_slice: PtrSliceT = &raw const *from_slice;
             let from_len: usize = Len(from_slice);
             let ty_size: usize = SizeOf($T);
-            let to_ptr: PtrU8 = from_ptr as PtrU8 (PtrToPtr);
-            let to_len: usize = Mul(from_len, ty_size);
-            let to_raw_slice: PtrSliceU8 = *const SliceU8 from (to_ptr, t_len);
+            let to_ptr: PtrU8 = copy from_ptr as PtrU8 (PtrToPtr);
+            let to_len: usize = Mul(copy from_len, copy ty_size);
+            let to_raw_slice: PtrSliceU8 = *const SliceU8 from (copy to_ptr, copy t_len);
             let to_slice: RefSliceU8 = &*to_raw_slice;
         },
         quote! {

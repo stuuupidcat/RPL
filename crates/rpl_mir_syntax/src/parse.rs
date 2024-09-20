@@ -1,6 +1,7 @@
 use quote::ToTokens;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::{Ident, Token};
+use token::Token;
 
 use crate::*;
 
@@ -44,10 +45,6 @@ pub enum ParseError {
     ExpectBraceOrParenthesis,
     #[error("`,` is needed for single-element tuple")]
     ExpectTuple,
-    #[error("`crate` cannot be used as non-beginning position in a path")]
-    UnexpectedCrateInPath,
-    #[error("`crate` cannot be used standalone in a path")]
-    CrateAloneInPath,
     #[error("type declaration with generic arguments are not supported")]
     TypeWithGenericsNotSupported,
     #[error("expect `(`, `[`, or `{{")]
@@ -225,59 +222,31 @@ impl Parse for PathArguments {
 }
 
 impl PathSegment {
-    fn parse_kw_crate(input: ParseStream<'_>) -> Result<Self> {
-        Ok(PathSegment {
-            ident: IdentOrCrate::Crate(input.parse()?),
-            arguments: PathArguments::None,
-        })
-    }
     fn parse_turbofish(input: ParseStream<'_>) -> Result<Self> {
         Ok(PathSegment {
-            ident: IdentOrCrate::Ident(input.parse()?),
+            ident: input.parse()?,
             arguments: input.call(PathArguments::parse_turbofish)?,
         })
     }
 }
 
-impl Parse for PathSegment {
+impl Parse for PathLeading {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
-        if input.peek(Token![crate]) {
-            return Err(input.error(ParseError::UnexpectedCrateInPath));
+        if input.peek(Token![::]) {
+            Ok(PathLeading::Colon(input.parse()?))
+        } else if input.peek(Token![$]) {
+            Ok(PathLeading::Crate(input.parse()?))
+        } else {
+            Ok(PathLeading::None)
         }
-        Ok(PathSegment {
-            ident: IdentOrCrate::Ident(input.parse()?),
-            arguments: input.parse()?,
-        })
-    }
-}
-
-impl Path {
-    fn parse_path_started_with_crate(input: ParseStream<'_>) -> Result<Self> {
-        let mut segments = Punctuated::new();
-        segments.push_value(PathSegment::parse_kw_crate(input)?);
-        segments.push_punct(input.parse().map_err(|_| input.error(ParseError::CrateAloneInPath))?);
-        segments.push_value(input.parse()?);
-        while input.peek(Token![::]) {
-            segments.push_punct(input.parse()?);
-            segments.push_value(input.parse()?);
-        }
-        Ok(Path {
-            leading_colon: None,
-            segments,
-        })
     }
 }
 
 impl Parse for Path {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
-        if input.peek(Token![crate]) {
-            Path::parse_path_started_with_crate(input)
-        } else {
-            Ok(Path {
-                leading_colon: input.parse()?,
-                segments: Punctuated::parse_separated_nonempty(input)?,
-            })
-        }
+        let leading: PathLeading = input.parse()?;
+        let segments = Punctuated::parse_separated_nonempty(input)?;
+        Ok(Path { leading, segments })
     }
 }
 
@@ -287,16 +256,16 @@ impl QSelf {
         let ty = input.parse()?;
         let tk_as = input.parse()?;
         let tk_gt;
-        let leading_colon;
+        let leading;
         let mut segments = Punctuated::new();
         let mut position = 0;
         match tk_as {
             None => {
                 tk_gt = input.parse()?;
-                leading_colon = input.parse()?;
+                leading = input.parse()?;
             },
             Some(_) => {
-                leading_colon = input.parse()?;
+                leading = input.parse()?;
                 loop {
                     segments.push_value(input.parse()?);
                     position += 1;
@@ -315,10 +284,7 @@ impl QSelf {
             tk_as,
             tk_gt,
         };
-        let path = Path {
-            leading_colon,
-            segments,
-        };
+        let path = Path { leading, segments };
         Ok((qself, path))
     }
 }
@@ -420,7 +386,11 @@ impl Parse for Type {
         } else if input.peek(Token![!]) {
             Ok(Type::Never(input.parse()?))
         } else if input.peek(Token![$]) {
-            Ok(Type::TyVar(input.parse()?))
+            if input.peek2(Token![crate]) {
+                Ok(Type::Path(input.parse()?))
+            } else {
+                Ok(Type::TyVar(input.parse()?))
+            }
         } else {
             Ok(Type::Path(input.parse()?))
         }
@@ -537,9 +507,9 @@ impl Parse for Operand {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         Ok(if input.peek(Token![move]) {
             Operand::Move(input.parse()?)
-        } else if Place::can_start(input) {
+        } else if input.peek(kw::copy) {
             Operand::Copy(input.parse()?)
-        } else if input.peek(syn::Lit) {
+        } else if input.peek(Token![const]) {
             Const::Lit(input.parse()?).into()
         } else {
             Const::Path(input.parse()?).into()
@@ -826,6 +796,8 @@ impl Parse for RvalueOrCall {
             Ok(RvalueOrCall::Any(input.parse()?))
         } else if input.peek(Token![<]) {
             Ok(RvalueOrCall::Call(input.parse()?))
+        } else if input.peek(kw::copy) || input.peek(Token![move]) || input.peek(Token![const]) {
+            input.call(RvalueOrCall::parse_operand_any_or_aggregate)
         } else if input.peek(syn::Ident) && input.peek2(token::Paren) {
             input.call(RvalueOrCall::parse_opertion_or_call)
         } else {
