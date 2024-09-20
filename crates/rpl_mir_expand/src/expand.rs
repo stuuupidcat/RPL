@@ -203,7 +203,9 @@ impl ToTokens for Expand<'_, &MetaItem> {
                 let ty_var_ident = ident.as_ty_var();
                 symbols.lock().add_ty_var(self.value.clone());
                 quote_each_token!(tokens
+                    #[allow(non_snake_case)]
                     let #ty_var_ident = #patterns.new_ty_var();
+                    #[allow(non_snake_case)]
                     let #ty_ident = #patterns.mk_var_ty(#tcx, #ty_var_ident);
                 );
             },

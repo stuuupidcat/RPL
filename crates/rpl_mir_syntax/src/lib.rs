@@ -29,6 +29,9 @@ pub(crate) mod kw {
     // Operand
     syn::custom_keyword!(copy);
 
+    // place
+    syn::custom_keyword!(of);
+
     // Rvalue
     syn::custom_keyword!(Len);
     syn::custom_keyword!(Discriminant);
@@ -413,6 +416,8 @@ pub struct PlaceConstIndex {
     bracket: token::Bracket,
     pub from_end: Option<Token![-]>,
     pub index: syn::Index,
+    kw_of: kw::of,
+    pub min_length: syn::Index,
 }
 
 #[derive(Clone)]

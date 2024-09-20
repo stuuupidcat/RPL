@@ -1,7 +1,6 @@
 use quote::ToTokens;
 use syn::parse::{Parse, ParseStream, Result};
 use syn::{Ident, Token};
-use token::Token;
 
 use crate::*;
 
@@ -435,13 +434,13 @@ impl Place {
         }))
     }
     fn parse_const_index(self, bracket: token::Bracket, content: ParseStream<'_>) -> Result<Self> {
-        let from_end = content.parse()?;
-        let index = content.parse()?;
         Ok(Place::ConstIndex(PlaceConstIndex {
             place: Box::new(self),
             bracket,
-            from_end,
-            index,
+            from_end: content.parse()?,
+            index: content.parse()?,
+            kw_of: content.parse()?,
+            min_length: content.parse()?,
         }))
     }
     fn parse_subslice(self, bracket: token::Bracket, content: ParseStream<'_>) -> Result<Self> {

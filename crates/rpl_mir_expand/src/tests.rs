@@ -1,3 +1,4 @@
+use pretty_assertions::assert_eq;
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::parse::Parse;
@@ -38,7 +39,9 @@ fn test_ty_var() {
     pass!(
         MetaItem!( $T:ty ),
         quote! {
+            #[allow(non_snake_case)]
             let T_ty_var = patterns.new_ty_var();
+            #[allow(non_snake_case)]
             let T_ty = patterns.mk_var_ty(tcx, T_ty_var);
         },
     );
@@ -67,7 +70,9 @@ fn test_mir_pattern() {
             let to_slice: RefSliceU8 = &*to_raw_slice;
         },
         quote! {
+            #[allow(non_snake_case)]
             let T_ty_var = patterns.new_ty_var();
+            #[allow(non_snake_case)]
             let T_ty = patterns.mk_var_ty(tcx, T_ty_var);
             let SliceT_ty = patterns.mk_slice_ty(tcx, T_ty);
             let RefSliceT_ty = patterns.mk_ref_ty(
