@@ -119,14 +119,14 @@ fn pattern<'tcx>(tcx: TyCtxt<'tcx>, patterns: &mut pat::Patterns<'tcx>) -> Patte
         let ty_size: usize = SizeOf($T);
         let ty_size_mut: usize = SizeOf($T);
 
-        let to_ptr: *const u8 = from_raw as *const u8 (PtrToPtr);
-        let to_ptr_mut: *mut u8 = from_raw_mut as *mut u8 (PtrToPtr);
+        let to_ptr: *const u8 = copy from_raw as *const u8 (PtrToPtr);
+        let to_ptr_mut: *mut u8 = copy from_raw_mut as *mut u8 (PtrToPtr);
 
         let to_len: usize = Mul(move from_len, move ty_size);
         let to_len_mut: usize = Mul(move from_len_mut, move ty_size_mut);
 
-        let to_raw: *const [u8] = *const [u8] from (to_ptr, to_len);
-        let to_raw_mut: *mut [u8] = *mut [u8] from (to_ptr_mut, to_len_mut);
+        let to_raw: *const [u8] = *const [u8] from (copy to_ptr, copy to_len);
+        let to_raw_mut: *mut [u8] = *mut [u8] from (copy to_ptr_mut, copy to_len_mut);
 
         let to_slice: &[u8] = &*to_raw;
         let to_slice_mut: &mut [u8] = &mut *to_raw_mut;

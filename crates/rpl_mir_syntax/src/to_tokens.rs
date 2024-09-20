@@ -119,7 +119,7 @@ impl ToTokens for TypePath {
             qself.ty.to_tokens(tokens);
             if let Some(tk_as) = qself.tk_as {
                 tk_as.to_tokens(tokens);
-                self.path.leading_colon.to_tokens(tokens);
+                self.path.leading.to_tokens(tokens);
                 for (pos, pair) in pairs.by_ref().take(qself.position).enumerate() {
                     let (seg, tk_colon2) = pair.into_tuple();
                     seg.to_tokens(tokens);
@@ -130,8 +130,10 @@ impl ToTokens for TypePath {
                 }
             } else {
                 qself.tk_gt.to_tokens(tokens);
-                self.path.leading_colon.to_tokens(tokens);
+                self.path.leading.to_tokens(tokens);
             }
+        } else {
+            self.path.leading.to_tokens(tokens);
         }
         for pair in pairs {
             let (seg, tk_colon2) = pair.into_tuple();
