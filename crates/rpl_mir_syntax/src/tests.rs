@@ -182,7 +182,7 @@ fn test_mir_pattern() {
         type PtrSliceU8 = *const SliceU8;
         type RefSliceU8 = &SliceU8;
 
-        let from_slice: SliceT = any!();
+        let from_slice: SliceT = _;
         let from_raw_slice: PtrSliceT = &raw const *from_slice;
         let from_len: usize = Len(from_slice);
         let ty_size: usize = SizeOf($T);
@@ -205,7 +205,7 @@ fn test_mir_pattern() {
         type PtrSliceI8 = *const [i8];
         type PtrI8 = *const i8;
 
-        let cstring: CString = any!();
+        let cstring: CString = _;
         let non_null: NonNullSliceU8 = copy (((cstring.inner).0).pointer);
         let uslice_ptr: PtrSliceU8 = copy (non_null.pointer);
         let cstr: PtrCStr = copy uslice_ptr as PtrCStr (PtrToPtr);
@@ -216,7 +216,7 @@ fn test_mir_pattern() {
         let islice: PtrSliceI8 = &raw const ((*cstr).inner);
         let iptr: PtrI8 = move islice as PtrI8 (PtrToPtr);
         drop(cstring);
-        let s: i32 = any!();
+        let s: i32 = _;
         let ret: i32 = sqlite3session_attach(move s, move iptr);
     });
 }

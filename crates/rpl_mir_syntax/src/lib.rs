@@ -33,7 +33,6 @@ pub(crate) mod kw {
     syn::custom_keyword!(Len);
     syn::custom_keyword!(Discriminant);
     syn::custom_keyword!(raw);
-    syn::custom_keyword!(any);
 
     // CastKind
     syn::custom_keyword!(PtrToPtr);
@@ -805,15 +804,13 @@ impl<K: Clone, C: Clone, P: Clone> Clone for Macro<K, C, P> {
     }
 }
 
-pub type AnyValue = Macro<kw::any, syn::parse::Nothing>;
-
 auto_derive! {
     #[auto_derive(ToTokens, From)]
     #[derive(Clone)]
     pub enum RvalueOrCall {
         Rvalue(Rvalue),
         Call(Call),
-        Any(AnyValue),
+        Any(Token![_]),
     }
 }
 
