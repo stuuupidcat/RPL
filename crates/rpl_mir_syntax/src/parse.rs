@@ -792,7 +792,7 @@ impl Parse for RvalueOrCall {
             Ok(Rvalue::parse_array_like(input)?.into())
         } else if input.peek(Token![&]) {
             Ok(Rvalue::parse_ref_or_address_of(input)?.into())
-        } else if input.peek(kw::any) {
+        } else if input.peek(Token![_]) {
             Ok(RvalueOrCall::Any(input.parse()?))
         } else if input.peek(Token![<]) {
             Ok(RvalueOrCall::Call(input.parse()?))
