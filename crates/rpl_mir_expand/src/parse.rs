@@ -1,6 +1,6 @@
+use proc_macro2::TokenStream;
+use quote::ToTokens;
 use syn::parse::{Parse, ParseStream};
-use syn::Ident;
-use syntax::Mir;
 
 const MACRO_MIR: &str = "mir";
 
@@ -16,23 +16,25 @@ impl Parse for MirPatternFn {
 }
 
 impl MirPatternFn {
-    pub(crate) fn tcx_and_patterns(&self) -> Option<(&Ident, &Ident)> {
+    pub(crate) fn expand_macro_mir(mut self) -> syn::Result<TokenStream> {
         let inputs = self.item_fn.sig.inputs.iter().collect::<Vec<_>>();
-        if let [syn::FnArg::Typed(tcx), syn::FnArg::Typed(patterns)] = inputs[..]
+        let tcx_and_patterns = if let [syn::FnArg::Typed(tcx), syn::FnArg::Typed(patterns)] = inputs[..]
             && let box syn::Pat::Ident(ref tcx) = tcx.pat
             && let box syn::Pat::Ident(ref patterns) = patterns.pat
         {
-            return Some((&tcx.ident, &patterns.ident));
+            Some((&tcx.ident, &patterns.ident))
+        } else {
+            None
+        };
+        for stmt in &mut self.item_fn.block.stmts {
+            if let syn::Stmt::Macro(syn::StmtMacro { mac, .. }) = stmt
+                && mac.path.is_ident(MACRO_MIR)
+            {
+                mac.path = syn::parse_quote!(::rpl_macros::identity);
+                let mir = syn::parse2(mac.tokens.clone())?;
+                mac.tokens = crate::expand_mir(mir, tcx_and_patterns)?;
+            }
         }
-        None
-    }
-
-    pub(crate) fn stmt_is_macro_mir(&self, stmt: &syn::Stmt) -> syn::Result<Option<Mir>> {
-        if let syn::Stmt::Macro(syn::StmtMacro { mac, .. }) = stmt
-            && mac.path.is_ident(MACRO_MIR)
-        {
-            return syn::parse2(mac.tokens.clone()).map(Some);
-        }
-        Ok(None)
+        Ok(self.item_fn.into_token_stream())
     }
 }

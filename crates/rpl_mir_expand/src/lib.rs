@@ -12,6 +12,7 @@ extern crate rustc_driver;
 extern crate rustc_hash;
 extern crate rustc_index;
 
+mod check;
 pub(crate) mod expand;
 mod parse;
 pub(crate) mod symbol_table;
@@ -19,8 +20,10 @@ pub(crate) mod symbol_table;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use check::check_mir;
 pub use expand::{expand, expand_mir};
 #[cfg(test)]
 pub(crate) use expand::{expand_impl, Expand};
 pub use parse::MirPatternFn;
+pub(crate) use symbol_table::is_primitive;
 pub use symbol_table::SymbolTable;

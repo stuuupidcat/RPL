@@ -444,21 +444,22 @@ impl Place {
         }))
     }
     fn parse_subslice(self, bracket: token::Bracket, content: ParseStream<'_>) -> Result<Self> {
-        let from = content.parse()?;
-        let tk_dotdot = content.parse()?;
+        let from = if content.peek(syn::LitInt) {
+            Some(content.parse()?)
+        } else {
+            None
+        };
+        let tk_colon = content.parse()?;
         let from_end = content.parse()?;
         let to = content.parse()?;
         Ok(Place::Subslice(PlaceSubslice {
             place: Box::new(self),
             bracket,
             from,
-            tk_dotdot,
+            tk_colon,
             from_end,
             to,
         }))
-    }
-    fn can_start(input: ParseStream<'_>) -> bool {
-        input.peek(token::Paren) || input.peek(Token![*]) || input.peek(syn::Ident) && !input.peek2(Token![::])
     }
 }
 
@@ -481,7 +482,7 @@ impl Place {
                 let bracket = syn::bracketed!(content in input);
                 if content.peek(Ident) {
                     place.parse_index(bracket, &content)?
-                } else if content.peek2(Token![..]) {
+                } else if content.peek(Token![:]) || content.peek2(Token![:]) {
                     place.parse_subslice(bracket, &content)?
                 } else {
                     place.parse_const_index(bracket, &content)?

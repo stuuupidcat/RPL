@@ -11,6 +11,11 @@ pub fn mir_pattern(_attribute: TokenStream, input: TokenStream) -> TokenStream {
 
 #[proc_macro]
 pub fn mir(input: TokenStream) -> TokenStream {
-    let expanded = expand::expand_mir(syn::parse_macro_input!(input as syntax::Mir));
-    expanded.into()
+    expand::expand_mir(syn::parse_macro_input!(input as syntax::Mir), None)
+        .map_or_else(|err| err.into_compile_error().into(), Into::into)
+}
+
+#[proc_macro]
+pub fn identity(input: TokenStream) -> TokenStream {
+    input
 }

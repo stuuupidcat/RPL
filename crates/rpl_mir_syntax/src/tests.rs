@@ -101,8 +101,8 @@ fn test_place() {
     pass!(Place!((*x.0)[2 of 3]));
     pass!(Place!((*x.0)[y]));
     pass!(Place!((*x.0)[-3 of 4]));
-    pass!(Place!((*x.0)[1..3]));
-    pass!(Place!((*x.0)[1..-3]));
+    pass!(Place!((*x.0)[1:3]));
+    pass!(Place!((*x.0)[1:-3]));
 
     fail!(Place!(from_ptr as), "unexpected token");
 }

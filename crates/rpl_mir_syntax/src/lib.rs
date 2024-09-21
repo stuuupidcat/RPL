@@ -424,8 +424,8 @@ pub struct PlaceConstIndex {
 pub struct PlaceSubslice {
     pub place: Box<Place>,
     bracket: token::Bracket,
-    pub from: syn::Index,
-    tk_dotdot: Token![..],
+    pub from: Option<syn::Index>,
+    tk_colon: Token![:],
     pub from_end: Option<Token![-]>,
     pub to: syn::Index,
 }
