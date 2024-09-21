@@ -187,8 +187,16 @@ pub enum PlaceElem<'tcx> {
     Deref,
     Field(Field),
     Index(LocalIdx),
-    ConstantIndex { offset: u64, from_end: bool },
-    Subslice { from: u64, to: u64, from_end: bool },
+    ConstantIndex {
+        offset: u64,
+        min_length: u64,
+        from_end: bool,
+    },
+    Subslice {
+        from: u64,
+        to: u64,
+        from_end: bool,
+    },
     Downcast(Symbol),
     OpaqueCast(Ty<'tcx>),
     Subtype(Ty<'tcx>),
@@ -754,9 +762,14 @@ impl<'tcx> Patterns<'tcx> {
                         PlaceElem::ConstantIndex {
                             offset: offset_pat,
                             from_end: from_end_pat,
+                            min_length: min_length_pat,
                         },
-                        ConstantIndex { offset, from_end, .. },
-                    ) => (offset_pat, from_end_pat) == (offset, from_end),
+                        ConstantIndex {
+                            offset,
+                            from_end,
+                            min_length,
+                        },
+                    ) => (offset_pat, from_end_pat, min_length_pat) == (offset, from_end, min_length),
                     (
                         _,
                         PlaceElem::Subslice {

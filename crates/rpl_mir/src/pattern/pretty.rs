@@ -19,23 +19,27 @@ impl<'tcx> fmt::Debug for Place<'tcx> {
 }
 
 fn fmt_projection<'tcx>(f: &mut fmt::Formatter<'_>, place: Place<'tcx>, proj: &PlaceElem<'tcx>) -> fmt::Result {
+    struct FromEnd(bool);
+    impl fmt::Display for FromEnd {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            if self.0 { f.write_str("-") } else { Ok(()) }
+        }
+    }
     match proj {
         PlaceElem::Deref => write!(f, "(*{place:?})"),
         PlaceElem::Field(field) => write!(f, "({place:?}.{field:?})"),
         PlaceElem::Index(local) => write!(f, "({place:?}[{local:?}])"),
-        &PlaceElem::ConstantIndex { offset, from_end } => {
-            if from_end {
-                write!(f, "({place:?}[{offset}])")
-            } else {
-                write!(f, "({place:?}[-{offset}])")
-            }
+        &PlaceElem::ConstantIndex {
+            offset,
+            min_length,
+            from_end,
+        } => {
+            let from_end = FromEnd(from_end);
+            write!(f, "({place:?}[{from_end}{offset} of {min_length}])")
         },
         &PlaceElem::Subslice { from, to, from_end } => {
-            if from_end {
-                write!(f, "({place:?}[{from}..{to}])")
-            } else {
-                write!(f, "({place:?}[{from}..-{to}])")
-            }
+            let from_end = FromEnd(from_end);
+            write!(f, "({place:?}[{from}:{from_end}{to}])")
         },
         PlaceElem::Downcast(variant) => write!(f, "({place:?} as {variant})"),
         PlaceElem::OpaqueCast(ty) | PlaceElem::Subtype(ty) => write!(f, "({place:?} as {ty:?})"),

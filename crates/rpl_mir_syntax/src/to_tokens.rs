@@ -173,7 +173,7 @@ impl ToTokens for PlaceSubslice {
         self.place.to_tokens(tokens);
         self.bracket.surround(tokens, |tokens| {
             self.from.to_tokens(tokens);
-            self.tk_dotdot.to_tokens(tokens);
+            self.tk_colon.to_tokens(tokens);
             self.from_end.to_tokens(tokens);
             self.to.to_tokens(tokens);
         });
