@@ -20,6 +20,9 @@ impl CheckCtxt {
         for meta in &mir.metas {
             self.check_meta(meta)?;
         }
+        for decl in &mir.declarations {
+            self.check_decl(decl)?;
+        }
         for stmt in &mir.statements {
             self.check_stmt(stmt)?;
         }
@@ -39,26 +42,35 @@ impl CheckCtxt {
         Ok(())
     }
 
+    fn check_decl(&mut self, decl: &Declaration) -> syn::Result<()> {
+        match decl {
+            Declaration::TypeDecl(TypeDecl { ty, ident, .. }) => self.symbols.add_type(ident.clone(), ty.clone()),
+            Declaration::UsePath(UsePath { path, .. }) => self.symbols.add_path(path.clone()),
+            Declaration::LocalDecl(LocalDecl { ident, ty, init, .. }) => {
+                self.symbols.add_local(ident.clone(), ty.clone());
+                if let Some(LocalInit { rvalue_or_call, .. }) = init {
+                    self.check_rvalue_or_call(rvalue_or_call)?;
+                }
+                Ok(())
+            },
+        }
+    }
+
     fn check_stmt(&mut self, stmt: &Statement) -> syn::Result<()> {
         match stmt {
-            Statement::TypeDecl(TypeDecl { ty, ident, .. }) => self.symbols.add_type(ident.clone(), ty.clone()),
-            Statement::UsePath(UsePath { path, .. }) => self.symbols.add_path(path.clone()),
-            Statement::LocalDecl(LocalDecl {
-                ident,
-                ty,
-                rvalue_or_call,
-                ..
-            }) => {
-                self.symbols.add_local(ident.clone(), ty.clone());
-                self.check_rvalue_or_call(rvalue_or_call)
-            },
-            Statement::Assign(Assign {
-                place, rvalue_or_call, ..
-            }) => {
+            Statement::Assign(
+                Assign {
+                    place, rvalue_or_call, ..
+                },
+                _,
+            ) => {
                 self.check_place(place)?;
                 self.check_rvalue_or_call(rvalue_or_call)
             },
-            Statement::Drop(Drop { place, .. }) => self.check_place(place),
+            Statement::Drop(Drop { place, .. }, _) => self.check_place(place),
+            Statement::Control(_control, _) => todo!(),
+            Statement::Loop(Loop { label: _, block: _, .. }) => todo!(),
+            Statement::SwitchInt(_switch_int) => todo!(),
         }
     }
 
@@ -72,14 +84,9 @@ impl CheckCtxt {
 
     fn check_rvalue(&self, rvalue: &Rvalue) -> syn::Result<()> {
         match rvalue {
-            Rvalue::Use(RvalueUse { operand, .. }) | Rvalue::UnaryOp(RvalueUnOp { operand, .. }) => {
-                self.check_operand(operand)
-            },
-            Rvalue::Repeat(RvalueRepeat { operand, len, .. }) => {
-                self.check_operand(operand)?;
-                self.check_const(len)?;
-                Ok(())
-            },
+            Rvalue::Use(RvalueUse { operand, .. })
+            | Rvalue::UnaryOp(RvalueUnOp { operand, .. })
+            | Rvalue::Repeat(RvalueRepeat { operand, .. }) => self.check_operand(operand),
             Rvalue::Ref(RvalueRef { place, .. })
             | Rvalue::AddressOf(RvalueAddrOf { place, .. })
             | Rvalue::Len(RvalueLen { place, .. })
@@ -135,7 +142,8 @@ impl CheckCtxt {
 
     fn check_place(&self, place: &Place) -> syn::Result<()> {
         match place {
-            Place::Local(PlaceLocal { local }) => self.check_local(local),
+            Place::Local(PlaceLocal::Local(local)) => self.check_local(local),
+            Place::Local(PlaceLocal::Underscore(_) | PlaceLocal::SelfValue(_)) => Ok(()),
 
             Place::Paren(PlaceParen { place, .. })
             | Place::Deref(PlaceDeref { place, .. })
@@ -172,8 +180,8 @@ impl CheckCtxt {
 
     fn check_aggregate(&self, agg: &RvalueAggregate) -> syn::Result<()> {
         match agg {
-            RvalueAggregate::Array(AggregateArray { ty, operands, .. }) => {
-                self.check_type(ty)?;
+            RvalueAggregate::Array(AggregateArray { operands, .. }) => {
+                // self.check_type(ty)?;
                 for operand in operands.operands.iter() {
                     self.check_operand(operand)?;
                 }
@@ -209,12 +217,8 @@ impl CheckCtxt {
                 self.check_type(ty)?;
                 Ok(())
             },
-            Type::Array(TypeArray { ty, len, .. }) => {
-                self.check_type(ty)?;
-                self.check_const(len)?;
-                Ok(())
-            },
-            Type::Group(TypeGroup { ty, .. })
+            Type::Array(TypeArray { ty, .. })
+            | Type::Group(TypeGroup { ty, .. })
             | Type::Paren(TypeParen { ty, .. })
             | Type::Slice(TypeSlice { ty, .. })
             | Type::Ptr(TypePtr { ty, .. }) => self.check_type(ty),

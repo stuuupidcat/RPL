@@ -42,19 +42,21 @@ pub fn expand_mir(mir: Mir, tcx_and_patterns: Option<(&Ident, &Ident)>) -> syn::
     Ok(tokens)
 }
 
-trait ExpandIdent: Sized + std::borrow::Borrow<Ident> + Into<Ident> {
-    fn with_suffix(&self, suffix: impl std::fmt::Display) -> Ident {
-        let ident = self.borrow();
-        format_ident!("{ident}{suffix}")
+trait ToSymbol: Sized + ToString {
+    fn to_symbol(&self) -> IdentSymbol {
+        IdentSymbol(self.to_string())
     }
+}
+
+impl<S: ToString> ToSymbol for S {}
+
+trait ExpandIdent: Sized {
+    fn with_suffix(&self, suffix: impl std::fmt::Display) -> Ident;
     // fn with_span(self, span: Span) -> Ident {
     //     let mut ident = self.into();
     //     ident.set_span(span);
     //     ident
     // }
-    fn as_symbol(&self) -> IdentSymbol<'_> {
-        IdentSymbol(self.borrow())
-    }
     fn as_ty(&self) -> Ident {
         self.with_suffix("_ty")
     }
@@ -69,7 +71,25 @@ trait ExpandIdent: Sized + std::borrow::Borrow<Ident> + Into<Ident> {
     }
 }
 
-impl ExpandIdent for Ident {}
+impl ExpandIdent for syn::Token![self] {
+    fn with_suffix(&self, suffix: impl std::fmt::Display) -> Ident {
+        format_ident!("self{suffix}")
+    }
+}
+impl ExpandIdent for Ident {
+    fn with_suffix(&self, suffix: impl std::fmt::Display) -> Ident {
+        format_ident!("{self}{suffix}")
+    }
+}
+impl ExpandIdent for syntax::PlaceLocal {
+    fn with_suffix(&self, suffix: impl std::fmt::Display) -> Ident {
+        match self {
+            PlaceLocal::Local(ident) => ident.with_suffix(suffix),
+            PlaceLocal::Underscore(_underscore) => todo!(),
+            PlaceLocal::SelfValue(self_value) => self_value.with_suffix(suffix),
+        }
+    }
+}
 
 impl<'ecx> ExpandCtxt<'ecx> {
     pub(crate) fn new(tcx: &'ecx Ident, patterns: &'ecx Ident) -> Self {
@@ -157,10 +177,15 @@ impl<'a, T: 'a, P: 'a> PairsExt<'a, T, P> for Pairs<'a, T, P> {
 
 impl ToTokens for Expand<'_, &Mir> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let Mir { metas, statements } = &self.value;
+        let Mir {
+            metas,
+            declarations,
+            statements,
+        } = &self.value;
         let metas = metas.iter().map(|meta| self.expand(meta));
+        let declarations = declarations.iter().map(|declaration| self.expand(declaration));
         let statements = statements.iter().map(|statement| self.expand(statement));
-        quote_each_token!(tokens #(#metas)* #(#statements)*);
+        quote_each_token!(tokens #(#metas)* #(#declarations)* #(#statements)*);
     }
 }
 
@@ -189,14 +214,24 @@ impl ToTokens for Expand<'_, &Meta> {
     }
 }
 
+impl ToTokens for Expand<'_, &Declaration> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self.value {
+            Declaration::TypeDecl(type_decl) => self.expand(type_decl).to_tokens(tokens),
+            Declaration::UsePath(use_path) => self.expand(use_path).to_tokens(tokens),
+            Declaration::LocalDecl(local_decl) => self.expand(local_decl).to_tokens(tokens),
+        }
+    }
+}
+
 impl ToTokens for Expand<'_, &Statement> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self.value {
-            Statement::TypeDecl(type_decl) => self.expand(type_decl).to_tokens(tokens),
-            Statement::UsePath(use_path) => self.expand(use_path).to_tokens(tokens),
-            Statement::LocalDecl(local_decl) => self.expand(local_decl).to_tokens(tokens),
-            Statement::Assign(assign) => self.expand(assign).to_tokens(tokens),
-            Statement::Drop(drop) => self.expand(drop).to_tokens(tokens),
+            Statement::Assign(assign, _) => self.expand(assign).to_tokens(tokens),
+            Statement::Drop(drop, _) => self.expand(drop).to_tokens(tokens),
+            Statement::Control(_control, _) => todo!(),
+            Statement::Loop(_loop) => todo!(),
+            Statement::SwitchInt(_switch_int) => todo!(),
         }
     }
 }
@@ -217,21 +252,18 @@ impl ToTokens for Expand<'_, &UsePath> {
 
 impl ToTokens for Expand<'_, &LocalDecl> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let LocalDecl {
-            ident,
-            ty,
-            rvalue_or_call,
-            ..
-        } = self.value;
+        let LocalDecl { ident, ty, init, .. } = self.value;
         let ExpandCtxt { patterns, .. } = self.ecx;
         let ty = self.expand(ty);
         let local = ident.as_local();
         quote_each_token!(tokens let #local = #patterns.mk_local(#ty); );
-        self.expand(Assign {
-            place: &Place::Local(ident.clone().into()),
-            rvalue_or_call,
-        })
-        .to_tokens(tokens);
+        if let Some(LocalInit { rvalue_or_call, .. }) = init {
+            self.expand(Assign {
+                place: &Place::Local(ident.clone().into()),
+                rvalue_or_call,
+            })
+            .to_tokens(tokens);
+        }
     }
 }
 
@@ -303,7 +335,6 @@ impl ToTokens for Expand<'_, &Type> {
         match self.value {
             Type::Array(TypeArray { box ty, len, .. }) => {
                 let ty = self.expand(ty);
-                let len = self.expand(len);
                 quote_each_token!(tokens #patterns.mk_array(#tcx, #ty, #len));
             },
             Type::Group(TypeGroup { box ty, .. }) | Type::Paren(TypeParen { box ty, .. }) => {
@@ -360,7 +391,6 @@ impl ToTokens for Expand<'_, &Rvalue> {
             },
             Rvalue::Repeat(RvalueRepeat { operand, len, .. }) => {
                 let operand = self.expand(operand);
-                let len = self.expand(len);
                 quote_each_token!(tokens Repeat(#operand, #len));
             },
             Rvalue::Ref(RvalueRef {
@@ -494,7 +524,7 @@ impl ToTokens for Expand<'_, Projections<'_>> {
                 place
             },
             Place::DownCast(PlaceDowncast { box place, variant, .. }) => {
-                let variant = self.expand(variant.as_symbol());
+                let variant = self.expand(variant.to_symbol());
                 quote_each_token!(tokens Downcast(#variant),);
                 place
             },
@@ -508,7 +538,7 @@ impl ToTokens for Expand<'_, &syn::Member> {
         quote_each_token!(tokens ::rpl_mir::pat::Field::);
         match self.value {
             syn::Member::Named(name) => {
-                let name = self.expand(name.as_symbol());
+                let name = self.expand(name.to_symbol());
                 quote_each_token!(tokens Named(#name));
             },
             &syn::Member::Unnamed(syn::Index { index, .. }) => {
@@ -521,7 +551,7 @@ impl ToTokens for Expand<'_, &syn::Member> {
 impl ToTokens for Expand<'_, &Place> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
         let ExpandCtxt { tcx, patterns, .. } = self.ecx;
-        if let Place::Local(PlaceLocal { local }) = self.value {
+        if let Place::Local(local) = self.value {
             let local = local.as_local();
             quote_each_token!(tokens #local.into_place());
         } else {
@@ -532,11 +562,11 @@ impl ToTokens for Expand<'_, &Place> {
     }
 }
 
-struct IdentSymbol<'a>(&'a Ident);
+struct IdentSymbol(String);
 
-impl ToTokens for Expand<'_, IdentSymbol<'_>> {
+impl ToTokens for Expand<'_, IdentSymbol> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ident = self.value.0.to_string();
+        let ident = self.value.0.as_str();
         quote_each_token!(tokens ::rustc_span::Symbol::intern(#ident));
     }
 }
@@ -545,10 +575,10 @@ impl ToTokens for Expand<'_, &RvalueAggregate> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
         quote_each_token!(tokens ::rpl_mir::pat::AggKind::);
         match self.value {
-            RvalueAggregate::Array(AggregateArray { box ty, operands, .. }) => {
-                let ty = self.expand(ty);
+            RvalueAggregate::Array(AggregateArray { operands, .. }) => {
+                // let ty = self.expand(ty);
                 let operands = self.expand_punctuated(&operands.operands);
-                quote_each_token!(tokens Array(#ty), [#operands].into_iter().collect());
+                quote_each_token!(tokens Array, [#operands].into_iter().collect());
             },
             RvalueAggregate::Tuple(AggregateTuple { operands }) => {
                 let operands = self.expand_punctuated(&operands.operands);
@@ -560,7 +590,7 @@ impl ToTokens for Expand<'_, &RvalueAggregate> {
             }) => {
                 let adt = self.expand(adt);
                 let operands = self.expand_punctuated_mapped(fields, |f| &f.operand);
-                let fields = self.expand_punctuated_mapped(fields, |f| f.ident.as_symbol());
+                let fields = self.expand_punctuated_mapped(fields, |f| f.ident.to_symbol());
                 quote_each_token!(tokens
                     Adt(#adt, [/* TODO: generic argmuents */], [#fields].into_iter().collect()),
                     [#operands].into_iter().collect(),

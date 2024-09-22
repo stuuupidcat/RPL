@@ -48,6 +48,14 @@ pub enum ParseError {
     TypeWithGenericsNotSupported,
     #[error("expect `(`, `[`, or `{{")]
     ExpectDelimiter,
+    #[error("expect `type`, `use`, or `let")]
+    ExpectDeclaration,
+    #[error("expect integer suffix")]
+    ExpectIntSuffix,
+    #[error("unrecognized integer suffix {0}")]
+    UnrecognizedIntSuffix(String),
+    #[error("expect `,` or `;`")]
+    ExpectCommaOrSemicolon,
 }
 
 impl Parse for Region {
@@ -690,26 +698,35 @@ impl Parse for AggregateRawPtr {
 }
 
 impl Rvalue {
-    fn parse_array_like(input: ParseStream<'_>) -> Result<Self> {
+    fn parse_array(input: ParseStream<'_>) -> Result<Self> {
         let content;
         let bracket = syn::bracketed!(content in input);
-        Ok(if input.peek(kw::from) {
-            Rvalue::Aggregate(RvalueAggregate::Array(AggregateArray {
+        let operand = content.parse()?;
+        if content.peek(Token![;]) {
+            Ok(Rvalue::Repeat(RvalueRepeat {
                 bracket,
-                ty: content.parse()?,
-                tk_semi: content.parse()?,
-                tk_underscore: content.parse()?,
-                kw_from: input.parse()?,
-                operands: input.parse()?,
-            }))
-        } else {
-            Rvalue::Repeat(RvalueRepeat {
-                bracket,
-                operand: content.parse()?,
+                operand,
                 tk_semi: content.parse()?,
                 len: content.parse()?,
+            }))
+        } else if !content.is_empty() {
+            let mut operands = Punctuated::new();
+            operands.push_value(operand);
+            operands.push_punct(content.parse()?);
+            while !content.is_empty() {
+                operands.push_value(content.parse()?);
+                if content.is_empty() {
+                    break;
+                }
+                operands.push_punct(content.parse()?);
+            }
+            Ok(RvalueAggregate::Array(AggregateArray {
+                operands: BracketedOperands { bracket, operands },
             })
-        })
+            .into())
+        } else {
+            Err(content.error(ParseError::ExpectCommaOrSemicolon))
+        }
     }
     fn parse_ref_or_address_of(input: ParseStream<'_>) -> Result<Self> {
         let tk_and = input.parse()?;
@@ -789,7 +806,7 @@ impl RvalueOrCall {
 impl Parse for RvalueOrCall {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         if input.peek(token::Bracket) {
-            Ok(Rvalue::parse_array_like(input)?.into())
+            Ok(Rvalue::parse_array(input)?.into())
         } else if input.peek(Token![&]) {
             Ok(Rvalue::parse_ref_or_address_of(input)?.into())
         } else if input.peek(Token![_]) {
@@ -813,23 +830,118 @@ impl Parse for Drop {
             kw_drop: input.parse()?,
             paren: syn::parenthesized!(content in input),
             place: content.parse()?,
+        })
+    }
+}
+
+impl Parse for LocalDecl {
+    fn parse(input: ParseStream) -> Result<Self> {
+        Ok(LocalDecl {
+            tk_let: input.parse()?,
+            tk_mut: input.parse()?,
+            ident: input.parse()?,
+            tk_colon: input.parse()?,
+            ty: input.parse()?,
+            init: input.peek(Token![=]).then(|| input.parse()).transpose()?,
             tk_semi: input.parse()?,
         })
     }
 }
 
-impl Parse for Statement {
+impl Parse for Declaration {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         Ok(if input.peek(Token![type]) {
-            Statement::TypeDecl(input.parse()?)
+            Declaration::TypeDecl(input.parse()?)
         } else if input.peek(Token![use]) {
-            Statement::UsePath(input.parse()?)
+            Declaration::UsePath(input.parse()?)
         } else if input.peek(Token![let]) {
-            Statement::LocalDecl(input.parse()?)
-        } else if input.peek(kw::drop) && input.peek2(token::Paren) {
-            Statement::Drop(input.parse()?)
+            Declaration::LocalDecl(input.parse()?)
         } else {
-            Statement::Assign(input.parse()?)
+            return Err(input.error(ParseError::ExpectDeclaration));
+        })
+    }
+}
+
+impl Parse for Block {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let content;
+        Ok(Block {
+            brace: syn::braced!(content in input),
+            statements: std::iter::from_fn(|| content.parse().ok()).collect(),
+        })
+    }
+}
+
+impl Parse for SwitchBody {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        Ok(if input.peek(token::Brace) {
+            SwitchBody::Block(input.parse()?)
+        } else {
+            SwitchBody::Statement(input.parse()?, input.parse()?)
+        })
+    }
+}
+
+impl Parse for SwitchValue {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        Ok(if input.peek(Token![_]) {
+            SwitchValue::Underscore(input.parse()?)
+        } else if input.peek(syn::LitBool) {
+            SwitchValue::Bool(input.parse()?)
+        } else {
+            let value: syn::LitInt = input.parse()?;
+            const INT_SUFFIXES: &[&str] = &[
+                "u8", "u16", "u32", "u64", "u128", "usize", "i8", "i16", "i32", "i64", "i128", "isize",
+            ];
+            let suffix = value.suffix().trim_start_matches("_");
+            if suffix.is_empty() {
+                return Err(input.error(ParseError::ExpectIntSuffix));
+            } else if !INT_SUFFIXES.contains(&suffix) {
+                return Err(syn::Error::new(
+                    value.span(),
+                    ParseError::UnrecognizedIntSuffix(suffix.to_string()),
+                ));
+            }
+            value.into()
+        })
+    }
+}
+
+impl Parse for SwitchInt {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let mut content;
+        Ok(SwitchInt {
+            kw_switch_int: input.parse()?,
+            paren: syn::parenthesized!(content in input),
+            operand: content.parse()?,
+            brace: syn::braced!(content in input),
+            targets: std::iter::from_fn(|| content.parse().ok()).collect(),
+        })
+    }
+}
+
+impl Parse for Control {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        Ok(if input.peek(Token![break]) {
+            Control::Break(input.parse()?, input.parse()?)
+        } else {
+            Control::Continue(input.parse()?, input.parse()?)
+        })
+    }
+}
+
+impl<End: Parse> Parse for Statement<End> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        Ok(if input.peek(kw::drop) && input.peek2(token::Paren) {
+            Statement::Drop(input.parse()?, input.parse()?)
+        } else if input.peek(Token![break]) || input.peek(Token![continue]) {
+            Statement::Control(input.parse()?, input.parse()?)
+        } else if input.peek(Token![loop]) {
+            Statement::Loop(input.parse()?)
+        } else if input.peek(kw::switchInt) {
+            Statement::SwitchInt(input.parse()?)
+        } else {
+            Statement::Assign(input.parse()?, input.parse()?)
         })
     }
 }
@@ -879,11 +991,19 @@ impl Parse for Mir {
         while input.peek(kw::meta) {
             metas.push(input.parse()?);
         }
+        let mut declarations = Vec::new();
+        while Declaration::can_start(input) {
+            declarations.push(input.parse()?);
+        }
         let mut statements = Vec::new();
         while !input.is_empty() {
             statements.push(input.parse()?);
         }
-        Ok(Mir { metas, statements })
+        Ok(Mir {
+            metas,
+            declarations,
+            statements,
+        })
     }
 }
 

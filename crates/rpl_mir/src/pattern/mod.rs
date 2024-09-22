@@ -333,7 +333,7 @@ pub enum ConstKind<'tcx> {
 
 #[derive(Debug)]
 pub enum AggKind<'tcx> {
-    Array(Ty<'tcx>),
+    Array,
     Tuple,
     Adt(ItemPath<'tcx>, GenericArgsRef<'tcx>, Option<Box<[Symbol]>>),
     RawPtr(Ty<'tcx>, mir::Mutability),
@@ -943,10 +943,7 @@ impl<'tcx> Patterns<'tcx> {
         operands: &IndexSlice<FieldIdx, mir::Operand<'tcx>>,
     ) -> bool {
         match (agg_kind_pat, agg_kind) {
-            (&AggKind::Array(ty_pat), &mir::AggregateKind::Array(ty)) => {
-                self.match_ty(tcx, ty_pat, ty) && self.match_agg_operands(tcx, body, operands_pat, &operands.raw)
-            },
-            (AggKind::Tuple, mir::AggregateKind::Tuple) => {
+            (&AggKind::Array, &mir::AggregateKind::Array(_)) | (AggKind::Tuple, mir::AggregateKind::Tuple) => {
                 self.match_agg_operands(tcx, body, operands_pat, &operands.raw)
             },
             (
