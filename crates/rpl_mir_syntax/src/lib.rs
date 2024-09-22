@@ -25,6 +25,7 @@ pub(crate) mod kw {
 
     // Statement
     syn::custom_keyword!(drop);
+    syn::custom_keyword!(switchInt);
 
     // Operand
     syn::custom_keyword!(copy);
@@ -39,6 +40,7 @@ pub(crate) mod kw {
 
     // CastKind
     syn::custom_keyword!(PtrToPtr);
+    syn::custom_keyword!(IntToInt);
 
     // BinOp
     syn::custom_keyword!(Add);
@@ -46,6 +48,12 @@ pub(crate) mod kw {
     syn::custom_keyword!(Mul);
     syn::custom_keyword!(Div);
     syn::custom_keyword!(Rem);
+    syn::custom_keyword!(Lt);
+    syn::custom_keyword!(Gt);
+    syn::custom_keyword!(Le);
+    syn::custom_keyword!(Ge);
+    syn::custom_keyword!(Eq);
+    syn::custom_keyword!(Ne);
 
     // NullOp
     syn::custom_keyword!(SizeOf);
@@ -112,7 +120,7 @@ pub struct TypeArray {
     bracket: token::Bracket,
     pub ty: Box<Type>,
     tk_semi: Token![;],
-    pub len: Const,
+    pub len: syn::LitInt,
 }
 
 /*
@@ -373,8 +381,20 @@ auto_derive! {
 auto_derive! {
     #[auto_derive(ToTokens, Parse, From)]
     #[derive(Clone)]
-    pub struct PlaceLocal {
-        pub local: Ident,
+    pub enum PlaceLocal {
+        Local(Ident),
+        Underscore(Token![_]),
+        SelfValue(Token![self]),
+    }
+}
+
+impl std::fmt::Display for PlaceLocal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PlaceLocal::Local(ident) => ident.fmt(f),
+            PlaceLocal::Underscore(_) => f.write_str("_"),
+            PlaceLocal::SelfValue(_) => f.write_str("self"),
+        }
     }
 }
 
@@ -465,9 +485,9 @@ auto_derive! {
 }
 
 impl Place {
-    pub fn local(&self) -> &Ident {
+    pub fn local(&self) -> &PlaceLocal {
         match self {
-            Place::Local(PlaceLocal { local }) => local,
+            Place::Local(local) => local,
             Place::Paren(PlaceParen { box place, .. })
             | Place::Deref(PlaceDeref { box place, .. })
             | Place::Field(PlaceField { box place, .. })
@@ -477,9 +497,9 @@ impl Place {
             | Place::DownCast(PlaceDowncast { box place, .. }) => place.local(),
         }
     }
-    pub fn into_local(self) -> Ident {
+    pub fn into_local(self) -> PlaceLocal {
         match self {
-            Place::Local(PlaceLocal { local }) => local,
+            Place::Local(local) => local,
             Place::Paren(PlaceParen { box place, .. })
             | Place::Deref(PlaceDeref { box place, .. })
             | Place::Field(PlaceField { box place, .. })
@@ -550,7 +570,7 @@ pub struct RvalueRepeat {
     bracket: token::Bracket,
     pub operand: Operand,
     tk_semi: Token![;],
-    pub len: Const,
+    pub len: syn::LitInt,
 }
 
 auto_derive! {
@@ -589,6 +609,7 @@ auto_derive! {
     #[derive(Clone, Copy)]
     pub enum CastKind {
         PtrToPtr(kw::PtrToPtr),
+        IntToInt(kw::IntToInt),
     }
 
 }
@@ -611,6 +632,12 @@ auto_derive! {
         Mul(kw::Mul),
         Div(kw::Div),
         Rem(kw::Rem),
+        Lt(kw::Lt),
+        Gt(kw::Gt),
+        Le(kw::Le),
+        Ge(kw::Ge),
+        Eq(kw::Eq),
+        Ne(kw::Ne),
     }
 }
 
@@ -668,11 +695,11 @@ pub struct RvalueDiscriminant {
 
 #[derive(Clone)]
 pub struct AggregateArray {
-    bracket: token::Bracket,
-    pub ty: Box<Type>,
-    tk_semi: Token![;],
-    tk_underscore: Token![_],
-    kw_from: kw::from,
+    // bracket: token::Bracket,
+    // pub ty: Box<Type>,
+    // tk_semi: Token![;],
+    // tk_underscore: Token![_],
+    // kw_from: kw::from,
     pub operands: BracketedOperands,
 }
 
@@ -832,14 +859,22 @@ auto_derive! {
 auto_derive! {
     #[auto_derive(ToTokens, Parse)]
     #[derive(Clone)]
+    pub struct LocalInit {
+        tk_eq: Token![=],
+        pub rvalue_or_call: RvalueOrCall,
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens)]
+    #[derive(Clone)]
     pub struct LocalDecl {
         tk_let: Token![let],
         tk_mut: Option<Token![mut]>,
         pub ident: Ident,
         tk_colon: Token![:],
         pub ty: Type,
-        tk_eq: Token![=],
-        pub rvalue_or_call: RvalueOrCall,
+        pub init: Option<LocalInit>,
         tk_semi: Token![;],
     }
 }
@@ -857,7 +892,6 @@ auto_derive! {
         pub place: Place,
         tk_eq: Token![=],
         pub rvalue_or_call: RvalueOrCall,
-        tk_semi: Token![;],
     }
 }
 
@@ -866,19 +900,88 @@ pub struct Drop {
     kw_drop: kw::drop,
     paren: token::Paren,
     pub place: Place,
-    tk_semi: Token![;],
 }
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
     #[derive(Clone)]
-    pub enum Statement {
+    pub enum Declaration {
         TypeDecl(TypeDecl),
         UsePath(UsePath),
         LocalDecl(LocalDecl),
-        Assign(Assign),
-        Drop(Drop),
     }
+}
+
+impl Declaration {
+    fn can_start(input: syn::parse::ParseStream<'_>) -> bool {
+        input.peek(Token![type]) || input.peek(Token![use]) || input.peek(Token![let])
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct Loop {
+        pub label: Option<syn::Label>,
+        tk_loop: Token![loop],
+        pub block: Block,
+    }
+}
+
+#[derive(Clone)]
+pub enum Control {
+    Break(Token![break], Option<syn::Label>),
+    Continue(Token![continue], Option<syn::Label>),
+}
+
+#[derive(Clone)]
+pub struct Block {
+    brace: token::Brace,
+    pub statements: Vec<Statement>,
+}
+
+#[derive(Clone)]
+pub enum SwitchBody {
+    Statement(Statement<syn::parse::Nothing>, Token![,]),
+    Block(Block),
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct SwitchTarget {
+        pub value: SwitchValue,
+        tk_arrow: Token![=>],
+        pub body: SwitchBody,
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
+    pub enum SwitchValue {
+        Bool(syn::LitBool),
+        Int(syn::LitInt),
+        Underscore(Token![_]),
+    }
+}
+
+#[derive(Clone)]
+pub struct SwitchInt {
+    kw_switch_int: kw::switchInt,
+    paren: token::Paren,
+    pub operand: Operand,
+    brace: token::Brace,
+    pub targets: Vec<SwitchTarget>,
+}
+
+#[derive(Clone)]
+pub enum Statement<End = Token![;]> {
+    Assign(Assign, End),
+    Drop(Drop, End),
+    Control(Control, End),
+    Loop(Loop),
+    SwitchInt(SwitchInt),
 }
 
 auto_derive! {
@@ -910,5 +1013,6 @@ auto_derive! {
 
 pub struct Mir {
     pub metas: Vec<Meta>,
+    pub declarations: Vec<Declaration>,
     pub statements: Vec<Statement>,
 }
