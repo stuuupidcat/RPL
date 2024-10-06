@@ -89,8 +89,8 @@ test_case! {
             _?6 = Len((*_?0));
             _?7 = SizeOf(?T0);
             _?8 = Mul(move _?6, move _?7);
-            _?9 = RawPtr([u8], Not) from [copy _?4, copy _?8];
-            _?10 = RawPtr([u8], Mut) from [copy _?5, copy _?8];
+            _?9 = *const [u8] from (copy _?4, copy _?8);
+            _?10 = *mut [u8] from (copy _?5, copy _?8);
             _?11 = &(*_?9);
             _?12 = &mut (*_?10);
         }
@@ -106,7 +106,7 @@ test_case! {
         let mut x0: usize; // _17
         let x1: usize; // _14
         let x2: usize; // _15
-        let x3: core::option::Option<usize>; // _3
+        let x3: #[lang = "Option"]<usize>; // _3
         let x: usize; // _4
         let mut base: *mut $T; // _6
         let offset: isize; // _7
@@ -125,7 +125,7 @@ test_case! {
                     x1 = copy x0;
                     x2 = core::iter::Step::forward_unchecked(copy x1, const 1_usize);
                     x0 = move x2;
-                    x3 = core::option::Option::Some(copy x1);
+                    x3 = #[lang = "Some"](copy x1);
                     x = copy (x3 as Some).0;
                     base = copy (*self).mem;
                     offset = copy x as isize (IntToInt);
@@ -141,7 +141,7 @@ test_case! {
         let _?2: usize;
         let _?3: usize;
         let _?4: usize;
-        let _?5: core::option::Option<usize>;
+        let _?5: #[lang = "Option"]<usize>;
         let _?6: usize;
         let _?7: *mut ?T0;
         let _?8: isize;
@@ -171,9 +171,7 @@ test_case! {
         }
         ?bb6: {
             _?2 = move _?4;
-            _?5 = core::option::Option::Some(copy _?3) -> ?bb7;
-        }
-        ?bb7: {
+            _?5 = #[lang = "Some"](copy _?3);
             _?6 = copy ((_?5 as Some).0);
             _?7 = copy ((*_?0).mem);
             _?8 = copy _?6 as isize (IntToInt);

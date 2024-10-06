@@ -2,10 +2,13 @@ use crate::symbol_table::CheckError;
 use crate::SymbolTable;
 use proc_macro2::Ident;
 use rpl_mir_syntax::*;
+use rustc_span::Symbol;
 use syn::Token;
 
 pub(crate) fn check_mir(mir: &Mir) -> syn::Result<()> {
-    CheckCtxt::new().check_mir(mir)
+    rustc_span::create_session_if_not_set_then(rustc_span::edition::LATEST_STABLE_EDITION, |_| {
+        CheckCtxt::new().check_mir(mir)
+    })
 }
 
 #[derive(Default)]
@@ -149,7 +152,18 @@ impl CheckCtxt {
                 self.check_path(&type_path.path)?;
                 Ok(())
             },
+            ConstOperand::LangItem(lang_item) => self.check_lang_item(lang_item),
         }
+    }
+
+    fn check_lang_item(&self, lang_item: &LangItem) -> syn::Result<()> {
+        let value = lang_item.item.value();
+        rustc_hir::LangItem::from_name(Symbol::intern(&value))
+            .ok_or_else(|| syn::Error::new_spanned(lang_item, CheckError::UnknownLangItem(value)))?;
+        if let Some(args) = &lang_item.args {
+            args.args.iter().try_for_each(|arg| self.check_generic_arg(arg))?;
+        }
+        Ok(())
     }
 
     fn check_place(&self, place: &Place) -> syn::Result<()> {
@@ -251,6 +265,7 @@ impl CheckCtxt {
                 _ = self.symbols.get_ty_var(ident)?;
                 Ok(())
             },
+            Type::LangItem(lang_item) => self.check_lang_item(lang_item),
         }
     }
 

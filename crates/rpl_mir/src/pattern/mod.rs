@@ -7,7 +7,7 @@ use rustc_hash::FxHashMap;
 use rustc_hir::def::CtorKind;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::definitions::DefPathData;
-use rustc_hir::LangItem;
+use rustc_hir::{LangItem, Target};
 use rustc_index::{IndexSlice, IndexVec};
 use rustc_middle::{mir, ty};
 use rustc_span::symbol::kw;
@@ -296,11 +296,10 @@ pub enum Const {
     Value(IntValue),
 }
 
-#[derive(Debug)]
 pub enum AggKind<'tcx> {
     Array,
     Tuple,
-    Adt(ItemPath<'tcx>, GenericArgsRef<'tcx>, Option<Box<[Symbol]>>),
+    Adt(Path<'tcx>, Option<Box<[Symbol]>>),
     RawPtr(Ty<'tcx>, mir::Mutability),
 }
 
@@ -421,7 +420,7 @@ pub enum TyKind<'tcx> {
     Tuple(&'tcx [Ty<'tcx>]),
     Ref(RegionKind, Ty<'tcx>, mir::Mutability),
     RawPtr(Ty<'tcx>, mir::Mutability),
-    Adt(ItemPath<'tcx>, GenericArgsRef<'tcx>),
+    Adt(Path<'tcx>, GenericArgsRef<'tcx>),
     Uint(ty::UintTy),
     Int(ty::IntTy),
     Float(ty::FloatTy),
@@ -492,7 +491,17 @@ impl<'tcx> PatternsBuilder<'tcx> {
         self.mk_statement(StatementKind::Assign(place.into(), rvalue));
     }
     pub fn mk_fn_call(&mut self, func: Operand<'tcx>, args: List<Operand<'tcx>>, destination: Option<Place<'tcx>>) {
-        self.check_terminator();
+        if let Some(place) = destination
+            && let Operand::Constant(ConstOperand::ZeroSized(ty)) = func
+            && let &TyKind::FnDef(Path::LangItem(lang_item), _) = ty.kind()
+            && let Target::Variant | Target::Struct = lang_item.target()
+        {
+            self.mk_assign(
+                place,
+                Rvalue::Aggregate(AggKind::Adt(lang_item.into(), None), args.data),
+            );
+            return;
+        }
         let target = self.patterns.basic_blocks.next_index();
         self.patterns.basic_blocks[self.current].terminator = Some(TerminatorKind::Call {
             func,
@@ -626,11 +635,19 @@ impl<'tcx> Patterns<'tcx> {
     pub fn mk_var_ty(&self, ty_var: TyVarIdx) -> Ty<'tcx> {
         self.mk_ty(TyKind::TyVar(ty_var))
     }
+    pub fn mk_lang_item(&self, item: &str) -> Path<'tcx> {
+        #[cold]
+        #[inline(never)]
+        fn unknonw_lang_item(item: &str) -> ! {
+            panic!("unknown language item \"{item}\"")
+        }
+        Path::LangItem(LangItem::from_name(Symbol::intern(item)).unwrap_or_else(|| unknonw_lang_item(item)))
+    }
     pub fn mk_item_path(&self, path: &[&str]) -> ItemPath<'tcx> {
         ItemPath(self.mk_symbols(path))
     }
-    pub fn mk_adt_ty(&self, path: ItemPath<'tcx>, generics: GenericArgsRef<'tcx>) -> Ty<'tcx> {
-        self.mk_ty(TyKind::Adt(path, generics))
+    pub fn mk_adt_ty(&self, path: impl Into<Path<'tcx>>, generics: GenericArgsRef<'tcx>) -> Ty<'tcx> {
+        self.mk_ty(TyKind::Adt(path.into(), generics))
     }
     pub fn mk_slice_ty(&self, ty: Ty<'tcx>) -> Ty<'tcx> {
         self.mk_ty(TyKind::Slice(ty))

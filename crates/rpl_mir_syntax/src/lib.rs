@@ -22,6 +22,7 @@ pub(crate) mod kw {
     // Metadata
     syn::custom_keyword!(meta);
     syn::custom_keyword!(ty);
+    syn::custom_keyword!(lang);
 
     // Statement
     syn::custom_keyword!(drop);
@@ -376,6 +377,9 @@ auto_derive! {
 
         /// A `TyVar` from `meta!($T:ty)`.
         TyVar(TypeVar),
+
+        /// A languate item
+        LangItem(LangItem),
     }
 }
 
@@ -528,12 +532,23 @@ auto_derive! {
     }
 }
 
+#[derive(Clone)]
+pub struct LangItem {
+    tk_pound: Token![#],
+    bracket: token::Bracket,
+    kw_lang: kw::lang,
+    tk_eq: Token![=],
+    pub item: syn::LitStr,
+    pub args: Option<AngleBracketedGenericArguments>,
+}
+
 auto_derive! {
     #[auto_derive(ToTokens)]
     #[derive(Clone)]
     pub enum ConstOperand {
         Lit(ConstLit),
         Path(TypePath),
+        LangItem(LangItem),
     }
 }
 

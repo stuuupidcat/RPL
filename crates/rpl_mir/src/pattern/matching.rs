@@ -94,8 +94,7 @@ impl<'tcx> Patterns<'tcx> {
             (TyKind::Int(ty_pat), ty::Int(ty)) => ty_pat == ty,
             (TyKind::Float(ty_pat), ty::Float(ty)) => ty_pat == ty,
             (TyKind::Adt(path, args_pat), ty::Adt(adt, args)) => {
-                matches!(self.match_item_path(tcx, path, adt.did()), Some([]))
-                    && self.match_generic_args(tcx, args_pat, args)
+                self.match_path(tcx, path, adt.did()) && self.match_generic_args(tcx, args_pat, args)
             },
             (TyKind::FnDef(path, args_pat), ty::FnDef(def_id, args)) => {
                 self.match_path(tcx, path, def_id) && self.match_generic_args(tcx, args_pat, args)
@@ -229,8 +228,8 @@ impl<'tcx> Patterns<'tcx> {
                 self.match_agg_operands(tcx, body, operands_pat, &operands.raw)
             },
             (
-                &AggKind::Adt(path, args_pat, ref fields),
-                &mir::AggregateKind::Adt(def_id, variant_idx, args, _, field_idx),
+                &AggKind::Adt(Path::Item(path), ref fields),
+                &mir::AggregateKind::Adt(def_id, variant_idx, _, _, field_idx),
             ) if let Some(remainder) = self.match_item_path(tcx, path, def_id) => {
                 let adt = tcx.adt_def(def_id);
                 let variant = adt.variant(variant_idx);
@@ -241,7 +240,6 @@ impl<'tcx> Patterns<'tcx> {
                     &[name] => variant.name == name,
                     _ => false,
                 };
-                let generics_matched = self.match_generic_args(tcx, args_pat, args);
                 let fields_matched = match (fields, field_idx) {
                     (None, None) => {
                         variant.ctor.is_some() && self.match_agg_operands(tcx, body, operands_pat, &operands.raw)
@@ -263,7 +261,7 @@ impl<'tcx> Patterns<'tcx> {
                     },
                     _ => false,
                 };
-                variant_matched && generics_matched && fields_matched
+                variant_matched && fields_matched
             },
             (&AggKind::RawPtr(ty_pat, mutability_pat), &mir::AggregateKind::RawPtr(ty, mutability)) => {
                 self.match_ty(tcx, ty_pat, ty)
