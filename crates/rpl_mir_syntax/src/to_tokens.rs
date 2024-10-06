@@ -111,6 +111,18 @@ impl ToTokens for ParenthesizedGenericArguments {
     }
 }
 
+impl ToTokens for LangItem {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.tk_pound.to_tokens(tokens);
+        self.bracket.surround(tokens, |tokens| {
+            self.kw_lang.to_tokens(tokens);
+            self.tk_eq.to_tokens(tokens);
+            self.item.to_tokens(tokens);
+            self.args.to_tokens(tokens);
+        });
+    }
+}
+
 impl ToTokens for TypePath {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let mut pairs = self.path.segments.pairs();

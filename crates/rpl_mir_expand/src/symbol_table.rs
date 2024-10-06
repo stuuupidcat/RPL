@@ -24,6 +24,8 @@ pub(crate) enum CheckError {
     MultipleOtherwiseInSwitchInt,
     #[error("missing integer suffix in switchInt statement")]
     MissingSuffixInSwitchInt,
+    #[error("unknown language item \"{0}\"")]
+    UnknownLangItem(String),
 }
 
 #[derive(Default)]

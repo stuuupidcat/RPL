@@ -174,7 +174,7 @@ fn test_cve_2020_35892() {
             let mut x0: usize; // _17
             let x1: usize; // _14
             let x2: usize; // _15
-            let x3: core::option::Option<usize>; // _3
+            let x3: #[lang = "Option"]<usize>; // _3
             let x: usize; // _4
             let mut base: *mut T; // _6
             let offset: isize; // _7
@@ -193,7 +193,7 @@ fn test_cve_2020_35892() {
                         x1 = copy x0;
                         x2 = forward_unchecked(copy x1, const 1_usize);
                         x0 = move x2;
-                        x3 = Some(copy x1);
+                        x3 = #[lang = "Some"](copy x1);
                         x = copy (x3 as Some).0;
                         base = copy (*self).mem;
                         offset = copy x as isize (IntToInt);
@@ -219,7 +219,7 @@ fn test_cve_2020_35892() {
             let x1_local = patterns.mk_local(patterns.primitive_types.usize);
             let x2_local = patterns.mk_local(patterns.primitive_types.usize);
             let x3_local = patterns.mk_local(patterns.mk_adt_ty(
-                patterns.mk_item_path(&["core", "option", "Option",]),
+                patterns.mk_lang_item("Option"),
                 patterns.mk_generic_args(&[patterns.primitive_types.usize.into()]),
             ));
             let x_local = patterns.mk_local(patterns.primitive_types.usize);
@@ -300,7 +300,7 @@ fn test_cve_2020_35892() {
                             let x3_stmt = patterns.mk_fn_call(
                                 patterns.mk_zeroed(
                                     patterns.mk_fn(
-                                        patterns.mk_item_path(&["Some",]),
+                                        patterns.mk_lang_item("Some"),
                                         patterns.mk_generic_args(&[]),
                                     )
                                 ),

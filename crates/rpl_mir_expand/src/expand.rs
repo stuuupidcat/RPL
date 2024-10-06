@@ -262,16 +262,25 @@ struct ExpandAsFnOperand<'a>(&'a Operand);
 impl ToTokens for Expand<'_, ExpandAsFnOperand<'_>> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
         let ExpandCtxt { patterns } = self.ecx;
-        if let Operand::Constant(ConstOperand::Path(path)) = self.value.0 {
-            if let Some(_qself) = &path.qself {
-                todo!();
+        if let Operand::Constant(path) = self.value.0 {
+            match path {
+                ConstOperand::Lit(ConstLit { lit, .. }) => panic!("unexpected literal: `{}`", lit.to_token_stream()),
+                ConstOperand::Path(path) => {
+                    if let Some(_qself) = &path.qself {
+                        todo!();
+                    }
+                    let path = self.expand(&path.path);
+                    quote_each_token!(tokens
+                        #patterns.mk_zeroed(#patterns.mk_fn(
+                            #patterns.mk_item_path(&[#path]), patterns.mk_generic_args(&[]),
+                        ))
+                    );
+                },
+                ConstOperand::LangItem(lang_item) => {
+                    let lang_item = self.expand(lang_item);
+                    quote_each_token!(tokens #patterns.mk_zeroed(#patterns.mk_fn(#lang_item)));
+                },
             }
-            let path = self.expand(&path.path);
-            quote_each_token!(tokens
-                #patterns.mk_zeroed(#patterns.mk_fn(
-                    #patterns.mk_item_path(&[#path]), patterns.mk_generic_args(&[]),
-                ))
-            );
         } else {
             self.expand(self.value.0).to_tokens(tokens);
         }
@@ -543,7 +552,26 @@ impl ToTokens for Expand<'_, &Type> {
             },
             Type::Tuple(_) => todo!(),
             Type::TyVar(TypeVar { ident, .. }) => ident.as_ty().to_tokens(tokens),
+            Type::LangItem(lang_item) => {
+                let lang_item = self.expand(lang_item);
+                quote_each_token!(tokens #patterns.mk_adt_ty(#lang_item));
+            },
         }
+    }
+}
+
+impl ToTokens for Expand<'_, &LangItem> {
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        let ExpandCtxt { patterns } = self.ecx;
+        let LangItem { item, args, .. } = self.value;
+        let mut gen_args = TokenStream::new();
+        if let Some(args) = args {
+            let args = self.expand_punctuated(&args.args);
+            quote_each_token!(gen_args #args);
+        }
+        quote_each_token!(tokens
+            #patterns.mk_lang_item(#item), #patterns.mk_generic_args(&[#gen_args]),
+        );
     }
 }
 
@@ -668,6 +696,7 @@ impl ToTokens for Expand<'_, &ConstOperand> {
             }) => {
                 todo!();
             },
+            ConstOperand::LangItem(_) => todo!(),
         }
     }
 }

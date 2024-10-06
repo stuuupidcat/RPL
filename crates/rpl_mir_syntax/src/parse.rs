@@ -126,10 +126,26 @@ impl Parse for Const {
     }
 }
 
+impl Parse for LangItem {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let content;
+        Ok(LangItem {
+            tk_pound: input.parse()?,
+            bracket: syn::bracketed!(content in input),
+            kw_lang: content.parse()?,
+            tk_eq: content.parse()?,
+            item: content.parse()?,
+            args: input.peek(Token![<]).then(|| input.parse()).transpose()?,
+        })
+    }
+}
+
 impl Parse for ConstOperand {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         Ok(if input.peek(Token![const]) {
             ConstOperand::Lit(input.parse()?)
+        } else if input.peek(Token![#]) {
+            ConstOperand::LangItem(input.parse()?)
         } else {
             ConstOperand::Path(input.parse()?)
         })
@@ -402,6 +418,8 @@ impl Parse for Type {
             Ok(Type::Reference(input.parse()?))
         } else if input.peek(Token![!]) {
             Ok(Type::Never(input.parse()?))
+        } else if input.peek(Token![#]) {
+            Ok(Type::LangItem(input.parse()?))
         } else if input.peek(Token![$]) {
             if input.peek2(Token![crate]) {
                 Ok(Type::Path(input.parse()?))

@@ -72,7 +72,7 @@ impl<'tcx> fmt::Debug for Path<'tcx> {
         match self {
             Self::Item(path) => path.fmt(f),
             Self::TypeRelative(ty, path) => write!(f, "<{ty:?}>::{path}"),
-            Self::LangItem(lang_item) => lang_item.fmt(f),
+            Self::LangItem(lang_item) => write!(f, "#[lang = \"{}\"]", lang_item.name()),
         }
     }
 }
@@ -230,10 +230,59 @@ impl<'tcx> fmt::Debug for Rvalue<'tcx> {
             Self::NullaryOp(op, ty) => write!(f, "{op:?}({ty:?})"),
             Self::UnaryOp(op, operand) => write!(f, "{op:?}({operand:?}"),
             Self::Discriminant(place) => f.debug_tuple("discriminant").field(place).finish(),
-            Self::Aggregate(agg_kind, args) => write!(f, "{agg_kind:?} from {args:?}"),
+            Self::Aggregate(agg_kind, args) => format_aggregate(agg_kind, args, f),
             Self::ShallowInitBox(operand, ty) => write!(f, "Box<{ty:?}>({operand:?})"),
             Self::CopyForDeref(place) => write!(f, "&(*{place:?})"),
         }
+    }
+}
+
+fn format_aggregate<'tcx>(
+    agg_kind: &AggKind<'tcx>,
+    operands: &[Operand<'tcx>],
+    f: &mut fmt::Formatter<'_>,
+) -> fmt::Result {
+    fn fmt_list<T>(
+        f: &mut fmt::Formatter<'_>,
+        list: impl IntoIterator<Item = T>,
+        end: &str,
+        mut fmt: impl FnMut(T, &mut fmt::Formatter<'_>) -> fmt::Result,
+    ) -> fmt::Result {
+        let mut iter = list.into_iter();
+        if let Some(first) = iter.next() {
+            fmt(first, f)?;
+        }
+        for elem in iter {
+            write!(f, ", ")?;
+            fmt(elem, f)?;
+        }
+        f.write_str(end)
+    }
+    match agg_kind {
+        AggKind::Array => {
+            f.write_str("[")?;
+            fmt_list(f, operands, "]", fmt::Debug::fmt)
+        },
+        AggKind::Tuple => {
+            f.write_str("(")?;
+            fmt_list(f, operands, ")", fmt::Debug::fmt)
+        },
+        AggKind::Adt(path, None) => {
+            write!(f, "{path:?}(")?;
+            fmt_list(f, operands, ")", fmt::Debug::fmt)
+        },
+        AggKind::Adt(path, Some(fields)) => {
+            write!(f, "{path:?}{{")?;
+            let mut fields = fields.iter();
+            fmt_list(f, operands, "}", |operand, f| {
+                let field = fields.next().ok_or(std::fmt::Error)?;
+                write!(f, "{field}: {operand:?}")
+            })
+        },
+        AggKind::RawPtr(ty, mutability) => {
+            write!(f, "*{} {ty:?} from (", mutability.ptr_str())?;
+            fmt_list(f, operands, ")", fmt::Debug::fmt)
+        },
     }
 }
 
