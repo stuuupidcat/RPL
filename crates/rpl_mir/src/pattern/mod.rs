@@ -623,6 +623,7 @@ impl<'tcx> Patterns<'tcx> {
         }
         self.arena.alloc_slice(slice)
     }
+    
 }
 
 impl<'tcx> Patterns<'tcx> {
