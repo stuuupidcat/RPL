@@ -2,6 +2,7 @@ use crate::symbol_table::CheckError;
 use crate::SymbolTable;
 use proc_macro2::Ident;
 use rpl_mir_syntax::*;
+use syn::Token;
 
 pub(crate) fn check_mir(mir: &Mir) -> syn::Result<()> {
     CheckCtxt::new().check_mir(mir)
@@ -29,11 +30,7 @@ impl CheckCtxt {
         Ok(())
     }
     fn check_meta(&mut self, meta: &Meta) -> syn::Result<()> {
-        meta.meta
-            .content
-            .iter()
-            .map(|item| self.check_meta_item(item))
-            .collect()
+        meta.meta.content.iter().try_for_each(|item| self.check_meta_item(item))
     }
     fn check_meta_item(&mut self, meta_item: &MetaItem) -> syn::Result<()> {
         match meta_item.kind {
@@ -53,10 +50,11 @@ impl CheckCtxt {
                 }
                 Ok(())
             },
+            Declaration::SelfDecl(self_value) => self.symbols.add_self_value(self_value.clone()),
         }
     }
 
-    fn check_stmt(&mut self, stmt: &Statement) -> syn::Result<()> {
+    fn check_stmt<End>(&self, stmt: &Statement<End>) -> syn::Result<()> {
         match stmt {
             Statement::Assign(
                 Assign {
@@ -67,10 +65,11 @@ impl CheckCtxt {
                 self.check_place(place)?;
                 self.check_rvalue_or_call(rvalue_or_call)
             },
+            Statement::Call(CallIgnoreRet { call, .. }, _) => self.check_call(call),
             Statement::Drop(Drop { place, .. }, _) => self.check_place(place),
-            Statement::Control(_control, _) => todo!(),
-            Statement::Loop(Loop { label: _, block: _, .. }) => todo!(),
-            Statement::SwitchInt(_switch_int) => todo!(),
+            Statement::Control(control, _) => self.check_control(control),
+            Statement::Loop(Loop { label, block, .. }) => self.check_loop(label.as_ref(), block),
+            Statement::SwitchInt(switch_int) => self.check_switch_int(switch_int),
         }
     }
 
@@ -123,7 +122,7 @@ impl CheckCtxt {
             Operand::Copy(OperandCopy { place, .. }) | Operand::Move(OperandMove { place, .. }) => {
                 self.check_place(place)
             },
-            Operand::Constant(konst) => self.check_const(konst),
+            Operand::Constant(konst) => self.check_const_operand(konst),
         }
     }
 
@@ -140,10 +139,23 @@ impl CheckCtxt {
         }
     }
 
+    fn check_const_operand(&self, konst: &ConstOperand) -> syn::Result<()> {
+        match konst {
+            ConstOperand::Lit(_) => Ok(()),
+            ConstOperand::Path(type_path) => {
+                if let Some(qself) = &type_path.qself {
+                    self.check_type(&qself.ty)?;
+                }
+                self.check_path(&type_path.path)?;
+                Ok(())
+            },
+        }
+    }
+
     fn check_place(&self, place: &Place) -> syn::Result<()> {
         match place {
             Place::Local(PlaceLocal::Local(local)) => self.check_local(local),
-            Place::Local(PlaceLocal::Underscore(_) | PlaceLocal::SelfValue(_)) => Ok(()),
+            &Place::Local(PlaceLocal::SelfValue(self_value)) => self.check_self_value(self_value),
 
             Place::Paren(PlaceParen { place, .. })
             | Place::Deref(PlaceDeref { place, .. })
@@ -173,8 +185,13 @@ impl CheckCtxt {
         }
     }
 
-    fn check_local(&self, place: &Ident) -> syn::Result<()> {
-        self.symbols.get_local(place)?;
+    fn check_self_value(&self, self_value: Token![self]) -> syn::Result<()> {
+        self.symbols.get_self_value(self_value.span)?;
+        Ok(())
+    }
+
+    fn check_local(&self, local: &Ident) -> syn::Result<()> {
+        self.symbols.get_local(local)?;
         Ok(())
     }
 
@@ -229,7 +246,7 @@ impl CheckCtxt {
                 self.check_path(path)?;
                 Ok(())
             },
-            Type::Tuple(TypeTuple { tys, .. }) => tys.iter().map(|ty| self.check_type(ty)).collect(),
+            Type::Tuple(TypeTuple { tys, .. }) => tys.iter().try_for_each(|ty| self.check_type(ty)),
             Type::TyVar(TypeVar { ident, .. }) => {
                 _ = self.symbols.get_ty_var(ident)?;
                 Ok(())
@@ -242,11 +259,79 @@ impl CheckCtxt {
             if !crate::is_primitive(ident) {
                 _ = self.symbols.get_type(ident)?;
             }
+        } else {
+            for segment in &path.segments {
+                self.check_generic_args(&segment.arguments)?;
+            }
         }
         Ok(())
     }
 
+    fn check_generic_args(&self, args: &PathArguments) -> syn::Result<()> {
+        match args {
+            PathArguments::None => Ok(()),
+            PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) => {
+                args.iter().try_for_each(|arg| self.check_generic_arg(arg))
+            },
+        }
+    }
+
+    fn check_generic_arg(&self, arg: &GenericArgument) -> syn::Result<()> {
+        match arg {
+            &GenericArgument::Region(region) => self.check_region(Some(region)),
+            GenericArgument::Type(ty) => self.check_type(ty),
+            GenericArgument::Const(GenericConst { konst, .. }) => self.check_const(konst),
+        }
+    }
+
     fn check_region(&self, _region: Option<Region>) -> syn::Result<()> {
+        Ok(())
+    }
+
+    fn check_control(&self, _control: &Control) -> syn::Result<()> {
+        Ok(())
+    }
+
+    fn check_loop(&self, _label: Option<&syn::Label>, block: &Block) -> syn::Result<()> {
+        self.check_block(block)
+    }
+
+    fn check_block(&self, block: &Block) -> syn::Result<()> {
+        block.statements.iter().try_for_each(|stmt| self.check_stmt(stmt))
+    }
+
+    fn check_switch_int(&self, switch_int: &SwitchInt) -> syn::Result<()> {
+        self.check_operand(&switch_int.operand)?;
+        let mut has_otherwise = false;
+        for SwitchTarget { value, body, .. } in &switch_int.targets {
+            if let SwitchValue::Underscore(_) = value {
+                if has_otherwise {
+                    return Err(syn::Error::new_spanned(value, CheckError::MultipleOtherwiseInSwitchInt));
+                }
+                has_otherwise = true;
+            }
+            self.check_switch_value(value)?;
+            self.check_switch_body(body)?;
+        }
+        Ok(())
+    }
+
+    fn check_switch_body(&self, body: &SwitchBody) -> syn::Result<()> {
+        match body {
+            SwitchBody::Block(block) => self.check_block(block),
+            SwitchBody::Statement(stmt, _) => self.check_stmt(stmt),
+        }
+    }
+
+    fn check_switch_value(&self, value: &SwitchValue) -> syn::Result<()> {
+        match value {
+            SwitchValue::Bool(_) | SwitchValue::Underscore(_) => {},
+            SwitchValue::Int(int) => {
+                if int.suffix().trim_start_matches('_').is_empty() {
+                    return Err(syn::Error::new_spanned(int, CheckError::MissingSuffixInSwitchInt));
+                }
+            },
+        }
         Ok(())
     }
 }

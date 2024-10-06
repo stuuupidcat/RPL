@@ -1,7 +1,7 @@
-use proc_macro2::TokenStream;
+use proc_macro2::{Span, TokenStream};
 use rustc_hash::FxHashMap;
 use syn::Ident;
-use syntax::{MetaItem, MetaKind, Path, Type};
+use syntax::{MetaItem, MetaKind, Path, SelfDecl, Type};
 
 #[derive(thiserror::Error, Debug)]
 #[allow(clippy::enum_variant_names)]
@@ -14,14 +14,21 @@ pub(crate) enum CheckError {
     TypeOrAlreadyDeclared(String),
     #[error("type or path named by `{0}` is not declared")]
     TypeOrPathNotDeclared(String),
-    #[error("local `{0}` is not declared")]
+    #[error("local variable `{0}` is not declared")]
     LocalNotDeclared(String),
+    #[error("local variable `self` is already declared")]
+    SelfAlreadyDeclared,
     #[error("constant index `{0}` out of bound for minimum length `{1}`")]
     ConstantIndexOutOfBound(u32, u32),
+    #[error("multiple otherwise (`_`) branches in switchInt statement")]
+    MultipleOtherwiseInSwitchInt,
+    #[error("missing integer suffix in switchInt statement")]
+    MissingSuffixInSwitchInt,
 }
 
 #[derive(Default)]
 pub struct SymbolTable {
+    self_value: Option<Type>,
     locals: FxHashMap<Ident, Type>,
     types: FxHashMap<Ident, TypeKind>,
     ty_vars: FxHashMap<Ident, MetaItem>,
@@ -89,6 +96,13 @@ impl SymbolTable {
             .get(ident)
             .ok_or_else(|| syn::Error::new(ident.span(), CheckError::TypeOrPathNotDeclared(ident.to_string())))
     }
+    pub fn add_self_value(&mut self, self_value: SelfDecl) -> syn::Result<()> {
+        if self.self_value.is_some() {
+            return Err(syn::Error::new_spanned(self_value, CheckError::SelfAlreadyDeclared));
+        }
+        self.self_value = Some(self_value.ty);
+        Ok(())
+    }
     pub fn add_local(&mut self, ident: Ident, ty: Type) {
         self.locals.insert(ident, ty);
     }
@@ -96,6 +110,11 @@ impl SymbolTable {
         self.locals
             .get(ident)
             .ok_or_else(|| syn::Error::new(ident.span(), CheckError::LocalNotDeclared(ident.to_string())))
+    }
+    pub fn get_self_value(&self, span: Span) -> syn::Result<&Type> {
+        self.self_value
+            .as_ref()
+            .ok_or_else(|| syn::Error::new(span, CheckError::LocalNotDeclared("self".to_string())))
     }
     pub fn add_path(&mut self, path: Path) -> syn::Result<()> {
         let ident = path

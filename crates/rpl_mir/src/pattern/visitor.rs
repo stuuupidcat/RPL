@@ -2,12 +2,12 @@ use super::*;
 
 pub trait PatternVisitor<'tcx>: Sized {
     fn visit_local(&mut self, _local: LocalIdx) {}
-    fn visit_const_value(&mut self, _const_var: ConstValue) {}
+    fn visit_scalar_int(&mut self, _scalar_int: IntValue) {}
     fn visit_ty_var(&mut self, _ty_var: TyVarIdx) {}
     fn visit_const_var(&mut self, _const_var: ConstVarIdx) {}
 
-    fn visit_pattern(&mut self, pattern: &Pattern<'tcx>) {
-        pattern.visit_with(self);
+    fn visit_basic_block(&mut self, block: &BasicBlockData<'tcx>) {
+        block.visit_with(self);
     }
     fn visit_place(&mut self, place: Place<'tcx>) {
         place.visit_with(self);
@@ -27,11 +27,14 @@ pub trait PatternVisitor<'tcx>: Sized {
     fn visit_terminator(&mut self, terminator: &TerminatorKind<'tcx>) {
         terminator.visit_with(self);
     }
+    fn visit_switch_targets(&mut self, targets: &SwitchTargets) {
+        targets.visit_with(self);
+    }
 
     fn visit_ty(&mut self, ty: Ty<'tcx>) {
         ty.visit_with(self);
     }
-    fn visit_const(&mut self, konst: Const<'tcx>) {
+    fn visit_const(&mut self, konst: Const) {
         konst.visit_with(self);
     }
     fn visit_generic_args(&mut self, args: GenericArgsRef<'tcx>) {
@@ -56,18 +59,6 @@ pub trait PatternSuperVisitable<'tcx> {
 }
 
 impl<'tcx, P: PatternSuperVisitable<'tcx>> PatternVisitable<'tcx> for P {}
-
-impl<'tcx> PatternSuperVisitable<'tcx> for Pattern<'tcx> {
-    fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
-        match self.kind {
-            PatternKind::TyVar => {},
-            PatternKind::ConstVar => {},
-            PatternKind::Init(local) => vis.visit_local(local),
-            PatternKind::Statement(ref statement) => vis.visit_statement(statement),
-            PatternKind::Terminator(ref terminator) => vis.visit_terminator(terminator),
-        }
-    }
-}
 
 impl<'tcx> PatternSuperVisitable<'tcx> for Place<'tcx> {
     fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
@@ -110,14 +101,11 @@ impl<'tcx> PatternSuperVisitable<'tcx> for GenericArgsRef<'tcx> {
     }
 }
 
-impl<'tcx> PatternSuperVisitable<'tcx> for Const<'tcx> {
+impl<'tcx> PatternSuperVisitable<'tcx> for Const {
     fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
-        match *self.kind() {
-            ConstKind::ConstVar(const_var) => vis.visit_const_var(const_var),
-            ConstKind::Value(ty, scalar) => {
-                vis.visit_ty(ty);
-                vis.visit_const_value(ConstValue::Scalar(scalar.into()));
-            },
+        match *self {
+            Const::ConstVar(const_var) => vis.visit_const_var(const_var),
+            Const::Value(int_value) => vis.visit_scalar_int(int_value),
         }
     }
 }
@@ -144,14 +132,20 @@ impl<'tcx> PatternSuperVisitable<'tcx> for Path<'tcx> {
 impl<'tcx> PatternSuperVisitable<'tcx> for ConstOperand<'tcx> {
     fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
         match *self {
-            ConstOperand::Ty(ty, konst) => {
-                vis.visit_ty(ty);
-                vis.visit_const(konst);
-            },
-            ConstOperand::Val(value, ty) => {
-                vis.visit_const_value(value);
-                vis.visit_ty(ty);
-            },
+            ConstOperand::ConstVar(const_var) => vis.visit_const_var(const_var),
+            ConstOperand::ScalarInt(int_value) => vis.visit_scalar_int(int_value),
+            ConstOperand::ZeroSized(ty) => vis.visit_ty(ty),
+        }
+    }
+}
+
+impl<'tcx> PatternSuperVisitable<'tcx> for BasicBlockData<'tcx> {
+    fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
+        for statement in &self.statements {
+            vis.visit_statement(statement);
+        }
+        if let Some(terminator) = &self.terminator {
+            vis.visit_terminator(terminator);
         }
     }
 }
@@ -194,11 +188,12 @@ impl<'tcx> PatternSuperVisitable<'tcx> for Operand<'tcx> {
 
 impl<'tcx> PatternSuperVisitable<'tcx> for StatementKind<'tcx> {
     fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
-        match self {
-            &StatementKind::Assign(place, ref rvalue) => {
+        match *self {
+            StatementKind::Assign(place, ref rvalue) => {
                 vis.visit_place(place);
                 vis.visit_rvalue(rvalue);
             },
+            StatementKind::Init(place) => vis.visit_place(place),
         }
     }
 }
@@ -210,14 +205,29 @@ impl<'tcx> PatternSuperVisitable<'tcx> for TerminatorKind<'tcx> {
                 ref func,
                 ref args,
                 destination,
+                target: _,
             } => {
                 vis.visit_operand(func);
                 for arg in &args.data {
                     vis.visit_operand(arg);
                 }
-                vis.visit_place(destination);
+                if let Some(destination) = destination {
+                    vis.visit_place(destination);
+                }
             },
-            TerminatorKind::Drop { place } => vis.visit_place(place),
+            TerminatorKind::Drop { place, target: _ } => vis.visit_place(place),
+            TerminatorKind::SwitchInt {
+                ref operand,
+                ref targets,
+            } => {
+                vis.visit_operand(operand);
+                vis.visit_switch_targets(targets);
+            },
+            TerminatorKind::Goto(_) | TerminatorKind::Return => {},
         }
     }
+}
+
+impl<'tcx> PatternSuperVisitable<'tcx> for SwitchTargets {
+    fn super_visit_with<V: PatternVisitor<'tcx>>(&self, _vis: &mut V) {}
 }

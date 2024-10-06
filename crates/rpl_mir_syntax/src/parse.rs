@@ -126,6 +126,16 @@ impl Parse for Const {
     }
 }
 
+impl Parse for ConstOperand {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        Ok(if input.peek(Token![const]) {
+            ConstOperand::Lit(input.parse()?)
+        } else {
+            ConstOperand::Path(input.parse()?)
+        })
+    }
+}
+
 impl Parse for GenericConst {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         Ok(if input.peek(token::Brace) {
@@ -144,10 +154,10 @@ impl Parse for GenericArgument {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         Ok(if input.peek(syn::Lifetime) {
             GenericArgument::Region(input.parse()?)
-        } else if input.fork().parse::<GenericConst>().is_ok() {
-            GenericArgument::Const(input.parse()?)
-        } else {
+        } else if input.fork().parse::<Type>().is_ok() {
             GenericArgument::Type(input.parse()?)
+        } else {
+            GenericArgument::Const(input.parse()?)
         })
     }
 }
@@ -517,10 +527,8 @@ impl Parse for Operand {
             Operand::Move(input.parse()?)
         } else if input.peek(kw::copy) {
             Operand::Copy(input.parse()?)
-        } else if input.peek(Token![const]) {
-            Const::Lit(input.parse()?).into()
         } else {
-            Const::Path(input.parse()?).into()
+            Operand::Constant(input.parse()?)
         })
     }
 }
@@ -854,6 +862,8 @@ impl Parse for Declaration {
             Declaration::TypeDecl(input.parse()?)
         } else if input.peek(Token![use]) {
             Declaration::UsePath(input.parse()?)
+        } else if input.peek(Token![let]) && (input.peek2(Token![self]) || input.peek3(Token![self])) {
+            Declaration::SelfDecl(input.parse()?)
         } else if input.peek(Token![let]) {
             Declaration::LocalDecl(input.parse()?)
         } else {
@@ -940,6 +950,8 @@ impl<End: Parse> Parse for Statement<End> {
             Statement::Loop(input.parse()?)
         } else if input.peek(kw::switchInt) {
             Statement::SwitchInt(input.parse()?)
+        } else if input.peek(Token![_]) {
+            Statement::Call(input.parse()?, input.parse()?)
         } else {
             Statement::Assign(input.parse()?, input.parse()?)
         })
