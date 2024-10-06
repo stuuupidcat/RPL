@@ -1,58 +1,56 @@
-use rustc_middle::ty::TyCtxt;
+use rustc_arena::DroplessArena;
 use rustc_span::Symbol;
 
-pub trait IntoArena<'tcx, T: ?Sized> {
-    fn into_arena(self) -> &'tcx T;
+pub trait AllocInArena<'tcx, T: ?Sized> {
+    fn alloc_in_arena(self) -> &'tcx T;
 }
 
-impl<'tcx, T: ?Sized> IntoArena<'tcx, T> for &'tcx T {
-    fn into_arena(self) -> &'tcx T {
+impl<'tcx, T: ?Sized> AllocInArena<'tcx, T> for &'tcx T {
+    fn alloc_in_arena(self) -> &'tcx T {
         self
     }
 }
 
-impl<'tcx, T, const N: usize> IntoArena<'tcx, [T]> for &'tcx [T; N] {
-    fn into_arena(self) -> &'tcx [T] {
+impl<'tcx, T, const N: usize> AllocInArena<'tcx, [T]> for &'tcx [T; N] {
+    fn alloc_in_arena(self) -> &'tcx [T] {
         self
     }
 }
 
-impl<'tcx> IntoArena<'tcx, [Symbol]> for (TyCtxt<'tcx>, &[&str]) {
-    fn into_arena(self) -> &'tcx [Symbol] {
-        let (tcx, syms) = self;
-        tcx.arena
-            .dropless
-            .alloc_from_iter(syms.iter().map(|sym| Symbol::intern(sym)))
+impl<'tcx> AllocInArena<'tcx, [Symbol]> for (&'tcx DroplessArena, &[&str]) {
+    fn alloc_in_arena(self) -> &'tcx [Symbol] {
+        let (arena, syms) = self;
+        arena.alloc_from_iter(syms.iter().map(|sym| Symbol::intern(sym)))
     }
 }
 
-impl<'tcx, const N: usize> IntoArena<'tcx, [Symbol]> for (TyCtxt<'tcx>, &[&str; N]) {
-    fn into_arena(self) -> &'tcx [Symbol] {
-        let (tcx, syms) = self;
-        (tcx, &syms[..]).into_arena()
+impl<'tcx, const N: usize> AllocInArena<'tcx, [Symbol]> for (&'tcx DroplessArena, &[&str; N]) {
+    fn alloc_in_arena(self) -> &'tcx [Symbol] {
+        let (arena, syms) = self;
+        (arena, &syms[..]).alloc_in_arena()
     }
 }
 
-impl<'tcx, T: Copy> IntoArena<'tcx, T> for (TyCtxt<'tcx>, T) {
-    fn into_arena(self) -> &'tcx T {
-        let (tcx, value) = self;
-        tcx.arena.dropless.alloc(value)
+impl<'tcx, T: Copy> AllocInArena<'tcx, T> for (&'tcx DroplessArena, T) {
+    fn alloc_in_arena(self) -> &'tcx T {
+        let (arena, value) = self;
+        arena.alloc(value)
     }
 }
 
-impl<'tcx, T: Copy> IntoArena<'tcx, [T]> for (TyCtxt<'tcx>, &[T]) {
-    fn into_arena(self) -> &'tcx [T] {
-        let (tcx, slice) = self;
+impl<'tcx, T: Copy> AllocInArena<'tcx, [T]> for (&'tcx DroplessArena, &[T]) {
+    fn alloc_in_arena(self) -> &'tcx [T] {
+        let (arena, slice) = self;
         if slice.is_empty() {
             return &[];
         }
-        tcx.arena.dropless.alloc_slice(slice)
+        arena.alloc_slice(slice)
     }
 }
 
-impl<'tcx, T: Copy, const N: usize> IntoArena<'tcx, [T]> for (TyCtxt<'tcx>, &[T; N]) {
-    fn into_arena(self) -> &'tcx [T] {
-        let (tcx, slice) = self;
-        (tcx, &slice[..]).into_arena()
+impl<'tcx, T: Copy, const N: usize> AllocInArena<'tcx, [T]> for (&'tcx DroplessArena, &[T; N]) {
+    fn alloc_in_arena(self) -> &'tcx [T] {
+        let (arena, slice) = self;
+        (arena, &slice[..]).alloc_in_arena()
     }
 }

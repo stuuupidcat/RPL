@@ -18,11 +18,10 @@ impl Parse for MirPatternFn {
 impl MirPatternFn {
     pub(crate) fn expand_macro_mir(mut self) -> syn::Result<TokenStream> {
         let inputs = self.item_fn.sig.inputs.iter().collect::<Vec<_>>();
-        let tcx_and_patterns = if let [syn::FnArg::Typed(tcx), syn::FnArg::Typed(patterns)] = inputs[..]
-            && let box syn::Pat::Ident(ref tcx) = tcx.pat
+        let patterns = if let [syn::FnArg::Typed(patterns)] = inputs[..]
             && let box syn::Pat::Ident(ref patterns) = patterns.pat
         {
-            Some((&tcx.ident, &patterns.ident))
+            Some(&patterns.ident)
         } else {
             None
         };
@@ -32,7 +31,7 @@ impl MirPatternFn {
             {
                 mac.path = syn::parse_quote!(::rpl_macros::identity);
                 let mir = syn::parse2(mac.tokens.clone())?;
-                mac.tokens = crate::expand_mir(mir, tcx_and_patterns)?;
+                mac.tokens = crate::expand_mir(mir, patterns)?;
             }
         }
         Ok(self.item_fn.into_token_stream())

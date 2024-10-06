@@ -878,6 +878,13 @@ dependencies = [
 [[package]]
 name = "rpl_mir"
 version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "proc-macro2",
+ "quote",
+ "rpl_macros",
+ "syn",
+]
 
 [[package]]
 name = "rpl_mir_expand"

@@ -375,6 +375,10 @@ impl<End: ToTokens> ToTokens for Statement<End> {
                 assign.to_tokens(tokens);
                 end.to_tokens(tokens);
             },
+            Statement::Call(call, end) => {
+                call.to_tokens(tokens);
+                end.to_tokens(tokens);
+            },
             Statement::Drop(drop, end) => {
                 drop.to_tokens(tokens);
                 end.to_tokens(tokens);

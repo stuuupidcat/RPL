@@ -12,6 +12,15 @@ extern crate rustc_driver;
 extern crate rustc_hash;
 extern crate rustc_index;
 
+macro_rules! todo {
+    () => {
+        std::todo!("{}:{}", file!(), line!())
+    };
+    ($($arg:tt)*) => {
+        std::todo!($($arg)*)
+    };
+}
+
 mod check;
 pub(crate) mod expand;
 mod parse;

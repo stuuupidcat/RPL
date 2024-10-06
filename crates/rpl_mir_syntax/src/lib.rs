@@ -54,6 +54,7 @@ pub(crate) mod kw {
     syn::custom_keyword!(Ge);
     syn::custom_keyword!(Eq);
     syn::custom_keyword!(Ne);
+    syn::custom_keyword!(Offset);
 
     // NullOp
     syn::custom_keyword!(SizeOf);
@@ -383,7 +384,6 @@ auto_derive! {
     #[derive(Clone)]
     pub enum PlaceLocal {
         Local(Ident),
-        Underscore(Token![_]),
         SelfValue(Token![self]),
     }
 }
@@ -392,7 +392,6 @@ impl std::fmt::Display for PlaceLocal {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PlaceLocal::Local(ident) => ident.fmt(f),
-            PlaceLocal::Underscore(_) => f.write_str("_"),
             PlaceLocal::SelfValue(_) => f.write_str("self"),
         }
     }
@@ -524,6 +523,15 @@ auto_derive! {
     #[auto_derive(ToTokens)]
     #[derive(Clone)]
     pub enum Const {
+        Lit(syn::Lit),
+        Path(TypePath),
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens)]
+    #[derive(Clone)]
+    pub enum ConstOperand {
         Lit(ConstLit),
         Path(TypePath),
     }
@@ -555,7 +563,7 @@ auto_derive! {
     pub enum Operand {
         Copy(OperandCopy),
         Move(OperandMove),
-        Constant(Const),
+        Constant(ConstOperand),
     }
 }
 
@@ -638,6 +646,7 @@ auto_derive! {
         Ge(kw::Ge),
         Eq(kw::Eq),
         Ne(kw::Ne),
+        Offset(kw::Offset),
     }
 }
 
@@ -895,11 +904,34 @@ auto_derive! {
     }
 }
 
+auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct CallIgnoreRet {
+        tk_underscore : Token![_],
+        tk_eq: Token![=],
+        pub call: Call,
+    }
+}
+
 #[derive(Clone)]
 pub struct Drop {
     kw_drop: kw::drop,
     paren: token::Paren,
     pub place: Place,
+}
+
+auto_derive! {
+    #[auto_derive(Parse, ToTokens)]
+    #[derive(Clone)]
+    pub struct SelfDecl {
+        tk_let: Token![let],
+        tk_mut: Option<Token![mut]>,
+        tk_self: Token![self],
+        tk_colon: Token![:],
+        pub ty: Type,
+        tk_semi: Token![;],
+    }
 }
 
 auto_derive! {
@@ -909,6 +941,7 @@ auto_derive! {
         TypeDecl(TypeDecl),
         UsePath(UsePath),
         LocalDecl(LocalDecl),
+        SelfDecl(SelfDecl),
     }
 }
 
@@ -978,6 +1011,7 @@ pub struct SwitchInt {
 #[derive(Clone)]
 pub enum Statement<End = Token![;]> {
     Assign(Assign, End),
+    Call(CallIgnoreRet, End),
     Drop(Drop, End),
     Control(Control, End),
     Loop(Loop),

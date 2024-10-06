@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote_each_token, quote_token, ToTokens};
+use quote::{format_ident, quote, quote_each_token, quote_token, ToTokens};
 use syn::punctuated::{Pair, Pairs, Punctuated};
 use syn::Ident;
 use syntax::*;
@@ -7,15 +7,14 @@ use syntax::*;
 use crate::MirPatternFn;
 
 pub(crate) struct ExpandCtxt<'ecx> {
-    tcx: &'ecx Ident,
     patterns: &'ecx Ident,
 }
 
-pub(crate) fn expand_impl<T>(value: T, tcx: &Ident, patterns: &Ident, tokens: &mut TokenStream)
+pub(crate) fn expand_impl<T>(value: T, patterns: &Ident, tokens: &mut TokenStream)
 where
     for<'ecx> Expand<'ecx, T>: ToTokens,
 {
-    let ecx = ExpandCtxt::new(tcx, patterns);
+    let ecx = ExpandCtxt::new(patterns);
     ecx.expand(value).to_tokens(tokens);
 }
 
@@ -25,20 +24,16 @@ pub fn expand(mir_pattern: MirPatternFn) -> TokenStream {
         .unwrap_or_else(syn::Error::into_compile_error)
 }
 
-static PARAM_TCX: &str = "tcx";
-pub(crate) static PARAM_PATTERNS: &str = "patterns";
+static PARAM_PATTERNS: &str = "patterns";
 
-pub fn expand_mir(mir: Mir, tcx_and_patterns: Option<(&Ident, &Ident)>) -> syn::Result<TokenStream> {
+pub fn expand_mir(mir: Mir, tcx_and_patterns: Option<&Ident>) -> syn::Result<TokenStream> {
     crate::check_mir(&mir)?;
-    let (tcx, patterns) = match tcx_and_patterns {
-        None => (
-            &syn::Ident::new(PARAM_TCX, proc_macro2::Span::call_site()),
-            &syn::Ident::new(PARAM_PATTERNS, proc_macro2::Span::call_site()),
-        ),
-        Some(tcx_and_patterns) => tcx_and_patterns,
+    let patterns = match tcx_and_patterns {
+        None => &syn::Ident::new(PARAM_PATTERNS, proc_macro2::Span::call_site()),
+        Some(patterns) => patterns,
     };
     let mut tokens = TokenStream::new();
-    expand_impl(&mir, &tcx, &patterns, &mut tokens);
+    expand_impl(&mir, patterns, &mut tokens);
     Ok(tokens)
 }
 
@@ -71,6 +66,11 @@ trait ExpandIdent: Sized {
     }
 }
 
+impl ExpandIdent for &'static str {
+    fn with_suffix(&self, suffix: impl std::fmt::Display) -> Ident {
+        format_ident!("{self}{suffix}")
+    }
+}
 impl ExpandIdent for syn::Token![self] {
     fn with_suffix(&self, suffix: impl std::fmt::Display) -> Ident {
         format_ident!("self{suffix}")
@@ -81,22 +81,39 @@ impl ExpandIdent for Ident {
         format_ident!("{self}{suffix}")
     }
 }
-impl ExpandIdent for syntax::PlaceLocal {
+impl ExpandIdent for PlaceLocal {
     fn with_suffix(&self, suffix: impl std::fmt::Display) -> Ident {
         match self {
             PlaceLocal::Local(ident) => ident.with_suffix(suffix),
-            PlaceLocal::Underscore(_underscore) => todo!(),
             PlaceLocal::SelfValue(self_value) => self_value.with_suffix(suffix),
         }
     }
 }
 
 impl<'ecx> ExpandCtxt<'ecx> {
-    pub(crate) fn new(tcx: &'ecx Ident, patterns: &'ecx Ident) -> Self {
-        Self { tcx, patterns }
+    pub(crate) fn new(patterns: &'ecx Ident) -> Self {
+        Self { patterns }
     }
     pub(crate) fn expand<T>(&self, value: T) -> Expand<'_, T> {
         Expand { value, ecx: self }
+    }
+    fn expand_projections<'a>(&self, place: &'a Place) -> Expand<'_, Projections<'a>> {
+        Expand {
+            value: Projections(place),
+            ecx: self,
+        }
+    }
+    fn expand_as_adt<'a>(&self, path: &'a Path) -> Expand<'_, ExpandAsAdt<'a>> {
+        Expand {
+            value: ExpandAsAdt(path),
+            ecx: self,
+        }
+    }
+    fn expand_as_fn_operand<'a>(&self, operand: &'a Operand) -> Expand<'_, ExpandAsFnOperand<'a>> {
+        Expand {
+            value: ExpandAsFnOperand(operand),
+            ecx: self,
+        }
     }
     fn expand_punctuated<'a, U: 'a, P: 'a>(
         &'ecx self,
@@ -191,7 +208,7 @@ impl ToTokens for Expand<'_, &Mir> {
 
 impl ToTokens for Expand<'_, &MetaItem> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { tcx, patterns } = self.ecx;
+        let ExpandCtxt { patterns } = self.ecx;
         let MetaItem { ident, kind, .. } = &self.value;
         match kind {
             MetaKind::Ty(_) => {
@@ -201,7 +218,7 @@ impl ToTokens for Expand<'_, &MetaItem> {
                     #[allow(non_snake_case)]
                     let #ty_var_ident = #patterns.new_ty_var();
                     #[allow(non_snake_case)]
-                    let #ty_ident = #patterns.mk_var_ty(#tcx, #ty_var_ident);
+                    let #ty_ident = #patterns.mk_var_ty(#ty_var_ident);
                 );
             },
         }
@@ -210,7 +227,9 @@ impl ToTokens for Expand<'_, &MetaItem> {
 
 impl ToTokens for Expand<'_, &Meta> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.expand_punctuated(&self.value.meta.content).to_tokens(tokens);
+        for meta_item in self.value.meta.content.iter() {
+            self.expand(meta_item).to_tokens(tokens);
+        }
     }
 }
 
@@ -220,18 +239,125 @@ impl ToTokens for Expand<'_, &Declaration> {
             Declaration::TypeDecl(type_decl) => self.expand(type_decl).to_tokens(tokens),
             Declaration::UsePath(use_path) => self.expand(use_path).to_tokens(tokens),
             Declaration::LocalDecl(local_decl) => self.expand(local_decl).to_tokens(tokens),
+            Declaration::SelfDecl(self_value) => self.expand(self_value).to_tokens(tokens),
         }
     }
 }
 
-impl ToTokens for Expand<'_, &Statement> {
+impl<End> ToTokens for Expand<'_, &Statement<End>> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self.value {
             Statement::Assign(assign, _) => self.expand(assign).to_tokens(tokens),
+            Statement::Call(call, _) => self.expand(call).to_tokens(tokens),
             Statement::Drop(drop, _) => self.expand(drop).to_tokens(tokens),
-            Statement::Control(_control, _) => todo!(),
-            Statement::Loop(_loop) => todo!(),
-            Statement::SwitchInt(_switch_int) => todo!(),
+            Statement::Control(control, _) => self.expand(control).to_tokens(tokens),
+            Statement::Loop(loop_) => self.expand(loop_).to_tokens(tokens),
+            Statement::SwitchInt(switch_int) => self.expand(switch_int).to_tokens(tokens),
+        }
+    }
+}
+
+struct ExpandAsFnOperand<'a>(&'a Operand);
+
+impl ToTokens for Expand<'_, ExpandAsFnOperand<'_>> {
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        let ExpandCtxt { patterns } = self.ecx;
+        if let Operand::Constant(ConstOperand::Path(path)) = self.value.0 {
+            if let Some(_qself) = &path.qself {
+                todo!();
+            }
+            let path = self.expand(&path.path);
+            quote_each_token!(tokens
+                #patterns.mk_zeroed(#patterns.mk_fn(
+                    #patterns.mk_item_path(&[#path]), patterns.mk_generic_args(&[]),
+                ))
+            );
+        } else {
+            self.expand(self.value.0).to_tokens(tokens);
+        }
+    }
+}
+
+impl ToTokens for Expand<'_, &CallIgnoreRet> {
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        let ExpandCtxt { patterns } = self.ecx;
+        let Call { func, operands } = &self.value.call;
+        let func = self.expand_as_fn_operand(func);
+        let operands = self.expand(operands);
+        quote_each_token!(tokens #patterns.mk_fn_call(#func, #operands, None); );
+    }
+}
+
+impl ToTokens for Expand<'_, &Control> {
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        let ExpandCtxt { patterns } = self.ecx;
+        match self.value {
+            Control::Break(_, _) => {
+                quote_each_token!(tokens #patterns.mk_break(););
+            },
+            Control::Continue(_, _) => {
+                quote_each_token!(tokens #patterns.mk_continue(););
+            },
+        }
+    }
+}
+
+impl ToTokens for Expand<'_, &Loop> {
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        let ExpandCtxt { patterns } = self.ecx;
+        let statements = self
+            .value
+            .block
+            .statements
+            .iter()
+            .map(|statement| self.expand(statement));
+        quote_each_token!(tokens #patterns.mk_loop(|#patterns| { #(#statements)* }););
+    }
+}
+
+impl ToTokens for Expand<'_, &SwitchInt> {
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        let ExpandCtxt { patterns } = self.ecx;
+        let operand = self.expand(&self.value.operand);
+        let targets = self.value.targets.iter().map(|target| self.expand(target));
+        quote_each_token!(tokens #patterns.mk_switch_int(#operand, |mut #patterns| { #(#targets)* }););
+    }
+}
+
+impl ToTokens for Expand<'_, &SwitchTarget> {
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        let ExpandCtxt { patterns } = self.ecx;
+        let SwitchTarget { value, body, .. } = self.value;
+        let body = self.expand(body);
+        let value = match value {
+            SwitchValue::Bool(lit_bool) => Some(quote!(#lit_bool)),
+            SwitchValue::Int(lit_int) => Some(quote!(#lit_int)),
+            SwitchValue::Underscore(_) => None,
+        };
+        let body = quote!(|#patterns| { #body });
+        match value {
+            Some(value) => {
+                quote_each_token!(tokens #patterns.mk_switch_target(#value, #body););
+            },
+            None => {
+                quote_each_token!(tokens #patterns.mk_otherwise(#body););
+            },
+        }
+    }
+}
+
+impl ToTokens for Expand<'_, &SwitchBody> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self.value {
+            SwitchBody::Statement(statement, _) => self.expand(statement).to_tokens(tokens),
+            SwitchBody::Block(block) => self.expand(block).to_tokens(tokens),
+        }
+    }
+}
+impl ToTokens for Expand<'_, &Block> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        for statement in &self.value.statements {
+            self.expand(statement).to_tokens(tokens);
         }
     }
 }
@@ -267,6 +393,16 @@ impl ToTokens for Expand<'_, &LocalDecl> {
     }
 }
 
+impl ToTokens for Expand<'_, &SelfDecl> {
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        let SelfDecl { ty, .. } = self.value;
+        let ExpandCtxt { patterns, .. } = self.ecx;
+        let ty = self.expand(ty);
+        let local = "self".as_local();
+        quote_each_token!(tokens let #local = #patterns.mk_self(#ty); );
+    }
+}
+
 struct Assign<'a> {
     place: &'a Place,
     rvalue_or_call: &'a RvalueOrCall,
@@ -284,7 +420,7 @@ impl ToTokens for Expand<'_, &syntax::Assign> {
 
 impl ToTokens for Expand<'_, Assign<'_>> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns, tcx } = self.ecx;
+        let ExpandCtxt { patterns } = self.ecx;
         let Assign { place, rvalue_or_call } = self.value;
         let local = place.local();
         let stmt = local.as_stmt();
@@ -296,11 +432,9 @@ impl ToTokens for Expand<'_, Assign<'_>> {
                 quote_each_token!(tokens #patterns.mk_assign(#place, #rvalue); );
             },
             RvalueOrCall::Call(Call { func, operands }) => {
-                let func = self.expand(func);
+                let func = self.expand_as_fn_operand(func);
                 let operands = self.expand(operands);
-                quote_each_token!(tokens #patterns.mk_fn_call(
-                    #tcx, #func, #operands, [/* TODO: generics */], #place,
-                ); );
+                quote_each_token!(tokens #patterns.mk_fn_call(#func, #operands, Some(#place)); );
             },
             RvalueOrCall::Any(_) => {
                 let local = local.as_local();
@@ -329,13 +463,49 @@ impl RegionExt for Option<Region> {
     }
 }
 
+struct ExpandAsAdt<'a>(&'a Path);
+
+impl ToTokens for Expand<'_, ExpandAsAdt<'_>> {
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        let ExpandCtxt { patterns } = self.ecx;
+        let mut iter = self.value.0.segments.iter();
+        let mut path = TokenStream::new();
+        let mut gen_args = TokenStream::new();
+        for segment in iter.by_ref() {
+            let ident = segment.ident.to_string();
+            quote_each_token!(path #ident,);
+            if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &segment.arguments {
+                let args = self.expand_punctuated(args);
+                quote_each_token!(gen_args #args);
+            }
+        }
+        quote_each_token!(tokens #patterns.mk_adt_ty(
+            #patterns.mk_item_path(&[#path]), #patterns.mk_generic_args(&[#gen_args]),
+        ));
+        if let Some(_rem) = iter.next() {
+            todo!();
+        }
+    }
+}
+
+impl ToTokens for Expand<'_, &GenericArgument> {
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        match self.value {
+            GenericArgument::Region(Region { kind, .. }) => self.expand(*kind).to_tokens(tokens),
+            GenericArgument::Type(ty) => self.expand(ty).to_tokens(tokens),
+            GenericArgument::Const(GenericConst { konst, .. }) => self.expand(konst).to_tokens(tokens),
+        }
+        quote_each_token!(tokens.into());
+    }
+}
+
 impl ToTokens for Expand<'_, &Type> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { tcx, patterns } = self.ecx;
+        let ExpandCtxt { patterns } = self.ecx;
         match self.value {
             Type::Array(TypeArray { box ty, len, .. }) => {
                 let ty = self.expand(ty);
-                quote_each_token!(tokens #patterns.mk_array(#tcx, #ty, #len));
+                quote_each_token!(tokens #patterns.mk_array(#ty, #len));
             },
             Type::Group(TypeGroup { box ty, .. }) | Type::Paren(TypeParen { box ty, .. }) => {
                 self.expand(ty).to_tokens(tokens);
@@ -348,11 +518,13 @@ impl ToTokens for Expand<'_, &Type> {
                     ident.as_ty().to_tokens(tokens);
                 }
             },
-            Type::Path(TypePath { .. }) => todo!(),
+            Type::Path(TypePath { path, .. }) => {
+                self.expand_as_adt(path).to_tokens(tokens);
+            },
             Type::Ptr(TypePtr { mutability, box ty, .. }) => {
                 let ty = self.expand(ty);
                 let mutability = self.expand(*mutability);
-                quote_each_token!(tokens #patterns.mk_raw_ptr_ty(#tcx, #ty, #mutability));
+                quote_each_token!(tokens #patterns.mk_raw_ptr_ty(#ty, #mutability));
             },
             Type::Reference(TypeReference {
                 region,
@@ -363,11 +535,11 @@ impl ToTokens for Expand<'_, &Type> {
                 let region = self.expand(region.kind());
                 let ty = self.expand(ty);
                 let mutability = self.expand(*mutability);
-                quote_each_token!(tokens #patterns.mk_ref_ty(#tcx, #region, #ty, #mutability));
+                quote_each_token!(tokens #patterns.mk_ref_ty(#region, #ty, #mutability));
             },
             Type::Slice(TypeSlice { box ty, .. }) => {
                 let ty = self.expand(ty);
-                quote_each_token!(tokens #patterns.mk_slice_ty(#tcx, #ty));
+                quote_each_token!(tokens #patterns.mk_slice_ty(#ty));
             },
             Type::Tuple(_) => todo!(),
             Type::TyVar(TypeVar { ident, .. }) => ident.as_ty().to_tokens(tokens),
@@ -376,8 +548,18 @@ impl ToTokens for Expand<'_, &Type> {
 }
 
 impl ToTokens for Expand<'_, &CallOperands> {
-    fn to_tokens(&self, _tokens: &mut TokenStream) {
-        todo!()
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        quote_each_token!(tokens ::rpl_mir::pat::List::);
+        match self.value {
+            CallOperands::Ordered(operands) => {
+                let operands = self.expand_punctuated(&operands.operands);
+                quote_each_token!(tokens ordered([#operands]));
+            },
+            CallOperands::Unordered(operands) => {
+                let operands = self.expand_punctuated(&operands.operands);
+                quote_each_token!(tokens unordered([#operands]));
+            },
+        }
     }
 }
 
@@ -451,7 +633,7 @@ impl ToTokens for Expand<'_, &Rvalue> {
 
 impl ToTokens for Expand<'_, &Operand> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        quote_each_token!(tokens ::rpl_mir::pat::);
+        quote_each_token!(tokens ::rpl_mir::pat::Operand::);
         match self.value {
             Operand::Copy(OperandCopy { place, .. }) => {
                 let place = self.expand(place);
@@ -469,9 +651,64 @@ impl ToTokens for Expand<'_, &Operand> {
     }
 }
 
+impl ToTokens for Expand<'_, &ConstOperand> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self.value {
+            ConstOperand::Lit(ConstLit { lit, .. }) => self.expand(lit).to_tokens(tokens),
+            ConstOperand::Path(TypePath { qself: None, path: _ }) => {
+                todo!();
+                // let path = self.expand(path);
+                // quote_each_token!(tokens ::rpl_mir::pat::ConstOperand::ZeroSized(
+                //     #patterns.mk_item_path(&[#path]),
+                // ));
+            },
+            ConstOperand::Path(TypePath {
+                qself: Some(_qself),
+                path: _,
+            }) => {
+                todo!();
+            },
+        }
+    }
+}
+
 impl ToTokens for Expand<'_, &Const> {
-    fn to_tokens(&self, _tokens: &mut TokenStream) {
-        todo!()
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self.value {
+            Const::Lit(lit) => self.expand(lit).to_tokens(tokens),
+            Const::Path(TypePath { qself: None, path }) => {
+                todo!("{}", path.to_token_stream());
+                // let path = self.expand(path);
+                // quote_each_token!(tokens ::rpl_mir::pat::ConstOperand::ZeroSized(
+                //     #patterns.mk_item_path(&[#path]),
+                // ));
+            },
+            Const::Path(TypePath {
+                qself: Some(_qself),
+                path: _,
+            }) => {
+                todo!();
+            },
+        }
+    }
+}
+
+impl ToTokens for Expand<'_, &syn::Lit> {
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        match self.value {
+            syn::Lit::Str(_lit_str) => todo!(),
+            syn::Lit::ByteStr(_lit_byte_str) => todo!(),
+            syn::Lit::CStr(_lit_cstr) => todo!(),
+            syn::Lit::Byte(_lit_byte) => todo!(),
+            syn::Lit::Char(_lit_char) => todo!(),
+            syn::Lit::Int(lit_int) => {
+                quote_each_token!(tokens ::rpl_mir::pat::ConstOperand::ScalarInt(#lit_int.into()));
+            },
+            syn::Lit::Float(_lit_float) => todo!(),
+            syn::Lit::Bool(_lit_bool) => todo!(),
+            syn::Lit::Verbatim(_literal) => todo!(),
+            _ => todo!(),
+        }
     }
 }
 
@@ -479,57 +716,68 @@ struct Projections<'a>(&'a Place);
 
 impl ToTokens for Expand<'_, Projections<'_>> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        if let Place::Local(_) = self.value.0 {
-            return;
+        let mut place = self.value.0;
+        let mut projections = Vec::new();
+        loop {
+            let mut proj = quote!(::rpl_mir::pat::PlaceElem::);
+            let inner = match place {
+                Place::Local(_) => break,
+                Place::Paren(PlaceParen { place: box inner, .. }) => {
+                    place = inner;
+                    continue;
+                },
+                Place::Deref(PlaceDeref { box place, .. }) => {
+                    quote_each_token!(proj Deref,);
+                    place
+                },
+                Place::Field(PlaceField { box place, field, .. }) => {
+                    let field = self.expand(field);
+                    quote_each_token!(proj Field(#field),);
+                    place
+                },
+                Place::Index(PlaceIndex { box place, index, .. }) => {
+                    let index = index.as_local();
+                    quote_each_token!(proj Index(#index),);
+                    place
+                },
+                &Place::ConstIndex(PlaceConstIndex {
+                    box ref place,
+                    from_end,
+                    index: syn::Index { index, .. },
+                    min_length: syn::Index { index: min_length, .. },
+                    ..
+                }) => {
+                    let from_end = from_end.is_some();
+                    quote_each_token!(proj ConstIndex {
+                        offset: #index,
+                        min_length: #min_length,
+                        from_end: #from_end
+                    },);
+                    place
+                },
+                &Place::Subslice(PlaceSubslice {
+                    box ref place,
+                    ref from,
+                    from_end,
+                    to: syn::Index { index: to, .. },
+                    ..
+                }) => {
+                    let from = from.as_ref().map_or(0, |from| from.index);
+                    let from_end = from_end.is_some();
+                    quote_each_token!(proj Subslice { from: #from, to: #to, from_end: #from_end },);
+                    place
+                },
+                Place::DownCast(PlaceDowncast { box place, variant, .. }) => {
+                    let variant = self.expand(variant.to_symbol());
+                    quote_each_token!(proj Downcast(#variant),);
+                    place
+                },
+            };
+            projections.push(proj);
+            place = inner;
         }
-        quote_each_token!(tokens ::rpl_mir::pat::PlaceElem::);
-        let inner = match self.value.0 {
-            Place::Local(_) => return,
-            Place::Paren(PlaceParen { box place, .. }) => place,
-            Place::Deref(PlaceDeref { box place, .. }) => {
-                quote_each_token!(tokens Deref,);
-                place
-            },
-            Place::Field(PlaceField { box place, field, .. }) => {
-                let field = self.expand(field);
-                quote_each_token!(tokens Field(#field),);
-                place
-            },
-            Place::Index(PlaceIndex { box place, index, .. }) => {
-                let index = index.as_local();
-                quote_each_token!(tokens Index(#index),);
-                place
-            },
-            &Place::ConstIndex(PlaceConstIndex {
-                box ref place,
-                from_end,
-                index: syn::Index { index, .. },
-                min_length: syn::Index { index: min_length, .. },
-                ..
-            }) => {
-                let from_end = from_end.is_some();
-                quote_each_token!(tokens ConstIndex { offset: #index, min_length: #min_length, from_end: #from_end },);
-                place
-            },
-            &Place::Subslice(PlaceSubslice {
-                box ref place,
-                ref from,
-                from_end,
-                to: syn::Index { index: to, .. },
-                ..
-            }) => {
-                let from = from.as_ref().map_or(0, |from| from.index);
-                let from_end = from_end.is_some();
-                quote_each_token!(tokens Subslice { from: #from, to: #to, from_end: #from_end },);
-                place
-            },
-            Place::DownCast(PlaceDowncast { box place, variant, .. }) => {
-                let variant = self.expand(variant.to_symbol());
-                quote_each_token!(tokens Downcast(#variant),);
-                place
-            },
-        };
-        self.expand(Projections(inner)).to_tokens(tokens);
+        projections.reverse();
+        quote_each_token!(tokens #(#projections)*);
     }
 }
 
@@ -550,14 +798,14 @@ impl ToTokens for Expand<'_, &syn::Member> {
 
 impl ToTokens for Expand<'_, &Place> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { tcx, patterns, .. } = self.ecx;
+        let ExpandCtxt { patterns, .. } = self.ecx;
         if let Place::Local(local) = self.value {
             let local = local.as_local();
             quote_each_token!(tokens #local.into_place());
         } else {
             let local = self.value.local().as_local();
-            let projections = self.expand(Projections(self.value));
-            quote_each_token!(tokens #patterns.mk_place(#local, (#tcx, &[#projections])));
+            let projections = self.expand_projections(self.value);
+            quote_each_token!(tokens ::rpl_mir::pat::Place::new(#local, #patterns.mk_projection(&[#projections])));
         }
     }
 }
@@ -613,8 +861,14 @@ impl ToTokens for Expand<'_, &RvalueAggregate> {
 }
 
 impl ToTokens for Expand<'_, &Path> {
-    fn to_tokens(&self, _tokens: &mut TokenStream) {
-        todo!()
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        if let PathLeading::Crate(_) = self.value.leading {
+            quote_each_token!(tokens "crate",);
+        }
+        for segment in &self.value.segments {
+            let segment = segment.ident.to_string();
+            quote_each_token!(tokens #segment,);
+        }
     }
 }
 
