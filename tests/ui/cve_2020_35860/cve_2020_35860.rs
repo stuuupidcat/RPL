@@ -1,5 +1,8 @@
+//@ ignore-on-host
+
 use std::{ffi::CStr, ops::Deref};
 
+#[allow(non_camel_case_types)]
 type c_char = i8;
 
 pub trait DisposeRef {

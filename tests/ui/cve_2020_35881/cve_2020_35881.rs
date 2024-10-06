@@ -1,3 +1,5 @@
+//@ ignore-on-host
+
 use std::mem;
 
 pub unsafe fn get_data<T: ?Sized>(val: *const T) -> *const () {

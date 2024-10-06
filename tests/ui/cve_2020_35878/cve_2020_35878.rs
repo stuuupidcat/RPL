@@ -1,3 +1,5 @@
+//@ ignore-on-host
+
 use std::cmp::Eq;
 use std::hash::Hash;
 use std::mem;

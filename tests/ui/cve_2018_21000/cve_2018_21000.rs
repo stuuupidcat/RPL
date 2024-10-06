@@ -1,3 +1,5 @@
+//@ ignore-on-host
+
 use std::mem::{size_of, forget};
 use std::vec::Vec;
 

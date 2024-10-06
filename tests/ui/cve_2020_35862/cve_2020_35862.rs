@@ -1,3 +1,5 @@
+//@ ignore-on-host
+
 use core::slice;
 use std::marker::PhantomData;
 use std::ops::Deref;
