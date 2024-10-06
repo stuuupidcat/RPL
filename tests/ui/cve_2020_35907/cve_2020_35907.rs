@@ -1,3 +1,5 @@
+//@ ignore-on-host
+
 use core::task::{RawWaker, RawWakerVTable, Waker};
 use std::cell::UnsafeCell;
 

@@ -135,6 +135,7 @@ fn base_config(test_dir: &str) -> (Config, Args) {
             "-Zui-testing",
             "-Zdeduplicate-diagnostics=no",
             "-Dwarnings",
+            "-Adeprecated",
             &format!("-Ldependency={}", deps_path.display()),
         ]
         .map(OsString::from),

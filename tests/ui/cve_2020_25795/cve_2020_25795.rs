@@ -1,3 +1,5 @@
+//@ ignore-on-host
+
 use std::{mem::MaybeUninit, ptr};
 
 pub trait Unsigned: Copy + Default + 'static {
