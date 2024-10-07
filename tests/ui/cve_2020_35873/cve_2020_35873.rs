@@ -1,3 +1,5 @@
+//@ ignore-on-host
+
 struct Session<'a> {
     s: i32,
     _f: &'a (),

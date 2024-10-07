@@ -111,6 +111,18 @@ impl ToTokens for ParenthesizedGenericArguments {
     }
 }
 
+impl ToTokens for LangItem {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.tk_pound.to_tokens(tokens);
+        self.bracket.surround(tokens, |tokens| {
+            self.kw_lang.to_tokens(tokens);
+            self.tk_eq.to_tokens(tokens);
+            self.item.to_tokens(tokens);
+            self.args.to_tokens(tokens);
+        });
+    }
+}
+
 impl ToTokens for TypePath {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         let mut pairs = self.path.segments.pairs();
@@ -119,7 +131,7 @@ impl ToTokens for TypePath {
             qself.ty.to_tokens(tokens);
             if let Some(tk_as) = qself.tk_as {
                 tk_as.to_tokens(tokens);
-                self.path.leading_colon.to_tokens(tokens);
+                self.path.leading.to_tokens(tokens);
                 for (pos, pair) in pairs.by_ref().take(qself.position).enumerate() {
                     let (seg, tk_colon2) = pair.into_tuple();
                     seg.to_tokens(tokens);
@@ -130,8 +142,10 @@ impl ToTokens for TypePath {
                 }
             } else {
                 qself.tk_gt.to_tokens(tokens);
-                self.path.leading_colon.to_tokens(tokens);
+                self.path.leading.to_tokens(tokens);
             }
+        } else {
+            self.path.leading.to_tokens(tokens);
         }
         for pair in pairs {
             let (seg, tk_colon2) = pair.into_tuple();
@@ -160,6 +174,8 @@ impl ToTokens for PlaceConstIndex {
         self.bracket.surround(tokens, |tokens| {
             self.from_end.to_tokens(tokens);
             self.index.to_tokens(tokens);
+            self.kw_of.to_tokens(tokens);
+            self.min_length.to_tokens(tokens);
         });
     }
 }
@@ -169,7 +185,7 @@ impl ToTokens for PlaceSubslice {
         self.place.to_tokens(tokens);
         self.bracket.surround(tokens, |tokens| {
             self.from.to_tokens(tokens);
-            self.tk_dotdot.to_tokens(tokens);
+            self.tk_colon.to_tokens(tokens);
             self.from_end.to_tokens(tokens);
             self.to.to_tokens(tokens);
         });
@@ -246,12 +262,12 @@ impl ToTokens for RvalueDiscriminant {
 
 impl ToTokens for AggregateArray {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.bracket.surround(tokens, |tokens| {
-            self.ty.to_tokens(tokens);
-            self.tk_semi.to_tokens(tokens);
-            self.tk_underscore.to_tokens(tokens);
-        });
-        self.kw_from.to_tokens(tokens);
+        // self.bracket.surround(tokens, |tokens| {
+        //     self.ty.to_tokens(tokens);
+        //     self.tk_semi.to_tokens(tokens);
+        //     self.tk_underscore.to_tokens(tokens);
+        // });
+        // self.kw_from.to_tokens(tokens);
         self.operands.to_tokens(tokens);
     }
 }
@@ -299,7 +315,6 @@ impl ToTokens for Drop {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         self.kw_drop.to_tokens(tokens);
         self.paren.surround(tokens, |tokens| self.place.to_tokens(tokens));
-        self.tk_semi.to_tokens(tokens);
     }
 }
 
@@ -316,10 +331,87 @@ impl<K: ToTokens, C: ToTokens, P> ToTokens for Macro<K, C, P> {
     }
 }
 
+impl ToTokens for Block {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.brace.surround(tokens, |tokens| {
+            for statement in &self.statements {
+                statement.to_tokens(tokens);
+            }
+        });
+    }
+}
+
+impl ToTokens for SwitchBody {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            SwitchBody::Statement(statement, tk_comma) => {
+                statement.to_tokens(tokens);
+                tk_comma.to_tokens(tokens);
+            },
+            SwitchBody::Block(block) => block.to_tokens(tokens),
+        }
+    }
+}
+
+impl ToTokens for SwitchInt {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.kw_switch_int.to_tokens(tokens);
+        self.paren.surround(tokens, |tokens| self.operand.to_tokens(tokens));
+        self.brace.surround(tokens, |tokens| {
+            for target in &self.targets {
+                target.to_tokens(tokens);
+            }
+        });
+    }
+}
+
+impl ToTokens for Control {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Control::Break(tk_break, label) => {
+                tk_break.to_tokens(tokens);
+                label.to_tokens(tokens);
+            },
+            Control::Continue(tk_continue, label) => {
+                tk_continue.to_tokens(tokens);
+                label.to_tokens(tokens);
+            },
+        }
+    }
+}
+
+impl<End: ToTokens> ToTokens for Statement<End> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Statement::Assign(assign, end) => {
+                assign.to_tokens(tokens);
+                end.to_tokens(tokens);
+            },
+            Statement::Call(call, end) => {
+                call.to_tokens(tokens);
+                end.to_tokens(tokens);
+            },
+            Statement::Drop(drop, end) => {
+                drop.to_tokens(tokens);
+                end.to_tokens(tokens);
+            },
+            Statement::Control(control, end) => {
+                control.to_tokens(tokens);
+                end.to_tokens(tokens);
+            },
+            Statement::Loop(loop_) => loop_.to_tokens(tokens),
+            Statement::SwitchInt(switch_int) => switch_int.to_tokens(tokens),
+        }
+    }
+}
+
 impl ToTokens for Mir {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         for meta in &self.metas {
             meta.to_tokens(tokens);
+        }
+        for declaration in &self.declarations {
+            declaration.to_tokens(tokens);
         }
         for statement in &self.statements {
             statement.to_tokens(tokens);

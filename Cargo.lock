@@ -287,6 +287,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22ec99545bb0ed0ea7bb9b8e1e9122ea386ff8a48c0922e43f36d45ab09e0e80"
 
 [[package]]
+name = "diff"
+version = "0.1.13"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "56254986775e3233ffa9c4d7d3faaf6d36a2c09d30b20687e9f88bc8bafc16c8"
+
+[[package]]
 name = "dirs-next"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -724,6 +730,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "da544ee218f0d287a911e9c99a39a8c9bc8fcad3cb8db5959940044ecfc67265"
 
 [[package]]
+name = "pretty_assertions"
+version = "1.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ae130e2f271fbc2ac3a40fb1d07180839cdbbe443c7a27e1e3c13c5cac0116d"
+dependencies = [
+ "diff",
+ "yansi",
+]
+
+[[package]]
 name = "prettydiff"
 version = "0.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -862,11 +878,19 @@ dependencies = [
 [[package]]
 name = "rpl_mir"
 version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "proc-macro2",
+ "quote",
+ "rpl_macros",
+ "syn",
+]
 
 [[package]]
 name = "rpl_mir_expand"
 version = "0.1.0"
 dependencies = [
+ "pretty_assertions",
  "proc-macro2",
  "quote",
  "rpl_mir_syntax",
@@ -878,6 +902,7 @@ dependencies = [
 name = "rpl_mir_syntax"
 version = "0.1.0"
 dependencies = [
+ "pretty_assertions",
  "proc-macro2",
  "quote",
  "syn",
@@ -1459,3 +1484,9 @@ checksum = "f593a95398737aeed53e489c785df13f3618e41dbcd6718c6addbf1395aa6876"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "yansi"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cfe53a6657fd280eaa890a3bc59152892ffa3e30101319d168b781ed6529b049"

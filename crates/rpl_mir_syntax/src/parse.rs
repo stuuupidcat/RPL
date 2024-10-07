@@ -44,14 +44,18 @@ pub enum ParseError {
     ExpectBraceOrParenthesis,
     #[error("`,` is needed for single-element tuple")]
     ExpectTuple,
-    #[error("`crate` cannot be used as non-beginning position in a path")]
-    UnexpectedCrateInPath,
-    #[error("`crate` cannot be used standalone in a path")]
-    CrateAloneInPath,
     #[error("type declaration with generic arguments are not supported")]
     TypeWithGenericsNotSupported,
     #[error("expect `(`, `[`, or `{{")]
     ExpectDelimiter,
+    #[error("expect `type`, `use`, or `let")]
+    ExpectDeclaration,
+    #[error("expect integer suffix")]
+    ExpectIntSuffix,
+    #[error("unrecognized integer suffix {0}")]
+    UnrecognizedIntSuffix(String),
+    #[error("expect `,` or `;`")]
+    ExpectCommaOrSemicolon,
 }
 
 impl Parse for Region {
@@ -122,6 +126,32 @@ impl Parse for Const {
     }
 }
 
+impl Parse for LangItem {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let content;
+        Ok(LangItem {
+            tk_pound: input.parse()?,
+            bracket: syn::bracketed!(content in input),
+            kw_lang: content.parse()?,
+            tk_eq: content.parse()?,
+            item: content.parse()?,
+            args: input.peek(Token![<]).then(|| input.parse()).transpose()?,
+        })
+    }
+}
+
+impl Parse for ConstOperand {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        Ok(if input.peek(Token![const]) {
+            ConstOperand::Lit(input.parse()?)
+        } else if input.peek(Token![#]) {
+            ConstOperand::LangItem(input.parse()?)
+        } else {
+            ConstOperand::Path(input.parse()?)
+        })
+    }
+}
+
 impl Parse for GenericConst {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         Ok(if input.peek(token::Brace) {
@@ -140,10 +170,10 @@ impl Parse for GenericArgument {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         Ok(if input.peek(syn::Lifetime) {
             GenericArgument::Region(input.parse()?)
-        } else if input.fork().parse::<GenericConst>().is_ok() {
-            GenericArgument::Const(input.parse()?)
-        } else {
+        } else if input.fork().parse::<Type>().is_ok() {
             GenericArgument::Type(input.parse()?)
+        } else {
+            GenericArgument::Const(input.parse()?)
         })
     }
 }
@@ -225,59 +255,31 @@ impl Parse for PathArguments {
 }
 
 impl PathSegment {
-    fn parse_kw_crate(input: ParseStream<'_>) -> Result<Self> {
-        Ok(PathSegment {
-            ident: IdentOrCrate::Crate(input.parse()?),
-            arguments: PathArguments::None,
-        })
-    }
     fn parse_turbofish(input: ParseStream<'_>) -> Result<Self> {
         Ok(PathSegment {
-            ident: IdentOrCrate::Ident(input.parse()?),
+            ident: input.parse()?,
             arguments: input.call(PathArguments::parse_turbofish)?,
         })
     }
 }
 
-impl Parse for PathSegment {
+impl Parse for PathLeading {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
-        if input.peek(Token![crate]) {
-            return Err(input.error(ParseError::UnexpectedCrateInPath));
+        if input.peek(Token![::]) {
+            Ok(PathLeading::Colon(input.parse()?))
+        } else if input.peek(Token![$]) {
+            Ok(PathLeading::Crate(input.parse()?))
+        } else {
+            Ok(PathLeading::None)
         }
-        Ok(PathSegment {
-            ident: IdentOrCrate::Ident(input.parse()?),
-            arguments: input.parse()?,
-        })
-    }
-}
-
-impl Path {
-    fn parse_path_started_with_crate(input: ParseStream<'_>) -> Result<Self> {
-        let mut segments = Punctuated::new();
-        segments.push_value(PathSegment::parse_kw_crate(input)?);
-        segments.push_punct(input.parse().map_err(|_| input.error(ParseError::CrateAloneInPath))?);
-        segments.push_value(input.parse()?);
-        while input.peek(Token![::]) {
-            segments.push_punct(input.parse()?);
-            segments.push_value(input.parse()?);
-        }
-        Ok(Path {
-            leading_colon: None,
-            segments,
-        })
     }
 }
 
 impl Parse for Path {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
-        if input.peek(Token![crate]) {
-            Path::parse_path_started_with_crate(input)
-        } else {
-            Ok(Path {
-                leading_colon: input.parse()?,
-                segments: Punctuated::parse_separated_nonempty(input)?,
-            })
-        }
+        let leading: PathLeading = input.parse()?;
+        let segments = Punctuated::parse_separated_nonempty(input)?;
+        Ok(Path { leading, segments })
     }
 }
 
@@ -287,16 +289,16 @@ impl QSelf {
         let ty = input.parse()?;
         let tk_as = input.parse()?;
         let tk_gt;
-        let leading_colon;
+        let leading;
         let mut segments = Punctuated::new();
         let mut position = 0;
         match tk_as {
             None => {
                 tk_gt = input.parse()?;
-                leading_colon = input.parse()?;
+                leading = input.parse()?;
             },
             Some(_) => {
-                leading_colon = input.parse()?;
+                leading = input.parse()?;
                 loop {
                     segments.push_value(input.parse()?);
                     position += 1;
@@ -315,10 +317,7 @@ impl QSelf {
             tk_as,
             tk_gt,
         };
-        let path = Path {
-            leading_colon,
-            segments,
-        };
+        let path = Path { leading, segments };
         Ok((qself, path))
     }
 }
@@ -419,8 +418,14 @@ impl Parse for Type {
             Ok(Type::Reference(input.parse()?))
         } else if input.peek(Token![!]) {
             Ok(Type::Never(input.parse()?))
+        } else if input.peek(Token![#]) {
+            Ok(Type::LangItem(input.parse()?))
         } else if input.peek(Token![$]) {
-            Ok(Type::TyVar(input.parse()?))
+            if input.peek2(Token![crate]) {
+                Ok(Type::Path(input.parse()?))
+            } else {
+                Ok(Type::TyVar(input.parse()?))
+            }
         } else {
             Ok(Type::Path(input.parse()?))
         }
@@ -465,31 +470,32 @@ impl Place {
         }))
     }
     fn parse_const_index(self, bracket: token::Bracket, content: ParseStream<'_>) -> Result<Self> {
-        let from_end = content.parse()?;
-        let index = content.parse()?;
         Ok(Place::ConstIndex(PlaceConstIndex {
             place: Box::new(self),
             bracket,
-            from_end,
-            index,
+            from_end: content.parse()?,
+            index: content.parse()?,
+            kw_of: content.parse()?,
+            min_length: content.parse()?,
         }))
     }
     fn parse_subslice(self, bracket: token::Bracket, content: ParseStream<'_>) -> Result<Self> {
-        let from = content.parse()?;
-        let tk_dotdot = content.parse()?;
+        let from = if content.peek(syn::LitInt) {
+            Some(content.parse()?)
+        } else {
+            None
+        };
+        let tk_colon = content.parse()?;
         let from_end = content.parse()?;
         let to = content.parse()?;
         Ok(Place::Subslice(PlaceSubslice {
             place: Box::new(self),
             bracket,
             from,
-            tk_dotdot,
+            tk_colon,
             from_end,
             to,
         }))
-    }
-    fn can_start(input: ParseStream<'_>) -> bool {
-        input.peek(token::Paren) || input.peek(Token![*]) || input.peek(syn::Ident) && !input.peek2(Token![::])
     }
 }
 
@@ -512,7 +518,7 @@ impl Place {
                 let bracket = syn::bracketed!(content in input);
                 if content.peek(Ident) {
                     place.parse_index(bracket, &content)?
-                } else if content.peek2(Token![..]) {
+                } else if content.peek(Token![:]) || content.peek2(Token![:]) {
                     place.parse_subslice(bracket, &content)?
                 } else {
                     place.parse_const_index(bracket, &content)?
@@ -537,12 +543,10 @@ impl Parse for Operand {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         Ok(if input.peek(Token![move]) {
             Operand::Move(input.parse()?)
-        } else if Place::can_start(input) {
+        } else if input.peek(kw::copy) {
             Operand::Copy(input.parse()?)
-        } else if input.peek(syn::Lit) {
-            Const::Lit(input.parse()?).into()
         } else {
-            Const::Path(input.parse()?).into()
+            Operand::Constant(input.parse()?)
         })
     }
 }
@@ -720,26 +724,35 @@ impl Parse for AggregateRawPtr {
 }
 
 impl Rvalue {
-    fn parse_array_like(input: ParseStream<'_>) -> Result<Self> {
+    fn parse_array(input: ParseStream<'_>) -> Result<Self> {
         let content;
         let bracket = syn::bracketed!(content in input);
-        Ok(if input.peek(kw::from) {
-            Rvalue::Aggregate(RvalueAggregate::Array(AggregateArray {
+        let operand = content.parse()?;
+        if content.peek(Token![;]) {
+            Ok(Rvalue::Repeat(RvalueRepeat {
                 bracket,
-                ty: content.parse()?,
-                tk_semi: content.parse()?,
-                tk_underscore: content.parse()?,
-                kw_from: input.parse()?,
-                operands: input.parse()?,
-            }))
-        } else {
-            Rvalue::Repeat(RvalueRepeat {
-                bracket,
-                operand: content.parse()?,
+                operand,
                 tk_semi: content.parse()?,
                 len: content.parse()?,
+            }))
+        } else if !content.is_empty() {
+            let mut operands = Punctuated::new();
+            operands.push_value(operand);
+            operands.push_punct(content.parse()?);
+            while !content.is_empty() {
+                operands.push_value(content.parse()?);
+                if content.is_empty() {
+                    break;
+                }
+                operands.push_punct(content.parse()?);
+            }
+            Ok(RvalueAggregate::Array(AggregateArray {
+                operands: BracketedOperands { bracket, operands },
             })
-        })
+            .into())
+        } else {
+            Err(content.error(ParseError::ExpectCommaOrSemicolon))
+        }
     }
     fn parse_ref_or_address_of(input: ParseStream<'_>) -> Result<Self> {
         let tk_and = input.parse()?;
@@ -819,13 +832,15 @@ impl RvalueOrCall {
 impl Parse for RvalueOrCall {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         if input.peek(token::Bracket) {
-            Ok(Rvalue::parse_array_like(input)?.into())
+            Ok(Rvalue::parse_array(input)?.into())
         } else if input.peek(Token![&]) {
             Ok(Rvalue::parse_ref_or_address_of(input)?.into())
-        } else if input.peek(kw::any) {
+        } else if input.peek(Token![_]) {
             Ok(RvalueOrCall::Any(input.parse()?))
         } else if input.peek(Token![<]) {
             Ok(RvalueOrCall::Call(input.parse()?))
+        } else if input.peek(kw::copy) || input.peek(Token![move]) || input.peek(Token![const]) {
+            input.call(RvalueOrCall::parse_operand_any_or_aggregate)
         } else if input.peek(syn::Ident) && input.peek2(token::Paren) {
             input.call(RvalueOrCall::parse_opertion_or_call)
         } else {
@@ -841,23 +856,122 @@ impl Parse for Drop {
             kw_drop: input.parse()?,
             paren: syn::parenthesized!(content in input),
             place: content.parse()?,
+        })
+    }
+}
+
+impl Parse for LocalDecl {
+    fn parse(input: ParseStream) -> Result<Self> {
+        Ok(LocalDecl {
+            tk_let: input.parse()?,
+            tk_mut: input.parse()?,
+            ident: input.parse()?,
+            tk_colon: input.parse()?,
+            ty: input.parse()?,
+            init: input.peek(Token![=]).then(|| input.parse()).transpose()?,
             tk_semi: input.parse()?,
         })
     }
 }
 
-impl Parse for Statement {
+impl Parse for Declaration {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         Ok(if input.peek(Token![type]) {
-            Statement::TypeDecl(input.parse()?)
+            Declaration::TypeDecl(input.parse()?)
         } else if input.peek(Token![use]) {
-            Statement::UsePath(input.parse()?)
+            Declaration::UsePath(input.parse()?)
+        } else if input.peek(Token![let]) && (input.peek2(Token![self]) || input.peek3(Token![self])) {
+            Declaration::SelfDecl(input.parse()?)
         } else if input.peek(Token![let]) {
-            Statement::LocalDecl(input.parse()?)
-        } else if input.peek(kw::drop) && input.peek2(token::Paren) {
-            Statement::Drop(input.parse()?)
+            Declaration::LocalDecl(input.parse()?)
         } else {
-            Statement::Assign(input.parse()?)
+            return Err(input.error(ParseError::ExpectDeclaration));
+        })
+    }
+}
+
+impl Parse for Block {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let content;
+        Ok(Block {
+            brace: syn::braced!(content in input),
+            statements: std::iter::from_fn(|| content.parse().ok()).collect(),
+        })
+    }
+}
+
+impl Parse for SwitchBody {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        Ok(if input.peek(token::Brace) {
+            SwitchBody::Block(input.parse()?)
+        } else {
+            SwitchBody::Statement(input.parse()?, input.parse()?)
+        })
+    }
+}
+
+impl Parse for SwitchValue {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        Ok(if input.peek(Token![_]) {
+            SwitchValue::Underscore(input.parse()?)
+        } else if input.peek(syn::LitBool) {
+            SwitchValue::Bool(input.parse()?)
+        } else {
+            let value: syn::LitInt = input.parse()?;
+            const INT_SUFFIXES: &[&str] = &[
+                "u8", "u16", "u32", "u64", "u128", "usize", "i8", "i16", "i32", "i64", "i128", "isize",
+            ];
+            let suffix = value.suffix().trim_start_matches("_");
+            if suffix.is_empty() {
+                return Err(input.error(ParseError::ExpectIntSuffix));
+            } else if !INT_SUFFIXES.contains(&suffix) {
+                return Err(syn::Error::new(
+                    value.span(),
+                    ParseError::UnrecognizedIntSuffix(suffix.to_string()),
+                ));
+            }
+            value.into()
+        })
+    }
+}
+
+impl Parse for SwitchInt {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let mut content;
+        Ok(SwitchInt {
+            kw_switch_int: input.parse()?,
+            paren: syn::parenthesized!(content in input),
+            operand: content.parse()?,
+            brace: syn::braced!(content in input),
+            targets: std::iter::from_fn(|| content.parse().ok()).collect(),
+        })
+    }
+}
+
+impl Parse for Control {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        Ok(if input.peek(Token![break]) {
+            Control::Break(input.parse()?, input.parse()?)
+        } else {
+            Control::Continue(input.parse()?, input.parse()?)
+        })
+    }
+}
+
+impl<End: Parse> Parse for Statement<End> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        Ok(if input.peek(kw::drop) && input.peek2(token::Paren) {
+            Statement::Drop(input.parse()?, input.parse()?)
+        } else if input.peek(Token![break]) || input.peek(Token![continue]) {
+            Statement::Control(input.parse()?, input.parse()?)
+        } else if input.peek(Token![loop]) {
+            Statement::Loop(input.parse()?)
+        } else if input.peek(kw::switchInt) {
+            Statement::SwitchInt(input.parse()?)
+        } else if input.peek(Token![_]) {
+            Statement::Call(input.parse()?, input.parse()?)
+        } else {
+            Statement::Assign(input.parse()?, input.parse()?)
         })
     }
 }
@@ -907,11 +1021,19 @@ impl Parse for Mir {
         while input.peek(kw::meta) {
             metas.push(input.parse()?);
         }
+        let mut declarations = Vec::new();
+        while Declaration::can_start(input) {
+            declarations.push(input.parse()?);
+        }
         let mut statements = Vec::new();
         while !input.is_empty() {
             statements.push(input.parse()?);
         }
-        Ok(Mir { metas, statements })
+        Ok(Mir {
+            metas,
+            declarations,
+            statements,
+        })
     }
 }
 

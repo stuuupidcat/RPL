@@ -68,6 +68,33 @@ struct Pattern {
     ptr_usage: pat::PatternIdx,
 }
 
+/*
+#[rpl_macros::mir_pattern]
+fn pattern<'tcx>(tcx: TyCtxt<'tcx>, patterns: &mut pat::Patterns<'tcx>) -> Pattern {
+    mir! {
+        use core::ffi::c_str::CString;
+        use core::ffi::c_str::Cstr;
+        use core::ptr::non_null::NonNull;
+        use $crate::ffi::sqlite3session_attach;
+
+        let cstring: CString = any!();
+        let non_null: NonNull<[u8]> = (((cstring.inner).0).pointer);
+        let uslice_ptr: *const [u8] = non_null.pointer;
+        let cstr: *const CStr = uslice_ptr as *const CStr (PtrToPtr);
+        let islice: *const [i8] = &raw const ((*cstr).inner);
+        let iptr: *const i8 = move islice as *const i8 (PtrToPtr);
+        drop(cstring);
+        let s: i32 = any!();
+        let ret: i32 = sqlite3session_attach(move s, move iptr);
+    }
+    Pattern {
+        cstring_drop,
+        ptr_usage,
+    }
+}
+*/
+
+// /*
 /// patterns:
 /// ```ignore
 /// let cstring   : CString       = ...                                      ;
@@ -202,6 +229,7 @@ fn pattern<'tcx>(tcx: TyCtxt<'tcx>, patterns: &mut pat::Patterns<'tcx>) -> Patte
         ptr_usage,
     }
 }
+// */
 
 #[instrument(level = "debug", skip(tcx), ret)]
 fn is_all_safe_trait<'tcx>(tcx: TyCtxt<'tcx>, predicates: ty::GenericPredicates<'tcx>, self_ty: Ty<'tcx>) -> bool {

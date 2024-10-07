@@ -6,7 +6,9 @@
 #![feature(is_none_or)]
 #![feature(box_patterns)]
 #![feature(try_trait_v2)]
+#![feature(debug_closure_helpers)]
 
+extern crate rustc_arena;
 extern crate rustc_data_structures;
 extern crate rustc_driver;
 extern crate rustc_errors;
@@ -23,30 +25,31 @@ extern crate tracing;
 
 pub mod pattern;
 
-use std::iter::zip;
+// use std::iter::zip;
 
-use rustc_index::bit_set::BitSet;
-use rustc_index::{Idx, IndexSlice};
+// use rustc_index::bit_set::BitSet;
+// use rustc_index::{Idx, IndexSlice};
+use rustc_middle::mir;
 use rustc_middle::ty::TyCtxt;
-use rustc_middle::{mir, ty};
-use rustc_target::abi::FieldIdx;
+// use rustc_target::abi::FieldIdx;
 
 pub use crate::pattern as pat;
 
 pub struct CheckMirCtxt<'tcx> {
-    tcx: TyCtxt<'tcx>,
-    body: &'tcx mir::Body<'tcx>,
+    _tcx: TyCtxt<'tcx>,
+    _body: &'tcx mir::Body<'tcx>,
     pub patterns: pat::Patterns<'tcx>,
 }
 
 impl<'tcx> CheckMirCtxt<'tcx> {
-    pub fn new(tcx: TyCtxt<'tcx>, body: &'tcx mir::Body<'tcx>) -> Self {
+    pub fn new(tcx: TyCtxt<'tcx>, body: &'tcx mir::Body<'tcx>, patterns: pat::Patterns<'tcx>) -> Self {
         Self {
-            tcx,
-            body,
-            patterns: pat::Patterns::new(tcx),
+            _tcx: tcx,
+            _body: body,
+            patterns,
         }
     }
+    /*
     #[instrument(level = "info", skip(self), fields(def_id = ?self.body.source.def_id()))]
     pub fn check(&mut self) {
         self.check_args();
@@ -125,8 +128,10 @@ impl<'tcx> CheckMirCtxt<'tcx> {
     ) -> Option<pat::MatchIdx> {
         self.match_terminator(block, terminator)
     }
+    */
 }
 
+/*
 impl<'tcx> CheckMirCtxt<'tcx> {
     pub fn match_local(&self, pat: pat::LocalIdx, local: mir::Local) -> bool {
         let matched = self.patterns.match_local(self.tcx, self.body, pat, local);
@@ -351,3 +356,4 @@ impl<'tcx> CheckMirCtxt<'tcx> {
         self.patterns.match_region(region_pat, region)
     }
 }
+*/

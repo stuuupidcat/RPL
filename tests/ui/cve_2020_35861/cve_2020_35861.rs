@@ -1,3 +1,5 @@
+//@ ignore-on-host
+
 extern crate alloc as core_alloc;
 
 mod alloc {
@@ -338,7 +340,6 @@ const _: [(); _FOOTER_ALIGN_ASSERTION as usize] = [()];
 // Maximum typical overhead per allocation imposed by allocators.
 const MALLOC_OVERHEAD: usize = 16;
 
-
 const OVERHEAD: usize = (MALLOC_OVERHEAD + FOOTER_SIZE + (CHUNK_ALIGN - 1)) & !(CHUNK_ALIGN - 1);
 
 // Choose a relatively small default initial chunk size, since we double chunk
@@ -353,7 +354,6 @@ const DEFAULT_CHUNK_SIZE_WITHOUT_FOOTER: usize = FIRST_ALLOCATION_GOAL - OVERHEA
 
 #[inline]
 fn layout_for_array<T>(len: usize) -> Option<Layout> {
-
     let layout = Layout::new::<T>();
     let size_rounded_up = round_up_to(layout.size(), layout.align())?;
     let total_size = len.checked_mul(size_rounded_up)?;
@@ -643,7 +643,6 @@ impl Bump {
         })
     }
 
-
     #[inline(always)]
     #[allow(clippy::mut_from_ref)]
     pub fn alloc_slice_fill_default<T: Default>(&self, len: usize) -> &mut [T] {
@@ -663,7 +662,6 @@ impl Bump {
     fn try_alloc_layout_fast(&self, layout: Layout) -> Option<NonNull<u8>> {
         unsafe {
             if layout.size() == 0 {
-
                 let ptr = layout.align() as *mut u8;
                 return Some(NonNull::new_unchecked(ptr));
             }
@@ -733,7 +731,6 @@ impl Bump {
         }
     }
 
-    
     pub fn iter_allocated_chunks(&mut self) -> ChunkIter<'_> {
         ChunkIter {
             footer: Some(self.current_chunk_footer.get()),

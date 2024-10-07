@@ -22,18 +22,26 @@ pub(crate) mod kw {
     // Metadata
     syn::custom_keyword!(meta);
     syn::custom_keyword!(ty);
+    syn::custom_keyword!(lang);
 
     // Statement
     syn::custom_keyword!(drop);
+    syn::custom_keyword!(switchInt);
+
+    // Operand
+    syn::custom_keyword!(copy);
+
+    // place
+    syn::custom_keyword!(of);
 
     // Rvalue
     syn::custom_keyword!(Len);
     syn::custom_keyword!(Discriminant);
     syn::custom_keyword!(raw);
-    syn::custom_keyword!(any);
 
     // CastKind
     syn::custom_keyword!(PtrToPtr);
+    syn::custom_keyword!(IntToInt);
 
     // BinOp
     syn::custom_keyword!(Add);
@@ -41,6 +49,13 @@ pub(crate) mod kw {
     syn::custom_keyword!(Mul);
     syn::custom_keyword!(Div);
     syn::custom_keyword!(Rem);
+    syn::custom_keyword!(Lt);
+    syn::custom_keyword!(Gt);
+    syn::custom_keyword!(Le);
+    syn::custom_keyword!(Ge);
+    syn::custom_keyword!(Eq);
+    syn::custom_keyword!(Ne);
+    syn::custom_keyword!(Offset);
 
     // NullOp
     syn::custom_keyword!(SizeOf);
@@ -107,7 +122,7 @@ pub struct TypeArray {
     bracket: token::Bracket,
     pub ty: Box<Type>,
     tk_semi: Token![;],
-    pub len: Const,
+    pub len: syn::LitInt,
 }
 
 /*
@@ -223,29 +238,31 @@ auto_derive! {
 }
 
 auto_derive! {
-    #[auto_derive(ToTokens, Parse, From)]
+    #[auto_derive(Parse, ToTokens)]
     #[derive(Clone)]
-    pub enum IdentOrCrate {
-        Crate(Token![crate]),
-        Ident(Ident),
+    pub struct PathSegment {
+        pub ident: Ident,
+        pub arguments: PathArguments,
     }
 }
 
-impl IdentOrCrate {
-    pub fn as_ident(&self) -> Option<&Ident> {
-        match self {
-            IdentOrCrate::Ident(ident) => Some(ident),
-            IdentOrCrate::Crate(_) => None,
-        }
+auto_derive! {
+    #[auto_derive(Parse, ToTokens)]
+    #[derive(Clone, Copy)]
+    pub struct PathCrate {
+        tk_dollar: Token![$],
+        pub tk_crate: Token![crate],
+        colon: Token![::],
     }
 }
 
 auto_derive! {
     #[auto_derive(ToTokens)]
-    #[derive(Clone)]
-    pub struct PathSegment {
-        pub ident: IdentOrCrate,
-        pub arguments: PathArguments,
+    #[derive(Clone, Copy)]
+    pub enum PathLeading {
+        None,
+        Colon(Token![::]),
+        Crate(PathCrate),
     }
 }
 
@@ -253,20 +270,21 @@ auto_derive! {
     #[auto_derive(ToTokens)]
     #[derive(Clone)]
     pub struct Path {
-        pub leading_colon: Option<Token![::]>,
+        pub leading: PathLeading,
         pub segments: Punctuated<PathSegment, Token![::]>,
     }
 }
 
 impl Path {
     pub fn as_ident(&self) -> Option<&Ident> {
-        if self.leading_colon.is_some() || self.segments.len() != 1 || self.segments.trailing_punct() {
+        let PathLeading::None = self.leading else { return None };
+        if self.segments.len() != 1 || self.segments.trailing_punct() {
             return None;
         }
         self.ident()
     }
     pub fn ident(&self) -> Option<&Ident> {
-        self.segments.last()?.ident.as_ident()
+        Some(&self.segments.last()?.ident)
     }
 }
 
@@ -359,14 +377,27 @@ auto_derive! {
 
         /// A `TyVar` from `meta!($T:ty)`.
         TyVar(TypeVar),
+
+        /// A languate item
+        LangItem(LangItem),
     }
 }
 
 auto_derive! {
     #[auto_derive(ToTokens, Parse, From)]
     #[derive(Clone)]
-    pub struct PlaceLocal {
-        pub local: Ident,
+    pub enum PlaceLocal {
+        Local(Ident),
+        SelfValue(Token![self]),
+    }
+}
+
+impl std::fmt::Display for PlaceLocal {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PlaceLocal::Local(ident) => ident.fmt(f),
+            PlaceLocal::SelfValue(_) => f.write_str("self"),
+        }
     }
 }
 
@@ -408,14 +439,16 @@ pub struct PlaceConstIndex {
     bracket: token::Bracket,
     pub from_end: Option<Token![-]>,
     pub index: syn::Index,
+    kw_of: kw::of,
+    pub min_length: syn::Index,
 }
 
 #[derive(Clone)]
 pub struct PlaceSubslice {
     pub place: Box<Place>,
     bracket: token::Bracket,
-    pub from: syn::Index,
-    tk_dotdot: Token![..],
+    pub from: Option<syn::Index>,
+    tk_colon: Token![:],
     pub from_end: Option<Token![-]>,
     pub to: syn::Index,
 }
@@ -455,9 +488,9 @@ auto_derive! {
 }
 
 impl Place {
-    pub fn local(&self) -> &Ident {
+    pub fn local(&self) -> &PlaceLocal {
         match self {
-            Place::Local(PlaceLocal { local }) => local,
+            Place::Local(local) => local,
             Place::Paren(PlaceParen { box place, .. })
             | Place::Deref(PlaceDeref { box place, .. })
             | Place::Field(PlaceField { box place, .. })
@@ -467,9 +500,9 @@ impl Place {
             | Place::DownCast(PlaceDowncast { box place, .. }) => place.local(),
         }
     }
-    pub fn into_local(self) -> Ident {
+    pub fn into_local(self) -> PlaceLocal {
         match self {
-            Place::Local(PlaceLocal { local }) => local,
+            Place::Local(local) => local,
             Place::Paren(PlaceParen { box place, .. })
             | Place::Deref(PlaceDeref { box place, .. })
             | Place::Field(PlaceField { box place, .. })
@@ -482,7 +515,16 @@ impl Place {
 }
 
 auto_derive! {
-    #[auto_derive(ToTokens, From)]
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct ConstLit {
+        tk_const: Token![const],
+        pub lit: syn::Lit,
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens)]
     #[derive(Clone)]
     pub enum Const {
         Lit(syn::Lit),
@@ -490,10 +532,31 @@ auto_derive! {
     }
 }
 
+#[derive(Clone)]
+pub struct LangItem {
+    tk_pound: Token![#],
+    bracket: token::Bracket,
+    kw_lang: kw::lang,
+    tk_eq: Token![=],
+    pub item: syn::LitStr,
+    pub args: Option<AngleBracketedGenericArguments>,
+}
+
 auto_derive! {
-    #[auto_derive(ToTokens, Parse, From)]
+    #[auto_derive(ToTokens)]
+    #[derive(Clone)]
+    pub enum ConstOperand {
+        Lit(ConstLit),
+        Path(TypePath),
+        LangItem(LangItem),
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
     #[derive(Clone)]
     pub struct OperandCopy {
+        kw_copy: kw::copy,
         pub place: Place,
     }
 
@@ -515,7 +578,7 @@ auto_derive! {
     pub enum Operand {
         Copy(OperandCopy),
         Move(OperandMove),
-        Constant(Const),
+        Constant(ConstOperand),
     }
 }
 
@@ -530,7 +593,7 @@ pub struct RvalueRepeat {
     bracket: token::Bracket,
     pub operand: Operand,
     tk_semi: Token![;],
-    pub len: Const,
+    pub len: syn::LitInt,
 }
 
 auto_derive! {
@@ -569,6 +632,7 @@ auto_derive! {
     #[derive(Clone, Copy)]
     pub enum CastKind {
         PtrToPtr(kw::PtrToPtr),
+        IntToInt(kw::IntToInt),
     }
 
 }
@@ -591,6 +655,13 @@ auto_derive! {
         Mul(kw::Mul),
         Div(kw::Div),
         Rem(kw::Rem),
+        Lt(kw::Lt),
+        Gt(kw::Gt),
+        Le(kw::Le),
+        Ge(kw::Ge),
+        Eq(kw::Eq),
+        Ne(kw::Ne),
+        Offset(kw::Offset),
     }
 }
 
@@ -648,11 +719,11 @@ pub struct RvalueDiscriminant {
 
 #[derive(Clone)]
 pub struct AggregateArray {
-    bracket: token::Bracket,
-    pub ty: Box<Type>,
-    tk_semi: Token![;],
-    tk_underscore: Token![_],
-    kw_from: kw::from,
+    // bracket: token::Bracket,
+    // pub ty: Box<Type>,
+    // tk_semi: Token![;],
+    // tk_underscore: Token![_],
+    // kw_from: kw::from,
     pub operands: BracketedOperands,
 }
 
@@ -789,15 +860,13 @@ impl<K: Clone, C: Clone, P: Clone> Clone for Macro<K, C, P> {
     }
 }
 
-pub type AnyValue = Macro<kw::any, syn::parse::Nothing>;
-
 auto_derive! {
     #[auto_derive(ToTokens, From)]
     #[derive(Clone)]
     pub enum RvalueOrCall {
         Rvalue(Rvalue),
         Call(Call),
-        Any(AnyValue),
+        Any(Token![_]),
     }
 }
 
@@ -814,14 +883,22 @@ auto_derive! {
 auto_derive! {
     #[auto_derive(ToTokens, Parse)]
     #[derive(Clone)]
+    pub struct LocalInit {
+        tk_eq: Token![=],
+        pub rvalue_or_call: RvalueOrCall,
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens)]
+    #[derive(Clone)]
     pub struct LocalDecl {
         tk_let: Token![let],
         tk_mut: Option<Token![mut]>,
         pub ident: Ident,
         tk_colon: Token![:],
         pub ty: Type,
-        tk_eq: Token![=],
-        pub rvalue_or_call: RvalueOrCall,
+        pub init: Option<LocalInit>,
         tk_semi: Token![;],
     }
 }
@@ -839,7 +916,16 @@ auto_derive! {
         pub place: Place,
         tk_eq: Token![=],
         pub rvalue_or_call: RvalueOrCall,
-        tk_semi: Token![;],
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct CallIgnoreRet {
+        tk_underscore : Token![_],
+        tk_eq: Token![=],
+        pub call: Call,
     }
 }
 
@@ -848,19 +934,103 @@ pub struct Drop {
     kw_drop: kw::drop,
     paren: token::Paren,
     pub place: Place,
-    tk_semi: Token![;],
+}
+
+auto_derive! {
+    #[auto_derive(Parse, ToTokens)]
+    #[derive(Clone)]
+    pub struct SelfDecl {
+        tk_let: Token![let],
+        tk_mut: Option<Token![mut]>,
+        tk_self: Token![self],
+        tk_colon: Token![:],
+        pub ty: Type,
+        tk_semi: Token![;],
+    }
 }
 
 auto_derive! {
     #[auto_derive(ToTokens, From)]
     #[derive(Clone)]
-    pub enum Statement {
+    pub enum Declaration {
         TypeDecl(TypeDecl),
         UsePath(UsePath),
         LocalDecl(LocalDecl),
-        Assign(Assign),
-        Drop(Drop),
+        SelfDecl(SelfDecl),
     }
+}
+
+impl Declaration {
+    fn can_start(input: syn::parse::ParseStream<'_>) -> bool {
+        input.peek(Token![type]) || input.peek(Token![use]) || input.peek(Token![let])
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct Loop {
+        pub label: Option<syn::Label>,
+        tk_loop: Token![loop],
+        pub block: Block,
+    }
+}
+
+#[derive(Clone)]
+pub enum Control {
+    Break(Token![break], Option<syn::Label>),
+    Continue(Token![continue], Option<syn::Label>),
+}
+
+#[derive(Clone)]
+pub struct Block {
+    brace: token::Brace,
+    pub statements: Vec<Statement>,
+}
+
+#[derive(Clone)]
+pub enum SwitchBody {
+    Statement(Statement<syn::parse::Nothing>, Token![,]),
+    Block(Block),
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct SwitchTarget {
+        pub value: SwitchValue,
+        tk_arrow: Token![=>],
+        pub body: SwitchBody,
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
+    pub enum SwitchValue {
+        Bool(syn::LitBool),
+        Int(syn::LitInt),
+        Underscore(Token![_]),
+    }
+}
+
+#[derive(Clone)]
+pub struct SwitchInt {
+    kw_switch_int: kw::switchInt,
+    paren: token::Paren,
+    pub operand: Operand,
+    brace: token::Brace,
+    pub targets: Vec<SwitchTarget>,
+}
+
+#[derive(Clone)]
+pub enum Statement<End = Token![;]> {
+    Assign(Assign, End),
+    Call(CallIgnoreRet, End),
+    Drop(Drop, End),
+    Control(Control, End),
+    Loop(Loop),
+    SwitchInt(SwitchInt),
 }
 
 auto_derive! {
@@ -892,5 +1062,6 @@ auto_derive! {
 
 pub struct Mir {
     pub metas: Vec<Meta>,
+    pub declarations: Vec<Declaration>,
     pub statements: Vec<Statement>,
 }

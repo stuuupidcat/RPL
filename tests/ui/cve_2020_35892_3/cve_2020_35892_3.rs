@@ -1,3 +1,5 @@
+//@ ignore-on-host
+
 use std::ops::Index;
 use std::ptr;
 

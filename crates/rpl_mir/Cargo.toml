@@ -8,6 +8,13 @@ keywords.workspace = true
 edition.workspace = true
 
 [dependencies]
+syn.workspace = true
+
+[dev-dependencies]
+rpl_macros.workspace = true
+pretty_assertions.workspace = true
+quote.workspace = true
+proc-macro2.workspace = true
 
 [features]
 
