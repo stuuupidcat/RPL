@@ -223,7 +223,7 @@ impl<'tcx> PatternSuperVisitable<'tcx> for TerminatorKind<'tcx> {
                 vis.visit_operand(operand);
                 vis.visit_switch_targets(targets);
             },
-            TerminatorKind::Goto(_) | TerminatorKind::Return => {},
+            TerminatorKind::Goto(_) | TerminatorKind::Return | TerminatorKind::PatEnd => {},
         }
     }
 }
