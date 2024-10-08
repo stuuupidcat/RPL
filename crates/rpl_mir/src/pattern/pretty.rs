@@ -189,6 +189,7 @@ impl<'tcx> fmt::Debug for TerminatorKind<'tcx> {
             TerminatorKind::SwitchInt { operand, targets } => write!(f, "switchInt({operand:?}) -> {targets:?}"),
             TerminatorKind::Goto(basic_block) => write!(f, "goto {basic_block:?}"),
             TerminatorKind::Return => f.write_str("return"),
+            TerminatorKind::PatEnd => f.write_str("end"),
         }
     }
 }

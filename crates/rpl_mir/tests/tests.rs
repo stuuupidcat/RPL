@@ -93,6 +93,7 @@ test_case! {
             _?10 = *mut [u8] from (copy _?5, copy _?8);
             _?11 = &(*_?9);
             _?12 = &mut (*_?10);
+            end;
         }
     }
 }
@@ -158,13 +159,9 @@ test_case! {
             _?11 = Lt(move _?10, copy _?1);
             switchInt(move _?11) -> [false -> ?bb4, otherwise -> ?bb5];
         }
-        ?bb2: { }
-        ?bb3: {
-            goto ?bb1;
-        }
-        ?bb4: {
-            goto ?bb2;
-        }
+        ?bb2: { end; }
+        ?bb3: { goto ?bb1; }
+        ?bb4: { goto ?bb2; }
         ?bb5: {
             _?3 = copy _?2;
             _?4 = core::iter::Step::forward_unchecked(copy _?3, const 1_usize) -> ?bb6;

@@ -224,6 +224,8 @@ pub enum TerminatorKind<'tcx> {
         target: BasicBlock,
     },
     Return,
+    /// Pattern ends here
+    PatEnd,
 }
 
 pub enum Rvalue<'tcx> {
@@ -459,7 +461,8 @@ impl<'tcx> PatternsBuilder<'tcx> {
             current,
         }
     }
-    pub fn build(self) -> Patterns<'tcx> {
+    pub fn build(mut self) -> Patterns<'tcx> {
+        self.patterns.basic_blocks[self.current].terminator = Some(TerminatorKind::PatEnd);
         self.patterns
     }
 
@@ -543,7 +546,12 @@ impl<'tcx> PatternsBuilder<'tcx> {
         match terminator {
             None => *terminator = Some(TerminatorKind::Goto(block)),
             Some(TerminatorKind::Call { target, .. } | TerminatorKind::Drop { target, .. }) => *target = block,
-            Some(TerminatorKind::Goto(_) | TerminatorKind::SwitchInt { .. } | TerminatorKind::Return) => {},
+            Some(
+                TerminatorKind::Goto(_)
+                | TerminatorKind::SwitchInt { .. }
+                | TerminatorKind::Return
+                | TerminatorKind::PatEnd,
+            ) => {},
         }
     }
     pub fn mk_loop(&mut self, f: impl FnOnce(&mut PatternsBuilder<'tcx>)) {
@@ -623,7 +631,6 @@ impl<'tcx> Patterns<'tcx> {
         }
         self.arena.alloc_slice(slice)
     }
-    
 }
 
 impl<'tcx> Patterns<'tcx> {
