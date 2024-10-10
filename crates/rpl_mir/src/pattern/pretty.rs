@@ -2,6 +2,12 @@ use std::fmt;
 
 use super::*;
 
+impl fmt::Debug for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}[{:?}]", self.block, self.statement_index)
+    }
+}
+
 impl<'tcx> fmt::Debug for Place<'tcx> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.projection {
