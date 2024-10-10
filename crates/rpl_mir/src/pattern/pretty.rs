@@ -2,6 +2,12 @@ use std::fmt;
 
 use super::*;
 
+impl fmt::Debug for Location {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?}[{:?}]", self.block, self.statement_index)
+    }
+}
+
 impl<'tcx> fmt::Debug for Place<'tcx> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.projection {
@@ -189,6 +195,7 @@ impl<'tcx> fmt::Debug for TerminatorKind<'tcx> {
             TerminatorKind::SwitchInt { operand, targets } => write!(f, "switchInt({operand:?}) -> {targets:?}"),
             TerminatorKind::Goto(basic_block) => write!(f, "goto {basic_block:?}"),
             TerminatorKind::Return => f.write_str("return"),
+            TerminatorKind::PatEnd => f.write_str("end"),
         }
     }
 }

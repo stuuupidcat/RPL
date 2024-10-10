@@ -1,0 +1,24 @@
+[package]
+name = "rpl_mir_graph"
+version.workspace = true
+description.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[dependencies]
+rpl_mir.workspace = true
+bitflags.workspace = true
+
+[dev-dependencies]
+rpl_macros.workspace = true
+pretty_assertions.workspace = true
+proc-macro2.workspace = true
+quote.workspace = true
+
+[features]
+
+[package.metadata.rust-analyzer]
+# This crate uses #[feature(rustc_private)]
+rustc_private = true

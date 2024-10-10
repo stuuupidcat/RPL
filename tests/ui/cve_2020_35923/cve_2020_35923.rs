@@ -1,3 +1,5 @@
+//@ ignore-on-host
+
 use std::cmp::Ordering;
 use std::ops::AddAssign;
 

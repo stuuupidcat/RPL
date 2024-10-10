@@ -899,6 +899,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rpl_mir_graph"
+version = "0.1.0"
+dependencies = [
+ "bitflags 2.6.0",
+ "pretty_assertions",
+ "proc-macro2",
+ "quote",
+ "rpl_macros",
+ "rpl_mir",
+]
+
+[[package]]
 name = "rpl_mir_syntax"
 version = "0.1.0"
 dependencies = [

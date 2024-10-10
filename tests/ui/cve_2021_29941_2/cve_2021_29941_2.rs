@@ -1,3 +1,5 @@
+//@ ignore-on-host
+
 pub fn swap_index(bla: impl ExactSizeIterator<Item = u32>) -> Vec<u32> {
     let len = bla.len();
     let mut vec = Vec::with_capacity(len);

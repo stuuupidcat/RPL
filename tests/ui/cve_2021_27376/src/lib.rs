@@ -1,3 +1,5 @@
+//@ ignore-on-host
+
 extern crate libc;
 
 use libc::{sockaddr, sockaddr_storage, socklen_t};

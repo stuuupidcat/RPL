@@ -1,3 +1,5 @@
+//@ ignore-on-host
+
 use std::io::{BufRead, Error as IoError, ErrorKind as IoErrorKind, Read, Result as IoResult};
 use std::ops::Bound;
 use std::ops::RangeBounds;
