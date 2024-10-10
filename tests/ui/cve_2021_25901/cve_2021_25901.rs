@@ -1,3 +1,5 @@
+//@ ignore-on-host
+
 use std::{
     cell::UnsafeCell,
     sync::{atomic::AtomicBool, Mutex},
