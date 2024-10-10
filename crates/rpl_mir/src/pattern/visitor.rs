@@ -1,35 +1,12 @@
 use super::*;
 
+pub use rustc_middle::mir::visit::{MutatingUseContext, NonMutatingUseContext, PlaceContext};
+
 pub trait PatternVisitor<'tcx>: Sized {
-    fn visit_local(&mut self, _local: LocalIdx) {}
+    fn visit_local(&mut self, _local: LocalIdx, _pcx: PlaceContext, _location: Location) {}
     fn visit_scalar_int(&mut self, _scalar_int: IntValue) {}
     fn visit_ty_var(&mut self, _ty_var: TyVarIdx) {}
     fn visit_const_var(&mut self, _const_var: ConstVarIdx) {}
-
-    fn visit_basic_block(&mut self, block: &BasicBlockData<'tcx>) {
-        block.visit_with(self);
-    }
-    fn visit_place(&mut self, place: Place<'tcx>) {
-        place.visit_with(self);
-    }
-    fn visit_rvalue(&mut self, rvalue: &Rvalue<'tcx>) {
-        rvalue.visit_with(self);
-    }
-    fn visit_operand(&mut self, operand: &Operand<'tcx>) {
-        operand.visit_with(self);
-    }
-    fn visit_const_operand(&mut self, const_operand: &ConstOperand<'tcx>) {
-        const_operand.visit_with(self);
-    }
-    fn visit_statement(&mut self, statement: &StatementKind<'tcx>) {
-        statement.visit_with(self);
-    }
-    fn visit_terminator(&mut self, terminator: &TerminatorKind<'tcx>) {
-        terminator.visit_with(self);
-    }
-    fn visit_switch_targets(&mut self, targets: &SwitchTargets) {
-        targets.visit_with(self);
-    }
 
     fn visit_ty(&mut self, ty: Ty<'tcx>) {
         ty.visit_with(self);
@@ -46,6 +23,150 @@ pub trait PatternVisitor<'tcx>: Sized {
     fn visit_path(&mut self, path: &Path<'tcx>) {
         path.visit_with(self);
     }
+    fn visit_const_operand(&mut self, const_operand: &ConstOperand<'tcx>) {
+        const_operand.visit_with(self);
+    }
+
+    fn visit_basic_block_data(&mut self, bb: BasicBlock, data: &BasicBlockData<'tcx>) {
+        self.super_basic_block_data(bb, data);
+    }
+    fn visit_place(&mut self, place: Place<'tcx>, pcx: PlaceContext, location: Location) {
+        self.super_place(place, pcx, location);
+    }
+    fn visit_rvalue(&mut self, rvalue: &Rvalue<'tcx>, location: Location) {
+        self.super_rvalue(rvalue, location);
+    }
+    fn visit_operand(&mut self, operand: &Operand<'tcx>, location: Location) {
+        self.super_operand(operand, location);
+    }
+    fn visit_statement(&mut self, statement: &StatementKind<'tcx>, location: Location) {
+        self.super_statement(statement, location);
+    }
+    fn visit_terminator(&mut self, terminator: &TerminatorKind<'tcx>, location: Location) {
+        self.super_terminator(terminator, location);
+    }
+    fn visit_switch_targets(&mut self, _targets: &SwitchTargets, _location: Location) {}
+
+    fn super_basic_block_data(&mut self, block: BasicBlock, data: &BasicBlockData<'tcx>) {
+        for (statement_index, statement) in data.statements.iter().enumerate() {
+            self.visit_statement(statement, Location { block, statement_index });
+        }
+        if let Some(terminator) = &data.terminator {
+            self.visit_terminator(
+                terminator,
+                Location {
+                    block,
+                    statement_index: data.statements.len(),
+                },
+            );
+        }
+    }
+    fn super_place(&mut self, place: Place<'tcx>, pcx: PlaceContext, location: Location) {
+        self.visit_local(place.local, pcx, location);
+    }
+    fn super_rvalue(&mut self, rvalue: &Rvalue<'tcx>, location: Location) {
+        match rvalue {
+            Rvalue::Use(operand) | Rvalue::UnaryOp(_, operand) => self.visit_operand(operand, location),
+            &Rvalue::Repeat(ref operand, konst) => {
+                self.visit_operand(operand, location);
+                self.visit_const(konst);
+            },
+            &Rvalue::Ref(_region, bk, place) => {
+                let ctx = match bk {
+                    mir::BorrowKind::Shared => PlaceContext::NonMutatingUse(NonMutatingUseContext::SharedBorrow),
+                    mir::BorrowKind::Fake(_) => PlaceContext::NonMutatingUse(NonMutatingUseContext::FakeBorrow),
+                    mir::BorrowKind::Mut { .. } => PlaceContext::MutatingUse(MutatingUseContext::Borrow),
+                };
+                self.visit_place(place, ctx, location);
+            },
+            &Rvalue::AddressOf(m, place) => {
+                let ctx = match m {
+                    mir::Mutability::Mut => PlaceContext::MutatingUse(MutatingUseContext::AddressOf),
+                    mir::Mutability::Not => PlaceContext::NonMutatingUse(NonMutatingUseContext::AddressOf),
+                };
+                self.visit_place(place, ctx, location);
+            },
+            &Rvalue::Len(place) | &Rvalue::Discriminant(place) | &Rvalue::CopyForDeref(place) => {
+                self.visit_place(
+                    place,
+                    PlaceContext::NonMutatingUse(NonMutatingUseContext::Inspect),
+                    location,
+                );
+            },
+            &Rvalue::Cast(_, ref operand, ty) | &Rvalue::ShallowInitBox(ref operand, ty) => {
+                self.visit_operand(operand, location);
+                self.visit_ty(ty);
+            },
+            Rvalue::BinaryOp(_op, box [lhs, rhs]) => {
+                self.visit_operand(lhs, location);
+                self.visit_operand(rhs, location);
+            },
+            &Rvalue::NullaryOp(_op, ty) => self.visit_ty(ty),
+            Rvalue::Aggregate(_agg_kind, operands) => operands
+                .iter()
+                .for_each(|operand| self.visit_operand(operand, location)),
+        }
+    }
+    fn super_operand(&mut self, operand: &Operand<'tcx>, location: Location) {
+        match operand {
+            &Operand::Copy(place) => {
+                self.visit_place(
+                    place,
+                    PlaceContext::NonMutatingUse(NonMutatingUseContext::Copy),
+                    location,
+                );
+            },
+            &Operand::Move(place) => self.visit_place(
+                place,
+                PlaceContext::NonMutatingUse(NonMutatingUseContext::Move),
+                location,
+            ),
+            Operand::Constant(const_operand) => self.visit_const_operand(const_operand),
+        }
+    }
+    fn super_statement(&mut self, statement: &StatementKind<'tcx>, location: Location) {
+        let store = PlaceContext::MutatingUse(MutatingUseContext::Store);
+        match *statement {
+            StatementKind::Assign(place, ref rvalue) => {
+                self.visit_place(place, store, location);
+                self.visit_rvalue(rvalue, location);
+            },
+            StatementKind::Init(place) => self.visit_place(place, store, location),
+        }
+    }
+    fn super_terminator(&mut self, terminator: &TerminatorKind<'tcx>, location: Location) {
+        match *terminator {
+            TerminatorKind::Call {
+                ref func,
+                ref args,
+                destination,
+                target: _,
+            } => {
+                self.visit_operand(func, location);
+                for arg in &args.data {
+                    self.visit_operand(arg, location);
+                }
+                if let Some(destination) = destination {
+                    self.visit_place(
+                        destination,
+                        PlaceContext::MutatingUse(MutatingUseContext::Call),
+                        location,
+                    );
+                }
+            },
+            TerminatorKind::Drop { place, target: _ } => {
+                self.visit_place(place, PlaceContext::MutatingUse(MutatingUseContext::Drop), location)
+            },
+            TerminatorKind::SwitchInt {
+                ref operand,
+                ref targets,
+            } => {
+                self.visit_operand(operand, location);
+                self.visit_switch_targets(targets, location);
+            },
+            TerminatorKind::Goto(_) | TerminatorKind::Return | TerminatorKind::PatEnd => {},
+        }
+    }
 }
 
 pub trait PatternVisitable<'tcx>: PatternSuperVisitable<'tcx> {
@@ -59,13 +180,6 @@ pub trait PatternSuperVisitable<'tcx> {
 }
 
 impl<'tcx, P: PatternSuperVisitable<'tcx>> PatternVisitable<'tcx> for P {}
-
-impl<'tcx> PatternSuperVisitable<'tcx> for Place<'tcx> {
-    fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
-        vis.visit_local(self.local);
-        // TODO: visit place projections
-    }
-}
 
 impl<'tcx> PatternSuperVisitable<'tcx> for Ty<'tcx> {
     fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
@@ -137,97 +251,4 @@ impl<'tcx> PatternSuperVisitable<'tcx> for ConstOperand<'tcx> {
             ConstOperand::ZeroSized(ty) => vis.visit_ty(ty),
         }
     }
-}
-
-impl<'tcx> PatternSuperVisitable<'tcx> for BasicBlockData<'tcx> {
-    fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
-        for statement in &self.statements {
-            vis.visit_statement(statement);
-        }
-        if let Some(terminator) = &self.terminator {
-            vis.visit_terminator(terminator);
-        }
-    }
-}
-
-impl<'tcx> PatternSuperVisitable<'tcx> for Rvalue<'tcx> {
-    fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
-        match self {
-            Rvalue::Use(operand) | Rvalue::UnaryOp(_, operand) => vis.visit_operand(operand),
-            &Rvalue::Repeat(ref operand, konst) => {
-                vis.visit_operand(operand);
-                vis.visit_const(konst);
-            },
-            &Rvalue::Ref(_region, _borrow_kind, place) => vis.visit_place(place),
-            &Rvalue::AddressOf(_mutability, place) => vis.visit_place(place),
-            &Rvalue::Len(place) | &Rvalue::Discriminant(place) | &Rvalue::CopyForDeref(place) => {
-                vis.visit_place(place);
-            },
-            &Rvalue::Cast(_, ref operand, ty) | &Rvalue::ShallowInitBox(ref operand, ty) => {
-                vis.visit_operand(operand);
-                vis.visit_ty(ty);
-            },
-            Rvalue::BinaryOp(_op, box [lhs, rhs]) => {
-                vis.visit_operand(lhs);
-                vis.visit_operand(rhs);
-            },
-            &Rvalue::NullaryOp(_op, ty) => vis.visit_ty(ty),
-            Rvalue::Aggregate(_agg_kind, operands) => operands.iter().for_each(|operand| vis.visit_operand(operand)),
-        }
-    }
-}
-
-impl<'tcx> PatternSuperVisitable<'tcx> for Operand<'tcx> {
-    fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
-        match self {
-            &Operand::Copy(place) | &Operand::Move(place) => vis.visit_place(place),
-            Operand::Constant(const_operand) => vis.visit_const_operand(const_operand),
-        }
-    }
-}
-
-impl<'tcx> PatternSuperVisitable<'tcx> for StatementKind<'tcx> {
-    fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
-        match *self {
-            StatementKind::Assign(place, ref rvalue) => {
-                vis.visit_place(place);
-                vis.visit_rvalue(rvalue);
-            },
-            StatementKind::Init(place) => vis.visit_place(place),
-        }
-    }
-}
-
-impl<'tcx> PatternSuperVisitable<'tcx> for TerminatorKind<'tcx> {
-    fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
-        match *self {
-            TerminatorKind::Call {
-                ref func,
-                ref args,
-                destination,
-                target: _,
-            } => {
-                vis.visit_operand(func);
-                for arg in &args.data {
-                    vis.visit_operand(arg);
-                }
-                if let Some(destination) = destination {
-                    vis.visit_place(destination);
-                }
-            },
-            TerminatorKind::Drop { place, target: _ } => vis.visit_place(place),
-            TerminatorKind::SwitchInt {
-                ref operand,
-                ref targets,
-            } => {
-                vis.visit_operand(operand);
-                vis.visit_switch_targets(targets);
-            },
-            TerminatorKind::Goto(_) | TerminatorKind::Return | TerminatorKind::PatEnd => {},
-        }
-    }
-}
-
-impl<'tcx> PatternSuperVisitable<'tcx> for SwitchTargets {
-    fn super_visit_with<V: PatternVisitor<'tcx>>(&self, _vis: &mut V) {}
 }

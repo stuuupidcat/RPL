@@ -38,6 +38,12 @@ rustc_index::newtype_index! {
     pub struct BasicBlock {}
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Location {
+    pub block: BasicBlock,
+    pub statement_index: usize,
+}
+
 pub struct PrimitiveTypes<'tcx> {
     pub u8: Ty<'tcx>,
     pub u16: Ty<'tcx>,
@@ -82,7 +88,7 @@ pub struct Patterns<'tcx> {
     const_vars: IndexVec<ConstVarIdx, Ty<'tcx>>,
     locals: IndexVec<LocalIdx, Ty<'tcx>>,
     self_idx: Option<LocalIdx>,
-    basic_blocks: IndexVec<BasicBlock, BasicBlockData<'tcx>>,
+    pub basic_blocks: IndexVec<BasicBlock, BasicBlockData<'tcx>>,
     pub primitive_types: PrimitiveTypes<'tcx>,
 }
 
@@ -677,5 +683,17 @@ impl<'tcx> Patterns<'tcx> {
     }
     fn mk_ty(&self, kind: TyKind<'tcx>) -> Ty<'tcx> {
         Ty(self.arena.alloc(kind))
+    }
+}
+
+impl Patterns<'_> {
+    pub fn num_locals(&self) -> usize {
+        self.locals.len()
+    }
+}
+
+impl BasicBlockData<'_> {
+    pub fn num_statements_and_terminator(&self) -> usize {
+        self.statements.len() + self.terminator.is_some() as usize
     }
 }
