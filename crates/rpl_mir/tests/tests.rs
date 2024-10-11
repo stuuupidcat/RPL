@@ -180,3 +180,57 @@ test_case! {
         }
     }
 }
+
+test_case! {
+    fn cve_2018_21000() {
+        meta!{
+            $T1:ty,
+            $T2:ty,
+            $T3:ty,
+        }
+
+        type VecT1 = std::vec::Vec<$T1>;
+        type VecT2 = std::vec::Vec<$T2>;
+        type VecT3 = std::vec::Vec<$T3>;
+        type PtrT1 = *mut $T1;
+        type PtrT3 = *mut $T3;
+
+        let from_vec: VecT1 = _;
+        let size: usize = SizeOf($T2);
+        let from_cap: usize = Vec::capacity(move from_vec);
+        let to_cap: usize = Mul(copy from_cap, copy size);
+        let from_len: usize = Len(from_vec);
+        let to_len: usize = Mul(copy from_len, copy size);
+        let from_vec_ptr: PtrT1 = Vec::as_mut_ptr(move from_vec);
+        let to_vec_ptr: PtrT3 = copy from_vec_ptr as PtrT3 (PtrToPtr);
+        // tuple: not implemented yet
+        // let tmp: () = std::mem::forget(move from_vec); 
+        let res: VecT3 = Vec::from_raw_parts(copy to_vec_ptr, copy to_cap, copy to_len);
+    } => {
+        meta!(?T0:ty, ?T1:ty, ?T2:ty);
+        let _?0: std::vec::Vec<?T0>;
+        let _?1: usize;
+        let _?2: usize;
+        let _?3: usize;
+        let _?4: usize;
+        let _?5: usize;
+        let _?6: *mut ?T0;
+        let _?7: *mut ?T2;
+        let _?8: std::vec::Vec<?T2>;
+        ?bb0: {
+            _?0 = _;
+            _?1 = SizeOf(?T1);
+            _?2 = Vec::capacity(move _?0) -> ?bb1;
+        }
+        ?bb1: {
+            _?3 = Mul(copy _?2, copy _?1);
+            _?4 = Len(_?0);
+            _?5 = Mul(copy _?4, copy _?1);
+            _?6 = Vec::as_mut_ptr(move _?0) -> ?bb2;
+        }
+        ?bb2: {
+            _?7 = copy _?6 as *mut ?T2 (PtrToPtr);
+            _?8 = Vec::from_raw_parts(copy _?7, copy _?3, copy _?5) -> ?bb3;
+        }
+    }
+}

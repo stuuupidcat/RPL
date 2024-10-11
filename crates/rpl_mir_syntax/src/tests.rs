@@ -310,3 +310,32 @@ fn test_mir_pattern() {
         }
     });
 }
+
+#[test]
+fn test_parse_cve_2018_21000() {
+    pass!(Mir! {
+        meta!{
+            $T1:ty,
+            $T2:ty,
+            $T3:ty,
+        }
+
+        type VecT1 = std::vec::Vec<$T1>;
+        type VecT2 = std::vec::Vec<$T2>;
+        type VecT3 = std::vec::Vec<$T3>;
+        type PtrT1 = *mut $T1;
+        type PtrT3 = *mut $T3;
+
+        let from_vec: VecT1 = _;
+        let size: usize = SizeOf($T2);
+        let from_cap: usize = Vec::capacity(move from_vec);
+        let to_cap: usize = Mul(copy from_cap, copy size);
+        let from_len: usize = Len(from_vec);
+        let to_len: usize = Mul(copy from_len, copy size);
+        let from_vec_ptr: PtrT1 = Vec::as_mut_ptr(move from_vec);
+        let to_vec_ptr: PtrT3 = copy from_vec_ptr as PtrT3 (PtrToPtr);
+        // tuple: not implemented yet
+        // let tmp: () = std::mem::forget(move from_vec); 
+        let res: VecT3 = Vec::from_raw_parts(copy to_vec_ptr, copy to_cap, copy to_len);
+    });
+}
