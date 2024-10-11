@@ -376,7 +376,7 @@ impl ToTokens for Expand<'_, &TypeDecl> {
         let TypeDecl { ident, ty, .. } = self.value;
         let ty_ident = ident.as_ty();
         let ty = self.expand(ty);
-        quote_each_token!(tokens let #ty_ident = #ty;);
+        quote_each_token!(tokens #[allow(non_snake_case)] let #ty_ident = #ty;);
     }
 }
 impl ToTokens for Expand<'_, &UsePath> {
@@ -550,7 +550,10 @@ impl ToTokens for Expand<'_, &Type> {
                 let ty = self.expand(ty);
                 quote_each_token!(tokens #patterns.mk_slice_ty(#ty));
             },
-            Type::Tuple(_) => todo!(),
+            Type::Tuple(TypeTuple { tys, .. }) => {
+                let tys = self.expand_punctuated(tys);
+                quote_each_token!(tokens #patterns.mk_tuple_ty(&[#tys]));
+            },
             Type::TyVar(TypeVar { ident, .. }) => ident.as_ty().to_tokens(tokens),
             Type::LangItem(lang_item) => {
                 let lang_item = self.expand(lang_item);

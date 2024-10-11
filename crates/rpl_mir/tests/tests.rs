@@ -180,11 +180,7 @@ test_case! {
 
 test_case! {
     fn cve_2018_21000() {
-        meta!{
-            $T1:ty,
-            $T2:ty,
-            $T3:ty,
-        }
+        meta!($T1:ty, $T2:ty, $T3:ty);
 
         type VecT1 = std::vec::Vec<$T1>;
         type VecT2 = std::vec::Vec<$T2>;
@@ -200,8 +196,7 @@ test_case! {
         let to_len: usize = Mul(copy from_len, copy size);
         let from_vec_ptr: PtrT1 = Vec::as_mut_ptr(move from_vec);
         let to_vec_ptr: PtrT3 = copy from_vec_ptr as PtrT3 (PtrToPtr);
-        // tuple: not implemented yet
-        // let tmp: () = std::mem::forget(move from_vec); 
+        let _tmp: () = std::mem::forget(move from_vec);
         let res: VecT3 = Vec::from_raw_parts(copy to_vec_ptr, copy to_cap, copy to_len);
     } => {
         meta!(?T0:ty, ?T1:ty, ?T2:ty);
@@ -213,7 +208,8 @@ test_case! {
         let _?5: usize;
         let _?6: *mut ?T0;
         let _?7: *mut ?T2;
-        let _?8: std::vec::Vec<?T2>;
+        let _?8: ();
+        let _?9: std::vec::Vec<?T2>;
         ?bb0: {
             _?0 = _;
             _?1 = SizeOf(?T1);
@@ -227,7 +223,11 @@ test_case! {
         }
         ?bb2: {
             _?7 = copy _?6 as *mut ?T2 (PtrToPtr);
-            _?8 = Vec::from_raw_parts(copy _?7, copy _?3, copy _?5) -> ?bb3;
+            _?8 = std::mem::forget(move _?0) -> ?bb3;
         }
+        ?bb3: {
+            _?9 = Vec::from_raw_parts(copy _?7, copy _?3, copy _?5) -> ?bb4;
+        }
+        ?bb4: { end; }
     }
 }
