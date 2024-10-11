@@ -75,18 +75,25 @@ fn test_cve_2020_25016() {
             let T_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
             let T_ty = patterns.mk_var_ty(T_ty_var);
+            #[allow(non_snake_case)]
             let SliceT_ty = patterns.mk_slice_ty(T_ty);
+            #[allow(non_snake_case)]
             let RefSliceT_ty = patterns.mk_ref_ty(
                 ::rpl_mir::pat::RegionKind::ReAny,
                 SliceT_ty,
                 ::rustc_middle::mir::Mutability::Not
             );
+            #[allow(non_snake_case)]
             let PtrSliceT_ty = patterns.mk_raw_ptr_ty(SliceT_ty, ::rustc_middle::mir::Mutability::Not);
+            #[allow(non_snake_case)]
             let PtrU8_ty = patterns.mk_raw_ptr_ty(
                 patterns.primitive_types.u8, ::rustc_middle::mir::Mutability::Not
             );
+            #[allow(non_snake_case)]
             let SliceU8_ty = patterns.mk_slice_ty(patterns.primitive_types.u8);
+            #[allow(non_snake_case)]
             let PtrSliceU8_ty = patterns.mk_raw_ptr_ty(SliceU8_ty, ::rustc_middle::mir::Mutability::Not);
+            #[allow(non_snake_case)]
             let RefSliceU8_ty = patterns.mk_ref_ty(
                 ::rpl_mir::pat::RegionKind::ReAny,
                 SliceU8_ty,
@@ -381,18 +388,14 @@ fn test_cve_2020_35892() {
 fn test_cve_2018_21000() {
     pass!(
         Mir! {
-            meta!{
-                $T1:ty,
-                $T2:ty,
-                $T3:ty,
-            }
-    
+            meta!($T1:ty, $T2:ty, $T3:ty);
+
             type VecT1 = std::vec::Vec<$T1>;
             type VecT2 = std::vec::Vec<$T2>;
             type VecT3 = std::vec::Vec<$T3>;
             type PtrT1 = *mut $T1;
             type PtrT3 = *mut $T3;
-    
+
             let from_vec: VecT1 = _;
             let size: usize = SizeOf($T2);
             let from_cap: usize = Vec::capacity(move from_vec);
@@ -401,8 +404,7 @@ fn test_cve_2018_21000() {
             let to_len: usize = Mul(copy from_len, copy size);
             let from_vec_ptr: PtrT1 = Vec::as_mut_ptr(move from_vec);
             let to_vec_ptr: PtrT3 = copy from_vec_ptr as PtrT3 (PtrToPtr);
-            // tuple: not implemented yet
-            // let tmp: () = std::mem::forget(move from_vec);
+            let _tmp: () = std::mem::forget(move from_vec);
             let res: VecT3 = Vec::from_raw_parts(copy to_vec_ptr, copy to_cap, copy to_len);
         },
         quote! {
@@ -418,19 +420,24 @@ fn test_cve_2018_21000() {
             let T3_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
             let T3_ty = patterns.mk_var_ty(T3_ty_var);
+            #[allow(non_snake_case)]
             let VecT1_ty = patterns.mk_adt_ty(
                 patterns.mk_item_path(&["std", "vec", "Vec",]),
                 patterns.mk_generic_args(&[T1_ty.into()]),
             );
+            #[allow(non_snake_case)]
             let VecT2_ty = patterns.mk_adt_ty(
                 patterns.mk_item_path(&["std", "vec", "Vec",]),
                 patterns.mk_generic_args(&[T2_ty.into()]),
             );
+            #[allow(non_snake_case)]
             let VecT3_ty = patterns.mk_adt_ty(
                 patterns.mk_item_path(&["std", "vec", "Vec",]),
                 patterns.mk_generic_args(&[T3_ty.into()]),
             );
+            #[allow(non_snake_case)]
             let PtrT1_ty = patterns.mk_raw_ptr_ty(T1_ty, ::rustc_middle::mir::Mutability::Mut);
+            #[allow(non_snake_case)]
             let PtrT3_ty = patterns.mk_raw_ptr_ty(T3_ty, ::rustc_middle::mir::Mutability::Mut);
             let from_vec_local = patterns.mk_local(VecT1_ty);
             let from_vec_stmt = patterns.mk_init(from_vec_local);
@@ -496,6 +503,17 @@ fn test_cve_2018_21000() {
                     ::rpl_mir::pat::Operand::Copy(from_vec_ptr_local.into_place()),
                     PtrT3_ty
                 )
+            );
+            let _tmp_local = patterns.mk_local(patterns.mk_tuple_ty(&[]));
+            let _tmp_stmt = patterns.mk_fn_call(
+                patterns.mk_zeroed(patterns.mk_fn(
+                    patterns.mk_item_path(&["std", "mem", "forget",]),
+                    patterns.mk_generic_args(&[]),
+                )),
+                ::rpl_mir::pat::List::ordered([
+                    ::rpl_mir::pat::Operand::Move(from_vec_local.into_place())
+                ]),
+                Some(_tmp_local.into_place())
             );
             let res_local = patterns.mk_local(VecT3_ty);
             let res_stmt = patterns.mk_fn_call(

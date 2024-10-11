@@ -77,7 +77,7 @@ impl<'tcx> fmt::Debug for Path<'tcx> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Item(path) => path.fmt(f),
-            Self::TypeRelative(ty, path) => write!(f, "<{ty:?}>::{path}"),
+            Self::TypeRelative(ty, path) => write!(f, "< {ty:?} >::{path}"),
             Self::LangItem(lang_item) => write!(f, "#[lang = \"{}\"]", lang_item.name()),
         }
     }
@@ -96,11 +96,11 @@ impl<'tcx> fmt::Debug for TyKind<'tcx> {
             Self::Array(ty, len) => write!(f, "[{ty:?}; {len:?}]"),
             Self::Slice(ty) => write!(f, "[{ty:?}]"),
             Self::Tuple(tys) => {
-                let mut dbg = f.debug_tuple("");
+                f.write_str("(")?;
                 for ty in tys {
-                    dbg.field(ty);
+                    write!(f, "{ty:?}, ")?;
                 }
-                dbg.finish()
+                f.write_str(")")
             },
             Self::Ref(region, ty, mutability) => write!(f, "&{region}{}{ty:?}", mutability.prefix_str()),
             Self::RawPtr(ty, mutability) => write!(f, "*{} {ty:?}", mutability.ptr_str()),
@@ -122,17 +122,17 @@ impl<'tcx> fmt::Debug for GenericArgsRef<'tcx> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
             [] => Ok(()),
-            [arg] => write!(f, "<{arg:?}>"),
+            [arg] => write!(f, "< {arg:?} >"),
             [first, args @ ..] => {
                 if self.0.is_empty() {
                     return Ok(());
                 }
-                write!(f, "<{first:?}")?;
+                write!(f, "< {first:?}")?;
                 for arg in args {
                     f.write_str(",")?;
                     arg.fmt(f)?;
                 }
-                f.write_str(">")
+                f.write_str(" >")
             },
         }
     }
@@ -238,7 +238,7 @@ impl<'tcx> fmt::Debug for Rvalue<'tcx> {
             Self::UnaryOp(op, operand) => write!(f, "{op:?}({operand:?}"),
             Self::Discriminant(place) => f.debug_tuple("discriminant").field(place).finish(),
             Self::Aggregate(agg_kind, args) => format_aggregate(agg_kind, args, f),
-            Self::ShallowInitBox(operand, ty) => write!(f, "Box<{ty:?}>({operand:?})"),
+            Self::ShallowInitBox(operand, ty) => write!(f, "Box< {ty:?} >({operand:?})"),
             Self::CopyForDeref(place) => write!(f, "&(*{place:?})"),
         }
     }

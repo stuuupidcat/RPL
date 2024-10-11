@@ -98,6 +98,33 @@ pub struct BasicBlockData<'tcx> {
     pub terminator: Option<TerminatorKind<'tcx>>,
 }
 
+impl<'tcx> BasicBlockData<'tcx> {
+    fn set_terminator(&mut self, terminator: TerminatorKind<'tcx>) {
+        assert!(self.terminator.is_none(), "terminator already set");
+        self.terminator = Some(terminator);
+    }
+    fn set_goto(&mut self, block: BasicBlock) {
+        match &mut self.terminator {
+            None => self.terminator = Some(TerminatorKind::Goto(block)),
+            Some(TerminatorKind::Call { target, .. } | TerminatorKind::Drop { target, .. }) => *target = block,
+            // Here the `goto ?bb` termiantor comes from `break` or `continue`,
+            // plus the `return` termnator, are all skipped because thay are
+            // abnormal control flows.
+            Some(TerminatorKind::Goto(_) | TerminatorKind::Return) => {},
+            Some(terminator @ (TerminatorKind::SwitchInt { .. } | TerminatorKind::PatEnd)) => {
+                panic!("expect `{:?}`, but found `{terminator:?}`", TerminatorKind::Goto(block));
+            },
+        }
+    }
+    fn set_switch_targets(&mut self, switch_targets: SwitchTargets) {
+        match &mut self.terminator {
+            Some(TerminatorKind::SwitchInt { targets, .. }) => *targets = switch_targets,
+            None => panic!("`switchInt` terminator not set"),
+            Some(terminator) => panic!("expect `switchInt` terminator, but found `{terminator:?}`"),
+        }
+    }
+}
+
 pub struct ConstVar<'tcx> {
     pub konst: ty::Const<'tcx>,
 }
@@ -468,7 +495,8 @@ impl<'tcx> PatternsBuilder<'tcx> {
         }
     }
     pub fn build(mut self) -> Patterns<'tcx> {
-        self.patterns.basic_blocks[self.current].terminator = Some(TerminatorKind::PatEnd);
+        self.new_block_if_terminated();
+        self.patterns.basic_blocks[self.current].set_terminator(TerminatorKind::PatEnd);
         self.patterns
     }
 
@@ -484,13 +512,17 @@ impl<'tcx> PatternsBuilder<'tcx> {
     pub fn mk_self(&mut self, ty: Ty<'tcx>) -> LocalIdx {
         *self.patterns.self_idx.insert(self.patterns.locals.push(ty))
     }
-    fn check_terminator(&mut self) {
+    fn new_block_if_terminated(&mut self) {
         if self.patterns.basic_blocks[self.current].terminator.is_some() {
             self.current = self.patterns.basic_blocks.push(BasicBlockData::default());
         }
     }
+    fn next_block(&mut self) -> BasicBlock {
+        self.new_block_if_terminated();
+        self.patterns.basic_blocks.next_index()
+    }
     fn mk_statement(&mut self, kind: StatementKind<'tcx>) {
-        self.check_terminator();
+        self.new_block_if_terminated();
         self.patterns.basic_blocks[self.current].statements.push(kind);
     }
     pub fn mk_init(&mut self, place: impl Into<Place<'tcx>>) {
@@ -511,8 +543,8 @@ impl<'tcx> PatternsBuilder<'tcx> {
             );
             return;
         }
-        let target = self.patterns.basic_blocks.next_index();
-        self.patterns.basic_blocks[self.current].terminator = Some(TerminatorKind::Call {
+        let target = self.next_block();
+        self.patterns.basic_blocks[self.current].set_terminator(TerminatorKind::Call {
             func,
             args,
             destination,
@@ -520,45 +552,30 @@ impl<'tcx> PatternsBuilder<'tcx> {
         });
     }
     pub fn mk_drop(&mut self, place: impl Into<Place<'tcx>>) {
-        self.check_terminator();
-        let target = self.patterns.basic_blocks.next_index();
+        let target = self.next_block();
         let place = place.into();
-        self.patterns.basic_blocks[self.current].terminator = Some(TerminatorKind::Drop { place, target });
+        self.patterns.basic_blocks[self.current].set_terminator(TerminatorKind::Drop { place, target });
     }
     pub fn mk_switch_int(&mut self, operand: Operand<'tcx>, f: impl FnOnce(SwitchIntBuilder<'_, 'tcx>)) {
-        self.check_terminator();
+        self.new_block_if_terminated();
         let current = self.current;
-        self.patterns.basic_blocks[current].terminator = Some(TerminatorKind::SwitchInt {
+        self.patterns.basic_blocks[current].set_terminator(TerminatorKind::SwitchInt {
             operand,
             targets: SwitchTargets::default(),
         });
         let next = self.patterns.basic_blocks.push(BasicBlockData::default());
-        let mut built_targets = SwitchTargets::default();
+        let mut targets = SwitchTargets::default();
         let builder = SwitchIntBuilder {
             builder: self,
             next,
-            targets: &mut built_targets,
+            targets: &mut targets,
         };
         f(builder);
-        if let Some(terminator) = &mut self.patterns.basic_blocks[current].terminator
-            && let TerminatorKind::SwitchInt { targets, .. } = terminator
-        {
-            *targets = built_targets;
-        }
+        self.patterns.basic_blocks[current].set_switch_targets(targets);
         self.current = next;
     }
     fn goto(&mut self, block: BasicBlock) {
-        let terminator = &mut self.patterns.basic_blocks[self.current].terminator;
-        match terminator {
-            None => *terminator = Some(TerminatorKind::Goto(block)),
-            Some(TerminatorKind::Call { target, .. } | TerminatorKind::Drop { target, .. }) => *target = block,
-            Some(
-                TerminatorKind::Goto(_)
-                | TerminatorKind::SwitchInt { .. }
-                | TerminatorKind::Return
-                | TerminatorKind::PatEnd,
-            ) => {},
-        }
+        self.patterns.basic_blocks[self.current].set_goto(block);
     }
     pub fn mk_loop(&mut self, f: impl FnOnce(&mut PatternsBuilder<'tcx>)) {
         let enter = self.patterns.basic_blocks.push(BasicBlockData::default());
@@ -650,12 +667,9 @@ impl<'tcx> Patterns<'tcx> {
         self.mk_ty(TyKind::TyVar(ty_var))
     }
     pub fn mk_lang_item(&self, item: &str) -> Path<'tcx> {
-        #[cold]
-        #[inline(never)]
-        fn unknonw_lang_item(item: &str) -> ! {
-            panic!("unknown language item \"{item}\"")
-        }
-        Path::LangItem(LangItem::from_name(Symbol::intern(item)).unwrap_or_else(|| unknonw_lang_item(item)))
+        LangItem::from_name(Symbol::intern(item))
+            .unwrap_or_else(|| panic!("unknown language item \"{item}\""))
+            .into()
     }
     pub fn mk_item_path(&self, path: &[&str]) -> ItemPath<'tcx> {
         ItemPath(self.mk_symbols(path))
@@ -665,6 +679,9 @@ impl<'tcx> Patterns<'tcx> {
     }
     pub fn mk_slice_ty(&self, ty: Ty<'tcx>) -> Ty<'tcx> {
         self.mk_ty(TyKind::Slice(ty))
+    }
+    pub fn mk_tuple_ty(&self, ty: &[Ty<'tcx>]) -> Ty<'tcx> {
+        self.mk_ty(TyKind::Tuple(self.mk_slice(ty)))
     }
     pub fn mk_ref_ty(&self, region: RegionKind, ty: Ty<'tcx>, mutability: mir::Mutability) -> Ty<'tcx> {
         self.mk_ty(TyKind::Ref(region, ty, mutability))
