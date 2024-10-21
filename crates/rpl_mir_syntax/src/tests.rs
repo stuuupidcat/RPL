@@ -339,3 +339,46 @@ fn test_parse_cve_2018_21000() {
         let res: VecT3 = Vec::from_raw_parts(copy to_vec_ptr, copy to_cap, copy to_len);
     });
 }
+
+#[test]
+fn test_parse_cve_2020_35881_const() {
+    pass!(Mir! {
+        meta!{
+            $T1:ty,
+            // $T2:ty, $T2 should be (), i.e. an empty tuple
+        };
+
+        type PtrT1 = *const $T1;
+        type PtrPtrT1 = *const *const $T1;
+        type DerefPtrT1 = &*const $T1;
+        type PtrT2 = *const ();
+        type PtrPtrT2 = *const *const ();
+
+        let ptr_to_data: PtrT1 = _;
+        let data: DerefPtrT1 = &ptr_to_data;
+        let ptr_to_ptr_to_data: PtrPtrT1 = &raw const (*data);
+        let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *const *const () (Transmute);
+        let ptr_to_res: PtrT2 = copy* ptr_to_ptr_to_res;
+    });
+}
+
+#[test]
+fn test_parse_cve_2020_35881_mut() {
+    pass!(Mir! {
+        meta!{
+            $T1:ty,
+        };
+
+        type PtrT1 = *mut $T1;
+        type PtrPtrT1 = *mut *mut $T1;
+        type DerefPtrT1 = &mut *mut $T1;
+        type PtrT2 = *mut ();
+        type PtrPtrT2 = *mut *mut ();
+
+        let ptr_to_data: PtrT1 = _;
+        let data: DerefPtrT1 = &mut ptr_to_data;
+        let ptr_to_ptr_to_data: PtrPtrT1 = &raw mut (*data);
+        let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *mut *mut () (Transmute);
+        let ptr_to_res: PtrT2 = copy *ptr_to_ptr_to_res;
+    });
+}

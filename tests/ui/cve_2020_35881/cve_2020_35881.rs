@@ -9,3 +9,5 @@ pub unsafe fn get_data<T: ?Sized>(val: *const T) -> *const () {
 pub unsafe fn get_data_mut<T: ?Sized>(mut val: *mut T) -> *mut () {
     *mem::transmute::<*mut *mut T, *mut *mut ()>(&mut val)
 }
+
+fn main() {}

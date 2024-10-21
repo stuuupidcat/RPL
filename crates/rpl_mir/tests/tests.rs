@@ -231,3 +231,74 @@ test_case! {
         ?bb4: { end; }
     }
 }
+
+test_case! {
+    fn cve_2020_35881_const() {
+        meta!{
+            $T1:ty,
+        };
+
+        type PtrT1 = *const $T1;
+        type PtrPtrT1 = *const *const $T1;
+        type DerefPtrT1 = &*const $T1;
+        type PtrT2 = *const ();
+        type PtrPtrT2 = *const *const ();
+
+        let ptr_to_data: PtrT1 = _;
+        let data: DerefPtrT1 = &ptr_to_data;
+        let ptr_to_ptr_to_data: PtrPtrT1 = &raw const (*data);
+        let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *const *const () (Transmute);
+        let ptr_to_res: PtrT2 = copy* ptr_to_ptr_to_res;
+        // neglected the type-size-equivalence check
+    } => {
+        meta!(?T0:ty);
+        let _?0: *const ?T0;
+        let _?1: &*const ?T0;
+        let _?2: *const *const ?T0;
+        let _?3: *const *const ();
+        let _?4: *const ();
+        ?bb0: {
+            _?0 = _;
+            _?1 = &_?0;
+            _?2 = &raw const (*_?1);
+            _?3 = move _?2 as *const *const () (Transmute);
+            _?4 = copy (*_?3);
+            end;
+        }
+    }
+}
+
+test_case! {
+    fn cve_2020_35881_mut() {
+        meta!{
+            $T1:ty,
+        };
+
+        type PtrT1 = *mut $T1;
+        type PtrPtrT1 = *mut *mut $T1;
+        type DerefPtrT1 = &mut *mut $T1;
+        type PtrT2 = *mut ();
+        type PtrPtrT2 = *mut *mut ();
+
+        let ptr_to_data: PtrT1 = _;
+        let data: DerefPtrT1 = &mut ptr_to_data;
+        let ptr_to_ptr_to_data: PtrPtrT1 = &raw mut (*data);
+        let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *mut *mut () (Transmute);
+        let ptr_to_res: PtrT2 = copy *ptr_to_ptr_to_res;
+    } => {
+        meta!(?T0:ty);
+        let _?0: *mut ?T0;
+        let _?1: &mut *mut ?T0; // the blank space here cannot pass the test
+        let _?2: *mut *mut ?T0;
+        let _?3: *mut *mut ();
+        let _?4: *mut ();
+        ?bb0: {
+            _?0 = _;
+            _?1 = &mut _?0;
+            _?2 = &raw mut (*_?1);
+            _?3 = move _?2 as *mut *mut () (Transmute);
+            _?4 = copy (*_?3);
+            end;
+        }
+    }
+}

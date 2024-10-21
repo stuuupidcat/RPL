@@ -533,3 +533,244 @@ fn test_cve_2018_21000() {
         }
     );
 }
+
+#[test]
+fn test_cve_2020_35881_const() {
+    pass!(
+        Mir! {
+            meta!{
+                $T1:ty,
+            };
+
+            type PtrT1 = *const $T1;
+            type PtrPtrT1 = *const *const $T1;
+            type DerefPtrT1 = &*const $T1;
+            type PtrT2 = *const ();
+            type PtrPtrT2 = *const *const ();
+
+            let ptr_to_data: PtrT1 = _;
+            let data: DerefPtrT1 = &ptr_to_data;
+            let ptr_to_ptr_to_data: PtrPtrT1 = &raw const (*data);
+            let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *const *const () (Transmute);
+            let ptr_to_res: PtrT2 = copy* ptr_to_ptr_to_res;
+            // neglected the type-size-equivalence check
+        },
+        quote! {
+            #[allow(non_snake_case)]
+            let T1_ty_var = patterns.new_ty_var() ;
+            #[allow(non_snake_case)]
+            let T1_ty = patterns.mk_var_ty(T1_ty_var) ;
+            #[allow(non_snake_case)]
+            let PtrT1_ty = patterns.mk_raw_ptr_ty(
+                T1_ty,
+                ::rustc_middle::mir::Mutability::Not
+            );
+            #[allow(non_snake_case)]
+            let PtrPtrT1_ty = patterns.mk_raw_ptr_ty(
+                patterns.mk_raw_ptr_ty(
+                    T1_ty,
+                    ::rustc_middle::mir::Mutability::Not
+                ),
+                ::rustc_middle::mir::Mutability::Not
+            );
+            #[allow(non_snake_case)]
+            let DerefPtrT1_ty = patterns.mk_ref_ty(
+                ::rpl_mir::pat::RegionKind::ReAny,
+                patterns.mk_raw_ptr_ty(
+                    T1_ty,
+                    ::rustc_middle::mir::Mutability::Not
+                ),
+                ::rustc_middle::mir::Mutability::Not
+            );
+            #[allow(non_snake_case)]
+            let PtrT2_ty = patterns.mk_raw_ptr_ty(
+                patterns.mk_tuple_ty(&[]),
+                ::rustc_middle::mir::Mutability::Not
+            );
+            #[allow(non_snake_case)]
+            let PtrPtrT2_ty = patterns.mk_raw_ptr_ty(
+                patterns.mk_raw_ptr_ty(
+                    patterns.mk_tuple_ty(&[]),
+                    ::rustc_middle::mir::Mutability::Not
+                ),
+                ::rustc_middle::mir::Mutability::Not
+            );
+            let ptr_to_data_local = patterns.mk_local(PtrT1_ty) ;
+            let ptr_to_data_stmt = patterns.mk_init(ptr_to_data_local) ;
+            let data_local = patterns.mk_local(DerefPtrT1_ty) ;
+            let data_stmt = patterns.mk_assign(
+                data_local.into_place(),
+                ::rpl_mir::pat::Rvalue::Ref(
+                    ::rpl_mir::pat::RegionKind::ReAny,
+                    ::rustc_middle::mir::BorrowKind::Shared,
+                    ptr_to_data_local.into_place()
+                )
+            );
+            let ptr_to_ptr_to_data_local = patterns.mk_local(PtrPtrT1_ty) ;
+            let ptr_to_ptr_to_data_stmt = patterns.mk_assign(
+                ptr_to_ptr_to_data_local.into_place(),
+                ::rpl_mir::pat::Rvalue::AddressOf(
+                    ::rustc_middle::mir::Mutability::Not,
+                    ::rpl_mir::pat::Place::new(
+                        data_local,
+                        patterns.mk_projection(
+                            &[::rpl_mir::pat::PlaceElem::Deref,]
+                        )
+                    )
+                )
+            );
+            let ptr_to_ptr_to_res_local = patterns.mk_local(PtrPtrT2_ty) ;
+            let ptr_to_ptr_to_res_stmt = patterns.mk_assign(
+                ptr_to_ptr_to_res_local.into_place(),
+                ::rpl_mir::pat::Rvalue::Cast(
+                    ::rustc_middle::mir::CastKind::Transmute,
+                    ::rpl_mir::pat::Operand::Move(
+                        ptr_to_ptr_to_data_local.into_place()
+                    ),
+                    patterns.mk_raw_ptr_ty(
+                        patterns.mk_raw_ptr_ty(
+                            patterns.mk_tuple_ty(&[]),
+                            ::rustc_middle::mir::Mutability::Not
+                        ),
+                        ::rustc_middle::mir::Mutability::Not
+                    )
+                )
+            );
+            let ptr_to_res_local = patterns.mk_local(PtrT2_ty) ;
+            let ptr_to_res_stmt = patterns.mk_assign(
+                ptr_to_res_local.into_place(),
+                ::rpl_mir::pat::Rvalue::Use(
+                    ::rpl_mir::pat::Operand::Copy(
+                        ::rpl_mir::pat::Place::new(
+                            ptr_to_ptr_to_res_local,
+                            patterns.mk_projection(
+                                &[::rpl_mir::pat::PlaceElem::Deref,]
+                            )
+                        )
+                    )
+                )
+            );
+        }
+    )
+}
+
+#[test]
+fn test_cve_2020_35881_mut() {
+    pass!(
+        Mir! {
+            meta!{
+                $T1:ty,
+            };
+
+            type PtrT1 = *mut $T1;
+            type PtrPtrT1 = *mut *mut $T1;
+            type DerefPtrT1 = &mut *mut $T1;
+            type PtrT2 = *mut ();
+            type PtrPtrT2 = *mut *mut ();
+
+            let ptr_to_data: PtrT1 = _;
+            let data: DerefPtrT1 = &mut ptr_to_data;
+            let ptr_to_ptr_to_data: PtrPtrT1 = &raw mut (*data);
+            let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *mut *mut () (Transmute);
+            let ptr_to_res: PtrT2 = copy *ptr_to_ptr_to_res;
+        },
+        quote! {
+            #[allow(non_snake_case)]
+            let T1_ty_var = patterns.new_ty_var() ;
+            #[allow(non_snake_case)]
+            let T1_ty = patterns.mk_var_ty(T1_ty_var) ;
+            #[allow(non_snake_case)]
+            let PtrT1_ty = patterns.mk_raw_ptr_ty(
+                T1_ty,
+                ::rustc_middle::mir::Mutability::Mut
+            );
+            #[allow(non_snake_case)]
+            let PtrPtrT1_ty = patterns.mk_raw_ptr_ty(
+                patterns.mk_raw_ptr_ty(
+                    T1_ty,
+                    ::rustc_middle::mir::Mutability::Mut
+                ),
+                ::rustc_middle::mir::Mutability::Mut
+            );
+            #[allow(non_snake_case)]
+            let DerefPtrT1_ty = patterns.mk_ref_ty(
+                ::rpl_mir::pat::RegionKind::ReAny,
+                patterns.mk_raw_ptr_ty(
+                    T1_ty,
+                    ::rustc_middle::mir::Mutability::Mut
+                ),
+                ::rustc_middle::mir::Mutability::Mut
+            );
+            #[allow(non_snake_case)]
+            let PtrT2_ty = patterns.mk_raw_ptr_ty(
+                patterns.mk_tuple_ty(&[]),
+                ::rustc_middle::mir::Mutability::Mut
+            );
+            #[allow(non_snake_case)]
+            let PtrPtrT2_ty = patterns.mk_raw_ptr_ty(
+                patterns.mk_raw_ptr_ty(
+                    patterns.mk_tuple_ty(&[]),
+                    ::rustc_middle::mir::Mutability::Mut
+                ),
+                ::rustc_middle::mir::Mutability::Mut
+            );
+            let ptr_to_data_local = patterns.mk_local(PtrT1_ty) ;
+            let ptr_to_data_stmt = patterns.mk_init(ptr_to_data_local) ;
+            let data_local = patterns.mk_local(DerefPtrT1_ty) ;
+            let data_stmt = patterns.mk_assign(
+                data_local.into_place(),
+                ::rpl_mir::pat::Rvalue::Ref(
+                    ::rpl_mir::pat::RegionKind::ReAny,
+                    ::rustc_middle::mir::BorrowKind::Mut {
+                        kind: ::rustc_middle::mir::MutBorrowKind::Default
+                    },
+                    ptr_to_data_local.into_place()
+                )
+            );
+            let ptr_to_ptr_to_data_local = patterns.mk_local(PtrPtrT1_ty) ;
+            let ptr_to_ptr_to_data_stmt = patterns.mk_assign(
+                ptr_to_ptr_to_data_local.into_place(),
+                ::rpl_mir::pat::Rvalue::AddressOf(
+                    ::rustc_middle::mir::Mutability::Mut,
+                    ::rpl_mir::pat::Place::new(
+                        data_local,
+                        patterns.mk_projection(
+                            &[::rpl_mir::pat::PlaceElem::Deref,]
+                        )
+                    )
+                )
+            );
+            let ptr_to_ptr_to_res_local = patterns.mk_local(PtrPtrT2_ty) ;
+            let ptr_to_ptr_to_res_stmt = patterns.mk_assign(
+                ptr_to_ptr_to_res_local.into_place(),
+                ::rpl_mir::pat::Rvalue::Cast(
+                    ::rustc_middle::mir::CastKind::Transmute,
+                    ::rpl_mir::pat::Operand::Move(
+                        ptr_to_ptr_to_data_local.into_place()
+                    ),
+                    patterns.mk_raw_ptr_ty(
+                        patterns.mk_raw_ptr_ty(
+                            patterns.mk_tuple_ty(&[]),
+                            ::rustc_middle::mir::Mutability::Mut
+                        ),
+                        ::rustc_middle::mir::Mutability::Mut
+                    )
+                )
+            );
+            let ptr_to_res_local = patterns.mk_local(PtrT2_ty) ;
+            let ptr_to_res_stmt = patterns.mk_assign(
+                ptr_to_res_local.into_place(),
+                ::rpl_mir::pat::Rvalue::Use(
+                    ::rpl_mir::pat::Operand::Copy(
+                        ::rpl_mir::pat::Place::new(
+                            ptr_to_ptr_to_res_local,
+                            patterns.mk_projection(
+                                &[::rpl_mir::pat::PlaceElem::Deref,]
+                            )
+                        )
+                    )
+                )
+            );
+        }
+    )
+}
