@@ -302,3 +302,131 @@ test_case! {
         }
     }
 }
+
+test_case! {
+    fn cve_2021_29941_2() {
+        meta! {
+            $T:ty,
+        }
+
+        // type ExactSizeIterT = impl std::iter::ExactSizeIterator<Item = $T>;
+        // let's use a std::ops::Range<$T> instead temporarily
+        type RangeT = std::ops::Range<$T>;
+        type VecT = std::vec::Vec<$T>;
+        type RefMutVecT = &mut std::vec::Vec<$T>;
+        type PtrMutT = *mut $T;
+        type RefMutSliceT = &mut [$T];
+        type EnumerateRangeT = std::iter::Enumerate<RangeT>;
+        type RefMutEnumerateRangeT = &mut std::iter::Enumerate<RangeT>;
+        type OptionUsizeT = std::option::Option<(usize, $T)>;
+
+        let iter: RangeT = _;
+        // let len: usize = <RangeT as std::iter::ExactSizeIterator>::len(move iter);
+        let len: usize = RangeT::len(move iter);
+        let mut vec: VecT = std::vec::Vec::with_capacity(copy len);
+        let mut ref_to_vec: RefMutVecT = &mut vec;
+        let mut ptr_to_vec: PtrMutT = Vec::as_mut_ptr(move ref_to_vec);
+        let mut slice: RefMutSliceT = std::slice::from_raw_parts_mut(copy ptr_to_vec, copy len);
+        // let mut enumerate: EnumerateRangeT = <RangeT as std::iter::Iterator>::enumerate(move iter);
+        let mut enumerate: EnumerateRangeT = RangeT::enumerate(move iter);
+        let mut enumerate: RefMutEnumerateRangeT = &mut enumerate;
+        let next: OptionUsizeT;
+        let cmp: isize;
+        let first: usize;
+        let second_t: $T;
+        let second_usize: usize;
+        let _tmp: ();
+        loop {
+            // next = <EnumerateRangeT as std::iter::Iterator>::next(move enumerate);
+            next = EnumerateRangeT::next(move enumerate);
+            // in `cmp = discriminant(copy next);`
+            // which discriminant should be used?
+            cmp = balabala::discriminant(copy next); 
+            switchInt(move cmp) {
+                // true or 1 here?
+                true => {   
+                    first = copy (next as Some).0;
+                    second_t = copy (next as Some).1;
+                    second_usize = copy second_t as usize (IntToInt);
+                    (*slice)[second_usize] = copy first as $T (IntToInt);
+                }
+                _ => break,
+            }
+        }
+        // variable shadowing?
+        // There cannnot be two mutable references to `vec` in the same scope
+        ref_to_vec = &mut vec;
+        _tmp = Vec::set_len(move ref_to_vec, copy len);
+    } => {
+        meta!(
+            ?T0:ty
+        );
+        let _?0: std::ops::Range<?T0>;
+        let _?1: usize;
+        let _?2: std::vec::Vec<?T0>;
+        let _?3: &mut std::vec::Vec<?T0>;
+        let _?4: *mut ?T0;
+        let _?5: &mut [?T0];
+        let _?6: std::iter::Enumerate<std::ops::Range<?T0> >;
+        let _?7: &mut std::iter::Enumerate<std::ops::Range<?T0> >;
+        let _?8: std::option::Option<(usize ,?T0 ,)>;
+        let _?9: isize;
+        let _?10: usize;
+        let _?11: ?T0;
+        let _?12: usize;
+        let _?13: ();
+        ?bb0: { 
+            _?0 = _;
+            _?1 = RangeT::len (move _?0) -> ?bb1;
+        }
+        ?bb1: {
+            _?2 = std::vec::Vec::with_capacity (copy _?1) -> ?bb2;
+        }
+        ?bb2: {
+            _?3 = &mut _?2;
+            _?4 = Vec::as_mut_ptr (move _?3) -> ?bb3;
+        }
+        ?bb3: {
+            _?5 = std::slice::from_raw_parts_mut(
+                copy _?4,
+                copy _?1
+            ) -> ?bb4;
+        }
+        ?bb4: {
+            _?6 = RangeT::enumerate(move _?0) -> ?bb5;
+        }
+        ?bb5: { 
+            _?7 = &mut _?7;
+            goto ?bb6;
+        }
+        ?bb6: {
+            _?8 = EnumerateRangeT::next (move _?7) -> ?bb8;
+        }
+        ?bb7: { 
+            _?3 = &mut _?2;
+            _?13 = Vec::set_len (move _?3 , copy _?1) -> ?bb13;
+        }
+        ?bb8: { 
+            _?9 = balabala::discriminant(copy _?8) -> ?bb9;
+        }
+        ?bb9: { 
+            switchInt(move _?9) -> [true -> ?bb11 , otherwise -> ?bb12];
+        }
+        ?bb10: { 
+            goto?bb6;
+        }
+        ?bb11: { 
+            _?10 = copy ((_?8 as Some).0);
+            _?11 = copy ((_?8 as Some).1);
+            _?12 = copy _?11 as usize (IntToInt);
+            ((* _?5) [_?12]) = copy _?10 as?T0 (IntToInt);
+            goto?bb10;
+        }
+        ?bb12: {
+            goto?bb7;
+        }
+        ?bb13: {
+            end;
+        }
+    }
+}

@@ -557,9 +557,9 @@ fn test_cve_2020_35881_const() {
         },
         quote! {
             #[allow(non_snake_case)]
-            let T1_ty_var = patterns.new_ty_var() ;
+            let T1_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let T1_ty = patterns.mk_var_ty(T1_ty_var) ;
+            let T1_ty = patterns.mk_var_ty(T1_ty_var);
             #[allow(non_snake_case)]
             let PtrT1_ty = patterns.mk_raw_ptr_ty(
                 T1_ty,
@@ -595,9 +595,9 @@ fn test_cve_2020_35881_const() {
                 ),
                 ::rustc_middle::mir::Mutability::Not
             );
-            let ptr_to_data_local = patterns.mk_local(PtrT1_ty) ;
-            let ptr_to_data_stmt = patterns.mk_init(ptr_to_data_local) ;
-            let data_local = patterns.mk_local(DerefPtrT1_ty) ;
+            let ptr_to_data_local = patterns.mk_local(PtrT1_ty);
+            let ptr_to_data_stmt = patterns.mk_init(ptr_to_data_local);
+            let data_local = patterns.mk_local(DerefPtrT1_ty);
             let data_stmt = patterns.mk_assign(
                 data_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Ref(
@@ -606,7 +606,7 @@ fn test_cve_2020_35881_const() {
                     ptr_to_data_local.into_place()
                 )
             );
-            let ptr_to_ptr_to_data_local = patterns.mk_local(PtrPtrT1_ty) ;
+            let ptr_to_ptr_to_data_local = patterns.mk_local(PtrPtrT1_ty);
             let ptr_to_ptr_to_data_stmt = patterns.mk_assign(
                 ptr_to_ptr_to_data_local.into_place(),
                 ::rpl_mir::pat::Rvalue::AddressOf(
@@ -619,7 +619,7 @@ fn test_cve_2020_35881_const() {
                     )
                 )
             );
-            let ptr_to_ptr_to_res_local = patterns.mk_local(PtrPtrT2_ty) ;
+            let ptr_to_ptr_to_res_local = patterns.mk_local(PtrPtrT2_ty);
             let ptr_to_ptr_to_res_stmt = patterns.mk_assign(
                 ptr_to_ptr_to_res_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Cast(
@@ -636,7 +636,7 @@ fn test_cve_2020_35881_const() {
                     )
                 )
             );
-            let ptr_to_res_local = patterns.mk_local(PtrT2_ty) ;
+            let ptr_to_res_local = patterns.mk_local(PtrT2_ty);
             let ptr_to_res_stmt = patterns.mk_assign(
                 ptr_to_res_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Use(
@@ -676,9 +676,9 @@ fn test_cve_2020_35881_mut() {
         },
         quote! {
             #[allow(non_snake_case)]
-            let T1_ty_var = patterns.new_ty_var() ;
+            let T1_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let T1_ty = patterns.mk_var_ty(T1_ty_var) ;
+            let T1_ty = patterns.mk_var_ty(T1_ty_var);
             #[allow(non_snake_case)]
             let PtrT1_ty = patterns.mk_raw_ptr_ty(
                 T1_ty,
@@ -714,9 +714,9 @@ fn test_cve_2020_35881_mut() {
                 ),
                 ::rustc_middle::mir::Mutability::Mut
             );
-            let ptr_to_data_local = patterns.mk_local(PtrT1_ty) ;
-            let ptr_to_data_stmt = patterns.mk_init(ptr_to_data_local) ;
-            let data_local = patterns.mk_local(DerefPtrT1_ty) ;
+            let ptr_to_data_local = patterns.mk_local(PtrT1_ty);
+            let ptr_to_data_stmt = patterns.mk_init(ptr_to_data_local);
+            let data_local = patterns.mk_local(DerefPtrT1_ty);
             let data_stmt = patterns.mk_assign(
                 data_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Ref(
@@ -727,7 +727,7 @@ fn test_cve_2020_35881_mut() {
                     ptr_to_data_local.into_place()
                 )
             );
-            let ptr_to_ptr_to_data_local = patterns.mk_local(PtrPtrT1_ty) ;
+            let ptr_to_ptr_to_data_local = patterns.mk_local(PtrPtrT1_ty);
             let ptr_to_ptr_to_data_stmt = patterns.mk_assign(
                 ptr_to_ptr_to_data_local.into_place(),
                 ::rpl_mir::pat::Rvalue::AddressOf(
@@ -740,7 +740,7 @@ fn test_cve_2020_35881_mut() {
                     )
                 )
             );
-            let ptr_to_ptr_to_res_local = patterns.mk_local(PtrPtrT2_ty) ;
+            let ptr_to_ptr_to_res_local = patterns.mk_local(PtrPtrT2_ty);
             let ptr_to_ptr_to_res_stmt = patterns.mk_assign(
                 ptr_to_ptr_to_res_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Cast(
@@ -757,7 +757,7 @@ fn test_cve_2020_35881_mut() {
                     )
                 )
             );
-            let ptr_to_res_local = patterns.mk_local(PtrT2_ty) ;
+            let ptr_to_res_local = patterns.mk_local(PtrT2_ty);
             let ptr_to_res_stmt = patterns.mk_assign(
                 ptr_to_res_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Use(
@@ -773,4 +773,387 @@ fn test_cve_2020_35881_mut() {
             );
         }
     )
+}
+
+#[test]
+fn test_cve_2021_29941_2() {
+    pass!(
+        Mir! {
+            meta! {
+                $T:ty,
+            }
+
+            // type ExactSizeIterT = impl std::iter::ExactSizeIterator<Item = $T>;
+            // let's use a std::ops::Range<$T> instead temporarily
+            type RangeT = std::ops::Range<$T>;
+            type VecT = std::vec::Vec<$T>;
+            type RefMutVecT = &mut std::vec::Vec<$T>;
+            type PtrMutT = *mut $T;
+            type RefMutSliceT = &mut [$T];
+            type EnumerateRangeT = std::iter::Enumerate<RangeT>;
+            type RefMutEnumerateRangeT = &mut std::iter::Enumerate<RangeT>;
+            type OptionUsizeT = std::option::Option<(usize, $T)>;
+
+            let iter: RangeT = _;
+            // let len: usize = <RangeT as std::iter::ExactSizeIterator>::len(move iter);
+            let len: usize = RangeT::len(move iter);
+            let mut vec: VecT = std::vec::Vec::with_capacity(copy len);
+            let mut ref_to_vec: RefMutVecT = &mut vec;
+            let mut ptr_to_vec: PtrMutT = Vec::as_mut_ptr(move ref_to_vec);
+            let mut slice: RefMutSliceT = std::slice::from_raw_parts_mut(copy ptr_to_vec, copy len);
+            // let mut enumerate: EnumerateRangeT = <RangeT as std::iter::Iterator>::enumerate(move iter);
+            let mut enumerate: EnumerateRangeT = RangeT::enumerate(move iter);
+            let mut enumerate: RefMutEnumerateRangeT = &mut enumerate;
+            let next: OptionUsizeT;
+            let cmp: isize;
+            let first: usize;
+            let second_t: $T;
+            let second_usize: usize;
+            let _tmp: ();
+            loop {
+                // next = <EnumerateRangeT as std::iter::Iterator>::next(move enumerate);
+                next = EnumerateRangeT::next(move enumerate);
+                // in `cmp = discriminant(copy next);`
+                // which discriminant should be used?
+                cmp = balabala::discriminant(copy next);
+                switchInt(move cmp) {
+                    // true or 1 here?
+                    true => {
+                        first = copy (next as Some).0;
+                        second_t = copy (next as Some).1;
+                        second_usize = copy second_t as usize (IntToInt);
+                        (*slice)[second_usize] = copy first as $T (IntToInt);
+                    }
+                    _ => break,
+                }
+            }
+            // variable shadowing?
+            // There cannnot be two mutable references to `vec` in the same scope
+            ref_to_vec = &mut vec;
+            _tmp = Vec::set_len(move ref_to_vec, copy len);
+        },
+        quote! {
+            #[allow(non_snake_case)]
+            let T_ty_var = patterns.new_ty_var();
+            #[allow(non_snake_case)]
+            let T_ty = patterns.mk_var_ty(T_ty_var);
+            #[allow(non_snake_case)]
+            let RangeT_ty = patterns.mk_adt_ty(
+                patterns.mk_item_path(
+                    &["std", "ops", "Range" ,]
+                ),
+                patterns.mk_generic_args(
+                    &[T_ty.into()]
+                ),
+            );
+            #[allow(non_snake_case)]
+            let VecT_ty = patterns.mk_adt_ty(
+                patterns.mk_item_path(
+                    &["std", "vec", "Vec" ,]
+                ),
+                patterns.mk_generic_args(
+                    &[T_ty.into()]
+                ),
+            );
+            #[allow(non_snake_case)]
+            let RefMutVecT_ty = patterns.mk_ref_ty(
+                ::rpl_mir::pat::RegionKind::ReAny,
+                patterns.mk_adt_ty(
+                    patterns.mk_item_path(
+                        &["std", "vec", "Vec" ,]
+                    ),
+                    patterns.mk_generic_args(
+                        &[T_ty.into()]
+                    ),
+                )
+                ,::rustc_middle::mir::Mutability::Mut
+            );
+            #[allow(non_snake_case)]
+            let PtrMutT_ty = patterns.mk_raw_ptr_ty(
+                T_ty,::rustc_middle::mir::Mutability::Mut
+            );
+            #[allow(non_snake_case)]
+            let RefMutSliceT_ty = patterns.mk_ref_ty(
+                ::rpl_mir::pat::RegionKind::ReAny,
+                patterns.mk_slice_ty(
+                    T_ty
+                ),
+                ::rustc_middle::mir::Mutability::Mut
+            );
+            #[allow(non_snake_case)]
+            let EnumerateRangeT_ty = patterns.mk_adt_ty(
+                patterns.mk_item_path(
+                    &["std", "iter", "Enumerate",]
+                ),
+                patterns.mk_generic_args(&[RangeT_ty.into()]),
+            );
+            #[allow(non_snake_case)]
+            let RefMutEnumerateRangeT_ty = patterns.mk_ref_ty(
+                ::rpl_mir::pat::RegionKind::ReAny,
+                patterns.mk_adt_ty(
+                    patterns.mk_item_path(
+                        &["std", "iter", "Enumerate",]
+                    ),
+                    patterns.mk_generic_args(&[RangeT_ty.into()]),
+                ),
+                ::rustc_middle::mir::Mutability::Mut
+            );
+            #[allow(non_snake_case)]
+            let OptionUsizeT_ty = patterns.mk_adt_ty(
+                patterns.mk_item_path(
+                    &["std" , "option" , "Option" ,]
+                ), 
+                patterns.
+                mk_generic_args(
+                    &[patterns.mk_tuple_ty(
+                        &[patterns.primitive_types.usize, 
+                        T_ty]
+                    ).into()
+                    ]
+                ),
+            );
+            let iter_local = patterns.mk_local(RangeT_ty);
+            let iter_stmt = patterns.mk_init(iter_local);
+            let len_local = patterns.mk_local(patterns.primitive_types.usize);
+            let len_stmt = patterns.mk_fn_call(
+                patterns.mk_zeroed(
+                    patterns.mk_fn(
+                        patterns.mk_item_path(
+                            &["RangeT", "len" ,]
+                        ),
+                        patterns.mk_generic_args(&[]),
+                    )
+                ),
+                ::rpl_mir::pat::List::ordered(
+                    [:: rpl_mir::pat::Operand::Move(iter_local.into_place())]
+                ),
+                Some(len_local.into_place())
+            );
+            let vec_local = patterns.mk_local(VecT_ty);
+            let vec_stmt = patterns.mk_fn_call(
+                patterns.mk_zeroed(
+                    patterns.mk_fn(
+                        patterns.mk_item_path(
+                            &["std", "vec", "Vec", "with_capacity",]
+                        ),
+                        patterns.mk_generic_args(&[]),
+                    )
+                ),
+                ::rpl_mir::pat::List::ordered(
+                    [::rpl_mir::pat::Operand::Copy(len_local.into_place())]
+                ),
+                Some(vec_local.into_place())
+            );
+            let ref_to_vec_local = patterns.mk_local(RefMutVecT_ty);
+            let ref_to_vec_stmt = patterns.mk_assign(
+                ref_to_vec_local.into_place(),
+                ::rpl_mir::pat::Rvalue::Ref(
+                    ::rpl_mir::pat::RegionKind::ReAny,
+                    ::rustc_middle::mir::BorrowKind::Mut{
+                        kind : ::rustc_middle::mir::MutBorrowKind::Default
+                    },
+                    vec_local.into_place()
+                )
+            );
+            let ptr_to_vec_local = patterns.mk_local(PtrMutT_ty);
+            let ptr_to_vec_stmt = patterns.mk_fn_call(
+                patterns.mk_zeroed(
+                    patterns.mk_fn(
+                        patterns.mk_item_path(
+                            &["Vec", "as_mut_ptr" ,]
+                        ),
+                        patterns.mk_generic_args(&[]),
+                    )
+                ),
+                ::rpl_mir::pat::List::ordered(
+                    [:: rpl_mir::pat::Operand::Move(ref_to_vec_local.into_place())]
+                ),
+                Some(ptr_to_vec_local.into_place())
+            );
+            let slice_local = patterns.mk_local(RefMutSliceT_ty);
+            let slice_stmt = patterns.mk_fn_call(
+                patterns.mk_zeroed(
+                    patterns.mk_fn(
+                        patterns.mk_item_path(
+                            &["std", "slice", "from_raw_parts_mut" ,]
+                        ),
+                        patterns.mk_generic_args(&[]) ,
+                    )
+                ),
+                ::rpl_mir::pat::List::ordered(
+                    [
+                        :: rpl_mir::pat::Operand::Copy(ptr_to_vec_local.into_place()),
+                        ::rpl_mir::pat::Operand::Copy(len_local.into_place())
+                    ]
+                ),
+                Some(slice_local.into_place())
+            );
+            let enumerate_local = patterns.mk_local(EnumerateRangeT_ty);
+            let enumerate_stmt = patterns.mk_fn_call(
+                patterns.mk_zeroed(
+                    patterns.mk_fn(
+                        patterns.mk_item_path(&["RangeT", "enumerate" ,]),
+                        patterns.mk_generic_args(&[]) ,
+                    )
+                ),
+                ::rpl_mir::pat::List::ordered(
+                    [:: rpl_mir::pat::Operand::Move(iter_local.into_place())]
+                ),
+                Some(enumerate_local.into_place())
+            );
+            let enumerate_local = patterns.mk_local(RefMutEnumerateRangeT_ty);
+            let enumerate_stmt = patterns.mk_assign(
+                enumerate_local.into_place(),
+                ::rpl_mir::pat::Rvalue::Ref(
+                    ::rpl_mir::pat::RegionKind::ReAny,
+                    ::rustc_middle::mir::BorrowKind::Mut{
+                        kind : ::rustc_middle::mir::MutBorrowKind::Default
+                    },
+                    enumerate_local.into_place()
+                )
+            );
+            let next_local = patterns.mk_local(OptionUsizeT_ty);
+            let cmp_local = patterns.mk_local(patterns.primitive_types.isize);
+            let first_local = patterns.mk_local(patterns.primitive_types.usize);
+            let second_t_local = patterns.mk_local(T_ty);
+            let second_usize_local = patterns.mk_local(patterns.primitive_types.usize);
+            let _tmp_local = patterns.mk_local(patterns.mk_tuple_ty(&[]));
+            patterns.mk_loop(
+                | patterns | {
+                    let next_stmt = patterns.mk_fn_call(
+                        patterns.mk_zeroed(
+                        patterns.mk_fn(
+                            patterns.mk_item_path(
+                                &["EnumerateRangeT", "next" ,]
+                            ),
+                            patterns.mk_generic_args(&[]) ,)
+                        ),
+                        ::rpl_mir::pat::List::ordered(
+                            [:: rpl_mir::pat::Operand::Move(enumerate_local.into_place())]
+                        ),
+                        Some(next_local.into_place())
+                    );
+                    let cmp_stmt = patterns.mk_fn_call(
+                        patterns.mk_zeroed(
+                        patterns.mk_fn(
+                            patterns.mk_item_path(
+                                &["balabala", "discriminant",]
+                            ),
+                            patterns.mk_generic_args(&[]) ,)
+                        ),
+                        ::rpl_mir::pat::List::ordered(
+                            [:: rpl_mir::pat::Operand::Copy(next_local.into_place())]
+                        ),
+                        Some(cmp_local.into_place())
+                    );
+                    patterns.mk_switch_int(
+                        ::rpl_mir::pat::Operand::Move(cmp_local.into_place()),
+                        | mut patterns | {
+                            patterns.mk_switch_target(
+                                true, | patterns | {
+                                    let first_stmt = patterns.mk_assign(
+                                        first_local.into_place(),
+                                        ::rpl_mir::pat::Rvalue::Use(
+                                            ::rpl_mir::pat::Operand::Copy(
+                                                ::rpl_mir::pat::Place::new(
+                                                    next_local,
+                                                    patterns.mk_projection(
+                                                        &[
+                                                            ::rpl_mir::pat::PlaceElem::Downcast(
+                                                                ::rustc_span::Symbol::intern("Some")
+                                                            ),
+                                                            ::rpl_mir::pat::PlaceElem::Field(
+                                                                ::rpl_mir::pat::Field::Unnamed(0u32.into())
+                                                            ),
+                                                        ]
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    );
+                                    let second_t_stmt = patterns.mk_assign(
+                                        second_t_local.into_place(),
+                                        ::rpl_mir::pat::Rvalue::Use(
+                                            ::rpl_mir::pat::Operand::Copy(
+                                                ::rpl_mir::pat::Place::new(
+                                                    next_local,
+                                                    patterns.mk_projection(
+                                                        &[::rpl_mir::pat::PlaceElem::Downcast(
+                                                            ::rustc_span::Symbol::intern("Some")
+                                                        ),
+                                                        ::rpl_mir::pat::PlaceElem::Field(
+                                                            ::rpl_mir::pat::Field::Unnamed(1u32.into())
+                                                        ),
+                                                        ]
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    );
+                                    let second_usize_stmt = patterns.mk_assign(
+                                        second_usize_local.into_place(),
+                                        ::rpl_mir::pat::Rvalue::Cast(
+                                            ::rustc_middle::mir::CastKind::IntToInt,
+                                            ::rpl_mir::pat::Operand::Copy(
+                                                second_t_local.into_place()
+                                            ),
+                                            patterns.primitive_types.usize
+                                        )
+                                    );
+                                    let slice_stmt = patterns.mk_assign(
+                                        ::rpl_mir::pat::Place::new(
+                                            slice_local,
+                                            patterns.mk_projection(
+                                                &[
+                                                    ::rpl_mir::pat::PlaceElem::Deref,
+                                                    ::rpl_mir::pat::PlaceElem::Index(second_usize_local),
+                                                ]
+                                            )
+                                        ),
+                                        ::rpl_mir::pat::Rvalue::Cast(
+                                            ::rustc_middle::mir::CastKind::IntToInt,
+                                            ::rpl_mir::pat::Operand::Copy(first_local.into_place()),
+                                            T_ty
+                                        )
+                                    );
+                                }
+                            );
+                            patterns.mk_otherwise(
+                                | patterns | {
+                                    patterns.mk_break();
+                                }
+                            );
+                        }
+                    );
+                }
+            );
+            let ref_to_vec_stmt = patterns.mk_assign(
+                ref_to_vec_local.into_place(),
+                ::rpl_mir::pat::Rvalue::Ref(
+                    ::rpl_mir::pat::RegionKind::ReAny,
+                    ::rustc_middle::mir::BorrowKind::Mut{
+                        kind : ::rustc_middle::mir::MutBorrowKind::Default
+                    },
+                    vec_local.into_place()
+                )
+            );
+            let _tmp_stmt = patterns.mk_fn_call(
+                patterns.mk_zeroed(
+                    patterns.mk_fn(
+                        patterns.mk_item_path(
+                            &["Vec", "set_len",]
+                        ),
+                        patterns.mk_generic_args(&[]) ,
+                    )
+                ),
+                ::rpl_mir::pat::List::ordered(
+                    [
+                        ::rpl_mir::pat::Operand::Move(ref_to_vec_local.into_place()),
+                        ::rpl_mir::pat::Operand::Copy(len_local.into_place())
+                    ]
+                ),
+                Some(_tmp_local.into_place())
+            );
+        }
+    );
 }

@@ -13,3 +13,5 @@ pub fn swap_index(bla: impl ExactSizeIterator<Item = u32>) -> Vec<u32> {
     }
     vec
 }
+
+fn main() {}
