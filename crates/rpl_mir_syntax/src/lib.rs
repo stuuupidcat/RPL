@@ -42,6 +42,7 @@ pub(crate) mod kw {
     // CastKind
     syn::custom_keyword!(PtrToPtr);
     syn::custom_keyword!(IntToInt);
+    syn::custom_keyword!(Transmute);
 
     // BinOp
     syn::custom_keyword!(Add);
@@ -633,6 +634,7 @@ auto_derive! {
     pub enum CastKind {
         PtrToPtr(kw::PtrToPtr),
         IntToInt(kw::IntToInt),
+        Transmute(kw::Transmute),
     }
 
 }
