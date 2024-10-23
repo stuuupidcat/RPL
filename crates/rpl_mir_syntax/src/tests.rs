@@ -422,10 +422,10 @@ fn test_parse_cve_2021_29941_2() {
             next = EnumerateRangeT::next(move enumerate);
             // in `cmp = discriminant(copy next);`
             // which discriminant should be used?
-            cmp = balabala::discriminant(copy next); 
+            cmp = balabala::discriminant(copy next);
             switchInt(move cmp) {
                 // true or 1 here?
-                true => {   
+                true => {
                     first = copy (next as Some).0;
                     second_t = copy (next as Some).1;
                     second_usize = copy second_t as usize (IntToInt);

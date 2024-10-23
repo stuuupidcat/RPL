@@ -11,7 +11,7 @@ extern crate rustc_hir;
 extern crate rustc_macros;
 extern crate rustc_middle;
 extern crate rustc_span;
-// #[macro_use]
+#[macro_use]
 extern crate tracing;
 
 use rustc_hir::ItemId;
@@ -19,13 +19,13 @@ use rustc_middle::ty::TyCtxt;
 
 pub(crate) mod errors;
 
-// mod cve_2020_25016;
+mod cve_2020_25016;
 // mod cve_2020_35873;
 
 rustc_fluent_macro::fluent_messages! { "../messages.en.ftl" }
 
 static ALL_PATTERNS: &[fn(TyCtxt<'_>, ItemId)] = &[
-    // cve_2020_25016::check_item,
+    cve_2020_25016::check_item,
     // cve_2020_35873::check_item,
 ];
 
