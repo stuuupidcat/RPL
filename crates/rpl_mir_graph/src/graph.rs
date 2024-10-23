@@ -1,20 +1,16 @@
 use std::ops::Index;
 
 use crate::rwstate::RWStates;
-use rpl_mir::pat::visitor::{MutatingUseContext, NonMutatingUseContext, PlaceContext};
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_data_structures::packed::Pu128;
 use rustc_index::bit_set::{HybridBitSet, SparseBitMatrix};
 use rustc_index::{Idx, IndexVec};
+use rustc_middle::mir::visit::{MutatingUseContext, NonMutatingUseContext, PlaceContext};
 
 rustc_index::newtype_index! {
     #[debug_format = "Node{}"]
+    #[orderable]
     pub struct NodeIdx {}
-}
-
-rustc_index::newtype_index! {
-    #[debug_format = "Edge{}"]
-    pub struct EdgeIdx {}
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -25,7 +21,7 @@ pub enum NodeKind<BasicBlock, Local> {
     Local(Local),
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum EdgeKind {
     /// There is a goto edge from the `from` block to the `to` block.
     Goto,
@@ -36,7 +32,7 @@ pub enum EdgeKind {
     /// This means that the `from` statement must be executed before the `to` statement.
     DataRdep,
     /// There is an access to a local variable, by given access pattern and order.
-    Access(usize, Access),
+    Access(usize, PlaceContext),
     /// There is a switch jump with the given value.
     SwitchInt(Pu128),
     /// There is a switch jump of the otherwise branch.
@@ -45,7 +41,10 @@ pub enum EdgeKind {
 
 pub struct ProgramDepGraph<BasicBlock: Idx, Local: Idx> {
     nodes: IndexVec<NodeIdx, NodeKind<BasicBlock, Local>>,
-    edges: IndexVec<EdgeIdx, Edge>,
+    edges: Vec<Edge>,
+    locals_offset: NodeIdx,
+    blocks_offset: NodeIdx,
+    stmts_offsets: IndexVec<BasicBlock, NodeIdx>,
 }
 
 impl<BasicBlock: Idx, Local: Idx> Index<NodeIdx> for ProgramDepGraph<BasicBlock, Local> {
@@ -53,14 +52,6 @@ impl<BasicBlock: Idx, Local: Idx> Index<NodeIdx> for ProgramDepGraph<BasicBlock,
 
     fn index(&self, node: NodeIdx) -> &Self::Output {
         &self.nodes[node]
-    }
-}
-
-impl<BasicBlock: Idx, Local: Idx> Index<EdgeIdx> for ProgramDepGraph<BasicBlock, Local> {
-    type Output = Edge;
-
-    fn index(&self, edge: EdgeIdx) -> &Self::Output {
-        &self.edges[edge]
     }
 }
 
@@ -74,6 +65,9 @@ impl Edge {
     fn new(from: NodeIdx, to: NodeIdx, kind: EdgeKind) -> Self {
         Self { from, to, kind }
     }
+    pub fn nodes(&self) -> (NodeIdx, NodeIdx) {
+        (self.from, self.to)
+    }
 }
 
 impl<BasicBlock: Idx, Local: Idx> ProgramDepGraph<BasicBlock, Local> {
@@ -83,17 +77,48 @@ impl<BasicBlock: Idx, Local: Idx> ProgramDepGraph<BasicBlock, Local> {
     pub fn num_edges(&self) -> usize {
         self.edges.len()
     }
-    pub fn nodes(&self) -> impl Iterator<Item = (NodeIdx, &NodeKind<BasicBlock, Local>)> + '_ {
-        self.nodes.iter_enumerated()
+    pub fn nodes(&self) -> impl Iterator<Item = (NodeIdx, NodeKind<BasicBlock, Local>)> + '_ {
+        self.nodes.iter_enumerated().map(|(idx, &node)| (idx, node))
     }
-    pub fn edges(&self) -> impl Iterator<Item = (EdgeIdx, &Edge)> + '_ {
-        self.edges.iter_enumerated()
+    pub fn edges(&self) -> impl Iterator<Item = &Edge> + '_ {
+        self.edges.iter()
     }
-    pub fn build_from(cfg: &ControlFlowGraph<'_, BasicBlock>, ddg: &DataDepGraph<BasicBlock, Local>) -> Self {
+    pub fn find_edge(&self, from: NodeIdx, to: NodeIdx) -> Option<&Edge> {
+        Some(&self.edges[self.search_edge(from, to).ok()?])
+    }
+    pub fn edges_from(&self, from: NodeIdx) -> &[Edge] {
+        &self.edges[self.search_edges_for_node(from)]
+    }
+    pub fn block_nodes(&self, bb: BasicBlock) -> [NodeIdx; 2] {
+        let start = NodeIdx::plus(self.blocks_offset, bb.index() * 2);
+        let end = start.plus(1);
+        [start, end]
+    }
+    pub fn local_node(&self, local: Local) -> NodeIdx {
+        NodeIdx::plus(self.locals_offset, local.index())
+    }
+    pub fn stmt_node(&self, bb: BasicBlock, statement_index: usize) -> NodeIdx {
+        NodeIdx::plus(self.stmts_offsets[bb], statement_index)
+    }
+
+    pub fn build_from(cfg: &ControlFlowGraph<BasicBlock>, ddg: &DataDepGraph<BasicBlock, Local>) -> Self {
         ProgramDepGraphBuilder::new(cfg, ddg).build()
     }
+    fn search_edge(&self, from: NodeIdx, to: NodeIdx) -> Result<usize, usize> {
+        self.edges.binary_search_by_key(&(from, to), Edge::nodes)
+    }
+    fn search_edges_for_node(&self, from: NodeIdx) -> std::ops::Range<usize> {
+        let start = self
+            .search_edge(from, NodeIdx::ZERO)
+            .unwrap_or_else(std::convert::identity);
+        let end = self
+            .search_edge(from.plus(1), NodeIdx::ZERO)
+            .unwrap_or_else(std::convert::identity);
+        start..end
+    }
     fn add_locals(&mut self, num_locals: usize) -> impl Copy + Fn(Local) -> NodeIdx {
-        let offset = self.nodes.next_index();
+        self.locals_offset = self.nodes.next_index();
+        let offset = self.locals_offset;
         self.nodes.extend((0..num_locals).map(Local::new).map(NodeKind::Local));
         move |local| NodeIdx::plus(offset, local.index())
     }
@@ -104,7 +129,8 @@ impl<BasicBlock: Idx, Local: Idx> ProgramDepGraph<BasicBlock, Local> {
         impl Copy + Fn(BasicBlock) -> NodeIdx,
         impl Copy + Fn(BasicBlock) -> NodeIdx,
     ) {
-        let offset = self.nodes.next_index();
+        self.blocks_offset = self.nodes.next_index();
+        let offset = self.blocks_offset;
         self.nodes.extend(
             (0..num_blocks)
                 .map(BasicBlock::new)
@@ -119,7 +145,8 @@ impl<BasicBlock: Idx, Local: Idx> ProgramDepGraph<BasicBlock, Local> {
         bb: BasicBlock,
         block: &BlockDataDepGraph<Local>,
     ) -> impl Copy + Fn(usize) -> NodeIdx {
-        let offset = self.nodes.next_index();
+        self.stmts_offsets[bb] = self.nodes.next_index();
+        let offset = self.stmts_offsets[bb];
         self.nodes
             .extend((0..block.num_statements()).map(|stmt| NodeKind::StmtOrTerm(bb, stmt)));
         move |stmt| NodeIdx::plus(offset, stmt)
@@ -207,7 +234,7 @@ impl<BasicBlock: Idx, Local: Idx> ProgramDepGraph<BasicBlock, Local> {
 }
 
 struct ProgramDepGraphBuilder<'a, BasicBlock: Idx, Local: Idx> {
-    cfg: &'a ControlFlowGraph<'a, BasicBlock>,
+    cfg: &'a ControlFlowGraph<BasicBlock>,
     ddg: &'a DataDepGraph<BasicBlock, Local>,
     graph: ProgramDepGraph<BasicBlock, Local>,
 }
@@ -220,7 +247,10 @@ impl<'a, BasicBlock: Idx, Local: Idx> ProgramDepGraphBuilder<'a, BasicBlock, Loc
             ddg,
             graph: ProgramDepGraph {
                 nodes: IndexVec::new(),
-                edges: IndexVec::new(),
+                edges: Vec::new(),
+                locals_offset: NodeIdx::ZERO,
+                blocks_offset: NodeIdx::ZERO,
+                stmts_offsets: IndexVec::from_elem_n(NodeIdx::ZERO, cfg.num_blocks()),
             },
         }
     }
@@ -234,16 +264,17 @@ impl<'a, BasicBlock: Idx, Local: Idx> ProgramDepGraphBuilder<'a, BasicBlock, Loc
             graph.add_deps(block, stmts, starts(bb), ends(bb));
             graph.add_cfg_edges(bb, &self.cfg[bb], starts, ends);
         }
+        graph.edges.sort_unstable_by_key(Edge::nodes);
         self.graph
     }
 }
 
-pub struct ControlFlowGraph<'a, BasicBlock: Idx> {
-    pub(crate) terminator_edges: IndexVec<BasicBlock, TerminatorEdges<'a, BasicBlock>>,
+pub struct ControlFlowGraph<BasicBlock: Idx> {
+    pub(crate) terminator_edges: IndexVec<BasicBlock, TerminatorEdges<BasicBlock>>,
 }
 
-impl<'a, BasicBlock: Idx> ControlFlowGraph<'a, BasicBlock> {
-    pub fn new(num_blocks: usize, terminator_edges: impl FnMut(BasicBlock) -> TerminatorEdges<'a, BasicBlock>) -> Self {
+impl<BasicBlock: Idx> ControlFlowGraph<BasicBlock> {
+    pub fn new(num_blocks: usize, terminator_edges: impl FnMut(BasicBlock) -> TerminatorEdges<BasicBlock>) -> Self {
         Self {
             terminator_edges: IndexVec::from_fn_n(terminator_edges, num_blocks),
         }
@@ -253,15 +284,15 @@ impl<'a, BasicBlock: Idx> ControlFlowGraph<'a, BasicBlock> {
     }
 }
 
-impl<'a, BasicBlock: Idx> Index<BasicBlock> for ControlFlowGraph<'a, BasicBlock> {
-    type Output = TerminatorEdges<'a, BasicBlock>;
+impl<BasicBlock: Idx> Index<BasicBlock> for ControlFlowGraph<BasicBlock> {
+    type Output = TerminatorEdges<BasicBlock>;
 
     fn index(&self, bb: BasicBlock) -> &Self::Output {
         &self.terminator_edges[bb]
     }
 }
 
-pub enum TerminatorEdges<'a, BasicBlock: Idx> {
+pub enum TerminatorEdges<BasicBlock: Idx> {
     /// For terminators that have no successor, like `return`.
     None,
     /// For terminators that a single successor, like `goto`, and `assert` without cleanup block.
@@ -270,7 +301,7 @@ pub enum TerminatorEdges<'a, BasicBlock: Idx> {
     Double(BasicBlock, BasicBlock),
     /// Special action for `Yield`, `Call` and `InlineAsm` terminators.
     AssignOnReturn {
-        return_: &'a [BasicBlock],
+        return_: Box<[BasicBlock]>,
         cleanup: Option<BasicBlock>,
     },
     /// Special edge for `SwitchInt`.
@@ -284,7 +315,7 @@ pub struct SwitchTargets<BasicBlock: Idx> {
 
 pub struct DataDepGraph<BasicBlock: Idx, Local: Idx> {
     num_locals: usize,
-    pub(crate) blocks: IndexVec<BasicBlock, BlockDataDepGraph<Local>>,
+    pub blocks: IndexVec<BasicBlock, BlockDataDepGraph<Local>>,
 }
 
 impl<BasicBlock: Idx, Local: Idx> Index<BasicBlock> for DataDepGraph<BasicBlock, Local> {
@@ -296,11 +327,7 @@ impl<BasicBlock: Idx, Local: Idx> Index<BasicBlock> for DataDepGraph<BasicBlock,
 }
 
 impl<BasicBlock: Idx, Local: Idx> DataDepGraph<BasicBlock, Local> {
-    pub(crate) fn new(
-        num_blocks: usize,
-        mut num_statements: impl FnMut(BasicBlock) -> usize,
-        num_locals: usize,
-    ) -> Self {
+    pub fn new(num_blocks: usize, mut num_statements: impl FnMut(BasicBlock) -> usize, num_locals: usize) -> Self {
         Self {
             blocks: IndexVec::from_fn_n(|bb| BlockDataDepGraph::new(num_statements(bb), num_locals), num_blocks),
             num_locals,
@@ -323,12 +350,15 @@ pub struct BlockDataDepGraph<Local: Idx> {
     rdep_start: HybridBitSet<usize>,
     dep_end: HybridBitSet<usize>,
     rw_states: RWStates<Local>,
-    accesses: Vec<Vec<(Local, Access)>>,
+    accesses: Vec<Vec<(Local, PlaceContext)>>,
 }
 
 impl<Local: Idx> BlockDataDepGraph<Local> {
     pub fn num_statements(&self) -> usize {
         self.rdep_start.domain_size()
+    }
+    pub fn is_rdep_start(&self, statement: usize) -> bool {
+        self.rdep_start.contains(statement)
     }
     pub fn rdep_start(&self) -> impl Iterator<Item = usize> + '_ {
         self.rdep_start.iter()
@@ -341,6 +371,9 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
     }
     pub fn rdeps(&self, statement: usize) -> impl Iterator<Item = usize> + '_ {
         self.rdeps.iter(statement)
+    }
+    pub fn accesses(&self, statement: usize) -> &[(Local, PlaceContext)] {
+        &self.accesses[statement]
     }
 
     pub(crate) fn new(statements: usize, locals: usize) -> Self {
@@ -362,7 +395,7 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
     fn set_read_write(&mut self, statement: usize, local: Local) {
         self.rw_states.set_read_write(statement, local);
     }
-    pub(crate) fn update_deps(&mut self, stmt: usize) {
+    pub fn update_deps(&mut self, stmt: usize) {
         for local in self.rw_states.get_reads(stmt) {
             match (0..stmt)
                 .rev()
@@ -378,17 +411,16 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
             }
         }
     }
-    pub(crate) fn access_local(&mut self, local: Local, pcx: PlaceContext, statement: usize) {
-        let access = Access::from_place_context(pcx);
-        self.accesses[statement].push((local, access));
-        match access {
+    pub fn access_local(&mut self, local: Local, pcx: PlaceContext, statement: usize) {
+        self.accesses[statement].push((local, pcx));
+        match Access::from_place_context(pcx) {
             Access::Read => self.set_read(statement, local),
             Access::Write => self.set_write(statement, local),
             Access::ReadWrite => self.set_read_write(statement, local),
             Access::NoAccess => {},
         }
     }
-    pub(crate) fn update_dep_end(&mut self) {
+    pub fn update_dep_end(&mut self) {
         let num_statements = self.num_statements();
         for stmt in 0..num_statements {
             for local in self.rw_states.get_writes(stmt) {
@@ -400,7 +432,7 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Access {
     Read,
     Write,
@@ -417,8 +449,8 @@ impl Access {
                     AddressOf, Copy, FakeBorrow, Inspect, Move, PlaceMention, Projection, SharedBorrow,
                 };
                 match pcx {
-                    Inspect | Copy | Move | SharedBorrow | FakeBorrow | AddressOf => Self::Read,
-                    PlaceMention | Projection => Self::NoAccess,
+                    Inspect | Copy | Move | SharedBorrow | FakeBorrow | AddressOf | Projection => Self::Read,
+                    PlaceMention => Self::NoAccess,
                 }
             },
             MutatingUse(pcx) => {
@@ -427,9 +459,9 @@ impl Access {
                 };
                 match pcx {
                     Store | AsmOutput | Call | Yield => Self::Write,
-                    Borrow | AddressOf => Self::Read,
+                    Borrow | AddressOf | Projection => Self::Read,
                     SetDiscriminant | Drop => Self::ReadWrite,
-                    Projection | Retag | Deinit => Self::NoAccess,
+                    Retag | Deinit => Self::NoAccess,
                 }
             },
             NonUse(_) => Self::NoAccess,

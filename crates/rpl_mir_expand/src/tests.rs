@@ -25,13 +25,13 @@ where
 
 macro_rules! pass {
     ($test_struct:ident!( $( $tt:tt )* ), $($output:tt)*) => {
-        test_pass::<$test_struct>(quote!($($tt)*), $($output)*);
+        test_pass::<$test_struct>(quote!($($tt)*), $($output)*)
     };
     ($test_struct:ident!{ $( $tt:tt )* }, $($output:tt)*) => {
-        pass!($test_struct!( $($tt)* ), $($output)*);
+        pass!($test_struct!( $($tt)* ), $($output)*)
     };
     ($test_struct:ident![ $( $tt:tt )* ], $($output:tt)*) => {
-        pass!($test_struct!( $($tt)* ), $($output)*);
+        pass!($test_struct!( $($tt)* ), $($output)*)
     };
 }
 
@@ -902,11 +902,11 @@ fn test_cve_2021_29941_2() {
             let OptionUsizeT_ty = patterns.mk_adt_ty(
                 patterns.mk_item_path(
                     &["std" , "option" , "Option" ,]
-                ), 
+                ),
                 patterns.
                 mk_generic_args(
                     &[patterns.mk_tuple_ty(
-                        &[patterns.primitive_types.usize, 
+                        &[patterns.primitive_types.usize,
                         T_ty]
                     ).into()
                     ]

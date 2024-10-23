@@ -305,9 +305,7 @@ test_case! {
 
 test_case! {
     fn cve_2021_29941_2() {
-        meta! {
-            $T:ty,
-        }
+        meta!($T:ty);
 
         // type ExactSizeIterT = impl std::iter::ExactSizeIterator<Item = $T>;
         // let's use a std::ops::Range<$T> instead temporarily
@@ -341,10 +339,10 @@ test_case! {
             next = EnumerateRangeT::next(move enumerate);
             // in `cmp = discriminant(copy next);`
             // which discriminant should be used?
-            cmp = balabala::discriminant(copy next); 
+            cmp = balabala::discriminant(copy next);
             switchInt(move cmp) {
                 // true or 1 here?
-                true => {   
+                true => {
                     first = copy (next as Some).0;
                     second_t = copy (next as Some).1;
                     second_usize = copy second_t as usize (IntToInt);
@@ -358,9 +356,8 @@ test_case! {
         ref_to_vec = &mut vec;
         _tmp = Vec::set_len(move ref_to_vec, copy len);
     } => {
-        meta!(
-            ?T0:ty
-        );
+        meta!(?T0:ty);
+
         let _?0: std::ops::Range<?T0>;
         let _?1: usize;
         let _?2: std::vec::Vec<?T0>;
@@ -375,7 +372,7 @@ test_case! {
         let _?11: ?T0;
         let _?12: usize;
         let _?13: ();
-        ?bb0: { 
+        ?bb0: {
             _?0 = _;
             _?1 = RangeT::len (move _?0) -> ?bb1;
         }
@@ -395,35 +392,35 @@ test_case! {
         ?bb4: {
             _?6 = RangeT::enumerate(move _?0) -> ?bb5;
         }
-        ?bb5: { 
+        ?bb5: {
             _?7 = &mut _?7;
             goto ?bb6;
         }
         ?bb6: {
             _?8 = EnumerateRangeT::next (move _?7) -> ?bb8;
         }
-        ?bb7: { 
+        ?bb7: {
             _?3 = &mut _?2;
             _?13 = Vec::set_len (move _?3 , copy _?1) -> ?bb13;
         }
-        ?bb8: { 
+        ?bb8: {
             _?9 = balabala::discriminant(copy _?8) -> ?bb9;
         }
-        ?bb9: { 
+        ?bb9: {
             switchInt(move _?9) -> [true -> ?bb11 , otherwise -> ?bb12];
         }
-        ?bb10: { 
-            goto?bb6;
+        ?bb10: {
+            goto ?bb6;
         }
-        ?bb11: { 
+        ?bb11: {
             _?10 = copy ((_?8 as Some).0);
             _?11 = copy ((_?8 as Some).1);
             _?12 = copy _?11 as usize (IntToInt);
             ((* _?5) [_?12]) = copy _?10 as?T0 (IntToInt);
-            goto?bb10;
+            goto ?bb10;
         }
         ?bb12: {
-            goto?bb7;
+            goto ?bb7;
         }
         ?bb13: {
             end;

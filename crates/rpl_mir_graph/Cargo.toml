@@ -8,7 +8,6 @@ keywords.workspace = true
 edition.workspace = true
 
 [dependencies]
-rpl_mir.workspace = true
 bitflags.workspace = true
 
 [dev-dependencies]

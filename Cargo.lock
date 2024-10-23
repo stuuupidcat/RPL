@@ -883,6 +883,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rpl_macros",
+ "rpl_mir_graph",
  "syn",
 ]
 
@@ -907,7 +908,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rpl_macros",
- "rpl_mir",
 ]
 
 [[package]]

@@ -9,8 +9,8 @@ extern crate rustc_span;
 use pretty_assertions::assert_eq;
 use proc_macro2::TokenStream;
 use quote::quote;
+use rpl_mir::graph::pat_data_dep_graph;
 use rpl_mir::pat::PatternsBuilder;
-use rpl_mir_graph::pat::PatDataDepGraph;
 use rustc_arena::DroplessArena;
 use std::fmt::Write;
 
@@ -29,16 +29,16 @@ macro_rules! test_case {
                 let mut patterns = PatternsBuilder::new(&arena);
                 $name(&mut patterns);
                 let pattern = patterns.build();
-                let graph = PatDataDepGraph::from_patterns(&pattern);
+                let graph = pat_data_dep_graph(&pattern);
                 let string = &mut String::new();
                 for (bb, block) in graph.blocks() {
                     write!(string, "{bb:?}: {{").unwrap();
                     write!(string, "IN -> {:?},", block.rdep_start().collect::<Vec<_>>()).unwrap();
                     for stmt in 0..block.num_statements() {
                         write!(string, "{stmt} <- {:?},", block.deps(stmt).collect::<Vec<_>>()).unwrap();
-                        if stmt < pattern.basic_blocks[bb].statements.len() {
-                            write!(string, " | {:?};", pattern.basic_blocks[bb].statements[stmt]).unwrap();
-                        } else if let Some(terminator) = &pattern.basic_blocks[bb].terminator {
+                        if stmt < pattern[bb].statements.len() {
+                            write!(string, " | {:?};", pattern[bb].statements[stmt]).unwrap();
+                        } else if let Some(terminator) = &pattern[bb].terminator {
                             write!(string, " | {:?};", terminator).unwrap();
                         }
                     }

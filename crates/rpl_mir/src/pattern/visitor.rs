@@ -33,6 +33,19 @@ pub trait PatternVisitor<'tcx>: Sized {
     fn visit_place(&mut self, place: Place<'tcx>, pcx: PlaceContext, location: Location) {
         self.super_place(place, pcx, location);
     }
+    fn visit_projection(&mut self, place: Place<'tcx>, pcx: PlaceContext, location: Location) {
+        self.super_projection(place, pcx, location);
+    }
+
+    fn visit_projection_elem(
+        &mut self,
+        place_ref: Place<'tcx>,
+        elem: PlaceElem<'tcx>,
+        pcx: PlaceContext,
+        location: Location,
+    ) {
+        self.super_projection_elem(place_ref, elem, pcx, location);
+    }
     fn visit_rvalue(&mut self, rvalue: &Rvalue<'tcx>, location: Location) {
         self.super_rvalue(rvalue, location);
     }
@@ -62,7 +75,59 @@ pub trait PatternVisitor<'tcx>: Sized {
         }
     }
     fn super_place(&mut self, place: Place<'tcx>, pcx: PlaceContext, location: Location) {
+        let mut pcx = pcx;
+
+        if !place.projection.is_empty() && pcx.is_use() {
+            // ^ Only change the context if it is a real use, not a "use" in debuginfo.
+            pcx = if pcx.is_mutating_use() {
+                PlaceContext::MutatingUse(MutatingUseContext::Projection)
+            } else {
+                PlaceContext::NonMutatingUse(NonMutatingUseContext::Projection)
+            };
+        }
+
         self.visit_local(place.local, pcx, location);
+
+        self.visit_projection(place, pcx, location);
+    }
+    fn super_projection(&mut self, place: Place<'tcx>, pcx: PlaceContext, location: Location) {
+        for (base, elem) in place.iter_projections().rev() {
+            self.visit_projection_elem(base, elem, pcx, location);
+        }
+    }
+
+    fn super_projection_elem(
+        &mut self,
+        _place_ref: Place<'tcx>,
+        elem: PlaceElem<'tcx>,
+        _context: PlaceContext,
+        location: Location,
+    ) {
+        match elem {
+            PlaceElem::OpaqueCast(ty) | PlaceElem::Subtype(ty) => {
+                self.visit_ty(ty);
+            },
+            PlaceElem::Index(local) => {
+                self.visit_local(
+                    local,
+                    PlaceContext::NonMutatingUse(NonMutatingUseContext::Copy),
+                    location,
+                );
+            },
+            PlaceElem::Deref
+            | PlaceElem::Subslice {
+                from: _,
+                to: _,
+                from_end: _,
+            }
+            | PlaceElem::ConstantIndex {
+                offset: _,
+                min_length: _,
+                from_end: _,
+            }
+            | PlaceElem::Downcast(_)
+            | PlaceElem::Field(_) => {},
+        }
     }
     fn super_rvalue(&mut self, rvalue: &Rvalue<'tcx>, location: Location) {
         match rvalue {

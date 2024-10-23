@@ -1,20 +1,14 @@
-use std::iter::zip;
+use std::ops::Index;
 
 use rustc_arena::DroplessArena;
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_data_structures::packed::Pu128;
-use rustc_hash::FxHashMap;
-use rustc_hir::def::CtorKind;
-use rustc_hir::def_id::{DefId, LOCAL_CRATE};
-use rustc_hir::definitions::DefPathData;
 use rustc_hir::{LangItem, Target};
-use rustc_index::{IndexSlice, IndexVec};
+use rustc_index::IndexVec;
 use rustc_middle::{mir, ty};
-use rustc_span::symbol::kw;
 use rustc_span::Symbol;
 use rustc_target::abi::FieldIdx;
 
-mod matching;
 mod pretty;
 pub mod visitor;
 
@@ -42,6 +36,12 @@ rustc_index::newtype_index! {
 pub struct Location {
     pub block: BasicBlock,
     pub statement_index: usize,
+}
+
+impl From<(BasicBlock, usize)> for Location {
+    fn from((block, statement_index): (BasicBlock, usize)) -> Self {
+        Self { block, statement_index }
+    }
 }
 
 pub struct PrimitiveTypes<'tcx> {
@@ -84,12 +84,20 @@ impl<'tcx> PrimitiveTypes<'tcx> {
 
 pub struct Patterns<'tcx> {
     arena: &'tcx DroplessArena,
-    ty_vars: IndexVec<TyVarIdx, ()>,
-    const_vars: IndexVec<ConstVarIdx, Ty<'tcx>>,
-    locals: IndexVec<LocalIdx, Ty<'tcx>>,
-    self_idx: Option<LocalIdx>,
-    pub basic_blocks: IndexVec<BasicBlock, BasicBlockData<'tcx>>,
+    pub(crate) ty_vars: IndexVec<TyVarIdx, ()>,
+    pub(crate) const_vars: IndexVec<ConstVarIdx, Ty<'tcx>>,
+    pub(crate) self_idx: Option<LocalIdx>,
+    pub(crate) locals: IndexVec<LocalIdx, Ty<'tcx>>,
+    pub(crate) basic_blocks: IndexVec<BasicBlock, BasicBlockData<'tcx>>,
     pub primitive_types: PrimitiveTypes<'tcx>,
+}
+
+impl<'tcx> Index<BasicBlock> for Patterns<'tcx> {
+    type Output = BasicBlockData<'tcx>;
+
+    fn index(&self, bb: BasicBlock) -> &Self::Output {
+        &self.basic_blocks[bb]
+    }
 }
 
 #[derive(Default)]
@@ -99,6 +107,16 @@ pub struct BasicBlockData<'tcx> {
 }
 
 impl<'tcx> BasicBlockData<'tcx> {
+    pub fn terminator(&self) -> &TerminatorKind<'tcx> {
+        self.terminator.as_ref().expect("terminator not set")
+    }
+    pub fn debug_stmt_at(&self, index: usize) -> &dyn core::fmt::Debug {
+        if index < self.statements.len() {
+            &self.statements[index]
+        } else {
+            self.terminator()
+        }
+    }
     fn set_terminator(&mut self, terminator: TerminatorKind<'tcx>) {
         assert!(self.terminator.is_none(), "terminator already set");
         self.terminator = Some(terminator);
@@ -161,6 +179,24 @@ impl<'tcx> Place<'tcx> {
     }
     pub fn as_local(&self) -> Option<LocalIdx> {
         self.projection.is_empty().then_some(self.local)
+    }
+
+    /// Iterate over the projections in evaluation order, i.e., the first element is the base with
+    /// its projection and then subsequently more projections are added.
+    /// As a concrete example, given the place a.b.c, this would yield:
+    /// - (a, .b)
+    /// - (a.b, .c)
+    ///
+    /// Given a place without projections, the iterator is empty.
+    #[inline]
+    pub fn iter_projections(self) -> impl DoubleEndedIterator<Item = (Place<'tcx>, PlaceElem<'tcx>)> {
+        self.projection.iter().enumerate().map(move |(i, proj)| {
+            let base = Place {
+                local: self.local,
+                projection: &self.projection[..i],
+            };
+            (base, *proj)
+        })
     }
 }
 
@@ -521,42 +557,55 @@ impl<'tcx> PatternsBuilder<'tcx> {
         self.new_block_if_terminated();
         self.patterns.basic_blocks.next_index()
     }
-    fn mk_statement(&mut self, kind: StatementKind<'tcx>) {
+    fn mk_statement(&mut self, kind: StatementKind<'tcx>) -> Location {
         self.new_block_if_terminated();
-        self.patterns.basic_blocks[self.current].statements.push(kind);
+
+        let block = self.current;
+        let statement_index = self.patterns.basic_blocks[block].statements.len();
+
+        self.patterns.basic_blocks[block].statements.push(kind);
+        Location { block, statement_index }
     }
-    pub fn mk_init(&mut self, place: impl Into<Place<'tcx>>) {
-        self.mk_statement(StatementKind::Init(place.into()));
+    fn set_terminator(&mut self, kind: TerminatorKind<'tcx>) -> Location {
+        self.patterns.basic_blocks[self.current].set_terminator(kind);
+        self.patterns.terminator_loc(self.current)
     }
-    pub fn mk_assign(&mut self, place: impl Into<Place<'tcx>>, rvalue: Rvalue<'tcx>) {
-        self.mk_statement(StatementKind::Assign(place.into(), rvalue));
+    pub fn mk_init(&mut self, place: impl Into<Place<'tcx>>) -> Location {
+        self.mk_statement(StatementKind::Init(place.into()))
     }
-    pub fn mk_fn_call(&mut self, func: Operand<'tcx>, args: List<Operand<'tcx>>, destination: Option<Place<'tcx>>) {
+    pub fn mk_assign(&mut self, place: impl Into<Place<'tcx>>, rvalue: Rvalue<'tcx>) -> Location {
+        self.mk_statement(StatementKind::Assign(place.into(), rvalue))
+    }
+    pub fn mk_fn_call(
+        &mut self,
+        func: Operand<'tcx>,
+        args: List<Operand<'tcx>>,
+        destination: Option<Place<'tcx>>,
+    ) -> Location {
         if let Some(place) = destination
             && let Operand::Constant(ConstOperand::ZeroSized(ty)) = func
             && let &TyKind::FnDef(Path::LangItem(lang_item), _) = ty.kind()
             && let Target::Variant | Target::Struct = lang_item.target()
         {
-            self.mk_assign(
+            return self.mk_assign(
                 place,
                 Rvalue::Aggregate(AggKind::Adt(lang_item.into(), None), args.data),
             );
-            return;
         }
         let target = self.next_block();
-        self.patterns.basic_blocks[self.current].set_terminator(TerminatorKind::Call {
+        self.set_terminator(TerminatorKind::Call {
             func,
             args,
             destination,
             target,
-        });
+        })
     }
-    pub fn mk_drop(&mut self, place: impl Into<Place<'tcx>>) {
+    pub fn mk_drop(&mut self, place: impl Into<Place<'tcx>>) -> Location {
         let target = self.next_block();
         let place = place.into();
-        self.patterns.basic_blocks[self.current].set_terminator(TerminatorKind::Drop { place, target });
+        self.set_terminator(TerminatorKind::Drop { place, target })
     }
-    pub fn mk_switch_int(&mut self, operand: Operand<'tcx>, f: impl FnOnce(SwitchIntBuilder<'_, 'tcx>)) {
+    pub fn mk_switch_int(&mut self, operand: Operand<'tcx>, f: impl FnOnce(SwitchIntBuilder<'_, 'tcx>)) -> Location {
         self.new_block_if_terminated();
         let current = self.current;
         self.patterns.basic_blocks[current].set_terminator(TerminatorKind::SwitchInt {
@@ -573,28 +622,31 @@ impl<'tcx> PatternsBuilder<'tcx> {
         f(builder);
         self.patterns.basic_blocks[current].set_switch_targets(targets);
         self.current = next;
+        self.patterns.terminator_loc(current)
     }
-    fn goto(&mut self, block: BasicBlock) {
+    fn mk_goto(&mut self, block: BasicBlock) -> Location {
         self.patterns.basic_blocks[self.current].set_goto(block);
+        self.patterns.terminator_loc(self.current)
     }
-    pub fn mk_loop(&mut self, f: impl FnOnce(&mut PatternsBuilder<'tcx>)) {
+    pub fn mk_loop(&mut self, f: impl FnOnce(&mut PatternsBuilder<'tcx>)) -> Location {
         let enter = self.patterns.basic_blocks.push(BasicBlockData::default());
-        self.goto(enter);
+        self.mk_goto(enter);
         let exit = self.patterns.basic_blocks.push(BasicBlockData::default());
         self.loop_stack.push(Loop { enter, exit });
         self.current = enter;
         f(self);
         self.loop_stack.pop();
-        self.goto(enter);
+        let location = self.mk_goto(enter);
         self.current = exit;
+        location
     }
-    pub fn mk_break(&mut self) {
+    pub fn mk_break(&mut self) -> Location {
         let exit = self.loop_stack.last().expect("no loop to break from").exit;
-        self.goto(exit);
+        self.mk_goto(exit)
     }
-    pub fn mk_continue(&mut self) {
+    pub fn mk_continue(&mut self) -> Location {
         let enter = self.loop_stack.last().expect("no loop to continue").enter;
-        self.goto(enter);
+        self.mk_goto(enter)
     }
 }
 
@@ -619,7 +671,7 @@ impl<'tcx> SwitchIntBuilder<'_, 'tcx> {
         targets.targets.insert(value.into(), target);
         builder.current = target;
         f(builder);
-        builder.goto(*next);
+        builder.mk_goto(*next);
     }
     pub fn mk_otherwise(self, f: impl FnOnce(&mut PatternsBuilder<'tcx>)) {
         let Self { builder, next, targets } = self;
@@ -627,7 +679,7 @@ impl<'tcx> SwitchIntBuilder<'_, 'tcx> {
         targets.otherwise = Some(target);
         builder.current = target;
         f(builder);
-        builder.goto(next);
+        builder.mk_goto(next);
     }
 }
 
@@ -645,6 +697,12 @@ impl<'tcx> std::ops::DerefMut for SwitchIntBuilder<'_, 'tcx> {
 }
 
 impl<'tcx> Patterns<'tcx> {
+    pub fn terminator_loc(&self, block: BasicBlock) -> Location {
+        // assert the terminator is set
+        let _ = self.basic_blocks[block].terminator();
+        let statement_index = self.basic_blocks[block].statements.len();
+        Location { block, statement_index }
+    }
     fn mk_symbols(&self, syms: &[&str]) -> &'tcx [Symbol] {
         self.arena.alloc_from_iter(syms.iter().copied().map(Symbol::intern))
     }
@@ -700,12 +758,6 @@ impl<'tcx> Patterns<'tcx> {
     }
     fn mk_ty(&self, kind: TyKind<'tcx>) -> Ty<'tcx> {
         Ty(self.arena.alloc(kind))
-    }
-}
-
-impl Patterns<'_> {
-    pub fn num_locals(&self) -> usize {
-        self.locals.len()
     }
 }
 
