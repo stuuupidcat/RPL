@@ -1,7 +1,6 @@
 #![feature(rustc_private)]
 #![feature(let_chains)]
 #![feature(if_let_guard)]
-#![feature(is_none_or)]
 
 extern crate rustc_data_structures;
 extern crate rustc_driver;
@@ -13,6 +12,8 @@ extern crate rustc_middle;
 extern crate rustc_span;
 #[macro_use]
 extern crate tracing;
+
+extern crate rpl_macros;
 
 use rustc_hir::ItemId;
 use rustc_middle::ty::TyCtxt;

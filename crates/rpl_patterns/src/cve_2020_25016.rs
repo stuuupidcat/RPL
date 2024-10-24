@@ -58,9 +58,9 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
                 && let pattern_cast = pattern_cast(&mut patterns_cast)
                 && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &patterns_cast.build()).check()
                 && let Some(cast_from) = matches[pattern_cast.cast_from]
-                && let cast_from = cast_from.source_info(body).span
+                && let cast_from = cast_from.span_no_inline(body)
                 && let Some(cast_to) = matches[pattern_cast.cast_to]
-                && let cast_to = cast_to.source_info(body).span
+                && let cast_to = cast_to.span_no_inline(body)
                 && let ty = matches[pattern_cast.ty_var]
                 && check_ty(ty)
             {
@@ -75,9 +75,9 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
                 && let pattern_cast_mut = pattern_cast_mut(&mut patterns_cast_mut)
                 && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &patterns_cast_mut.build()).check()
                 && let Some(cast_from) = matches[pattern_cast_mut.cast_from_mut]
-                && let cast_from = cast_from.source_info(body).span
+                && let cast_from = cast_from.span_no_inline(body)
                 && let Some(cast_to) = matches[pattern_cast_mut.cast_to_mut]
-                && let cast_to = cast_to.source_info(body).span
+                && let cast_to = cast_to.span_no_inline(body)
                 && let ty = matches[pattern_cast_mut.ty_var]
                 && check_ty(ty)
             {

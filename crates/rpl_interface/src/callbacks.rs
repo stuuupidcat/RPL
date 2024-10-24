@@ -4,7 +4,6 @@ use rustc_session::parse::ParseSess;
 use rustc_span::Symbol;
 
 // use crate::passes::create_rpl_ctxt;
-use crate::DEFAULT_LOCALE_RESOURCES;
 
 pub static RPL_ARGS_ENV: &str = "RPL_ARGS";
 
@@ -75,7 +74,7 @@ impl rustc_driver::Callbacks for RplCallbacks {
             track_rpl_args(psess, &rpl_args_var);
             track_files(psess);
         }));
-        config.locale_resources = &DEFAULT_LOCALE_RESOURCES;
+        config.locale_resources = crate::default_locale_resources();
 
         /*
         config.register_lints = Some(Box::new(move |sess, lint_store| {

@@ -446,20 +446,20 @@ impl Access {
         match pcx {
             NonMutatingUse(pcx) => {
                 use NonMutatingUseContext::{
-                    AddressOf, Copy, FakeBorrow, Inspect, Move, PlaceMention, Projection, SharedBorrow,
+                    Copy, FakeBorrow, Inspect, Move, PlaceMention, Projection, RawBorrow, SharedBorrow,
                 };
                 match pcx {
-                    Inspect | Copy | Move | SharedBorrow | FakeBorrow | AddressOf | Projection => Self::Read,
+                    Inspect | Copy | Move | SharedBorrow | FakeBorrow | RawBorrow | Projection => Self::Read,
                     PlaceMention => Self::NoAccess,
                 }
             },
             MutatingUse(pcx) => {
                 use MutatingUseContext::{
-                    AddressOf, AsmOutput, Borrow, Call, Deinit, Drop, Projection, Retag, SetDiscriminant, Store, Yield,
+                    AsmOutput, Borrow, Call, Deinit, Drop, Projection, RawBorrow, Retag, SetDiscriminant, Store, Yield,
                 };
                 match pcx {
                     Store | AsmOutput | Call | Yield => Self::Write,
-                    Borrow | AddressOf | Projection => Self::Read,
+                    Borrow | RawBorrow | Projection => Self::Read,
                     SetDiscriminant | Drop => Self::ReadWrite,
                     Retag | Deinit => Self::NoAccess,
                 }

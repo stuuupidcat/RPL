@@ -32,8 +32,8 @@ where
         let slice = self.as_mut_slice();
         //~^ NOTE: trying to cast from this value of `&mut [T]` type
         unsafe {
-            //~^ ERROR: it is unsound to cast any slice `&mut [T]` to a byte slice `&mut [u8]`
             core::slice::from_raw_parts_mut(
+                //~^ ERROR: it is unsound to cast any slice `&mut [T]` to a byte slice `&mut [u8]`
                 slice.as_mut_ptr() as *mut _,
                 slice.len() * core::mem::size_of::<T>(),
             )

@@ -104,7 +104,7 @@ fn test_cve_2020_25016() {
             let from_raw_slice_local = patterns.mk_local(PtrSliceT_ty);
             let from_raw_slice_stmt = patterns.mk_assign(
                 from_raw_slice_local.into_place(),
-                ::rpl_mir::pat::Rvalue::AddressOf(
+                ::rpl_mir::pat::Rvalue::RawPtr(
                     ::rustc_middle::mir::Mutability::Not,
                     ::rpl_mir::pat::Place::new(
                         from_slice_local,
@@ -609,7 +609,7 @@ fn test_cve_2020_35881_const() {
             let ptr_to_ptr_to_data_local = patterns.mk_local(PtrPtrT1_ty);
             let ptr_to_ptr_to_data_stmt = patterns.mk_assign(
                 ptr_to_ptr_to_data_local.into_place(),
-                ::rpl_mir::pat::Rvalue::AddressOf(
+                ::rpl_mir::pat::Rvalue::RawPtr(
                     ::rustc_middle::mir::Mutability::Not,
                     ::rpl_mir::pat::Place::new(
                         data_local,
@@ -730,7 +730,7 @@ fn test_cve_2020_35881_mut() {
             let ptr_to_ptr_to_data_local = patterns.mk_local(PtrPtrT1_ty);
             let ptr_to_ptr_to_data_stmt = patterns.mk_assign(
                 ptr_to_ptr_to_data_local.into_place(),
-                ::rpl_mir::pat::Rvalue::AddressOf(
+                ::rpl_mir::pat::Rvalue::RawPtr(
                     ::rustc_middle::mir::Mutability::Mut,
                     ::rpl_mir::pat::Place::new(
                         data_local,

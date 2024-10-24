@@ -7,6 +7,7 @@ use rustc_index::IndexVec;
 use rustc_middle::mir;
 use rustc_middle::mir::visit::{MutatingUseContext, PlaceContext};
 use rustc_middle::ty::Ty;
+use rustc_span::Span;
 
 use crate::{pat, CheckMirCtxt};
 
@@ -57,6 +58,7 @@ impl<'tcx> Index<pat::TyVarIdx> for Matches<'tcx> {
 pub fn matches<'tcx>(cx: &CheckMirCtxt<'_, 'tcx>) -> Option<Matches<'tcx>> {
     let mut matching = MatchCtxt::new(cx);
     if matching.do_match() {
+        matching.matches.log_matches(cx.body);
         return matching.matches.try_into_matches().ok();
     }
     None
@@ -116,14 +118,14 @@ impl StatementMatch {
         }
     }
 
-    fn debug_with<'a, 'tcx>(&'a self, body: &'a mir::Body<'tcx>) -> impl core::fmt::Debug + use<'a, 'tcx> {
+    fn debug_with<'a, 'tcx>(self, body: &'a mir::Body<'tcx>) -> impl core::fmt::Debug + use<'a, 'tcx> {
         struct DebugStatementMatch<'a, 'tcx> {
-            stmt_match: &'a StatementMatch,
+            stmt_match: StatementMatch,
             body: &'a mir::Body<'tcx>,
         }
         impl core::fmt::Debug for DebugStatementMatch<'_, '_> {
             fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-                match *self.stmt_match {
+                match self.stmt_match {
                     StatementMatch::Arg(local) => write!(f, "let {local:?}: {:?}", self.body.local_decls[local].ty),
                     StatementMatch::Location(location) => self.body.stmt_at(location).either_with(
                         f,
@@ -141,6 +143,18 @@ impl StatementMatch {
             StatementMatch::Arg(arg) => &body.local_decls[arg].source_info,
             StatementMatch::Location(loc) => body.source_info(loc),
         }
+    }
+
+    pub fn span_no_inline(self, body: &mir::Body<'_>) -> Span {
+        let source_info = self.source_info(body);
+        let mut scope = source_info.scope;
+        if let Some(parent_scope) = body.source_scopes[scope].inlined_parent_scope {
+            scope = parent_scope;
+        }
+        if let Some((_instance, span)) = body.source_scopes[scope].inlined {
+            return span;
+        }
+        source_info.span
     }
 }
 
@@ -167,6 +181,7 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
             // succeeded: Cell::new(false),
         }
     }
+    #[instrument(level = "info", skip(self))]
     fn build_candidates(&mut self) {
         for (bb_pat, block_mat) in self.matches.basic_blocks.iter_enumerated_mut() {
             let block_pat = &self.cx.patterns[bb_pat];
@@ -223,7 +238,7 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
             matches.candidates = std::mem::take(&mut *candidates.borrow_mut());
         }
     }
-    #[instrument(level = "info", skip(self), ret)]
+    #[instrument(level = "debug", skip(self), ret)]
     fn do_match(&mut self) -> bool {
         self.build_candidates();
         self.matches.log_candidates();
@@ -457,8 +472,9 @@ impl<'tcx> CheckingMatches<'tcx> {
             || self.locals.iter().any(LocalMatches::has_empty_candidates)
             || self.ty_vars.iter().any(TyVarMatches::has_empty_candidates)
     }
+
+    #[instrument(level = "debug", skip(self))]
     fn log_candidates(&self) {
-        debug!("Candidates:");
         for (bb, block) in self.basic_blocks.iter_enumerated() {
             debug!("{bb:?}: {:?}", block.candidates);
             for (index, stmt) in block.statements.iter().enumerate() {
@@ -473,10 +489,26 @@ impl<'tcx> CheckingMatches<'tcx> {
         }
     }
 
+    #[instrument(level = "debug", skip_all)]
+    fn log_matches(&self, body: &mir::Body<'tcx>) {
+        for (bb, block) in self.basic_blocks.iter_enumerated() {
+            debug!("{bb:?} <-> [{:?}, {:?}]", block.start.get(), block.end.get());
+            for (index, stmt) in block.statements.iter().enumerate() {
+                debug!(
+                    "{bb:?}[{index}] <-> {:?}",
+                    stmt.matched.get().map(|matched| matched.debug_with(body))
+                );
+            }
+        }
+        for (local, matches) in self.locals.iter_enumerated() {
+            debug!("{local:?} <-> {:?}", matches.matched.get());
+        }
+        for (ty_var, matches) in self.ty_vars.iter_enumerated() {
+            debug!("{ty_var:?}: {:?}", matches.matched.get());
+        }
+    }
+
     fn try_into_matches(self) -> Result<Matches<'tcx>, MatchFailed> {
-        // info!(?self.basic_blocks, "try_into_matches");
-        // info!(?self.locals, "try_into_matches");
-        // info!(?self.ty_vars, "try_into_matches");
         let basic_blocks = self
             .basic_blocks
             .into_iter()
@@ -516,9 +548,6 @@ impl CheckBlockMatches {
     }
 
     fn into_matches(self) -> BlockMatches {
-        // info!(?self.statements, "into_matches");
-        info!(?self.start, "into_matches");
-        info!(?self.end, "into_matches");
         BlockMatches {
             statements: self.statements.into_iter().map(StatementMatches::take).collect(),
             start: self.start.take(),
@@ -539,7 +568,6 @@ impl StatementMatches {
     }
 
     fn take(self) -> Option<StatementMatch> {
-        info!(?self.matched, "take");
         self.matched.take()
     }
 }
@@ -562,7 +590,6 @@ impl LocalMatches {
     }
 
     fn try_take(self) -> Result<mir::Local, MatchFailed> {
-        info!(?self.matched, "try_take");
         self.matched.take().ok_or(MatchFailed)
     }
 }
@@ -579,7 +606,6 @@ impl<'tcx> TyVarMatches<'tcx> {
     }
 
     fn try_take(self) -> Result<Ty<'tcx>, MatchFailed> {
-        info!(?self.matched, "try_take");
         self.matched.take().ok_or(MatchFailed)
     }
 

@@ -1,3 +1,5 @@
+#![feature(rustc_private)]
+
 use proc_macro::TokenStream;
 
 extern crate rpl_mir_expand as expand;

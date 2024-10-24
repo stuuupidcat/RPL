@@ -8,7 +8,7 @@ impl fmt::Debug for Location {
     }
 }
 
-impl<'tcx> fmt::Debug for Place<'tcx> {
+impl fmt::Debug for Place<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.projection {
             [] => self.local.fmt(f),
@@ -28,7 +28,11 @@ fn fmt_projection<'tcx>(f: &mut fmt::Formatter<'_>, place: Place<'tcx>, proj: &P
     struct FromEnd(bool);
     impl fmt::Display for FromEnd {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            if self.0 { f.write_str("-") } else { Ok(()) }
+            if self.0 {
+                f.write_str("-")
+            } else {
+                Ok(())
+            }
         }
     }
     match proj {
@@ -73,7 +77,7 @@ impl fmt::Display for ItemPath<'_> {
     }
 }
 
-impl<'tcx> fmt::Debug for Path<'tcx> {
+impl fmt::Debug for Path<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Item(path) => path.fmt(f),
@@ -83,13 +87,13 @@ impl<'tcx> fmt::Debug for Path<'tcx> {
     }
 }
 
-impl<'tcx> fmt::Debug for Ty<'tcx> {
+impl fmt::Debug for Ty<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.kind().fmt(f)
     }
 }
 
-impl<'tcx> fmt::Debug for TyKind<'tcx> {
+impl fmt::Debug for TyKind<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Self::TyVar(ty_var) => ty_var.fmt(f),
@@ -118,7 +122,7 @@ impl<'tcx> fmt::Debug for TyKind<'tcx> {
     }
 }
 
-impl<'tcx> fmt::Debug for GenericArgsRef<'tcx> {
+impl fmt::Debug for GenericArgsRef<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
             [] => Ok(()),
@@ -138,7 +142,7 @@ impl<'tcx> fmt::Debug for GenericArgsRef<'tcx> {
     }
 }
 
-impl<'tcx> fmt::Debug for GenericArgKind<'tcx> {
+impl fmt::Debug for GenericArgKind<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Lifetime(region) => region.fmt(f),
@@ -166,7 +170,7 @@ impl fmt::Display for RegionKind {
     }
 }
 
-impl<'tcx> fmt::Debug for StatementKind<'tcx> {
+impl fmt::Debug for StatementKind<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Assign(place, rvalue) => write!(f, "{place:?} = {rvalue:?}"),
@@ -175,7 +179,7 @@ impl<'tcx> fmt::Debug for StatementKind<'tcx> {
     }
 }
 
-impl<'tcx> fmt::Debug for TerminatorKind<'tcx> {
+impl fmt::Debug for TerminatorKind<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             TerminatorKind::Call {
@@ -224,13 +228,13 @@ impl fmt::Debug for IntValue {
     }
 }
 
-impl<'tcx> fmt::Debug for Rvalue<'tcx> {
+impl fmt::Debug for Rvalue<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Use(operand) => operand.fmt(f),
             Self::Repeat(elem, len) => write!(f, "[{elem:?}; {len:?}]"),
             Self::Ref(region, bor, place) => write!(f, "&{region}{}{place:?}", bor.mutability().prefix_str()),
-            Self::AddressOf(mutability, place) => write!(f, "&raw {} {place:?}", mutability.ptr_str()),
+            Self::RawPtr(mutability, place) => write!(f, "&raw {} {place:?}", mutability.ptr_str()),
             Self::Len(place) => f.debug_tuple("Len").field(place).finish(),
             Self::Cast(cast_kind, operand, ty) => write!(f, "{operand:?} as {ty:?} ({cast_kind:?})"),
             Self::BinaryOp(op, box [lhs, rhs]) => write!(f, "{op:?}({lhs:?}, {rhs:?})"),
@@ -293,7 +297,7 @@ fn format_aggregate<'tcx>(
     }
 }
 
-impl<'tcx> fmt::Debug for Operand<'tcx> {
+impl fmt::Debug for Operand<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Copy(place) => write!(f, "copy {place:?}"),
@@ -303,7 +307,7 @@ impl<'tcx> fmt::Debug for Operand<'tcx> {
     }
 }
 
-impl<'tcx> fmt::Debug for ConstOperand<'tcx> {
+impl fmt::Debug for ConstOperand<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ConstVar(const_var) => const_var.fmt(f),
@@ -341,7 +345,7 @@ impl<T: fmt::Debug> fmt::Debug for List<T> {
     }
 }
 
-impl<'tcx> fmt::Debug for Patterns<'tcx> {
+impl fmt::Debug for Patterns<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let new_line = if f.alternate() { "\n" } else { " " };
         let indent = if f.alternate() { "    " } else { "" };

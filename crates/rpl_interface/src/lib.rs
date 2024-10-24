@@ -1,5 +1,4 @@
 #![feature(rustc_private)]
-#![feature(const_refs_to_static)]
 #![feature(let_chains)]
 #![feature(decl_macro)]
 
@@ -23,19 +22,10 @@ static RPL_LOCALE_RESOURCES: &[&str] = &[
     rpl_patterns::DEFAULT_LOCALE_RESOURCE,
 ];
 
-pub static DEFAULT_LOCALE_RESOURCES: [&str;
-    rustc_driver_impl::DEFAULT_LOCALE_RESOURCES.len() + RPL_LOCALE_RESOURCES.len()] = {
-    let mut resources = ["str"; rustc_driver_impl::DEFAULT_LOCALE_RESOURCES.len() + RPL_LOCALE_RESOURCES.len()];
-    let mut i = 0;
-    while i < rustc_driver_impl::DEFAULT_LOCALE_RESOURCES.len() {
-        resources[i] = rustc_driver_impl::DEFAULT_LOCALE_RESOURCES[i];
-        i += 1;
-    }
-    let mut j = 0;
-    while i < resources.len() {
-        resources[i] = RPL_LOCALE_RESOURCES[j];
-        i += 1;
-        j += 1;
-    }
-    resources
-};
+pub fn default_locale_resources() -> Vec<&'static str> {
+    [rustc_driver_impl::DEFAULT_LOCALE_RESOURCES, RPL_LOCALE_RESOURCES]
+        .into_iter()
+        .flatten()
+        .copied()
+        .collect()
+}

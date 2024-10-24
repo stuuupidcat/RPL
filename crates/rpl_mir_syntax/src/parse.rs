@@ -754,10 +754,10 @@ impl Rvalue {
             Err(content.error(ParseError::ExpectCommaOrSemicolon))
         }
     }
-    fn parse_ref_or_address_of(input: ParseStream<'_>) -> Result<Self> {
+    fn parse_ref_or_raw_ptr(input: ParseStream<'_>) -> Result<Self> {
         let tk_and = input.parse()?;
         Ok(if input.peek(kw::raw) {
-            Rvalue::AddressOf(RvalueAddrOf {
+            Rvalue::RawPtr(RvalueRawPtr {
                 tk_and,
                 kw_raw: input.parse()?,
                 mutability: input.parse()?,
@@ -834,7 +834,7 @@ impl Parse for RvalueOrCall {
         if input.peek(token::Bracket) {
             Ok(Rvalue::parse_array(input)?.into())
         } else if input.peek(Token![&]) {
-            Ok(Rvalue::parse_ref_or_address_of(input)?.into())
+            Ok(Rvalue::parse_ref_or_raw_ptr(input)?.into())
         } else if input.peek(Token![_]) {
             Ok(RvalueOrCall::Any(input.parse()?))
         } else if input.peek(Token![<]) {

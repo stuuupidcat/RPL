@@ -200,7 +200,7 @@ impl<'tcx> Place<'tcx> {
     }
 }
 
-impl<'tcx> From<LocalIdx> for Place<'tcx> {
+impl From<LocalIdx> for Place<'_> {
     fn from(local: LocalIdx) -> Self {
         Place { local, projection: &[] }
     }
@@ -301,7 +301,7 @@ pub enum Rvalue<'tcx> {
     Use(Operand<'tcx>),
     Repeat(Operand<'tcx>, Const),
     Ref(RegionKind, mir::BorrowKind, Place<'tcx>),
-    AddressOf(mir::Mutability, Place<'tcx>),
+    RawPtr(mir::Mutability, Place<'tcx>),
     Len(Place<'tcx>),
     Cast(mir::CastKind, Operand<'tcx>, Ty<'tcx>),
     BinaryOp(mir::BinOp, Box<[Operand<'tcx>; 2]>),
@@ -432,7 +432,7 @@ impl<'tcx> From<Ty<'tcx>> for GenericArgKind<'tcx> {
         GenericArgKind::Type(ty)
     }
 }
-impl<'tcx> From<Const> for GenericArgKind<'tcx> {
+impl From<Const> for GenericArgKind<'_> {
     fn from(konst: Const) -> Self {
         GenericArgKind::Const(konst)
     }
@@ -466,7 +466,7 @@ impl<'tcx> From<(Ty<'tcx>, &str)> for Path<'tcx> {
     }
 }
 
-impl<'tcx> From<LangItem> for Path<'tcx> {
+impl From<LangItem> for Path<'_> {
     fn from(lang_item: LangItem) -> Self {
         Path::LangItem(lang_item)
     }
@@ -690,7 +690,7 @@ impl<'tcx> std::ops::Deref for SwitchIntBuilder<'_, 'tcx> {
     }
 }
 
-impl<'tcx> std::ops::DerefMut for SwitchIntBuilder<'_, 'tcx> {
+impl std::ops::DerefMut for SwitchIntBuilder<'_, '_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.builder
     }

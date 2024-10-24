@@ -3,4 +3,5 @@
     "rust-analyzer.linkedProjects": [
         "./Cargo.toml",
     ],
+    "rust-analyzer.procMacro.enable": true,
 }
