@@ -2,7 +2,6 @@
 #![allow(rustc::untranslatable_diagnostic)]
 #![feature(rustc_private)]
 #![feature(let_chains)]
-#![feature(const_refs_to_static)]
 // warn on lints, that are included in `rust-lang/rust`s bootstrap
 #![warn(rust_2018_idioms, unused_lifetimes)]
 // warn on rustc internal lints

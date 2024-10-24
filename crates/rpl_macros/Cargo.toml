@@ -15,3 +15,7 @@ rpl_mir_syntax.workspace = true
 rpl_mir_expand.workspace = true
 syn.workspace = true
 quote.workspace = true
+
+[package.metadata.rust-analyzer]
+# This crate uses #[feature(rustc_private)]
+rustc_private = true

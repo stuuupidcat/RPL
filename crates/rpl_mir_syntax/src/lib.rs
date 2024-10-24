@@ -612,7 +612,7 @@ auto_derive! {
 auto_derive! {
     #[auto_derive(ToTokens, Parse)]
     #[derive(Clone)]
-    pub struct RvalueAddrOf {
+    pub struct RvalueRawPtr {
         tk_and: Token![&],
         kw_raw: kw::raw,
         pub mutability: PtrMutability,
@@ -791,7 +791,7 @@ auto_derive! {
         Use(RvalueUse),
         Repeat(RvalueRepeat),
         Ref(RvalueRef),
-        AddressOf(RvalueAddrOf),
+        RawPtr(RvalueRawPtr),
         Len(RvalueLen),
         Cast(RvalueCast),
         BinaryOp(RvalueBinOp),

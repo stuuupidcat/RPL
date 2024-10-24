@@ -90,7 +90,7 @@ impl CheckCtxt {
             | Rvalue::UnaryOp(RvalueUnOp { operand, .. })
             | Rvalue::Repeat(RvalueRepeat { operand, .. }) => self.check_operand(operand),
             Rvalue::Ref(RvalueRef { place, .. })
-            | Rvalue::AddressOf(RvalueAddrOf { place, .. })
+            | Rvalue::RawPtr(RvalueRawPtr { place, .. })
             | Rvalue::Len(RvalueLen { place, .. })
             | Rvalue::Discriminant(RvalueDiscriminant { place, .. }) => self.check_place(place),
             Rvalue::Cast(RvalueCast { operand, ty, .. }) => {

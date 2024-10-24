@@ -144,10 +144,10 @@ pub trait PatternVisitor<'tcx>: Sized {
                 };
                 self.visit_place(place, ctx, location);
             },
-            &Rvalue::AddressOf(m, place) => {
+            &Rvalue::RawPtr(m, place) => {
                 let ctx = match m {
-                    mir::Mutability::Mut => PlaceContext::MutatingUse(MutatingUseContext::AddressOf),
-                    mir::Mutability::Not => PlaceContext::NonMutatingUse(NonMutatingUseContext::AddressOf),
+                    mir::Mutability::Mut => PlaceContext::MutatingUse(MutatingUseContext::RawBorrow),
+                    mir::Mutability::Not => PlaceContext::NonMutatingUse(NonMutatingUseContext::RawBorrow),
                 };
                 self.visit_place(place, ctx, location);
             },

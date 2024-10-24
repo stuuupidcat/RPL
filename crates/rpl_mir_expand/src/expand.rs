@@ -121,6 +121,7 @@ impl<'ecx> ExpandCtxt<'ecx> {
     ) -> ExpandPunctPairs<'ecx, 'a, U, P> {
         self.expand_with(value, Punctuated::pairs)
     }
+    #[allow(clippy::type_complexity)] // FIXME: return type too complex
     fn expand_punctuated_mapped<'a, U: 'a, V: 'a, P: 'a>(
         &'ecx self,
         value: &'a Punctuated<U, P>,
@@ -617,10 +618,10 @@ impl ToTokens for Expand<'_, &Rvalue> {
                 let place = self.expand(place);
                 quote_each_token!(tokens Ref(#region, #mutability, #place));
             },
-            Rvalue::AddressOf(RvalueAddrOf { mutability, place, .. }) => {
+            Rvalue::RawPtr(RvalueRawPtr { mutability, place, .. }) => {
                 let mutability = self.expand(*mutability);
                 let place = self.expand(place);
-                quote_each_token!(tokens AddressOf(#mutability, #place));
+                quote_each_token!(tokens RawPtr(#mutability, #place));
             },
             Rvalue::Len(RvalueLen { place, .. }) => {
                 let place = self.expand(place);

@@ -15,16 +15,14 @@ LL |         let slice = self.as_slice();
    |                     ^^^^^^^^^^^^^^^
 
 error: it is unsound to cast any slice `&mut [T]` to a byte slice `&mut [u8]`
-  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:34:9
+  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:35:13
    |
-LL | /         unsafe {
+LL | /             core::slice::from_raw_parts_mut(
 LL | |
-LL | |             core::slice::from_raw_parts_mut(
 LL | |                 slice.as_mut_ptr() as *mut _,
 LL | |                 slice.len() * core::mem::size_of::<T>(),
 LL | |             )
-LL | |         }
-   | |_________^
+   | |_____________^
    |
 note: trying to cast from this value of `&mut [T]` type
   --> tests/ui/cve_2020_25016/cve_2020_25016.rs:32:21

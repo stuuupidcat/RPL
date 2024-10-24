@@ -3,12 +3,10 @@
 #![feature(rustc_attrs)]
 #![feature(let_chains)]
 #![feature(if_let_guard)]
-#![feature(is_none_or)]
 #![feature(box_patterns)]
 #![feature(try_trait_v2)]
 #![feature(debug_closure_helpers)]
 #![feature(iter_chain)]
-#![feature(precise_capturing)]
 #![feature(iterator_try_collect)]
 
 extern crate rustc_arena;
@@ -470,7 +468,7 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
                     && borrow_kind_pat == borrow_kind
                     && self.match_place(place_pat, place)
             },
-            (&pat::Rvalue::AddressOf(mutability_pat, place_pat), &mir::Rvalue::AddressOf(mutability, place)) => {
+            (&pat::Rvalue::RawPtr(mutability_pat, place_pat), &mir::Rvalue::RawPtr(mutability, place)) => {
                 mutability_pat == mutability && self.match_place(place_pat, place)
             },
             (&pat::Rvalue::Len(place_pat), &mir::Rvalue::Len(place))
