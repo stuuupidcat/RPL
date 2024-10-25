@@ -5,7 +5,8 @@ use rustc_data_structures::fx::FxIndexMap;
 use rustc_data_structures::packed::Pu128;
 use rustc_hir::{LangItem, Target};
 use rustc_index::IndexVec;
-use rustc_middle::{mir, ty};
+use rustc_middle::mir;
+use rustc_middle::ty::{self, TyCtxt};
 use rustc_span::Symbol;
 use rustc_target::abi::FieldIdx;
 
@@ -82,9 +83,11 @@ impl<'tcx> PrimitiveTypes<'tcx> {
     }
 }
 
+pub type TyPred<'tcx> = fn(TyCtxt<'tcx>, ty::ParamEnv<'tcx>, ty::Ty<'tcx>) -> bool;
+
 pub struct Patterns<'tcx> {
     arena: &'tcx DroplessArena,
-    pub(crate) ty_vars: IndexVec<TyVarIdx, ()>,
+    pub(crate) ty_vars: IndexVec<TyVarIdx, Option<TyPred<'tcx>>>,
     pub(crate) const_vars: IndexVec<ConstVarIdx, Ty<'tcx>>,
     pub(crate) self_idx: Option<LocalIdx>,
     pub(crate) locals: IndexVec<LocalIdx, Ty<'tcx>>,
@@ -537,7 +540,10 @@ impl<'tcx> PatternsBuilder<'tcx> {
     }
 
     pub fn new_ty_var(&mut self) -> TyVarIdx {
-        self.patterns.ty_vars.push(())
+        self.patterns.ty_vars.push(None)
+    }
+    pub fn set_ty_var(&mut self, ty_var: TyVarIdx, ty_pred: TyPred<'tcx>) {
+        self.patterns.ty_vars[ty_var] = Some(ty_pred);
     }
     pub fn new_const_var(&mut self, ty: Ty<'tcx>) -> ConstVarIdx {
         self.patterns.const_vars.push(ty)

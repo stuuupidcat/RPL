@@ -350,7 +350,7 @@ impl fmt::Debug for Patterns<'_> {
         let new_line = if f.alternate() { "\n" } else { " " };
         let indent = if f.alternate() { "    " } else { "" };
         let mut meta = f.debug_tuple("meta!");
-        for (ty_var, ()) in self.ty_vars.iter_enumerated() {
+        for (ty_var, _ty_pred) in self.ty_vars.iter_enumerated() {
             meta.field_with(|f| write!(f, "{ty_var:?}:ty"));
         }
         for (const_var, ty) in self.const_vars.iter_enumerated() {
