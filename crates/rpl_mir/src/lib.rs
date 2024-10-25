@@ -54,6 +54,7 @@ pub use matches::{Matches, StatementMatch};
 
 pub struct CheckMirCtxt<'a, 'tcx> {
     tcx: TyCtxt<'tcx>,
+    param_env: ty::ParamEnv<'tcx>,
     body: &'a mir::Body<'tcx>,
     patterns: &'a pat::Patterns<'tcx>,
     pat_cfg: PatControlFlowGraph,
@@ -76,6 +77,7 @@ impl<'a, 'tcx> CheckMirCtxt<'a, 'tcx> {
         let mir_ddg = crate::graph::mir_data_dep_graph(body);
         Self {
             tcx,
+            param_env: tcx.param_env_reveal_all_normalized(body.source.def_id()),
             body,
             patterns,
             pat_cfg,
@@ -591,7 +593,9 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
 
     fn match_ty(&self, ty_pat: pat::Ty<'tcx>, ty: ty::Ty<'tcx>) -> bool {
         let matched = match (*ty_pat.kind(), *ty.kind()) {
-            (pat::TyKind::TyVar(ty_var), _) => {
+            (pat::TyKind::TyVar(ty_var), _)
+                if self.patterns.ty_vars[ty_var].is_none_or(|ty_pred| ty_pred(self.tcx, self.param_env, ty)) =>
+            {
                 self.ty_vars[ty_var].borrow_mut().push(ty);
                 true
             },
