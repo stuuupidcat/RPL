@@ -51,3 +51,12 @@ pub struct OffsetByOne {
     pub len: Span,
     pub len_local: String,
 }
+
+// for cve_2018_21000
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_reversed_parameters_when_constructing_a_vec)]
+pub struct ReversedParameters {
+    #[note]
+    #[primary_span]
+    pub vec_constructing_stmt: Span,
+}

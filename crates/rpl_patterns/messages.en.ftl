@@ -9,3 +9,6 @@ rpl_patterns_unsound_slice_cast = it is unsound to cast any slice `&{$mutability
 
 rpl_patterns_use_after_drop = use a pointer from `{$ty}` after dropped
     .note = the `{$ty}` value is dropped here
+
+rpl_patterns_reversed_parameters_when_constructing_a_vec = when using `Vec::from_raw_parts`, the `len` and `cap` parameters are reversed
+    .note = the correct order is `Vec::from_raw_parts(ptr, len, cap)`

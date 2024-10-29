@@ -236,58 +236,57 @@ test_case! {
     fn cve_2018_21000_inlined() {
         meta!{$T:ty}
 
-        let from_vec: std::vec::Vec<$T>;
-        let to_vec: std::vec::Vec<u8>;
+        let to_vec: alloc::vec::Vec<$T, alloc::alloc::Global>;
+        let from_vec: alloc::vec::Vec<u8, alloc::alloc::Global> = _;
         let to_vec_cap: usize;
         let mut from_vec_cap: usize;
         let mut tsize: usize;
         let to_vec_len: usize;
         let mut from_vec_len: usize;
-        let mut from_vec_ptr: std::ptr::NonNull<u8>;
-        let mut to_raw_vec: alloc::raw_vec::RawVec<$T>;
-        let mut to_raw_vec_inner: alloc::raw_vec::RawVecInner<$T>;
-        let mut to_vec_wrapped_cap: alloc::raw_vec::Cap;
-        let mut from_vec_unique_ptr: std::ptr::Unique<u8>;
+        let mut from_vec_ptr: core::ptr::non_null::NonNull<u8>;
+        let mut to_raw_vec: alloc::raw_vec::RawVec<$T, alloc::alloc::Global>;
+        let mut to_raw_vec_inner: alloc::raw_vec::RawVecInner<alloc::alloc::Global>;
+        let mut to_vec_wrapped_len: alloc::raw_vec::Cap = _;
+        let mut from_vec_unique_ptr: core::ptr::unique::Unique<u8>;
 
-        from_vec_ptr = copy (((to_vec.0).0).0).0;
-        from_vec_cap = copy (((to_vec.0).0).1).0;
+        from_vec_ptr = copy from_vec.buf.inner.ptr.pointer;
+        from_vec_cap = copy from_vec.buf.inner.cap.0;
         tsize = SizeOf($T);
         to_vec_cap = Div(move from_vec_cap, copy tsize);
-        from_vec_len = copy to_vec.1;
+        from_vec_len = copy to_vec.len;
         to_vec_len = Div(move from_vec_len, copy tsize);
-        to_vec_wrapped_cap = alloc::raw_vec::Cap(copy to_vec_len);
-        from_vec_unique_ptr = std::ptr::Unique<u8> { pointer: copy from_vec_ptr, };
-        to_raw_vec_inner = alloc::raw_vec::RawVecInner { ptr: move from_vec_unique_ptr, cap: copy to_vec_wrapped_cap, };
-        to_raw_vec = alloc::raw_vec::RawVec<$T> {inner: move to_raw_vec_inner, };
-        from_vec = std::vec::Vec<$T> {buf: move to_raw_vec, len: copy to_vec_cap, };
+        // to_vec_wrapped_len = alloc::raw_vec::Cap(copy to_vec_len);
+        from_vec_unique_ptr = core::ptr::unique::Unique<u8> { pointer: copy from_vec_ptr, _marker: core::marker::PhantomData<u8>, };
+        to_raw_vec_inner = alloc::raw_vec::RawVecInner<alloc::alloc::Global> { ptr: move from_vec_unique_ptr, cap: copy to_vec_wrapped_len, alloc: alloc::alloc::Global, };
+        to_raw_vec = alloc::raw_vec::RawVec<$T, alloc::alloc::Global> {inner: move to_raw_vec_inner, _marker: core::marker::PhantomData<$T>, };
+        to_vec = alloc::vec::Vec<$T, alloc::alloc::Global> {buf: move to_raw_vec, len: copy to_vec_cap, };
     } => {
         meta!(?T0: ty);
-        let _?0: std::vec::Vec<?T0>;
-        let _?1: std::vec::Vec<u8>;
+        let _?0: alloc::vec::Vec<?T0, alloc::alloc::Global>;
+        let _?1: alloc::vec::Vec<u8, alloc::alloc::Global>;
         let _?2: usize;
         let _?3: usize;
         let _?4: usize;
         let _?5: usize;
         let _?6: usize;
-        let _?7: std::ptr::NonNull<u8>;
-        let _?8: alloc::raw_vec::RawVec<?T0>;
-        let _?9: alloc::raw_vec::RawVecInner<?T0>;
+        let _?7: core::ptr::non_null::NonNull<u8>;
+        let _?8: alloc::raw_vec::RawVec<?T0, alloc::alloc::Global>;
+        let _?9: alloc::raw_vec::RawVecInner<alloc::alloc::Global>;
         let _?10: alloc::raw_vec::Cap;
-        let _?11: std::ptr::Unique<u8>;
+        let _?11: core::ptr::unique::Unique<u8>;
         ?bb0: {
-            _?7 = copy ((((_?1.0) . 0) . 0) . 0);
-            _?3 = copy ((((_?1.0) . 0) . 1) . 0);
-            _?4 = SizeOf (?T0);
-            _?2 = Div (move _?3 , copy _?4);
-            _?6 = copy (_?1.1);
-            _?5 = Div (move _?6 , copy _?4);
-            _?10 = alloc::raw_vec::Cap (copy _?5) -> ?bb1;
-        }
-        ?bb1: {
-            _?11 = std::ptr::Unique { pointer: copy _?7 };
-            _?9 = alloc::raw_vec::RawVecInner { ptr: move _?11 , cap: copy _?10 };
-            _?8 = alloc::raw_vec::RawVec { inner: move _?9 };
-            _?0 = std::vec::Vec { buf: move _?8 , len: copy _?2 };
+            _?1 = _;
+            _?10 = _;
+            _?7 = copy((((_?1.buf).inner).ptr).pointer);
+            _?3 = copy((((_?1.buf).inner).cap).0);
+            _?4 = SizeOf(?T0);
+            _?2 = Div(move _?3 , copy _?4);
+            _?6 = copy(_?0.len);
+            _?5 = Div(move _?6 , copy _?4);
+            _?11 = core::ptr::unique::Unique { pointer: copy _?7, _marker: core::marker::PhantomData<u8> };
+            _?9 = alloc::raw_vec::RawVecInner { ptr: move _?11 , cap: copy _?10, alloc: alloc::alloc::Global };
+            _?8 = alloc::raw_vec::RawVec { inner: move _?9, _marker: core::marker::PhantomData<?T0> };
+            _?0 = alloc::vec::Vec { buf: move _?8 , len: copy _?2 };
             end;
         }
     }
