@@ -1,5 +1,5 @@
 use rpl_mir::pat::{self, PatternsBuilder};
-use rpl_mir::CheckMirCtxt;
+use rpl_mir::{CheckMirCtxt, Matches};
 use rustc_errors::MultiSpan;
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
@@ -12,12 +12,20 @@ use rustc_span::Span;
 pub fn check_item(tcx: TyCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
     // let def_id = item_id.owner_id.def_id;
-    let mut check_ctxt = CheckFnCtxt { tcx };
+    let mut check_ctxt = CheckFnCtxt::new(tcx);
     check_ctxt.visit_item(item);
 }
 
 struct CheckFnCtxt<'tcx> {
     tcx: TyCtxt<'tcx>,
+    loop_matches: Option<Matches<'tcx>>,
+}
+
+impl<'tcx> CheckFnCtxt<'tcx> {
+    fn new(tcx: TyCtxt<'tcx>) -> Self {
+        let loop_matches = None;
+        Self { tcx, loop_matches }
+    }
 }
 
 impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
@@ -46,10 +54,14 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
     ) -> Self::Result {
         if self.tcx.is_mir_available(def_id) {
             let body = self.tcx.optimized_mir(def_id);
-            let mut patterns = PatternsBuilder::new(&self.tcx.arena.dropless);
-            pattern_loop(&mut patterns);
-            let patterns = patterns.build();
-            if let Some(matches) = CheckMirCtxt::new(self.tcx, body, &patterns).check() {
+
+            #[allow(irrefutable_let_patterns)]
+            if let mut patterns = PatternsBuilder::new(&self.tcx.arena.dropless)
+                && let () = pattern_loop(&mut patterns)
+                && let patterns = patterns.build()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &patterns).check()
+            {
+                let matches = self.loop_matches.insert(matches);
                 let mut multi_span = MultiSpan::from_span(span);
                 matches
                     .basic_blocks
@@ -76,8 +88,33 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
                     });
                 #[allow(rustc::untranslatable_diagnostic)]
                 #[allow(rustc::diagnostic_outside_of_impl)]
-                self.tcx.dcx().span_err(multi_span, "MIR pattern matched");
+                self.tcx.dcx().span_note(multi_span, "MIR pattern matched");
+            } else if let mut patterns = PatternsBuilder::new(&self.tcx.arena.dropless)
+                && let pattern_offset_by_len = pattern_offset_by_len(&mut patterns)
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &patterns.build()).check()
+                && let Some(read) = matches[pattern_offset_by_len.read]
+                && let read = read.span_no_inline(body)
+                && let Some(ptr) = matches[pattern_offset_by_len.ptr]
+                && let ptr = ptr.span_no_inline(body)
+                && let Some(len) = matches[pattern_offset_by_len.len]
+                && let len = len.span_no_inline(body)
+            {
+                debug!(?ptr, ?read, ?len);
+                let len_local = self
+                    .tcx
+                    .sess
+                    .source_map()
+                    .span_to_snippet(len)
+                    .unwrap_or_else(|_| "{expr}".to_string());
+                self.tcx.dcx().emit_err(crate::errors::OffsetByOne {
+                    read,
+                    ptr,
+                    len,
+                    len_local,
+                });
             }
+            let mut patterns = PatternsBuilder::new(&self.tcx.arena.dropless);
+            pattern_loop(&mut patterns);
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
     }
@@ -124,4 +161,32 @@ fn pattern_loop(patterns: &mut pat::PatternsBuilder<'_>) {
     }
 
     patterns.set_ty_var(SlabT_ty_var, |_tcx, _params_env, ty| ty.is_adt());
+}
+
+struct PatternOffsetByLen {
+    len: pat::Location,
+    ptr: pat::Location,
+    read: pat::Location,
+}
+
+#[rpl_macros::mir_pattern]
+fn pattern_offset_by_len(patterns: &mut pat::PatternsBuilder<'_>) -> PatternOffsetByLen {
+    mir! {
+        meta!($T:ty, $SlabT:ty);
+        let self: &mut $SlabT;
+        let len: usize = copy (*self).len;
+        let len_isize: isize = move len as isize (IntToInt);
+        let base: *mut $T = copy (*self).mem;
+        let ptr_mut: *mut $T = Offset(copy base, copy len_isize);
+        let ptr: *const $T = copy ptr_mut as *const $T (PtrToPtr);
+        let elem: $T = copy (*ptr);
+    }
+
+    patterns.set_ty_var(SlabT_ty_var, |_tcx, _params_env, ty| ty.is_adt());
+
+    PatternOffsetByLen {
+        len: len_stmt,
+        ptr: ptr_mut_stmt,
+        read: elem_stmt,
+    }
 }

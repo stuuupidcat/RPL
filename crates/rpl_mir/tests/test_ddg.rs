@@ -115,7 +115,7 @@ test_case! {
 }
 
 test_case! {
-    fn cve_2020_35892() {
+    fn cve_2020_35892_3_loop() {
         meta!($T:ty, $SlabT:ty);
 
         let self: &mut $SlabT;
@@ -185,6 +185,31 @@ test_case! {
             5 <- [3, 4], | _?9 = Offset(copy _?7, copy _?8);
             6 <- [5],    | core::ptr::drop_in_place(copy _?9) -> ?bb3;
             OUT <- [0]
+        }
+    }
+}
+
+test_case! {
+    fn cve_2020_35892_3_offset_by_one() {
+        meta!($T:ty, $SlabT:ty);
+        let self: &mut $SlabT;
+        let len: usize = copy (*self).len;
+        let len_isize: isize = move len as isize (IntToInt);
+        let base: *mut $T = copy (*self).mem;
+        let ptr_mut: *mut $T = Offset(copy base, copy len_isize);
+        let ptr: *const $T = copy ptr_mut as *const $T (PtrToPtr);
+        let elem: $T = copy (*ptr);
+    } => {
+        ?bb0: {
+            IN -> [0, 2],
+            0 <- [],     | _?1 = copy ((*_?0).len);
+            1 <- [0],    | _?2 = move _?1 as isize (IntToInt);
+            2 <- [] ,    | _?3 = copy ((*_?0).mem);
+            3 <- [1, 2], | _?4 = Offset (copy _?3, copy _?2);
+            4 <- [3],    | _?5 = copy _?4 as * const ?T0 (PtrToPtr);
+            5 <- [4],    | _?6 = copy (*_?5) ;
+            6 <- [],     | end ;
+            OUT <- [5]
         }
     }
 }

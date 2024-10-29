@@ -1,4 +1,4 @@
-error: MIR pattern matched
+note: MIR pattern matched
   --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:15:5
    |
 LL | /         fn drop(&mut self) {
@@ -37,6 +37,24 @@ LL | |   |         }
 LL | |             unsafe { libc::free(self.mem as *mut _ as *mut libc::c_void) };
 LL | |         }
    | |_________^
+
+error: pointer out of bound
+  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:53:25
+   |
+LL |             last_elem_ptr = self.mem.offset(self.len as isize);
+   |                                      -------------------------
+   |                                      |      |
+   |                                      |      help: did you mean this: `(self.len - 1)`
+   |                                      pointer created here
+...
+LL |             last_elem = ptr::read(last_elem_ptr);
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^ pointer read here
+   |
+help: this is because `self.len` exceeds the container's length by one
+  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:48:45
+   |
+LL |             last_elem_ptr = self.mem.offset(self.len as isize);
+   |                                             ^^^^^^^^
 
 error: aborting due to 1 previous error
 
