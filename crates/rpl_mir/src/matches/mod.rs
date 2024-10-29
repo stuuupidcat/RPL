@@ -362,12 +362,14 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
         self.cx.body.basic_blocks.predecessors()[bb]
             .iter()
             .copied()
-            .filter(move |&pred| {
-                matches!(
-                    self.cx.mir_cfg[pred],
-                    TerminatorEdges::Single(target) | TerminatorEdges::Double(target, _)
-                    | TerminatorEdges::AssignOnReturn { return_: box [target], .. } if target == bb
-                )
+            .filter(move |&pred| match &self.cx.mir_cfg[pred] {
+                &TerminatorEdges::Single(target) => target == bb,
+                &TerminatorEdges::Double(target, cleanup) => target == bb || cleanup == bb,
+                TerminatorEdges::AssignOnReturn { return_, cleanup } => {
+                    std::iter::chain(return_, cleanup).any(|&target| target == bb)
+                },
+                TerminatorEdges::SwitchInt(targets) => targets.targets.values().any(|&target| target == bb),
+                TerminatorEdges::None => false,
             })
     }
     #[instrument(level = "debug", skip(self), ret)]
@@ -382,9 +384,9 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
             && {
                 matched.set(Some(stmt_match));
                 info!(
-                    pat = ?self.cx.patterns[loc_pat.block].debug_stmt_at(loc_pat.statement_index),
-                    statement = ?stmt_match.debug_with(self.cx.body),
-                    "statement matched",
+                    "statement matched {pat:?} <-> {statement:?}",
+                    pat = self.cx.patterns[loc_pat.block].debug_stmt_at(loc_pat.statement_index),
+                    statement = stmt_match.debug_with(self.cx.body),
                 );
                 self.match_stmt_locals(loc_pat, stmt_match)
             }
@@ -444,14 +446,22 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
     }
     #[instrument(level = "debug", skip(self), ret)]
     fn match_local(&self, local_pat: pat::LocalIdx, local: mir::Local) -> bool {
-        self.matches[local_pat].matched.r#match(local) && {
+        let matched = self.matches[local_pat].matched.r#match(local);
+        if matched {
             debug!(
                 "local matched: {local_pat:?}: {ty_pat:?} <-> {local:?}: {ty:?}",
                 ty_pat = self.cx.patterns.locals[local_pat],
                 ty = self.cx.body.local_decls[local].ty,
             );
-            self.match_local_ty(self.cx.patterns.locals[local_pat], self.cx.body.local_decls[local].ty)
+        } else {
+            let conflicted_local = self.matches[local_pat].matched.get().unwrap().into_inner();
+            info!(
+                "local conflicted: {local_pat:?}: {ty_pat:?} !! {local:?} / {conflicted_local:?}: {ty:?}",
+                ty_pat = self.cx.patterns.locals[local_pat],
+                ty = self.cx.body.local_decls[conflicted_local].ty,
+            );
         }
+        matched && self.match_local_ty(self.cx.patterns.locals[local_pat], self.cx.body.local_decls[local].ty)
     }
     #[instrument(level = "debug", skip(self), ret)]
     fn match_local_ty(&self, ty_pat: pat::Ty<'tcx>, ty: Ty<'tcx>) -> bool {

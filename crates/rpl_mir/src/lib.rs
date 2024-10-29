@@ -355,7 +355,7 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
             _ => false,
         };
         if matched {
-            info!(?pat, ?statement, "candidate matched");
+            info!("candidate matched: {pat:?} <-> {statement:?}");
         }
         matched
     }
