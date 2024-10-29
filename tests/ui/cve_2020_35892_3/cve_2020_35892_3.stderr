@@ -1,5 +1,5 @@
 error: MIR pattern matched
-  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:13:5
+  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:15:5
    |
 LL | /         fn drop(&mut self) {
 LL | |             for x in 0..self.len {
