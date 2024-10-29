@@ -1,4 +1,6 @@
-use std::mem::{size_of, forget};
+//@ compile-flags: -Z mir-opt-level=3
+
+use std::mem::{forget, size_of};
 use std::vec::Vec;
 
 pub unsafe fn guarded_transmute_vec_permissive<T>(mut bytes: Vec<u8>) -> Vec<T> {
@@ -8,6 +10,7 @@ pub unsafe fn guarded_transmute_vec_permissive<T>(mut bytes: Vec<u8>) -> Vec<T> 
     let len = bytes.len() / size_of::<T>();
     forget(bytes);
     Vec::from_raw_parts(ptr as *mut T, capacity, len)
+    //~^ ERROR: misordered parameters `len` and `cap` in `Vec::from_raw_parts`
 }
 
 /* pub unsafe fn guarded_transmute_to_bytes_vec<T>(mut from: Vec<T>) -> Vec<u8> {

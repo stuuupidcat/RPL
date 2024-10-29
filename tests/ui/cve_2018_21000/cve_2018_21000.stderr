@@ -1,0 +1,14 @@
+error: misordered parameters `len` and `cap` in `Vec::from_raw_parts`
+  --> tests/ui/cve_2018_21000/cve_2018_21000.rs:12:5
+   |
+LL |     Vec::from_raw_parts(ptr as *mut T, capacity, len)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+help: the correct order is `Vec::from_raw_parts(ptr, len, cap)`
+  --> tests/ui/cve_2018_21000/cve_2018_21000.rs:12:5
+   |
+LL |     Vec::from_raw_parts(ptr as *mut T, capacity, len)
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: aborting due to 1 previous error
+
