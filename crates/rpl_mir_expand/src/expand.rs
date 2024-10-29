@@ -855,6 +855,7 @@ impl ToTokens for Expand<'_, IdentSymbol> {
 impl ToTokens for Expand<'_, &RvalueAggregate> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
         quote_each_token!(tokens ::rpl_mir::pat::AggKind::);
+        let ExpandCtxt { patterns, .. } = self.ecx;
         match self.value {
             RvalueAggregate::Array(AggregateArray { operands, .. }) => {
                 // let ty = self.expand(ty);
@@ -873,7 +874,7 @@ impl ToTokens for Expand<'_, &RvalueAggregate> {
                 let operands = self.expand_punctuated_mapped(fields, |f| &f.operand);
                 let fields = self.expand_punctuated_mapped(fields, |f| f.ident.to_symbol());
                 quote_each_token!(tokens
-                    Adt(#adt, [/* TODO: generic argmuents */], [#fields].into_iter().collect()),
+                    Adt(#patterns.mk_item_path(&[#adt]).into(),/* [TODO: generic argmuents ],*/ Some([#fields].into_iter().collect())),
                     [#operands].into_iter().collect(),
                 );
             },
