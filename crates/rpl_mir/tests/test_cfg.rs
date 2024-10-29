@@ -233,6 +233,37 @@ test_case! {
 }
 
 test_case! {
+    fn cve_2018_21000_inlined() {
+        meta!{$T:ty}
+
+        let from_vec: std::vec::Vec<$T>;
+        let to_vec: std::vec::Vec<u8>;
+        let to_vec_cap: usize;
+        let mut from_vec_cap: usize;
+        let mut tsize: usize;
+        let to_vec_len: usize;
+        let mut from_vec_len: usize;
+        let mut from_vec_ptr: std::ptr::NonNull<u8>;
+        let mut to_raw_vec: alloc::raw_vec::RawVec<$T>;
+        let mut to_raw_vec_inner: alloc::raw_vec::RawVecInner<$T>;
+        let mut to_vec_wrapped_cap: alloc::raw_vec::Cap;
+        let mut from_vec_unique_ptr: std::ptr::Unique<u8>;
+
+        from_vec_ptr = copy (((to_vec.0).0).0).0;
+        from_vec_cap = copy (((to_vec.0).0).1).0;
+        tsize = SizeOf($T);
+        to_vec_cap = Div(move from_vec_cap, copy tsize);
+        from_vec_len = copy to_vec.1;
+        to_vec_len = Div(move from_vec_len, copy tsize);
+        to_vec_wrapped_cap = alloc::raw_vec::Cap(copy to_vec_len);
+        from_vec_unique_ptr = std::ptr::Unique<u8> { pointer: copy from_vec_ptr, };
+        to_raw_vec_inner = alloc::raw_vec::RawVecInner { ptr: move from_vec_unique_ptr, cap: copy to_vec_wrapped_cap, };
+        to_raw_vec = alloc::raw_vec::RawVec<$T> {inner: move to_raw_vec_inner, };
+        from_vec = std::vec::Vec<$T> {buf: move to_raw_vec, len: copy to_vec_cap, };
+    } => {}
+}
+
+test_case! {
     fn cve_2020_35881_const() {
         meta!{
             $T1:ty,
