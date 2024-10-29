@@ -1,3 +1,5 @@
+//@ compile-flags: -Z mir-opt-level=3
+
 extern crate libc;
 
 use std::ops::Index;
@@ -27,6 +29,7 @@ impl<T> Index<usize> for Slab<T> {
     type Output = T;
     fn index(&self, index: usize) -> &Self::Output {
         unsafe { &(*(self.mem.offset(index as isize))) }
+        // FIXME: should report error
     }
 }
 
@@ -45,6 +48,7 @@ impl<T> Slab<T> {
             last_elem_ptr = self.mem.offset(self.len as isize);
 
             elem = ptr::read(elem_ptr);
+            // FIXME: should report error
             last_elem = ptr::read(last_elem_ptr);
 
             ptr::write(elem_ptr, last_elem);
