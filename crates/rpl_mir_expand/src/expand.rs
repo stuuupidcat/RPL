@@ -687,7 +687,7 @@ impl ToTokens for Expand<'_, &ConstOperand> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
         match self.value {
             ConstOperand::Lit(ConstLit { lit, .. }) => self.expand(lit).to_tokens(tokens),
-            ConstOperand::Path(TypePath { qself: None, path}) => {
+            ConstOperand::Path(TypePath { qself: None, path }) => {
                 // todo!();
                 let path = self.expand_as_adt(path);
                 quote_each_token!(tokens ::rpl_mir::pat::ConstOperand::ZeroSized(#path));
@@ -872,7 +872,23 @@ impl ToTokens for Expand<'_, &RvalueAggregate> {
                 let operands = self.expand_punctuated_mapped(fields, |f| &f.operand);
                 let fields = self.expand_punctuated_mapped(fields, |f| f.ident.to_symbol());
                 quote_each_token!(tokens
-                    Adt(#patterns.mk_item_path(&[#adt]).into(),/* [TODO: generic argmuents ],*/ Some([#fields].into_iter().collect())),
+                    Adt(
+                        #patterns.mk_item_path(&[#adt]).into(),
+                        /* [TODO: generic argmuents ],*/
+                        Some([#fields].into_iter().collect())
+                    ),
+                    [#operands].into_iter().collect(),
+                );
+            },
+            RvalueAggregate::AdtTuple(AggregateAdtTuple {
+                adt,
+                fields: ParenthesizedOperands { operands, .. },
+                ..
+            }) => {
+                let adt = self.expand(adt);
+                let operands = self.expand_punctuated(operands);
+                quote_each_token!(tokens
+                    Adt(#patterns.mk_item_path(&[#adt]).into(),/* [TODO: generic argmuents ],*/ None),
                     [#operands].into_iter().collect(),
                 );
             },

@@ -723,6 +723,17 @@ impl Parse for AggregateRawPtr {
     }
 }
 
+impl Parse for Ctor {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let content;
+        Ok(Ctor {
+            pound: input.parse()?,
+            bracket: syn::bracketed!(content in input),
+            kw_ctor: content.parse()?,
+        })
+    }
+}
+
 impl Rvalue {
     fn parse_array(input: ParseStream<'_>) -> Result<Self> {
         let content;
@@ -780,6 +791,10 @@ impl RvalueOrCall {
         Ok(
             if input.peek(Token![*]) && (input.peek2(Token![const]) || input.peek2(Token![mut])) {
                 Rvalue::Aggregate(RvalueAggregate::RawPtr(input.parse()?)).into()
+            } else if let forked = input.fork()
+                && forked.parse::<Ctor>().is_ok()
+            {
+                Rvalue::Aggregate(RvalueAggregate::AdtTuple(input.parse()?)).into()
             } else if let forked = input.fork()
                 && forked.parse::<Path>().is_ok()
                 && forked.peek(token::Brace)

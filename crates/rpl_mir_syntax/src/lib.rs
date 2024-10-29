@@ -23,6 +23,7 @@ pub(crate) mod kw {
     syn::custom_keyword!(meta);
     syn::custom_keyword!(ty);
     syn::custom_keyword!(lang);
+    syn::custom_keyword!(ctor);
 
     // Statement
     syn::custom_keyword!(drop);
@@ -763,6 +764,23 @@ auto_derive! {
 }
 
 #[derive(Clone)]
+pub struct Ctor {
+    pub pound: Token![#],
+    pub bracket: token::Bracket,
+    pub kw_ctor: kw::ctor,
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct AggregateAdtTuple {
+        ctor: Ctor,
+        pub adt: Path,
+        pub fields: ParenthesizedOperands,
+    }
+}
+
+#[derive(Clone)]
 pub struct AggregateRawPtr {
     pub ty: TypePtr,
     kw_from: kw::from,
@@ -779,9 +797,9 @@ auto_derive! {
         Array(AggregateArray),
         Tuple(AggregateTuple),
         Adt(AggregateAdt),
+        AdtTuple(AggregateAdtTuple),
         RawPtr(AggregateRawPtr),
     }
-
 }
 
 auto_derive! {

@@ -272,6 +272,13 @@ impl ToTokens for AggregateArray {
     }
 }
 
+impl ToTokens for Ctor {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.pound.to_tokens(tokens);
+        self.bracket.surround(tokens, |tokens| self.kw_ctor.to_tokens(tokens));
+    }
+}
+
 impl ToTokens for StructFields {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         self.brace.surround(tokens, |tokens| self.fields.to_tokens(tokens));
