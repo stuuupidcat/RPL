@@ -260,7 +260,37 @@ test_case! {
         to_raw_vec_inner = alloc::raw_vec::RawVecInner { ptr: move from_vec_unique_ptr, cap: copy to_vec_wrapped_cap, };
         to_raw_vec = alloc::raw_vec::RawVec<$T> {inner: move to_raw_vec_inner, };
         from_vec = std::vec::Vec<$T> {buf: move to_raw_vec, len: copy to_vec_cap, };
-    } => {}
+    } => {
+        meta!(?T0: ty);
+        let _?0: std::vec::Vec<?T0>;
+        let _?1: std::vec::Vec<u8>;
+        let _?2: usize;
+        let _?3: usize;
+        let _?4: usize;
+        let _?5: usize;
+        let _?6: usize;
+        let _?7: std::ptr::NonNull<u8>;
+        let _?8: alloc::raw_vec::RawVec<?T0>;
+        let _?9: alloc::raw_vec::RawVecInner<?T0>;
+        let _?10: alloc::raw_vec::Cap;
+        let _?11: std::ptr::Unique<u8>;
+        ?bb0: {
+            _?7 = copy ((((_?1.0) . 0) . 0) . 0);
+            _?3 = copy ((((_?1.0) . 0) . 1) . 0);
+            _?4 = SizeOf (?T0);
+            _?2 = Div (move _?3 , copy _?4);
+            _?6 = copy (_?1.1);
+            _?5 = Div (move _?6 , copy _?4);
+            _?10 = alloc::raw_vec::Cap (copy _?5) -> ?bb1;
+        }
+        ?bb1: {
+            _?11 = std::ptr::Unique { pointer: copy _?7 };
+            _?9 = alloc::raw_vec::RawVecInner { ptr: move _?11 , cap: copy _?10 };
+            _?8 = alloc::raw_vec::RawVec { inner: move _?9 };
+            _?0 = std::vec::Vec { buf: move _?8 , len: copy _?2 };
+            end;
+        }
+    }
 }
 
 test_case! {
