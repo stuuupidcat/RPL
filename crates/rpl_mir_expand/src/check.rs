@@ -231,6 +231,13 @@ impl CheckCtxt {
                 }
                 Ok(())
             },
+            RvalueAggregate::AdtTuple(AggregateAdtTuple { adt, fields, .. }) => {
+                self.check_path(adt)?;
+                for field in fields.operands.iter() {
+                    self.check_operand(field)?;
+                }
+                Ok(())
+            },
             RvalueAggregate::RawPtr(AggregateRawPtr { ty, ptr, metadata, .. }) => {
                 self.check_type(&ty.ty)?;
                 self.check_operand(ptr)?;
