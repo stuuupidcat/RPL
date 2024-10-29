@@ -720,6 +720,9 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
     fn match_generic_args(&self, args_pat: pat::GenericArgsRef<'tcx>, args: ty::GenericArgsRef<'tcx>) -> bool {
         args_pat.len() == args.len()
             && zip(&*args_pat, args).all(|(&arg_pat, arg)| self.match_generic_arg(arg_pat, arg))
+        /*
+            FIXME: Default generic arguments like alloc::vec::Vec<T> = alloc::vec::Vec<T, alloc::alloc::Global>
+        */
     }
 
     fn match_generic_arg(&self, arg_pat: pat::GenericArgKind<'tcx>, arg: ty::GenericArg<'tcx>) -> bool {

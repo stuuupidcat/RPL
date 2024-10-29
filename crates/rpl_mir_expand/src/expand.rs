@@ -684,15 +684,13 @@ impl ToTokens for Expand<'_, &Operand> {
 }
 
 impl ToTokens for Expand<'_, &ConstOperand> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
         match self.value {
             ConstOperand::Lit(ConstLit { lit, .. }) => self.expand(lit).to_tokens(tokens),
-            ConstOperand::Path(TypePath { qself: None, path: _ }) => {
-                todo!();
-                // let path = self.expand(path);
-                // quote_each_token!(tokens ::rpl_mir::pat::ConstOperand::ZeroSized(
-                //     #patterns.mk_item_path(&[#path]),
-                // ));
+            ConstOperand::Path(TypePath { qself: None, path}) => {
+                // todo!();
+                let path = self.expand_as_adt(path);
+                quote_each_token!(tokens ::rpl_mir::pat::ConstOperand::ZeroSized(#path));
             },
             ConstOperand::Path(TypePath {
                 qself: Some(_qself),

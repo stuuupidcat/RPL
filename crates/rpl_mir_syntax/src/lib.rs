@@ -743,7 +743,7 @@ auto_derive! {
     pub struct StructField {
         pub ident: Ident,
         tk_colon: Token![:],
-        pub operand: Operand,
+        pub operand: Operand, /* FIXME _marker: std::marker::PhantomData `::` <u8> */
     }
 }
 
