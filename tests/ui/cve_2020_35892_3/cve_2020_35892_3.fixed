@@ -45,7 +45,7 @@ impl<T> Slab<T> {
 
         unsafe {
             elem_ptr = self.mem.offset(offset as isize);
-            last_elem_ptr = self.mem.offset(self.len as isize);
+            last_elem_ptr = self.mem.offset((self.len - 1) as isize);
             //~^ HELP: this is because `self.len` exceeds the container's length by one
             //~| HELP: did you mean this
 

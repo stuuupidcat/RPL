@@ -8,6 +8,7 @@
 #![feature(debug_closure_helpers)]
 #![feature(iter_chain)]
 #![feature(iterator_try_collect)]
+#![feature(cell_update)]
 
 extern crate rustc_abi;
 extern crate rustc_arena;

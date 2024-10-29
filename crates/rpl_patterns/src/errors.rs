@@ -37,3 +37,17 @@ pub struct UseAfterDrop<'tcx> {
     pub use_span: Span,
     pub ty: Ty<'tcx>,
 }
+
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_offset_by_one)]
+pub struct OffsetByOne {
+    #[primary_span]
+    #[label(rpl_patterns_read_label)]
+    pub read: Span,
+    #[label(rpl_patterns_ptr_label)]
+    pub ptr: Span,
+    #[help]
+    #[suggestion(code = "({len_local} - 1)")]
+    pub len: Span,
+    pub len_local: String,
+}

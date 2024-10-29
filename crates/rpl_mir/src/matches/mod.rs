@@ -1,4 +1,6 @@
 use std::cell::Cell;
+use std::fmt;
+use std::num::NonZero;
 use std::ops::Index;
 
 use rpl_mir_graph::TerminatorEdges;
@@ -405,8 +407,7 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
     #[instrument(level = "debug", skip(self), ret)]
     fn match_stmt_dep_start(&self, loc_pat: pat::Location, bb: mir::BasicBlock) -> bool {
         !self.cx.pat_ddg[loc_pat.block].is_rdep_start(loc_pat.statement_index)
-            || self.matches[loc_pat.block].start.get() == Some(bb)
-            || self.matches[loc_pat.block].start.get().is_none() && {
+            || self.matches[loc_pat.block].start.get().is_none_or(|block| block == bb) && {
                 self.matches[loc_pat.block].start.set(Some(bb));
                 self.match_block_starts_with(loc_pat.block, bb)
             }
@@ -443,13 +444,11 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
     }
     #[instrument(level = "debug", skip(self), ret)]
     fn match_local(&self, local_pat: pat::LocalIdx, local: mir::Local) -> bool {
-        self.matches[local_pat].matched.get().is_none_or(|l| l == local) && {
-            self.matches[local_pat].matched.set(Some(local));
+        self.matches[local_pat].matched.r#match(local) && {
             debug!(
-                ?local_pat, ?local,
-                ty_pat = ?self.cx.patterns.locals[local_pat],
-                ty = ?self.cx.body.local_decls[local].ty,
-                "local matched",
+                "local matched: {local_pat:?}: {ty_pat:?} <-> {local:?}: {ty:?}",
+                ty_pat = self.cx.patterns.locals[local_pat],
+                ty = self.cx.body.local_decls[local].ty,
             );
             self.match_local_ty(self.cx.patterns.locals[local_pat], self.cx.body.local_decls[local].ty)
         }
@@ -463,9 +462,8 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
                     &[ty] => ty,
                     [..] => return false,
                 };
-                debug!(?ty_var, ?ty, "type variable matched");
-                self.matches[ty_var].matched.set(Some(ty));
-                true
+                debug!("type variable matched, {ty_var:?} <-> {ty:?}");
+                self.matches[ty_var].matched.r#match(ty)
             })
         }
     }
@@ -477,9 +475,9 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
     }
     #[instrument(level = "debug", skip(self))]
     fn unmatch_local(&self, local_pat: pat::LocalIdx) {
-        self.matches[local_pat].matched.set(None);
+        self.matches[local_pat].matched.unmatch();
         if let &pat::TyKind::TyVar(ty_var) = self.cx.patterns.locals[local_pat].kind() {
-            self.matches[ty_var].matched.set(None);
+            self.matches[ty_var].matched.unmatch();
         }
     }
 }
@@ -592,14 +590,14 @@ impl StatementMatches {
 
 #[derive(Debug)]
 struct LocalMatches {
-    matched: Cell<Option<mir::Local>>,
+    matched: CountedMatch<mir::Local>,
     candidates: HybridBitSet<mir::Local>,
 }
 
 impl LocalMatches {
     fn new(num_locals: usize) -> Self {
         Self {
-            matched: Cell::new(None),
+            matched: CountedMatch::default(),
             candidates: HybridBitSet::new_empty(num_locals),
         }
     }
@@ -608,13 +606,13 @@ impl LocalMatches {
     }
 
     fn try_take(self) -> Result<mir::Local, MatchFailed> {
-        self.matched.take().ok_or(MatchFailed)
+        self.matched.try_take()
     }
 }
 
 #[derive(Default, Debug)]
 struct TyVarMatches<'tcx> {
-    matched: Cell<Option<Ty<'tcx>>>,
+    matched: CountedMatch<Ty<'tcx>>,
     candidates: Vec<Ty<'tcx>>,
 }
 
@@ -624,10 +622,80 @@ impl<'tcx> TyVarMatches<'tcx> {
     }
 
     fn try_take(self) -> Result<Ty<'tcx>, MatchFailed> {
-        self.matched.take().ok_or(MatchFailed)
+        self.matched.try_take()
     }
 
     fn has_empty_candidates(&self) -> bool {
         self.candidates.is_empty()
+    }
+}
+
+struct CountedMatch<T>(Cell<Option<Counted<T>>>);
+
+impl<T> Default for CountedMatch<T> {
+    fn default() -> Self {
+        Self(Cell::new(None))
+    }
+}
+
+impl<T: Copy + PartialEq> CountedMatch<T> {
+    fn get(&self) -> Option<Counted<T>> {
+        self.0.get()
+    }
+    fn r#match(&self, value: T) -> bool {
+        match self.0.get() {
+            None => self.0.set(Some(Counted::new(value))),
+            Some(l) if l.value == value => self.0.set(Some(l.inc())),
+            Some(_) => return false,
+        }
+        true
+    }
+    fn unmatch(&self) {
+        self.0.update(|m| m.and_then(Counted::dec));
+    }
+    fn try_take(self) -> Result<T, MatchFailed> {
+        self.0.take().map(Counted::into_inner).ok_or(MatchFailed)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Counted<T> {
+    value: T,
+    count: NonZero<u32>,
+}
+
+impl<T> Counted<T> {
+    fn new(value: T) -> Self {
+        Self {
+            value,
+            count: NonZero::<u32>::MIN,
+        }
+    }
+    fn into_inner(self) -> T {
+        self.value
+    }
+    fn inc(self) -> Self {
+        Self {
+            count: self.count.checked_add(1).unwrap(),
+            ..self
+        }
+    }
+    fn dec(self) -> Option<Self> {
+        Some(Self {
+            count: NonZero::new(self.count.get().wrapping_sub(1))?,
+            ..self
+        })
+    }
+}
+
+impl<T: fmt::Debug> fmt::Debug for Counted<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{:?} {{{}}}", self.value, self.count)
+    }
+}
+
+impl<T: Copy + fmt::Debug> fmt::Debug for CountedMatch<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.get().fmt(f)
     }
 }
