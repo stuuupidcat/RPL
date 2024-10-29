@@ -39,7 +39,7 @@ static TEST_DEPENDENCIES: &[&str] = &[
     "syn",
     "log",
     "tracing",
-    // "libc",
+    "libc",
     // "tokio",
 ];
 
