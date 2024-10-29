@@ -106,7 +106,8 @@ impl fmt::Debug for TyKind<'_> {
                 }
                 f.write_str(")")
             },
-            Self::Ref(region, ty, mutability) => write!(f, "&{region}{} {ty:?}", mutability.prefix_str()),
+            Self::Ref(region, ty, mir::Mutability::Not) => write!(f, "&{region} {ty:?}"),
+            Self::Ref(region, ty, mir::Mutability::Mut) => write!(f, "&{region}mut {ty:?}"),
             Self::RawPtr(ty, mutability) => write!(f, "*{} {ty:?}", mutability.ptr_str()),
             Self::Adt(path, args) => {
                 write!(f, "{path:?}{args:?}")

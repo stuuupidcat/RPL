@@ -1,0 +1,42 @@
+error: MIR pattern matched
+  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:13:5
+   |
+LL | /         fn drop(&mut self) {
+LL | |             for x in 0..self.len {
+   | |             -   -    -----------
+   | |             |   |    |  |
+   | |             |   |    |  _?1 = copy ((*_?0).len) <=> _16 = copy ((*_1).1: usize)
+   | |             |   |    _?2 = const 0_usize <=> _15 = const 0_usize
+   | |             |   |    _?10 = copy _?2 <=> _14 = copy _15
+   | |             |   |    _?11 = Lt(move _?10, copy _?1) <=> _12 = Lt(move _14, copy _16)
+   | |             |   |    switchInt(move _?11) -> [false -> ?bb4, otherwise -> ?bb5] <=> switchInt(move _12) -> [0: bb6, otherwise: bb4]
+   | |             |   |    _?3 = copy _?2 <=> _13 = copy _15
+   | |             |   |    _?4 = core::iter::range::Step::forward_unchecked(copy _?3, const 1_usize) -> ?bb6 <=> _15 = <usize as std::iter::Step>::forward_unchecked(copy _13, const 1_usize) -> [return: bb5, unwind continue]
+   | |             |   |    _?5 = #[lang = "Some"](copy _?3) <=> _2 = std::option::Option::<usize>::Some(copy _13)
+   | |    _________|   _?6 = copy ((_?5 as Some).0) <=> _3 = copy ((_2 as Some).0: usize)
+   | |   |
+LL | |   |
+LL | |   |             unsafe {
+LL | |   |                 let elem_ptr = self.mem.offset(x as isize);
+   | |   |                                -------- ------------------
+   | |   |                                |        |      |
+   | |   |                                |        |      _?8 = copy _?6 as isize (IntToInt) <=> _6 = copy _3 as isize (IntToInt)
+   | |   |                                |        _?9 = Offset(copy _?7, copy _?8) <=> _4 = Offset(copy _5, copy _6)
+   | |   |                                _?7 = copy ((*_?0).mem) <=> _5 = copy ((*_1).2: *mut T)
+LL | |   |                 ptr::drop_in_place(elem_ptr);
+   | |   |                 ---------------------------- core::ptr::drop_in_place(copy _?9) -> ?bb3 <=> _7 = std::ptr::drop_in_place::<T>(copy _4) -> [return: bb2, unwind continue]
+LL | |   |                 std::hint::black_box(elem_ptr);
+LL | |   |             }
+LL | |   |         }
+   | |   |         -
+   | |   |         |
+   | |   |         goto ?bb1 <=> goto -> bb1
+   | |   |         end <=> goto -> bb1
+   | |   |_________goto ?bb1 <=> goto -> bb1
+   | |             goto ?bb2 <=> goto -> bb1
+LL | |             unsafe { libc::free(self.mem as *mut _ as *mut libc::c_void) };
+LL | |         }
+   | |_________^
+
+error: aborting due to 1 previous error
+

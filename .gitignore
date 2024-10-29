@@ -16,3 +16,5 @@
 
 # Vim swap files
 .*sw*
+
+mir_dump

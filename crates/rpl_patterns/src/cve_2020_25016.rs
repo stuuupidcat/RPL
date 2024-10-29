@@ -1,14 +1,13 @@
 use std::ops::Not;
 
 use rpl_mir::pat::PatternsBuilder;
+use rpl_mir::{pat, CheckMirCtxt};
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::{sym, Span, Symbol};
-
-use rpl_mir::{pat, CheckMirCtxt};
 
 #[instrument(level = "info", skip(tcx))]
 pub fn check_item(tcx: TyCtxt<'_>, item_id: hir::ItemId) {
@@ -28,6 +27,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
         self.tcx.hir()
     }
 
+    #[instrument(level = "debug", skip_all, fields(?item.owner_id))]
     fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
         match item.kind {
             hir::ItemKind::Trait(hir::IsAuto::No, hir::Safety::Safe, ..)
@@ -38,6 +38,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
         intravisit::walk_item(self, item);
     }
 
+    #[instrument(level = "info", skip_all, fields(?def_id))]
     fn visit_fn(
         &mut self,
         kind: intravisit::FnKind<'tcx>,

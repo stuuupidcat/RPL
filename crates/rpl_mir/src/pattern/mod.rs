@@ -234,6 +234,30 @@ pub struct IntValue {
     pub ty: IntTy,
 }
 
+impl IntValue {
+    pub fn normalize(self, pointer_bytes: u64) -> Pu128 {
+        use ty::IntTy::{Isize, I128, I16, I32, I64, I8};
+        use IntTy::{Bool, Int, NegInt, Uint};
+
+        let IntValue { ty, value } = self;
+        let mask: u128 = match ty {
+            NegInt(I8) => u8::MAX.into(),
+            NegInt(I16) => u16::MAX.into(),
+            NegInt(I32) => u32::MAX.into(),
+            NegInt(I64) => u64::MAX.into(),
+            NegInt(I128) => u128::MAX,
+            NegInt(Isize) => match pointer_bytes {
+                2 => u128::from(u16::MAX),
+                4 => u128::from(u32::MAX),
+                8 => u128::from(u64::MAX),
+                _ => panic!("unsupported pointer size: {pointer_bytes}"),
+            },
+            Int(_) | Uint(_) | Bool => return value,
+        };
+        Pu128((value.get() ^ mask).wrapping_add(1) & mask)
+    }
+}
+
 macro_rules! impl_uint {
     ($($ty:ident => $variant:ident),* $(,)?) => {$(
         impl From<$ty> for IntValue {
@@ -316,6 +340,7 @@ pub enum Rvalue<'tcx> {
     CopyForDeref(Place<'tcx>),
 }
 
+#[derive(Clone)]
 pub enum Operand<'tcx> {
     Copy(Place<'tcx>),
     Move(Place<'tcx>),
@@ -358,6 +383,7 @@ pub enum ListMatchMode {
     Unordered,
 }
 
+#[derive(Clone)]
 pub enum ConstOperand<'tcx> {
     ConstVar(ConstVarIdx),
     ScalarInt(IntValue),
@@ -370,6 +396,7 @@ pub enum Const {
     Value(IntValue),
 }
 
+#[derive(Debug, Clone)]
 pub enum AggKind<'tcx> {
     Array,
     Tuple,
@@ -503,7 +530,6 @@ pub enum TyKind<'tcx> {
     FnDef(Path<'tcx>, GenericArgsRef<'tcx>),
     Alias(ty::AliasTyKind, Path<'tcx>, GenericArgsRef<'tcx>),
 }
-
 pub struct PatternsBuilder<'tcx> {
     patterns: Patterns<'tcx>,
     loop_stack: Vec<Loop>,

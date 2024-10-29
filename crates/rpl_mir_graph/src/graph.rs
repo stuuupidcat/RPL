@@ -292,6 +292,7 @@ impl<BasicBlock: Idx> Index<BasicBlock> for ControlFlowGraph<BasicBlock> {
     }
 }
 
+#[derive(Debug)]
 pub enum TerminatorEdges<BasicBlock: Idx> {
     /// For terminators that have no successor, like `return`.
     None,
@@ -308,6 +309,7 @@ pub enum TerminatorEdges<BasicBlock: Idx> {
     SwitchInt(SwitchTargets<BasicBlock>),
 }
 
+#[derive(Debug)]
 pub struct SwitchTargets<BasicBlock: Idx> {
     pub targets: FxIndexMap<Pu128, BasicBlock>,
     pub otherwise: Option<BasicBlock>,

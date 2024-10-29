@@ -1,4 +1,4 @@
-//@ ignore-on-host
+extern crate libc;
 
 use std::ops::Index;
 use std::ptr;
@@ -7,6 +7,20 @@ pub struct Slab<T> {
     capacity: usize,
     len: usize,
     mem: *mut T,
+}
+
+impl<T> Drop for Slab<T> {
+    fn drop(&mut self) {
+        for x in 0..self.len {
+            //~^ ERROR: MIR pattern matched
+            unsafe {
+                let elem_ptr = self.mem.offset(x as isize);
+                ptr::drop_in_place(elem_ptr);
+                std::hint::black_box(elem_ptr);
+            }
+        }
+        unsafe { libc::free(self.mem as *mut _ as *mut libc::c_void) };
+    }
 }
 
 impl<T> Index<usize> for Slab<T> {

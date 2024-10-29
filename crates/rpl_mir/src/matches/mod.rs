@@ -12,13 +12,13 @@ use rustc_span::Span;
 use crate::{pat, CheckMirCtxt};
 
 pub struct Matches<'tcx> {
-    basic_blocks: IndexVec<pat::BasicBlock, BlockMatches>,
-    locals: IndexVec<pat::LocalIdx, mir::Local>,
-    ty_vars: IndexVec<pat::TyVarIdx, Ty<'tcx>>,
+    pub basic_blocks: IndexVec<pat::BasicBlock, BlockMatches>,
+    pub locals: IndexVec<pat::LocalIdx, mir::Local>,
+    pub ty_vars: IndexVec<pat::TyVarIdx, Ty<'tcx>>,
 }
 
 pub struct BlockMatches {
-    statements: Vec<Option<StatementMatch>>,
+    pub statements: Vec<Option<StatementMatch>>,
     pub start: Option<mir::BasicBlock>,
     pub end: Option<mir::BasicBlock>,
 }
@@ -118,7 +118,7 @@ impl StatementMatch {
         }
     }
 
-    fn debug_with<'a, 'tcx>(self, body: &'a mir::Body<'tcx>) -> impl core::fmt::Debug + use<'a, 'tcx> {
+    pub fn debug_with<'a, 'tcx>(self, body: &'a mir::Body<'tcx>) -> impl core::fmt::Debug + use<'a, 'tcx> {
         struct DebugStatementMatch<'a, 'tcx> {
             stmt_match: StatementMatch,
             body: &'a mir::Body<'tcx>,
@@ -148,7 +148,7 @@ impl StatementMatch {
     pub fn span_no_inline(self, body: &mir::Body<'_>) -> Span {
         let source_info = self.source_info(body);
         let mut scope = source_info.scope;
-        if let Some(parent_scope) = body.source_scopes[scope].inlined_parent_scope {
+        while let Some(parent_scope) = body.source_scopes[scope].inlined_parent_scope {
             scope = parent_scope;
         }
         if let Some((_instance, span)) = body.source_scopes[scope].inlined {
@@ -181,16 +181,24 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
             // succeeded: Cell::new(false),
         }
     }
-    #[instrument(level = "info", skip(self))]
+    #[instrument(level = "debug", skip(self))]
     fn build_candidates(&mut self) {
         for (bb_pat, block_mat) in self.matches.basic_blocks.iter_enumerated_mut() {
+            let _span = debug_span!("build_candidates", ?bb_pat).entered();
             let block_pat = &self.cx.patterns[bb_pat];
             for (bb, block) in self.cx.body.basic_blocks.iter_enumerated() {
+                let _span = debug_span!("build_candidates", ?bb).entered();
                 for (stmt_pat, matches) in block_mat.statements.iter_mut().enumerate() {
                     let loc_pat = pat::Location {
                         block: bb_pat,
                         statement_index: stmt_pat,
                     };
+                    let _span = debug_span!(
+                        "build_candidates",
+                        ?loc_pat,
+                        stmt_pat = ?self.cx.patterns[bb_pat].debug_stmt_at(stmt_pat),
+                    )
+                    .entered();
                     if loc_pat.statement_index < block_pat.statements.len()
                         && let pat::StatementKind::Init(pat::Place {
                             local: local_pat,
@@ -205,6 +213,8 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
                             matches.candidates.push(StatementMatch::Arg(self_value));
                         } else {
                             for arg in self.cx.body.args_iter() {
+                                let _span = debug_span!("build_candidates", arg = ?StatementMatch::Arg(arg).debug_with(self.cx.body))
+                                .entered();
                                 if self.cx.match_local(local_pat, arg) {
                                     debug!("add candidate of arg: {local_pat:?} <-> {arg:?}");
                                     matches.candidates.push(StatementMatch::Arg(arg));
@@ -217,6 +227,9 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
                             block: bb,
                             statement_index: stmt,
                         };
+                        let _span =
+                            debug_span!("build_candidates", stmt = ?StatementMatch::Location(loc).debug_with(self.cx.body))
+                                .entered();
                         if self.cx.match_statement_or_terminator(loc_pat, loc) {
                             if stmt == block.statements.len() && stmt_pat == block_pat.statements.len() {
                                 block_mat.candidates.insert(bb);
@@ -238,7 +251,7 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
             matches.candidates = std::mem::take(&mut *candidates.borrow_mut());
         }
     }
-    #[instrument(level = "debug", skip(self), ret)]
+    #[instrument(level = "info", skip(self), ret)]
     fn do_match(&mut self) -> bool {
         self.build_candidates();
         self.matches.log_candidates();
@@ -256,7 +269,6 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
         let matches = &self.matches[bb_pat];
         matches.visited.get()
             || {
-                matches.visited.set(true);
                 matches.start.set(Some(bb));
                 self.match_block(bb_pat)
             }
@@ -269,32 +281,34 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
     #[instrument(level = "info", skip(self), ret)]
     fn match_block_ends_with(&self, bb_pat: pat::BasicBlock, bb: mir::BasicBlock) -> bool {
         let matches = &self.matches[bb_pat];
-        matches.visited.get()
-            || {
-                matches.visited.set(true);
+        (matches.visited.get() || {
+            matches.visited.set(true);
 
-                // check the statements in order of reversed dependencies
-                self.cx.pat_ddg[bb_pat].dep_end().all(|statement_index| {
+            // check the statements in order of reversed dependencies
+            self.cx.pat_ddg[bb_pat]
+                .dep_end()
+                .chain((0..self.cx.patterns[bb_pat].num_statements_and_terminator()).rev())
+                .all(|statement_index| {
                     let loc_pat = pat::Location {
                         block: bb_pat,
                         statement_index,
                     };
                     self.match_stmt_in(loc_pat, bb)
                 })
-            } && {
-                matches.end.set(Some(bb));
-                // recursively check all the succesor blocks
-                self.match_successor_blocks(bb_pat, bb)
-            }
-            || {
-                matches.visited.set(false);
-                matches.end.set(None);
-                false
-            }
+        } && {
+            matches.end.set(Some(bb));
+            // recursively check all the succesor blocks
+            self.match_successor_blocks(bb_pat, bb)
+        }) || {
+            matches.visited.set(false);
+            matches.end.set(None);
+            false
+        }
     }
     #[instrument(level = "debug", skip(self), ret)]
     fn match_successor_blocks(&self, bb_pat: pat::BasicBlock, bb: mir::BasicBlock) -> bool {
         use TerminatorEdges::{AssignOnReturn, Double, Single, SwitchInt};
+        debug!(term_pat = ?self.cx.pat_cfg[bb_pat], term = ?self.cx.mir_cfg[bb]);
         match (&self.cx.pat_cfg[bb_pat], &self.cx.mir_cfg[bb]) {
             (TerminatorEdges::None, TerminatorEdges::None) => true,
             (&Single(bb_pat), &Single(bb) | &Double(bb, _)) => self.match_block_starts_with(bb_pat, bb),
@@ -392,6 +406,10 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
     fn match_stmt_dep_start(&self, loc_pat: pat::Location, bb: mir::BasicBlock) -> bool {
         !self.cx.pat_ddg[loc_pat.block].is_rdep_start(loc_pat.statement_index)
             || self.matches[loc_pat.block].start.get() == Some(bb)
+            || self.matches[loc_pat.block].start.get().is_none() && {
+                self.matches[loc_pat.block].start.set(Some(bb));
+                self.match_block_starts_with(loc_pat.block, bb)
+            }
             || self
                 .direct_predecessors(bb)
                 .any(|pred| self.match_stmt_dep_start(loc_pat, pred))
