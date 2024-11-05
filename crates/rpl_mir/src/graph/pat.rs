@@ -51,9 +51,9 @@ impl<'tcx> PatternVisitor<'tcx> for BlockDataDepGraph<pat::LocalIdx> {
     }
 }
 
-fn normalized_terminator_edges(termiantor: Option<&pat::TerminatorKind<'_>>, pointer_bytes: u64) -> PatTerminatorEdges {
+pub fn normalized_terminator_edges(terminator: Option<&pat::TerminatorKind<'_>>, pointer_bytes: u64) -> PatTerminatorEdges {
     use pat::TerminatorKind::{Call, Drop, Goto, PatEnd, Return, SwitchInt};
-    match termiantor {
+    match terminator {
         None | Some(Return | PatEnd) => TerminatorEdges::None,
         Some(&Goto(target) | &Drop { target, .. }) => TerminatorEdges::Single(target),
         Some(&Call { target, .. }) => TerminatorEdges::AssignOnReturn {
