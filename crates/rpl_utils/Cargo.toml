@@ -1,5 +1,5 @@
 [package]
-name = "rpl_interface"
+name = "rpl_utils"
 version.workspace = true
 description.workspace = true
 repository.workspace = true
@@ -8,9 +8,8 @@ keywords.workspace = true
 edition.workspace = true
 
 [dependencies]
-rpl_driver.workspace = true
-rpl_patterns.workspace = true
-rpl_utils.workspace = true
+rpl_mir.workspace = true
+filepath = "0.1.2"
 
 [features]
 
