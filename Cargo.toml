@@ -8,6 +8,7 @@ members = [
     "crates/rpl_mir_graph",
     "crates/rpl_mir_syntax",
     "crates/rpl_patterns",
+    "crates/rpl_graphviz",
     "./"
 ]
 
@@ -29,6 +30,7 @@ rpl_mir_expand = { path = "./crates/rpl_mir_expand" }
 rpl_mir_graph = { path = "./crates/rpl_mir_graph" }
 rpl_mir_syntax = { path = "./crates/rpl_mir_syntax" }
 rpl_patterns = { path = "./crates/rpl_patterns" }
+rpl_graphviz = { path = "./crates/rpl_graphviz" }
 rustc_tools_util = "0.3.0"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.7.3"
@@ -43,6 +45,7 @@ tracing = "0.1.28"
 thiserror = "1.0"
 pretty_assertions = "1.4"
 bitflags = "2.5"
+gsgdt = "0.1.2"
 
 [package]
 name = "rpl"

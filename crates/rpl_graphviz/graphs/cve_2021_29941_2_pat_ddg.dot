@@ -1,0 +1,114 @@
+digraph name {
+subgraph cluster_bb0 {
+    bb0IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb0IN</td></tr></table>>];
+    bb0stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_0 = _</td></tr></table>>];
+    bb0stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_1 = RangeT::len(move _0) -&gt; bb1</td></tr></table>>];
+    bb0OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+    bb0stmt0 -> bb0stmt1 [label=""];
+    bb0stmt1 -> bb0OUT [label=""];
+}
+subgraph cluster_bb1 {
+    bb1IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb1IN</td></tr></table>>];
+    bb1OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+    bb1IN -> bb1stmt0 [label=""];
+    bb1stmt0 -> bb1OUT [label=""];
+}
+subgraph cluster_bb2 {
+    bb2IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb2IN</td></tr></table>>];
+    bb2stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_3 = &amp;mut _2</td></tr></table>>];
+    bb2stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_4 = Vec::as_mut_ptr(move _3) -&gt; bb3</td></tr></table>>];
+    bb2OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+    bb2IN -> bb2stmt0 [label=""];
+    bb2stmt0 -> bb2stmt1 [label=""];
+    bb2stmt1 -> bb2OUT [label=""];
+}
+subgraph cluster_bb3 {
+    bb3IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb3IN</td></tr></table>>];
+    bb3OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+    bb3IN -> bb3stmt0 [label=""];
+    bb3stmt0 -> bb3OUT [label=""];
+}
+subgraph cluster_bb4 {
+    bb4IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb4IN</td></tr></table>>];
+    bb4OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+    bb4IN -> bb4stmt0 [label=""];
+    bb4stmt0 -> bb4OUT [label=""];
+}
+subgraph cluster_bb5 {
+    bb5IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb5IN</td></tr></table>>];
+    bb5stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_7 = &amp;mut _7</td></tr></table>>];
+    bb5OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+    bb5IN -> bb5stmt0 [label=""];
+    bb5stmt0 -> bb5OUT [label=""];
+}
+subgraph cluster_bb6 {
+    bb6IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb6IN</td></tr></table>>];
+    bb6OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+    bb6IN -> bb6stmt0 [label=""];
+    bb6stmt0 -> bb6OUT [label=""];
+}
+subgraph cluster_bb7 {
+    bb7IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb7IN</td></tr></table>>];
+    bb7stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_3 = &amp;mut _2</td></tr></table>>];
+    bb7stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_13 = Vec::set_len(move _3, copy _1) -&gt; bb13</td></tr></table>>];
+    bb7OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+    bb7IN -> bb7stmt0 [label=""];
+    bb7IN -> bb7stmt1 [label=""];
+    bb7stmt0 -> bb7stmt1 [label=""];
+    bb7stmt1 -> bb7OUT [label=""];
+}
+subgraph cluster_bb8 {
+    bb8IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb8IN</td></tr></table>>];
+    bb8OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+    bb8IN -> bb8stmt0 [label=""];
+    bb8stmt0 -> bb8OUT [label=""];
+}
+subgraph cluster_bb9 {
+    bb9IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb9IN</td></tr></table>>];
+    bb9OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+    bb9IN -> bb9stmt0 [label=""];
+    bb9stmt0 -> bb9OUT [label=""];
+}
+subgraph cluster_bb10 {
+    bb10IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb10IN</td></tr></table>>];
+    bb10OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+}
+subgraph cluster_bb11 {
+    bb11IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb11IN</td></tr></table>>];
+    bb11stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_10 = copy ((_8 as Some).0)</td></tr></table>>];
+    bb11stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_11 = copy ((_8 as Some).1)</td></tr></table>>];
+    bb11stmt2 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_12 = copy _11 as usize (IntToInt)</td></tr></table>>];
+    bb11stmt3 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">((*_5)[_12]) = copy _10 as T0 (IntToInt)</td></tr></table>>];
+    bb11OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+    bb11IN -> bb11stmt0 [label=""];
+    bb11IN -> bb11stmt1 [label=""];
+    bb11IN -> bb11stmt3 [label=""];
+    bb11stmt1 -> bb11stmt2 [label=""];
+    bb11stmt0 -> bb11stmt3 [label=""];
+    bb11stmt2 -> bb11stmt3 [label=""];
+    bb11stmt4 -> bb11OUT [label=""];
+}
+subgraph cluster_bb12 {
+    bb12IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb12IN</td></tr></table>>];
+    bb12OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+}
+subgraph cluster_bb13 {
+    bb13IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb13IN</td></tr></table>>];
+    bb13OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+}
+
+    bb0OUT -> bb1IN [label="AssignOnReturn"]
+    bb1OUT -> bb2IN [label="AssignOnReturn"]
+    bb2OUT -> bb3IN [label="AssignOnReturn"]
+    bb3OUT -> bb4IN [label="AssignOnReturn"]
+    bb4OUT -> bb5IN [label="AssignOnReturn"]
+    bb5OUT -> bb6IN [label=""]
+    bb6OUT -> bb8IN [label="AssignOnReturn"]
+    bb7OUT -> bb13IN [label="AssignOnReturn"]
+    bb8OUT -> bb9IN [label="AssignOnReturn"]
+    bb9OUT -> bb11IN [label="1"]
+    bb9OUT -> bb12IN [label="Otherwise"]
+    bb10OUT -> bb6IN [label=""]
+    bb11OUT -> bb10IN [label=""]
+    bb12OUT -> bb7IN [label=""]
+}

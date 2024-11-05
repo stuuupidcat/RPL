@@ -1,0 +1,27 @@
+[package]
+name = "rpl_graphviz"
+version.workspace = true
+description.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[dependencies]
+gsgdt.workspace = true
+rpl_mir.workspace = true
+rpl_mir_graph.workspace = true
+rpl_macros.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[features]
+
+[package.metadata.rust-analyzer]
+# This crate uses #[feature(rustc_private)]
+rustc_private = true
+
+[[bin]]
+name = "rpl-graphviz"
+path = "src/bin/main.rs"
