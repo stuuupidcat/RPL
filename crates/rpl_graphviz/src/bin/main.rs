@@ -38,14 +38,12 @@ macro_rules! pat_to_graphs {
 
 fn main() {
     pat_to_graphs!(cve_2018_21000);
-    pat_to_graphs!(cve_2020_25016);
+    pat_to_graphs!(cve_2020_35892_3);
     pat_to_graphs!(cve_2021_29941_2);
 }
-/* write a macro to simulate the main function */
-/* the file path is cve_2018_21000_cfg.dot and cve_2018_21000_ddg.dot */
 
 #[rpl_macros::mir_pattern]
-fn cve_2018_21000<'tcx>(mut patterns: PatternsBuilder<'tcx>) -> Patterns<'tcx> {
+fn cve_2020_35892_3<'tcx>(mut patterns: PatternsBuilder<'tcx>) -> Patterns<'tcx> {
     mir! {
         meta!($T:ty, $SlabT:ty);
 
@@ -88,7 +86,7 @@ fn cve_2018_21000<'tcx>(mut patterns: PatternsBuilder<'tcx>) -> Patterns<'tcx> {
 }
 
 #[rpl_macros::mir_pattern]
-fn cve_2020_25016<'tcx>(mut patterns: PatternsBuilder<'tcx>) -> Patterns<'tcx> {
+fn cve_2018_21000<'tcx>(mut patterns: PatternsBuilder<'tcx>) -> Patterns<'tcx> {
     mir! {
         meta!($T:ty);
 

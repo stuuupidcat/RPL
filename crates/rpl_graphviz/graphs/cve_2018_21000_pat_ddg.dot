@@ -1,70 +1,23 @@
-digraph name {
-subgraph cluster_bb0 {
+digraph bb0 {
     bb0IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb0IN</td></tr></table>>];
-    bb0stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_1 = copy ((*_0).len)</td></tr></table>>];
-    bb0stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_2 = const 0_usize</td></tr></table>>];
     bb0OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
+    bb0stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_0 = _</td></tr></table>>];
+    bb0stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_1 = &amp;raw mut (*_0)</td></tr></table>>];
+    bb0stmt2 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_2 = PtrMetadata(copy _0</td></tr></table>>];
+    bb0stmt3 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_3 = SizeOf(T0)</td></tr></table>>];
+    bb0stmt4 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_4 = copy _1 as *mut u8 (PtrToPtr)</td></tr></table>>];
+    bb0stmt5 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_5 = Mul(move _2, move _3)</td></tr></table>>];
+    bb0stmt6 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_6 = *mut [u8] from (copy _4, copy _5)</td></tr></table>>];
+    bb0stmt7 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_7 = &amp;mut (*_6)</td></tr></table>>];
+    bb0stmt7 -> bb0OUT [label=""];
     bb0IN -> bb0stmt0 [label=""];
-    bb0stmt0 -> bb0OUT [label=""];
-    bb0stmt1 -> bb0OUT [label=""];
-}
-subgraph cluster_bb1 {
-    bb1IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb1IN</td></tr></table>>];
-    bb1stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_10 = copy _2</td></tr></table>>];
-    bb1stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_11 = Lt(move _10, copy _1)</td></tr></table>>];
-    bb1stmt2 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">switchInt(move _11) -&gt; [false -&gt; bb4, otherwise -&gt; bb5]</td></tr></table>>];
-    bb1OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
-    bb1IN -> bb1stmt0 [label=""];
-    bb1IN -> bb1stmt1 [label=""];
-    bb1stmt0 -> bb1stmt1 [label=""];
-    bb1stmt1 -> bb1stmt2 [label=""];
-    bb1stmt2 -> bb1OUT [label=""];
-}
-subgraph cluster_bb2 {
-    bb2IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb2IN</td></tr></table>>];
-    bb2OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
-}
-subgraph cluster_bb3 {
-    bb3IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb3IN</td></tr></table>>];
-    bb3OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
-}
-subgraph cluster_bb4 {
-    bb4IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb4IN</td></tr></table>>];
-    bb4OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
-}
-subgraph cluster_bb5 {
-    bb5IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb5IN</td></tr></table>>];
-    bb5stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_3 = copy _2</td></tr></table>>];
-    bb5stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_4 = core::iter::range::Step::forward_unchecked(copy _3, const 1_usize) -&gt; bb6</td></tr></table>>];
-    bb5OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
-    bb5IN -> bb5stmt0 [label=""];
-    bb5stmt0 -> bb5stmt1 [label=""];
-    bb5stmt1 -> bb5OUT [label=""];
-}
-subgraph cluster_bb6 {
-    bb6IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">bb6IN</td></tr></table>>];
-    bb6stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_5 = #[lang = &quot;Some&quot;](copy _3)</td></tr></table>>];
-    bb6stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_6 = copy ((_5 as Some).0)</td></tr></table>>];
-    bb6stmt2 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_7 = copy ((*_0).mem)</td></tr></table>>];
-    bb6stmt3 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_8 = copy _6 as isize (IntToInt)</td></tr></table>>];
-    bb6stmt4 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_9 = Offset(copy _7, copy _8)</td></tr></table>>];
-    bb6stmt5 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">core::ptr::drop_in_place(copy _9) -&gt; bb3</td></tr></table>>];
-    bb6OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">OUT</td></tr></table>>];
-    bb6IN -> bb6stmt0 [label=""];
-    bb6IN -> bb6stmt2 [label=""];
-    bb6stmt0 -> bb6stmt1 [label=""];
-    bb6stmt1 -> bb6stmt3 [label=""];
-    bb6stmt2 -> bb6stmt4 [label=""];
-    bb6stmt3 -> bb6stmt4 [label=""];
-    bb6stmt4 -> bb6stmt5 [label=""];
-    bb6stmt5 -> bb6OUT [label=""];
-}
+    bb0stmt0 -> bb0stmt1 [label=""];
+    bb0stmt0 -> bb0stmt2 [label=""];
+    bb0stmt1 -> bb0stmt4 [label=""];
+    bb0stmt2 -> bb0stmt5 [label=""];
+    bb0stmt3 -> bb0stmt5 [label=""];
+    bb0stmt4 -> bb0stmt6 [label=""];
+    bb0stmt5 -> bb0stmt6 [label=""];
+    bb0stmt6 -> bb0stmt7 [label=""];
 
-    bb0OUT -> bb1IN [label=""]
-    bb1OUT -> bb4IN [label="0"]
-    bb1OUT -> bb5IN [label="Otherwise"]
-    bb3OUT -> bb1IN [label=""]
-    bb4OUT -> bb2IN [label=""]
-    bb5OUT -> bb6IN [label="AssignOnReturn"]
-    bb6OUT -> bb3IN [label="AssignOnReturn"]
 }

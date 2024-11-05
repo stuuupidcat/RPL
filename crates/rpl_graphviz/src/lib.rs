@@ -130,15 +130,17 @@ pub fn patterns_cfg_to_generic_graph<'tcx>(patterns: &'tcx Patterns) -> Graph {
 }
 
 struct DDGConfig {
-    pub in2out: bool, // If there is no statement in the block, whether there is an edge from IN to OUT
-    pub ignore_isolated_terminator: bool, // Whether to ignore the terminator that is not connected to any statement
-    pub terminator2out: bool, // If there are statements in the block, whether there is an edge from terminator to OUT
+    pub in2out: bool,         //  Whether set an edge from IN to OUT, if there is no statement in the block,
+    pub in2first_stmt: bool,  // Whether set an edge from IN to the first statement when there are no in2 edges
+    pub terminator2out: bool, // Whether set an edge from Terminator to OUT, if there are no 2out edges
+    pub ignore_isolated_terminator: bool, // Whether ignore the isolated terminator node
 }
 
 impl Default for DDGConfig {
     fn default() -> Self {
         Self {
             in2out: true,
+            in2first_stmt: true,
             ignore_isolated_terminator: true,
             terminator2out: true,
         }
@@ -157,6 +159,8 @@ pub fn patterns_ddg_to_generic_graphs(patterns: &Patterns) -> (Vec<Graph>, Vec<E
         let mut nodes: Vec<Node> = Vec::new();
         let mut edges: Vec<Edge> = Vec::new();
         let nodes_num = block.num_statements();
+        let mut terminator_needed = false; // whether there is a TERMINATOR -> OUT edge
+
         // IN node
         let label = format!("{:?}IN", bb).replace("?", "");
         let title = String::new();
@@ -164,21 +168,72 @@ pub fn patterns_ddg_to_generic_graphs(patterns: &Patterns) -> (Vec<Graph>, Vec<E
         let node = Node::new(vec![label.clone()], label.clone(), title, style);
         nodes.push(node);
         // In edges
-        let mut has_in_edge = false;
+        let mut has_in2_edge = false;
         for dep in block.rdep_start() {
-            if !has_in_edge {
-                has_in_edge = true;
+            if !has_in2_edge {
+                has_in2_edge = true;
             }
             let src = format!("{:?}IN", bb).replace("?", "");
             let dst = format!("{:?}stmt{:?}", bb, dep).replace("?", "");
+            if dep == nodes_num - 1 {
+                // IN -> terminator
+                terminator_needed = true;
+            }
             let label = String::new();
             let edge = Edge::new(src, dst, label);
             edges.push(edge);
         }
-        if ddg_config.in2out && !has_in_edge && nodes_num == 0 {
-            // In -> OUT
+
+        // OUT node
+        let label = format!("{:?}OUT", bb).replace("?", "");
+        let title = String::new();
+        let style = NodeStyle::default();
+        let node = Node::new(vec!["OUT".to_string()], label.clone(), title, style);
+        nodes.push(node);
+        // Out edges
+        let mut has_2out_edge = false;
+        for dep in block.dep_end() {
+            if !has_2out_edge {
+                has_2out_edge = true;
+            }
+            let src = format!("{:?}stmt{:?}", bb, dep).replace("?", "");
+            let dst = format!("{:?}OUT", bb).replace("?", "");
+            let label = String::new();
+            let edge = Edge::new(src, dst, label);
+            edges.push(edge);
+        }
+
+        // Terminator -> OUT
+        if ddg_config.terminator2out && !has_2out_edge && has_in2_edge
+        // last condition means no IN -> OUT edge
+        {
+            assert!(
+                nodes_num > 0,
+                "There should be at least one statement or terminator in the block"
+            );
+            terminator_needed = true;
+            let src = format!("{:?}stmt{:?}", bb, nodes_num - 1).replace("?", "");
+            let dst = format!("{:?}OUT", bb).replace("?", "");
+            let label = String::new();
+            let edge = Edge::new(src, dst, label);
+            edges.push(edge);
+        }
+
+        // In -> OUT
+        if ddg_config.in2out && !has_in2_edge && !has_2out_edge
+        // last condition means no Node -> OUT edge
+        {
             let src = format!("{:?}IN", bb).replace("?", "");
             let dst = format!("{:?}OUT", bb).replace("?", "");
+            let label = String::new();
+            let edge = Edge::new(src, dst, label);
+            edges.push(edge);
+        }
+
+        // IN -> First stmt
+        if ddg_config.in2first_stmt && !has_in2_edge && has_2out_edge {
+            let src = format!("{:?}IN", bb).replace("?", "");
+            let dst = format!("{:?}stmt0", bb).replace("?", "");
             let label = String::new();
             let edge = Edge::new(src, dst, label);
             edges.push(edge);
@@ -210,7 +265,7 @@ pub fn patterns_ddg_to_generic_graphs(patterns: &Patterns) -> (Vec<Graph>, Vec<E
                 let edge = Edge::new(src, dst, label);
                 edges.push(edge);
             }
-            if ddg_config.ignore_isolated_terminator && idx == nodes_num - 1 && deps_empty {
+            if ddg_config.ignore_isolated_terminator && idx == nodes_num - 1 && deps_empty && !terminator_needed {
                 // ignore the terminator
                 println!(
                     "ignore the isolated terminator `{:?}` of block `{:?}`",
@@ -222,36 +277,6 @@ pub fn patterns_ddg_to_generic_graphs(patterns: &Patterns) -> (Vec<Graph>, Vec<E
             }
         }
 
-        // OUT node
-        let label = format!("{:?}OUT", bb).replace("?", "");
-        let title = String::new();
-        let style = NodeStyle::default();
-        let node = Node::new(vec!["OUT".to_string()], label.clone(), title, style);
-        nodes.push(node);
-        // Out edges
-        let mut has_out_edge = false;
-        for dep in block.dep_end() {
-            if !has_out_edge {
-                has_out_edge = true;
-            }
-            let src = format!("{:?}stmt{:?}", bb, dep).replace("?", "");
-            let dst = format!("{:?}OUT", bb).replace("?", "");
-            let label = String::new();
-            let edge = Edge::new(src, dst, label);
-            edges.push(edge);
-        }
-        // Terminator -> OUT
-        assert!(
-            !has_in_edge || nodes_num > 0,
-            "There should be at least one statement in the block"
-        );
-        if ddg_config.terminator2out && !has_out_edge && has_in_edge {
-            let src = format!("{:?}stmt{:?}", bb, nodes_num - 1).replace("?", "");
-            let dst = format!("{:?}OUT", bb).replace("?", "");
-            let label = String::new();
-            let edge = Edge::new(src, dst, label);
-            edges.push(edge);
-        }
         // cfg edges: OUT->IN (cross subgraph edges)
         let terminator = basic_block_data.terminator();
         let normalized_terminator_edge = normalized_terminator_edges(Some(terminator), 8);
