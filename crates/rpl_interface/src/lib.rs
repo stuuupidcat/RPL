@@ -20,6 +20,7 @@ pub use callbacks::{DefaultCallbacks, RplCallbacks, RustcCallbacks, RPL_ARGS_ENV
 static RPL_LOCALE_RESOURCES: &[&str] = &[
     rpl_driver::DEFAULT_LOCALE_RESOURCE,
     rpl_patterns::DEFAULT_LOCALE_RESOURCE,
+    rpl_utils::DEFAULT_LOCALE_RESOURCE,
 ];
 
 pub fn default_locale_resources() -> Vec<&'static str> {
