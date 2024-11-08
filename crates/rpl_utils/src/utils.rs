@@ -1,7 +1,11 @@
-use core::iter::Iterator;
+use std::fs::File;
+use std::io;
+use std::iter::Iterator;
+use std::path::{Path, PathBuf};
 
+use rpl_graphviz::{mir_cfg_to_graphviz, mir_ddg_to_graphviz};
 use rustc_ast::token::{Token, TokenKind};
-use rustc_ast::tokenstream::TokenTree;
+use rustc_ast::tokenstream::{RefTokenTreeCursor, TokenTree};
 use rustc_errors::{DiagArgValue, IntoDiagArg, MultiSpan};
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
@@ -169,6 +173,7 @@ fn contains_attr(attrs: &[ast::Attribute], expected_attr: &str) -> Option<Span> 
 
 macro_rules! dump_mir_options {
     ($($name:ident: $ty:ty = $default:expr),* $(,)?) => {
+        #[derive(Debug)]
         struct DumpMirOptions {
             $( $name: $ty, )*
         }
@@ -207,37 +212,41 @@ fn contains_dump_mir(attrs: &[ast::Attribute]) -> Option<DumpMirAttr> {
             ast::AttrArgs::Empty => {},
             ast::AttrArgs::Delimited(delim_args) => {
                 let mut trees = delim_args.tokens.trees();
-                fn symbol(token: &Token) -> Option<Symbol> {
-                    token.ident().map(|(ident, _)| ident.name)
-                }
-                loop {
-                    if let Some(TokenTree::Token(name, _)) = trees.next()
-                        && let Some(name) = symbol(name)
-                    {
-                        let value = if let Some(TokenTree::Token(eq, _)) = trees.next()
-                            && eq.kind == TokenKind::Eq
-                            && let Some(TokenTree::Token(value, _)) = trees.next()
-                            && value.is_non_raw_ident_where(|ident| ident.name == kw::False)
-                        {
-                            false
-                        } else {
-                            true
-                        };
-                        match name.as_str() {
-                            DumpMirOptions::include_extra_comments => options.include_extra_comments = value,
-                            DumpMirOptions::dump_cfg => options.dump_cfg = value,
-                            DumpMirOptions::dump_ddg => options.dump_ddg = value,
-                            _ => {},
-                        }
-                    } else {
-                        break;
-                    }
-                    if let Some(TokenTree::Token(eq, _)) = trees.next()
-                        && eq.kind == TokenKind::Comma
-                    {
-                        continue;
+                fn eat_ident(trees: &mut RefTokenTreeCursor<'_>) -> Option<Symbol> {
+                    match trees.next() {
+                        Some(TokenTree::Token(token, _)) => token.ident().map(|(ident, _)| ident.name),
+                        _ => None,
                     }
                 }
+                fn matches_token(token: Option<&TokenTree>, f: impl FnOnce(&Token) -> bool) -> bool {
+                    matches!(token, Some(TokenTree::Token(token, _)) if f(token))
+                }
+                fn matches_token_kind(token: Option<&TokenTree>, kind: &TokenKind) -> bool {
+                    matches_token(token, |token| &token.kind == kind)
+                }
+                fn eat_token_kind(trees: &mut RefTokenTreeCursor<'_>, kind: TokenKind) -> Option<TokenKind> {
+                    matches_token_kind(trees.next(), &kind).then_some(kind)
+                }
+                fn eat_eq_bool(trees: &mut RefTokenTreeCursor<'_>) -> Option<bool> {
+                    if !matches_token_kind(trees.look_ahead(0), &TokenKind::Eq) {
+                        return None;
+                    }
+                    match trees.nth(1) {
+                        Some(TokenTree::Token(token, _)) if token.is_bool_lit() => Some(token.is_ident_named(kw::True)),
+                        _ => None,
+                    }
+                }
+                while let Some(()) = try {
+                    let name = eat_ident(&mut trees)?;
+                    let value = eat_eq_bool(&mut trees).unwrap_or(true);
+                    match name.as_str() {
+                        DumpMirOptions::include_extra_comments => options.include_extra_comments = value,
+                        DumpMirOptions::dump_cfg => options.dump_cfg = value,
+                        DumpMirOptions::dump_ddg => options.dump_ddg = value,
+                        _ => {},
+                    }
+                    eat_token_kind(&mut trees, TokenKind::Comma)?;
+                } {}
             },
             ast::AttrArgs::Eq(_, _attr_args_eq) => {},
         };
@@ -365,24 +374,40 @@ fn dump_mir<'tcx>(tcx: TyCtxt<'tcx>, body: &mir::Body<'tcx>, span: Span, attr: &
     let locals_and_source_scopes = dump_mir_locals_and_source_scopes(body);
 
     let def_id = body.source.def_id();
-    let file = dump_mir_to_file(tcx, body, &attr.options)
-        .map(|file| crate::errors::DumpMirFile { file })
-        .ok();
+    let files = dump_mir_to_file(tcx, body, &attr.options).map_or(Vec::new(), |path| {
+        let mut files = vec![crate::errors::DumpMirFile {
+            file: path.display().to_string(),
+            content: "MIR",
+        }];
+        if attr.options.dump_cfg
+            && let Ok(path) = dump_mir_cfg_to_file(body, &path)
+        {
+            files.push(crate::errors::DumpMirFile {
+                file: path.display().to_string(),
+                content: "control flow graph",
+            });
+        }
+        if attr.options.dump_ddg
+            && let Ok(path) = dump_mir_ddg_to_file(body, &path)
+        {
+            files.push(crate::errors::DumpMirFile {
+                file: path.display().to_string(),
+                content: "data dependency graph",
+            });
+        }
+        files
+    });
     tcx.dcx().emit_note(crate::errors::DumpMir {
         span,
         def_id: def_id.into(),
-        file,
+        files,
         attr_span: attr.span,
         locals_and_source_scopes,
         blocks,
     });
 }
 
-fn dump_mir_to_file<'tcx>(
-    tcx: TyCtxt<'tcx>,
-    body: &mir::Body<'tcx>,
-    options: &DumpMirOptions,
-) -> std::io::Result<String> {
+fn dump_mir_to_file<'tcx>(tcx: TyCtxt<'tcx>, body: &mir::Body<'tcx>, options: &DumpMirOptions) -> io::Result<PathBuf> {
     use filepath::FilePath;
     let mut file = mir::pretty::create_dump_file(tcx, "mir", false, "dump_mir", &"", body)?;
     mir::pretty::write_mir_fn(
@@ -394,7 +419,23 @@ fn dump_mir_to_file<'tcx>(
             include_extra_comments: options.include_extra_comments,
         },
     )?;
-    Ok(file.get_ref().path()?.display().to_string())
+    file.get_ref().path()
+}
+
+fn dump_mir_cfg_to_file(body: &mir::Body<'_>, path: &Path) -> std::io::Result<PathBuf> {
+    let mut path = path.to_path_buf();
+    path.add_extension("cfg.dot");
+    let mut file = File::create(&path)?;
+    mir_cfg_to_graphviz(body, &mut file, &Default::default())?;
+    Ok(path)
+}
+
+fn dump_mir_ddg_to_file(body: &mir::Body<'_>, path: &Path) -> std::io::Result<PathBuf> {
+    let mut path = path.to_path_buf();
+    path.add_extension("ddg.dot");
+    let mut file = File::create(&path)?;
+    mir_ddg_to_graphviz(body, &mut file, &Default::default())?;
+    Ok(path)
 }
 
 fn dump_mir_locals_and_source_scopes(body: &mir::Body<'_>) -> crate::errors::DumpMirLocalsAndSourceScopes {

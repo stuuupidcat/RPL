@@ -1,19 +1,21 @@
 note: MIR of `test`
   --> tests/ui/utils/dump_mir.rs:9:1
    |
-LL |   #[rpl::dump_mir]
-   |   ---------------- MIR dumpped because of this attribute
+LL |   #[rpl::dump_mir(dump_cfg, dump_ddg)]
+   |   ------------------------------------ MIR dumpped because of this attribute
 ...
 LL | / fn test() {
 LL | |
 LL | |
-LL | |     let mut arr: [u8; 20] = [1; 20];
+LL | |
 ...  |
 LL | |     }
 LL | | }
    | |_^
    |
    = note: see `./mir_dump/dump_mir.test.-------.dump_mir..mir` for dumpped MIR
+   = note: see `./mir_dump/dump_mir.test.-------.dump_mir..mir.cfg.dot` for dumpped control flow graph
+   = note: see `./mir_dump/dump_mir.test.-------.dump_mir..mir.ddg.dot` for dumpped data dependency graph
 note: locals and scopes in this MIR
   --> tests/ui/utils/dump_mir.rs:9:1
    |
@@ -21,6 +23,8 @@ LL |        fn test() {
    |        ^        - _0: (); // scope[0]
    |  ______|
    | |
+LL | |
+LL | |
 LL | |
 LL | |
 LL | |          let mut arr: [u8; 20] = [1; 20];
@@ -35,13 +39,13 @@ LL | |||        // FIXME: this note is not supposed to be here
 LL | |||        for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
    | |||   _____-___-____------------------------------------------_-
    | |||  |     |   |    |
-   | |||  |     |   |    _3: std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}>, {closure@tests/ui/utils/dump_mir.rs:15:44: 15:48}>; // scope[0]
-   | |||  |     |   |    _4: std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}>, {closure@tests/ui/utils/dump_mir.rs:15:44: 15:48}>; // scope[0]
-   | |||  |     |   |    _5: std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}>; // scope[0]
+   | |||  |     |   |    _3: std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}>, {closure@tests/ui/utils/dump_mir.rs:17:44: 17:48}>; // scope[0]
+   | |||  |     |   |    _4: std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}>, {closure@tests/ui/utils/dump_mir.rs:17:44: 17:48}>; // scope[0]
+   | |||  |     |   |    _5: std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}>; // scope[0]
    | |||  |     |   |    _6: std::ops::Range<usize>; // scope[0]
-   | |||  |     |   |    _7: std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}>, {closure@tests/ui/utils/dump_mir.rs:15:44: 15:48}>; // scope[2]
+   | |||  |     |   |    _7: std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}>, {closure@tests/ui/utils/dump_mir.rs:17:44: 17:48}>; // scope[2]
    | |||  |     |   |    _8: std::option::Option<usize>; // scope[0]
-   | |||  |     |   |    _9: &mut std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}>, {closure@tests/ui/utils/dump_mir.rs:15:44: 15:48}>; // scope[0]
+   | |||  |     |   |    _9: &mut std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}>, {closure@tests/ui/utils/dump_mir.rs:17:44: 17:48}>; // scope[0]
    | |||  |_____|   _11: usize; // scope[3]
    | ||| ||
 LL | ||| ||
@@ -76,9 +80,9 @@ note: bb0: {
           _1 = [const 1_u8; 20]; // scope[0]
           _2 = const 2_usize; // scope[1]
           _6 = std::ops::Range::<usize> { start: const 0_usize, end: const 10_usize }; // scope[2]
-          _5 = <std::ops::Range<usize> as std::iter::Iterator>::map::<usize, {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}>(move _6, const ZeroSized: {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}) -> [return: bb1, unwind continue]; // scope[2]
+          _5 = <std::ops::Range<usize> as std::iter::Iterator>::map::<usize, {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}>(move _6, const ZeroSized: {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}) -> [return: bb1, unwind continue]; // scope[2]
       }
-  --> tests/ui/utils/dump_mir.rs:15:14
+  --> tests/ui/utils/dump_mir.rs:17:14
    |
 LL |     let mut arr: [u8; 20] = [1; 20];
    |                             ------- _1 = [const 1_u8; 20]; // scope[0]
@@ -89,26 +93,26 @@ LL |     for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
    |              -------^^^^^^^^^^^^^^^
    |              |
    |              _6 = std::ops::Range::<usize> { start: const 0_usize, end: const 10_usize }; // scope[2]
-   |              _5 = <std::ops::Range<usize> as std::iter::Iterator>::map::<usize, {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}>(move _6, const ZeroSized: {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}) -> [return: bb1, unwind continue]; // scope[2]
+   |              _5 = <std::ops::Range<usize> as std::iter::Iterator>::map::<usize, {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}>(move _6, const ZeroSized: {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}) -> [return: bb1, unwind continue]; // scope[2]
 note: bb1: {
-          _4 = <std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}> as std::iter::Iterator>::filter::<{closure@tests/ui/utils/dump_mir.rs:15:44: 15:48}>(move _5, const ZeroSized: {closure@tests/ui/utils/dump_mir.rs:15:44: 15:48}) -> [return: bb2, unwind continue]; // scope[2]
+          _4 = <std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}> as std::iter::Iterator>::filter::<{closure@tests/ui/utils/dump_mir.rs:17:44: 17:48}>(move _5, const ZeroSized: {closure@tests/ui/utils/dump_mir.rs:17:44: 17:48}) -> [return: bb2, unwind continue]; // scope[2]
       }
-  --> tests/ui/utils/dump_mir.rs:15:14
+  --> tests/ui/utils/dump_mir.rs:17:14
    |
 LL |     for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
-   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ _4 = <std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}> as std::iter::Iterator>::filter::<{closure@tests/ui/utils/dump_mir.rs:15:44: 15:48}>(move _5, const ZeroSized: {closure@tests/ui/utils/dump_mir.rs:15:44: 15:48}) -> [return: bb2, unwind continue]; // scope[2]
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ _4 = <std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}> as std::iter::Iterator>::filter::<{closure@tests/ui/utils/dump_mir.rs:17:44: 17:48}>(move _5, const ZeroSized: {closure@tests/ui/utils/dump_mir.rs:17:44: 17:48}) -> [return: bb2, unwind continue]; // scope[2]
 note: bb2: {
-          _3 = <std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}>, {closure@tests/ui/utils/dump_mir.rs:15:44: 15:48}> as std::iter::IntoIterator>::into_iter(move _4) -> [return: bb3, unwind continue]; // scope[2]
+          _3 = <std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}>, {closure@tests/ui/utils/dump_mir.rs:17:44: 17:48}> as std::iter::IntoIterator>::into_iter(move _4) -> [return: bb3, unwind continue]; // scope[2]
       }
-  --> tests/ui/utils/dump_mir.rs:15:14
+  --> tests/ui/utils/dump_mir.rs:17:14
    |
 LL |     for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
-   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ _3 = <std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}>, {closure@tests/ui/utils/dump_mir.rs:15:44: 15:48}> as std::iter::IntoIterator>::into_iter(move _4) -> [return: bb3, unwind continue]; // scope[2]
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ _3 = <std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}>, {closure@tests/ui/utils/dump_mir.rs:17:44: 17:48}> as std::iter::IntoIterator>::into_iter(move _4) -> [return: bb3, unwind continue]; // scope[2]
 note: bb3: {
           _7 = move _3; // scope[2]
           goto -> bb4; // scope[3]
       }
-  --> tests/ui/utils/dump_mir.rs:15:5
+  --> tests/ui/utils/dump_mir.rs:17:5
    |
 LL |       for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
    |       ^        ------------------------------------------ _7 = move _3; // scope[2]
@@ -123,20 +127,20 @@ LL | |     }
    | |_____^ goto -> bb4; // scope[3]
 note: bb4: {
           _9 = &mut _7; // scope[3]
-          _8 = <std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}>, {closure@tests/ui/utils/dump_mir.rs:15:44: 15:48}> as std::iter::Iterator>::next(copy _9) -> [return: bb5, unwind continue]; // scope[3]
+          _8 = <std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}>, {closure@tests/ui/utils/dump_mir.rs:17:44: 17:48}> as std::iter::Iterator>::next(copy _9) -> [return: bb5, unwind continue]; // scope[3]
       }
-  --> tests/ui/utils/dump_mir.rs:15:14
+  --> tests/ui/utils/dump_mir.rs:17:14
    |
 LL |     for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |              |
    |              _9 = &mut _7; // scope[3]
-   |              _8 = <std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:15:26: 15:29}>, {closure@tests/ui/utils/dump_mir.rs:15:44: 15:48}> as std::iter::Iterator>::next(copy _9) -> [return: bb5, unwind continue]; // scope[3]
+   |              _8 = <std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:17:26: 17:29}>, {closure@tests/ui/utils/dump_mir.rs:17:44: 17:48}> as std::iter::Iterator>::next(copy _9) -> [return: bb5, unwind continue]; // scope[3]
 note: bb5: {
           _10 = discriminant(_8); // scope[3]
           switchInt(move _10) -> [0: bb8, 1: bb7, otherwise: bb6]; // scope[3]
       }
-  --> tests/ui/utils/dump_mir.rs:15:14
+  --> tests/ui/utils/dump_mir.rs:17:14
    |
 LL |     for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -146,7 +150,7 @@ LL |     for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
 note: bb6: {
           unreachable; // scope[3]
       }
-  --> tests/ui/utils/dump_mir.rs:15:14
+  --> tests/ui/utils/dump_mir.rs:17:14
    |
 LL |     for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
    |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ unreachable; // scope[3]
@@ -157,7 +161,7 @@ note: bb7: {
           _15 = Lt(copy _13, copy _14); // scope[4]
           assert(move _15, "index out of bounds: the length is {} but the index is {}", move _14, copy _13) -> [success: bb9, unwind continue]; // scope[4]
       }
-  --> tests/ui/utils/dump_mir.rs:25:18
+  --> tests/ui/utils/dump_mir.rs:27:18
    |
 LL |     for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
    |         - _11 = copy ((_8 as Some).0: usize); // scope[3]
@@ -172,7 +176,7 @@ LL |         arr[i] = arr[j];
 note: bb8: {
           return; // scope[0]
       }
-  --> tests/ui/utils/dump_mir.rs:30:2
+  --> tests/ui/utils/dump_mir.rs:32:2
    |
 LL | }
    |  ^ return; // scope[0]
@@ -182,7 +186,7 @@ note: bb9: {
           _17 = Lt(copy _11, copy _16); // scope[4]
           assert(move _17, "index out of bounds: the length is {} but the index is {}", move _16, copy _11) -> [success: bb10, unwind continue]; // scope[4]
       }
-  --> tests/ui/utils/dump_mir.rs:25:9
+  --> tests/ui/utils/dump_mir.rs:27:9
    |
 LL |         arr[i] = arr[j];
    |         ^^^^^^   ------ _12 = copy _1[_13]; // scope[4]
@@ -196,7 +200,7 @@ note: bb10: {
           _2 = Add(move _18, const 1_usize); // scope[4]
           goto -> bb4; // scope[3]
       }
-  --> tests/ui/utils/dump_mir.rs:15:5
+  --> tests/ui/utils/dump_mir.rs:17:5
    |
 LL | /     for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
 LL | |
@@ -215,10 +219,10 @@ LL | |     }
    | |_____^ goto -> bb4; // scope[3]
 
 note: MIR of `critical`
-  --> tests/ui/utils/dump_mir.rs:37:1
+  --> tests/ui/utils/dump_mir.rs:39:1
    |
-LL |   #[rpl::dump_mir]
-   |   ---------------- MIR dumpped because of this attribute
+LL |   #[rpl::dump_mir(dump_cfg, dump_ddg)]
+   |   ------------------------------------ MIR dumpped because of this attribute
 LL | / fn critical(i: i16, j: i16) -> Result<i16, ()> {
 LL | |
 LL | |
@@ -229,8 +233,10 @@ LL | | }
    | |_^
    |
    = note: see `./mir_dump/dump_mir.critical.-------.dump_mir..mir` for dumpped MIR
+   = note: see `./mir_dump/dump_mir.critical.-------.dump_mir..mir.cfg.dot` for dumpped control flow graph
+   = note: see `./mir_dump/dump_mir.critical.-------.dump_mir..mir.ddg.dot` for dumpped data dependency graph
 note: locals and scopes in this MIR
-  --> tests/ui/utils/dump_mir.rs:37:1
+  --> tests/ui/utils/dump_mir.rs:39:1
    |
 LL |     fn critical(i: i16, j: i16) -> Result<i16, ()> {
    |     ^           -       -          --------------- _0: std::result::Result<i16, ()>; // scope[0]
@@ -241,6 +247,7 @@ LL |     fn critical(i: i16, j: i16) -> Result<i16, ()> {
 LL | |
 LL | |
 LL | |
+...  |
 LL | |/      let result = 0_i16;
 LL | ||      let k = 3_i16 * i + j * j;
    | ||      -   -   ---------   ----- _5: i16; // scope[0]
@@ -269,7 +276,7 @@ note: bb0: {
           _3 = Add(move _4, move _5); // scope[1]
           _6 = f2() -> [return: bb1, unwind continue]; // scope[2]
       }
-  --> tests/ui/utils/dump_mir.rs:43:8
+  --> tests/ui/utils/dump_mir.rs:47:8
    |
 LL |     let k = 3_i16 * i + j * j;
    |             -----------------
@@ -282,7 +289,7 @@ LL |     if f2() {
 note: bb1: {
           switchInt(move _6) -> [0: bb4, otherwise: bb2]; // scope[2]
       }
-  --> tests/ui/utils/dump_mir.rs:43:8
+  --> tests/ui/utils/dump_mir.rs:47:8
    |
 LL |     if f2() {
    |        ^^^^ switchInt(move _6) -> [0: bb4, otherwise: bb2]; // scope[2]
@@ -290,7 +297,7 @@ note: bb2: {
           _7 = Gt(copy _3, const 0_i16); // scope[2]
           switchInt(move _7) -> [0: bb4, otherwise: bb3]; // scope[2]
       }
-  --> tests/ui/utils/dump_mir.rs:46:12
+  --> tests/ui/utils/dump_mir.rs:50:12
    |
 LL |         if k > 0 {
    |            ^^^^^
@@ -301,7 +308,7 @@ note: bb3: {
           _0 = std::result::Result::<i16, ()>::Err(const ()); // scope[2]
           goto -> bb5; // scope[0]
       }
-  --> tests/ui/utils/dump_mir.rs:52:2
+  --> tests/ui/utils/dump_mir.rs:56:2
    |
 LL |             return Err(());
    |                    ------- _0 = std::result::Result::<i16, ()>::Err(const ()); // scope[2]
@@ -313,7 +320,7 @@ note: bb4: {
           _0 = std::result::Result::<i16, ()>::Ok(move _8); // scope[2]
           goto -> bb5; // scope[0]
       }
-  --> tests/ui/utils/dump_mir.rs:52:2
+  --> tests/ui/utils/dump_mir.rs:56:2
    |
 LL |     Ok(result)
    |     ----------
@@ -325,20 +332,22 @@ LL | }
 note: bb5: {
           return; // scope[0]
       }
-  --> tests/ui/utils/dump_mir.rs:52:2
+  --> tests/ui/utils/dump_mir.rs:56:2
    |
 LL | }
    |  ^ return; // scope[0]
 
 note: MIR of `std::alloc::alloc`
-  --> tests/ui/utils/dump_mir.rs:59:13
+  --> tests/ui/utils/dump_mir.rs:63:13
    |
-LL |     #[rpl::dump_mir]
-   |     ---------------- MIR dumpped because of this attribute
+LL |     #[rpl::dump_mir(dump_cfg, dump_ddg)]
+   |     ------------------------------------ MIR dumpped because of this attribute
 LL |     let _ = std::alloc::alloc;
    |             ^^^^^^^^^^^^^^^^^
    |
    = note: see `./mir_dump/alloc.alloc-alloc.-------.dump_mir..mir` for dumpped MIR
+   = note: see `./mir_dump/alloc.alloc-alloc.-------.dump_mir..mir.cfg.dot` for dumpped control flow graph
+   = note: see `./mir_dump/alloc.alloc-alloc.-------.dump_mir..mir.ddg.dot` for dumpped data dependency graph
 note: locals and scopes in this MIR
   --> $SRC_DIR/alloc/src/alloc.rs:93:1
    |
@@ -640,29 +649,31 @@ LL |           intrinsics::volatile_load(src)
    = note: this note originates in the macro `ub_checks::assert_unsafe_precondition` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 note: MIR of `main::{closure#0}`
-  --> tests/ui/utils/dump_mir.rs:71:13
+  --> tests/ui/utils/dump_mir.rs:77:13
    |
-LL |     #[rpl::dump_mir]
-   |     ---------------- MIR dumpped because of this attribute
+LL |     #[rpl::dump_mir(dump_cfg, dump_ddg)]
+   |     ------------------------------------ MIR dumpped because of this attribute
 LL |     let _ = |x: i32| x + 1;
    |             ^^^^^^^^^^^^^^
    |
    = note: see `./mir_dump/dump_mir.main-{closure#0}.-------.dump_mir..mir` for dumpped MIR
+   = note: see `./mir_dump/dump_mir.main-{closure#0}.-------.dump_mir..mir.cfg.dot` for dumpped control flow graph
+   = note: see `./mir_dump/dump_mir.main-{closure#0}.-------.dump_mir..mir.ddg.dot` for dumpped data dependency graph
 note: locals and scopes in this MIR
-  --> tests/ui/utils/dump_mir.rs:71:13
+  --> tests/ui/utils/dump_mir.rs:77:13
    |
 LL |     let _ = |x: i32| x + 1;
    |             ^-^^^^^^-^^^^^
    |             ||      |
    |             ||      _0: i32; // scope[0]
    |             |_2: i32; // scope[0]
-   |             _1: &{closure@tests/ui/utils/dump_mir.rs:71:13: 71:21}; // scope[0]
+   |             _1: &{closure@tests/ui/utils/dump_mir.rs:77:13: 77:21}; // scope[0]
    |             scope[0]
 note: bb0: {
           _0 = Add(copy _2, const 1_i32); // scope[0]
           return; // scope[0]
       }
-  --> tests/ui/utils/dump_mir.rs:71:27
+  --> tests/ui/utils/dump_mir.rs:77:27
    |
 LL |     let _ = |x: i32| x + 1;
    |                      -----^ return; // scope[0]
@@ -670,14 +681,16 @@ LL |     let _ = |x: i32| x + 1;
    |                      _0 = Add(copy _2, const 1_i32); // scope[0]
 
 note: MIR of `<std::result::IntoIter<T> as std::iter::Iterator>::next`
-  --> tests/ui/utils/dump_mir.rs:78:13
+  --> tests/ui/utils/dump_mir.rs:86:13
    |
-LL |     #[rpl::dump_mir]
-   |     ---------------- MIR dumpped because of this attribute
+LL |     #[rpl::dump_mir(dump_cfg, dump_ddg)]
+   |     ------------------------------------ MIR dumpped because of this attribute
 LL |     let _ = <std::result::IntoIter<&str> as std::iter::Iterator>::next;
    |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
    = note: see `./mir_dump/core.result-{impl#20}-next.-------.dump_mir..mir` for dumpped MIR
+   = note: see `./mir_dump/core.result-{impl#20}-next.-------.dump_mir..mir.cfg.dot` for dumpped control flow graph
+   = note: see `./mir_dump/core.result-{impl#20}-next.-------.dump_mir..mir.ddg.dot` for dumpped data dependency graph
 note: locals and scopes in this MIR
   --> $SRC_DIR/core/src/result.rs:1902:5
    |
@@ -780,45 +793,45 @@ LL |         intrinsics::write_via_move(dst, src)
 error: abort due to debugging
   --> tests/ui/utils/dump_mir.rs:4:1
    |
-LL | #[rpl::dump_mir]
-   | ^^^^^^^^^^^^^^^^
+LL | #[rpl::dump_mir(dump_cfg, dump_ddg)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-LL | #[rpl::dump_mir]
-   | ^^^^^^^^^^^^^^^^
+LL | #[rpl::dump_mir(dump_cfg, dump_ddg)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-LL |     #[rpl::dump_mir]
-   |     ^^^^^^^^^^^^^^^^
+LL |     #[rpl::dump_mir(dump_cfg, dump_ddg)]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-LL |     #[rpl::dump_mir]
-   |     ^^^^^^^^^^^^^^^^
+LL |     #[rpl::dump_mir(dump_cfg, dump_ddg)]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 ...
-LL |     #[rpl::dump_mir]
-   |     ^^^^^^^^^^^^^^^^
+LL |     #[rpl::dump_mir(dump_cfg, dump_ddg)]
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
    = note: `#[rpl::dump_hir]`, `#[rpl::print_hir]` and `#[rpl::dump_mir]` are only used for debugging
    = note: this error is to remind you removing these attributes
 help: remove this attribute
    |
-LL - #[rpl::dump_mir]
+LL - #[rpl::dump_mir(dump_cfg, dump_ddg)]
    |
 help: remove this attribute
    |
-LL - #[rpl::dump_mir]
+LL - #[rpl::dump_mir(dump_cfg, dump_ddg)]
 LL +
    |
 help: remove this attribute
    |
-LL -     #[rpl::dump_mir]
+LL -     #[rpl::dump_mir(dump_cfg, dump_ddg)]
 LL +
    |
 help: remove this attribute
    |
-LL -     #[rpl::dump_mir]
+LL -     #[rpl::dump_mir(dump_cfg, dump_ddg)]
 LL +
    |
 help: remove this attribute
    |
-LL -     #[rpl::dump_mir]
+LL -     #[rpl::dump_mir(dump_cfg, dump_ddg)]
 LL +
    |
 

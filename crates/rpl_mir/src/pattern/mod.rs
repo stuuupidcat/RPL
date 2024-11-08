@@ -90,7 +90,7 @@ pub struct Patterns<'tcx> {
     pub(crate) ty_vars: IndexVec<TyVarIdx, Option<TyPred<'tcx>>>,
     pub(crate) const_vars: IndexVec<ConstVarIdx, Ty<'tcx>>,
     pub(crate) self_idx: Option<LocalIdx>,
-    pub(crate) locals: IndexVec<LocalIdx, Ty<'tcx>>,
+    pub locals: IndexVec<LocalIdx, Ty<'tcx>>,
     pub basic_blocks: IndexVec<BasicBlock, BasicBlockData<'tcx>>,
     pub primitive_types: PrimitiveTypes<'tcx>,
 }

@@ -1,5 +1,7 @@
 #![feature(rustc_private)]
 #![feature(let_chains)]
+#![feature(path_add_extension)]
+#![feature(try_blocks)]
 
 extern crate rustc_ast;
 extern crate rustc_data_structures;

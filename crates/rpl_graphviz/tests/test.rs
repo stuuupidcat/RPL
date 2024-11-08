@@ -1,50 +1,57 @@
 #![feature(rustc_private)]
+#![feature(macro_metavar_expr_concat)]
 
 extern crate rustc_arena;
 extern crate rustc_driver;
 extern crate rustc_middle;
 extern crate rustc_span;
 
-use rpl_graphviz::{write_cfg_graphviz, write_ddg_graphviz};
-use rpl_mir::pat::{Patterns, PatternsBuilder};
+use std::fs::File;
+use std::io::Read;
+
+use pretty_assertions::assert_eq;
+use rpl_graphviz::{pat_cfg_to_graphviz, pat_ddg_to_graphviz};
+use rpl_mir::pat::PatternsBuilder;
 use rustc_arena::DroplessArena;
 
-use std::fs::File;
-
-macro_rules! pat_to_graphs {
-    ($name:ident) => {
-        let arena = DroplessArena::default();
-        rustc_span::create_session_if_not_set_then(rustc_span::edition::LATEST_STABLE_EDITION, |_| {
-            let patterns = PatternsBuilder::new(&arena);
-            let patterns = $name(patterns);
-            let _dir = std::fs::create_dir_all("./crates/rpl_graphviz/graphs").unwrap();
-            let mut file = File::create(concat!(
-                "./crates/rpl_graphviz/graphs/",
-                stringify!($name),
-                "_pat_cfg.dot"
-            ))
-            .unwrap();
-            write_cfg_graphviz(&patterns, &mut file);
-            let mut file = File::create(concat!(
-                "./crates/rpl_graphviz/graphs/",
-                stringify!($name),
-                "_pat_ddg.dot"
-            ))
-            .unwrap();
-            write_ddg_graphviz(&patterns, &mut file);
-        });
-    };
+#[track_caller]
+fn compare_with_file(buf: Vec<u8>, file: &str) {
+    let mut file = File::open(file).unwrap();
+    let buf = String::from_utf8(buf).unwrap();
+    let mut expected = String::new();
+    file.read_to_string(&mut expected).unwrap();
+    assert_eq!(buf, expected);
 }
 
-fn main() {
-    pat_to_graphs!(cve_2018_21000);
-    pat_to_graphs!(cve_2020_35892_3);
-    pat_to_graphs!(cve_2021_29941_2);
+macro_rules! test_case {
+    ( $(#[$meta:meta])* fn $name:ident() { $($input:tt)* }) => {
+        #[rpl_macros::mir_pattern]
+        fn $name(patterns: &mut PatternsBuilder<'_>) {
+            mir! {
+                $($input)*
+            }
+        }
+        #[test]
+        $(#[$meta])*
+        fn ${concat(test_, $name)}() {
+            let arena = DroplessArena::default();
+            rustc_span::create_session_if_not_set_then(rustc_span::edition::LATEST_STABLE_EDITION, |_| {
+                let mut patterns = PatternsBuilder::new(&arena);
+                $name(&mut patterns);
+                let patterns = patterns.build();
+                let mut cfg = Vec::new();
+                pat_cfg_to_graphviz(&patterns, &mut cfg, &Default::default()).unwrap();
+                compare_with_file(cfg, concat!(env!("CARGO_MANIFEST_DIR"), "/tests/graphs/", stringify!($name), "_pat_cfg.dot"));
+                let mut ddg = Vec::new();
+                pat_ddg_to_graphviz(&patterns, &mut ddg, &Default::default()).unwrap();
+                compare_with_file(ddg, concat!(env!("CARGO_MANIFEST_DIR"), "/tests/graphs/", stringify!($name), "_pat_ddg.dot"));
+            })
+        }
+    }
 }
 
-#[rpl_macros::mir_pattern]
-fn cve_2020_35892_3<'tcx>(mut patterns: PatternsBuilder<'tcx>) -> Patterns<'tcx> {
-    mir! {
+test_case! {
+    fn cve_2020_35892_3() {
         meta!($T:ty, $SlabT:ty);
 
         let self: &mut $SlabT;
@@ -81,13 +88,10 @@ fn cve_2020_35892_3<'tcx>(mut patterns: PatternsBuilder<'tcx>) -> Patterns<'tcx>
             }
         }
     }
-
-    patterns.build()
 }
 
-#[rpl_macros::mir_pattern]
-fn cve_2018_21000<'tcx>(mut patterns: PatternsBuilder<'tcx>) -> Patterns<'tcx> {
-    mir! {
+test_case! {
+    fn cve_2018_21000() {
         meta!($T:ty);
 
         let from_slice_mut: &mut [$T] = _;
@@ -99,13 +103,10 @@ fn cve_2018_21000<'tcx>(mut patterns: PatternsBuilder<'tcx>) -> Patterns<'tcx> {
         let to_raw_mut: *mut [u8] = *mut [u8] from (copy to_ptr_mut, copy to_len_mut);
         let to_slice_mut: &mut [u8] = &mut *to_raw_mut;
     }
-
-    patterns.build()
 }
 
-#[rpl_macros::mir_pattern]
-fn cve_2021_29941_2<'tcx>(mut patterns: PatternsBuilder<'tcx>) -> Patterns<'tcx> {
-    mir! {
+test_case! {
+    fn cve_2021_29941_2() {
         meta!($T:ty);
         // type ExactSizeIterT = impl std::iter::ExactSizeIterator<Item = $T>;
         // let's use a std::ops::Range<$T> instead temporarily
@@ -157,5 +158,4 @@ fn cve_2021_29941_2<'tcx>(mut patterns: PatternsBuilder<'tcx>) -> Patterns<'tcx>
         _tmp = Vec::set_len(move ref_to_vec, copy len);
     }
 
-    patterns.build()
 }

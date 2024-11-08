@@ -1,0 +1,3 @@
+digraph ControlFlowGraph {
+    bb0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb0</td></tr><tr><td align="left" balign="left">_?0 = _<br/>_?1 = &amp;raw mut (*_?0)<br/>_?2 = PtrMetadata(copy _?0<br/>_?3 = SizeOf(?T0)<br/>_?4 = copy _?1 as *mut u8 (PtrToPtr)<br/>_?5 = Mul(move _?2, move _?3)<br/>_?6 = *mut [u8] from (copy _?4, copy _?5)<br/>_?7 = &amp;mut (*_?6)<br/></td></tr><tr><td align="left">end</td></tr></table>>];
+}
