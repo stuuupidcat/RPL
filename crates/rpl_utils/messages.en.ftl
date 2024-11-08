@@ -16,7 +16,7 @@ rpl_utils_dump_mir = MIR of `{$def_id}`
 
 rpl_utils_dump_mir_block = {$block}
 
-rpl_utils_dump_mir_file = see `{$file}` for dumpped MIR
+rpl_utils_dump_mir_file = see `{$file}` for dumpped {$content}
 
 rpl_utils_dump_mir_locals_and_source_scopes = locals and scopes in this MIR
 

@@ -1,0 +1,23 @@
+digraph DataDependencyGraph {
+subgraph cluster_bb0 {
+    bb0IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb0[IN]</td></tr></table>>];
+    bb0OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb0[OUT]</td></tr></table>>];
+    bb0stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?0 = _</td></tr></table>>];
+    bb0stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?1 = &amp;raw mut (*_?0)</td></tr></table>>];
+    bb0stmt2 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?2 = PtrMetadata(copy _?0</td></tr></table>>];
+    bb0stmt3 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?3 = SizeOf(?T0)</td></tr></table>>];
+    bb0stmt4 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?4 = copy _?1 as *mut u8 (PtrToPtr)</td></tr></table>>];
+    bb0stmt5 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?5 = Mul(move _?2, move _?3)</td></tr></table>>];
+    bb0stmt6 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?6 = *mut [u8] from (copy _?4, copy _?5)</td></tr></table>>];
+    bb0stmt7 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?7 = &amp;mut (*_?6)</td></tr></table>>];
+    bb0stmt7 -> bb0OUT [label=""];
+    bb0stmt0 -> bb0stmt1 [label=""];
+    bb0stmt0 -> bb0stmt2 [label=""];
+    bb0stmt1 -> bb0stmt4 [label=""];
+    bb0stmt2 -> bb0stmt5 [label=""];
+    bb0stmt3 -> bb0stmt5 [label=""];
+    bb0stmt4 -> bb0stmt6 [label=""];
+    bb0stmt5 -> bb0stmt6 [label=""];
+    bb0stmt6 -> bb0stmt7 [label=""];
+}
+}

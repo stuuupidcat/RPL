@@ -4,7 +4,7 @@ use crate::rwstate::RWStates;
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_data_structures::packed::Pu128;
 use rustc_index::bit_set::{HybridBitSet, SparseBitMatrix};
-use rustc_index::{Idx, IndexVec};
+use rustc_index::{Idx, IndexSlice, IndexVec};
 use rustc_middle::mir::visit::{MutatingUseContext, NonMutatingUseContext, PlaceContext};
 
 rustc_index::newtype_index! {
@@ -282,6 +282,9 @@ impl<BasicBlock: Idx> ControlFlowGraph<BasicBlock> {
     pub fn num_blocks(&self) -> usize {
         self.terminator_edges.len()
     }
+    pub fn blocks(&self) -> &IndexSlice<BasicBlock, TerminatorEdges<BasicBlock>> {
+        &self.terminator_edges
+    }
 }
 
 impl<BasicBlock: Idx> Index<BasicBlock> for ControlFlowGraph<BasicBlock> {
@@ -362,6 +365,9 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
     pub fn is_rdep_start(&self, statement: usize) -> bool {
         self.rdep_start.contains(statement)
     }
+    pub fn is_dep_end(&self, statement: usize) -> bool {
+        self.dep_end.contains(statement)
+    }
     pub fn rdep_start(&self) -> impl Iterator<Item = usize> + '_ {
         self.rdep_start.iter()
     }
@@ -380,8 +386,8 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
 
     pub(crate) fn new(statements: usize, locals: usize) -> Self {
         Self {
-            deps: SparseBitMatrix::new(locals),
-            rdeps: SparseBitMatrix::new(locals),
+            deps: SparseBitMatrix::new(statements),
+            rdeps: SparseBitMatrix::new(statements),
             rdep_start: HybridBitSet::new_empty(statements),
             dep_end: HybridBitSet::new_empty(statements),
             rw_states: RWStates::new(statements, locals),

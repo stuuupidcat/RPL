@@ -42,7 +42,7 @@ pub(crate) struct DumpMir {
     pub attr_span: Span,
     pub def_id: DefId,
     #[subdiagnostic]
-    pub file: Option<DumpMirFile>,
+    pub files: Vec<DumpMirFile>,
     #[subdiagnostic]
     pub locals_and_source_scopes: DumpMirLocalsAndSourceScopes,
     #[subdiagnostic]
@@ -53,6 +53,7 @@ pub(crate) struct DumpMir {
 #[note(rpl_utils_dump_mir_file)]
 pub(crate) struct DumpMirFile {
     pub file: String,
+    pub content: &'static str,
 }
 
 #[derive(Subdiagnostic)]

@@ -1,0 +1,67 @@
+digraph DataDependencyGraph {
+subgraph cluster_bb0 {
+    bb0IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb0[IN]</td></tr></table>>];
+    bb0OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb0[OUT]</td></tr></table>>];
+    bb0stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?1 = copy ((*_?0).len)</td></tr></table>>];
+    bb0stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?2 = const 0_usize</td></tr></table>>];
+    bb0IN -> bb0stmt0 [label=""];
+    bb0stmt0 -> bb0OUT [label=""];
+    bb0stmt1 -> bb0OUT [label=""];
+}
+subgraph cluster_bb1 {
+    bb1IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb1[IN]</td></tr></table>>];
+    bb1OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb1[OUT]</td></tr></table>>];
+    bb1stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?10 = copy _?2</td></tr></table>>];
+    bb1stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?11 = Lt(move _?10, copy _?1)</td></tr></table>>];
+    bb1stmt2 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">switchInt(move _?11) -&gt; [false -&gt; ?bb4, otherwise -&gt; ?bb5]</td></tr></table>>];
+    bb1IN -> bb1stmt0 [label=""];
+    bb1IN -> bb1stmt1 [label=""];
+    bb1stmt0 -> bb1stmt1 [label=""];
+    bb1stmt1 -> bb1stmt2 [label=""];
+}
+subgraph cluster_bb2 {
+    bb2IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb2[IN]</td></tr></table>>];
+    bb2OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb2[OUT]</td></tr></table>>];
+}
+subgraph cluster_bb3 {
+    bb3IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb3[IN]</td></tr></table>>];
+    bb3OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb3[OUT]</td></tr></table>>];
+}
+subgraph cluster_bb4 {
+    bb4IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb4[IN]</td></tr></table>>];
+    bb4OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb4[OUT]</td></tr></table>>];
+}
+subgraph cluster_bb5 {
+    bb5IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb5[IN]</td></tr></table>>];
+    bb5OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb5[OUT]</td></tr></table>>];
+    bb5stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?3 = copy _?2</td></tr></table>>];
+    bb5stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?4 = core::iter::range::Step::forward_unchecked(copy _?3, const 1_usize) -&gt; ?bb6</td></tr></table>>];
+    bb5IN -> bb5stmt0 [label=""];
+    bb5stmt1 -> bb5OUT [label=""];
+    bb5stmt0 -> bb5stmt1 [label=""];
+}
+subgraph cluster_bb6 {
+    bb6IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb6[IN]</td></tr></table>>];
+    bb6OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb6[OUT]</td></tr></table>>];
+    bb6stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?5 = #[lang = &quot;Some&quot;](copy _?3)</td></tr></table>>];
+    bb6stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?6 = copy ((_?5 as Some).0)</td></tr></table>>];
+    bb6stmt2 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?7 = copy ((*_?0).mem)</td></tr></table>>];
+    bb6stmt3 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?8 = copy _?6 as isize (IntToInt)</td></tr></table>>];
+    bb6stmt4 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?9 = Offset(copy _?7, copy _?8)</td></tr></table>>];
+    bb6stmt5 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">core::ptr::drop_in_place(copy _?9) -&gt; ?bb3</td></tr></table>>];
+    bb6IN -> bb6stmt0 [label=""];
+    bb6IN -> bb6stmt2 [label=""];
+    bb6stmt0 -> bb6stmt1 [label=""];
+    bb6stmt1 -> bb6stmt3 [label=""];
+    bb6stmt2 -> bb6stmt4 [label=""];
+    bb6stmt3 -> bb6stmt4 [label=""];
+    bb6stmt4 -> bb6stmt5 [label=""];
+}
+    bb0OUT -> bb1IN [label=""];
+    bb1OUT -> bb4IN [label="0"];
+    bb1OUT -> bb5IN [label="otherwise"];
+    bb3OUT -> bb1IN [label=""];
+    bb4OUT -> bb2IN [label=""];
+    bb5OUT -> bb6IN [label="return"];
+    bb6OUT -> bb3IN [label="return"];
+}
