@@ -30,6 +30,7 @@ subgraph cluster_bb3 {
 }
     bb0OUT -> bb2IN [label="0"];
     bb0OUT -> bb3IN [label="otherwise"];
-    bb2OUT -> bb1IN [label=""];
-    bb3OUT -> bb1IN [label=""];
+    bb2OUT -> bb1IN [label="goto"];
+    bb3OUT -> bb1IN [label="goto"];
+    bb0stmt0 -> bb3stmt0 [label="_?0"];
 }

@@ -12,13 +12,11 @@ pub type PatSwitchTargets = SwitchTargets<pat::BasicBlock>;
 type PatTerminatorEdges = TerminatorEdges<pat::BasicBlock>;
 
 pub fn pat_program_dep_graph(patterns: &pat::Patterns<'_>, pointer_bytes: u64) -> PatProgramDepGraph {
-    ProgramDepGraph::build_from(
-        &pat_control_fow_graph(patterns, pointer_bytes),
-        &pat_data_dep_graph(patterns),
-    )
+    let cfg = pat_control_flow_graph(patterns, pointer_bytes);
+    ProgramDepGraph::build_from(&cfg, &pat_data_dep_graph(patterns, &cfg))
 }
 
-pub fn pat_data_dep_graph(patterns: &pat::Patterns<'_>) -> PatDataDepGraph {
+pub fn pat_data_dep_graph(patterns: &pat::Patterns<'_>, cfg: &PatControlFlowGraph) -> PatDataDepGraph {
     let mut graph = DataDepGraph::new(
         patterns.basic_blocks.len(),
         |bb| patterns[bb].num_statements_and_terminator(),
@@ -27,10 +25,11 @@ pub fn pat_data_dep_graph(patterns: &pat::Patterns<'_>) -> PatDataDepGraph {
     for (bb, block) in patterns.basic_blocks.iter_enumerated() {
         graph.blocks[bb].visit_basic_block_data(bb, block);
     }
+    graph.build_interblock_edges(cfg);
     graph
 }
 
-pub fn pat_control_fow_graph(patterns: &pat::Patterns<'_>, pointer_bytes: u64) -> PatControlFlowGraph {
+pub fn pat_control_flow_graph(patterns: &pat::Patterns<'_>, pointer_bytes: u64) -> PatControlFlowGraph {
     ControlFlowGraph::new(patterns.basic_blocks.len(), |block| {
         normalized_terminator_edges(patterns[block].terminator.as_ref(), pointer_bytes)
     })

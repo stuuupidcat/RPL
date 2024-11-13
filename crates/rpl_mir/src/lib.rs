@@ -74,10 +74,10 @@ impl<'a, 'tcx> CheckMirCtxt<'a, 'tcx> {
     pub fn new(tcx: TyCtxt<'tcx>, body: &'a mir::Body<'tcx>, patterns: &'a pat::Patterns<'tcx>) -> Self {
         // let pat_pdg = crate::graph::pat_program_dep_graph(&patterns, tcx.pointer_size().bytes_usize());
         // let mir_pdg = crate::graph::mir_program_dep_graph(body);
-        let pat_cfg = crate::graph::pat_control_fow_graph(patterns, tcx.pointer_size().bytes());
-        let pat_ddg = crate::graph::pat_data_dep_graph(patterns);
+        let pat_cfg = crate::graph::pat_control_flow_graph(patterns, tcx.pointer_size().bytes());
+        let pat_ddg = crate::graph::pat_data_dep_graph(patterns, &pat_cfg);
         let mir_cfg = crate::graph::mir_control_flow_graph(body);
-        let mir_ddg = crate::graph::mir_data_dep_graph(body);
+        let mir_ddg = crate::graph::mir_data_dep_graph(body, &mir_cfg);
         Self {
             tcx,
             param_env: tcx.param_env_reveal_all_normalized(body.source.def_id()),

@@ -2,7 +2,7 @@ use std::iter::Iterator;
 use std::ops::Not;
 
 use gsgdt::{Edge, Graph, GraphvizSettings, Node, NodeStyle};
-use rpl_mir::graph::{mir_control_flow_graph, mir_data_dep_graph, pat_control_fow_graph, pat_data_dep_graph};
+use rpl_mir::graph::{mir_control_flow_graph, mir_data_dep_graph, pat_control_flow_graph, pat_data_dep_graph};
 use rpl_mir::pat;
 use rpl_mir_graph::{ControlFlowGraph, DataDepGraph, TerminatorEdges};
 use rustc_index::{Idx, IndexSlice};
@@ -31,7 +31,7 @@ impl<'a, 'tcx, L: BlockLabel> CfgBuilderImpl<'a, pat::Patterns<'tcx>, L> {
     pub fn from_patterns(patterns: &'a pat::Patterns<'tcx>, pointer_bytes: u64, node_style: NodeStyle) -> Self {
         CfgBuilderImpl {
             basic_blocks: patterns,
-            cfg: pat_control_fow_graph(patterns, pointer_bytes),
+            cfg: pat_control_flow_graph(patterns, pointer_bytes),
             node_style,
             _l: std::marker::PhantomData,
         }
@@ -58,9 +58,11 @@ impl Default for DdgConfig {
 
 impl<'a, 'tcx> DdgBuilder<'a, mir::Body<'tcx>> {
     pub fn from_mir(body: &'a mir::Body<'tcx>, node_style: NodeStyle, config: DdgConfig) -> Self {
+        let cfg_builder = CfgBuilderImpl::from_mir(body, node_style);
+        let ddg = mir_data_dep_graph(body, &cfg_builder.cfg);
         DdgBuilder {
-            cfg_builder: CfgBuilderImpl::from_mir(body, node_style),
-            ddg: mir_data_dep_graph(body),
+            cfg_builder,
+            ddg,
             config,
         }
     }
@@ -72,9 +74,11 @@ impl<'a, 'tcx> DdgBuilder<'a, pat::Patterns<'tcx>> {
         node_style: NodeStyle,
         config: DdgConfig,
     ) -> Self {
+        let cfg_builder = CfgBuilderImpl::from_patterns(patterns, pointer_bytes, node_style);
+        let ddg = pat_data_dep_graph(patterns, &cfg_builder.cfg);
         DdgBuilder {
-            cfg_builder: CfgBuilderImpl::from_patterns(patterns, pointer_bytes, node_style),
-            ddg: pat_data_dep_graph(patterns),
+            cfg_builder,
+            ddg,
             config,
         }
     }
@@ -193,7 +197,7 @@ impl<B: HasBasicBlocks, L: BlockLabel> CfgBuilderImpl<'_, B, L> {
                 match terminator {
                     None => {},
                     &Single(target) => {
-                        edges.push(new_edge(target, "".to_string()));
+                        edges.push(new_edge(target, "goto".to_string()));
                     },
                     &Double(bb0, bb1) => {
                         edges.push(new_edge(bb0, "return".to_string()));
@@ -252,7 +256,8 @@ impl MultiGraph {
 impl<B: HasBasicBlocks + HasLocals> DdgBuilder<'_, B> {
     pub fn build(&self) -> MultiGraph {
         let blocks = self.build_blocks();
-        let edges = self.cfg_builder.build_edges();
+        let mut edges = self.cfg_builder.build_edges();
+        self.build_interblock_edges(&mut edges);
         MultiGraph::new("DataDependencyGraph".into(), blocks, edges)
     }
     fn build_blocks(&self) -> Vec<Graph> {
@@ -322,14 +327,11 @@ impl<B: HasBasicBlocks + HasLocals> DdgBuilder<'_, B> {
             if self.ddg.blocks[bb].full_rdep_start_end() {
                 Some(self.new_edge(bb.in_label(), bb.out_label(), "*"))
             } else {
-                let locals = self.ddg.blocks[bb]
-                    .rdep_start_end()
-                    .map(|local| format!("{local:?}"))
-                    .collect::<Vec<_>>();
+                let locals = fmt_locals(self.ddg.blocks[bb].rdep_start_end());
                 locals
                     .is_empty()
                     .not()
-                    .then(|| self.new_edge(bb.in_label(), bb.out_label(), locals.join(",")))
+                    .then(|| self.new_edge(bb.in_label(), bb.out_label(), locals))
             }
         })
         .chain(
@@ -343,6 +345,20 @@ impl<B: HasBasicBlocks + HasLocals> DdgBuilder<'_, B> {
         )
         .collect()
     }
+    fn build_interblock_edges(&self, edges: &mut Vec<Edge>) {
+        for (from_block, from_stmt, to_block, to_stmt, local) in self.ddg.interblock_edges() {
+            edges.push(self.new_edge(
+                to_block.stmt_label(to_stmt),
+                from_block.stmt_label(from_stmt),
+                format!("{local:?}"),
+            ));
+        }
+    }
+}
+
+fn fmt_locals(locals: impl IntoIterator<Item: Idx>) -> String {
+    let locals = locals.into_iter().map(|local| format!("{local:?}")).collect::<Vec<_>>();
+    locals.join(",")
 }
 
 impl BasicBlock for mir::BasicBlock {}

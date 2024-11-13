@@ -9,7 +9,7 @@ extern crate rustc_span;
 use pretty_assertions::assert_eq;
 use proc_macro2::TokenStream;
 use quote::quote;
-use rpl_mir::graph::pat_data_dep_graph;
+use rpl_mir::graph::{pat_control_flow_graph, pat_data_dep_graph};
 use rpl_mir::pat::{LocalIdx, PatternsBuilder};
 use rustc_arena::DroplessArena;
 use std::fmt::Write;
@@ -40,7 +40,8 @@ macro_rules! test_case {
                 let mut patterns = PatternsBuilder::new(&arena);
                 $name(&mut patterns);
                 let pattern = patterns.build();
-                let graph = pat_data_dep_graph(&pattern);
+                let cfg = pat_control_flow_graph(&pattern, (usize::BITS / u8::BITS).into());
+                let graph = pat_data_dep_graph(&pattern, &cfg);
                 let string = &mut String::new();
                 for (bb, block) in graph.blocks() {
                     write!(string, "{bb:?}: {{").unwrap();
