@@ -37,6 +37,10 @@ pub fn pat_control_fow_graph(patterns: &pat::Patterns<'_>, pointer_bytes: u64) -
 }
 
 impl<'tcx> PatternVisitor<'tcx> for BlockDataDepGraph<pat::LocalIdx> {
+    fn visit_place(&mut self, place: pat::Place<'_>, pcx: PlaceContext, location: pat::Location) {
+        self.access_local(place.local, pcx, location.statement_index);
+        self.super_place(place, pcx, location);
+    }
     fn visit_local(&mut self, local: pat::LocalIdx, pcx: PlaceContext, location: pat::Location) {
         self.access_local(local, pcx, location.statement_index);
     }

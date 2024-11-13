@@ -1,9 +1,10 @@
+use core::default::Default;
 use std::ops::Index;
 
-use crate::rwstate::RWStates;
+use crate::rwstate::RWCStates;
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_data_structures::packed::Pu128;
-use rustc_index::bit_set::{HybridBitSet, SparseBitMatrix};
+use rustc_index::bit_set::HybridBitSet;
 use rustc_index::{Idx, IndexSlice, IndexVec};
 use rustc_middle::mir::visit::{MutatingUseContext, NonMutatingUseContext, PlaceContext};
 
@@ -22,7 +23,7 @@ pub enum NodeKind<BasicBlock, Local> {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub enum EdgeKind {
+pub enum EdgeKind<Local> {
     /// There is a goto edge from the `from` block to the `to` block.
     Goto,
     /// There is a goto edge from the `from` block to the `to` block when it unwinds.
@@ -30,7 +31,7 @@ pub enum EdgeKind {
     /// There is a reversed data dependency from the `from` statement to the `to` statement.
     ///
     /// This means that the `from` statement must be executed before the `to` statement.
-    DataRdep,
+    DataRdep(Local),
     /// There is an access to a local variable, by given access pattern and order.
     Access(usize, PlaceContext),
     /// There is a switch jump with the given value.
@@ -41,7 +42,7 @@ pub enum EdgeKind {
 
 pub struct ProgramDepGraph<BasicBlock: Idx, Local: Idx> {
     nodes: IndexVec<NodeIdx, NodeKind<BasicBlock, Local>>,
-    edges: Vec<Edge>,
+    edges: Vec<Edge<Local>>,
     locals_offset: NodeIdx,
     blocks_offset: NodeIdx,
     stmts_offsets: IndexVec<BasicBlock, NodeIdx>,
@@ -55,14 +56,14 @@ impl<BasicBlock: Idx, Local: Idx> Index<NodeIdx> for ProgramDepGraph<BasicBlock,
     }
 }
 
-pub struct Edge {
+pub struct Edge<Local> {
     pub from: NodeIdx,
     pub to: NodeIdx,
-    pub kind: EdgeKind,
+    pub kind: EdgeKind<Local>,
 }
 
-impl Edge {
-    fn new(from: NodeIdx, to: NodeIdx, kind: EdgeKind) -> Self {
+impl<Local> Edge<Local> {
+    fn new(from: NodeIdx, to: NodeIdx, kind: EdgeKind<Local>) -> Self {
         Self { from, to, kind }
     }
     pub fn nodes(&self) -> (NodeIdx, NodeIdx) {
@@ -80,13 +81,13 @@ impl<BasicBlock: Idx, Local: Idx> ProgramDepGraph<BasicBlock, Local> {
     pub fn nodes(&self) -> impl Iterator<Item = (NodeIdx, NodeKind<BasicBlock, Local>)> + '_ {
         self.nodes.iter_enumerated().map(|(idx, &node)| (idx, node))
     }
-    pub fn edges(&self) -> impl Iterator<Item = &Edge> + '_ {
+    pub fn edges(&self) -> impl Iterator<Item = &Edge<Local>> + '_ {
         self.edges.iter()
     }
-    pub fn find_edge(&self, from: NodeIdx, to: NodeIdx) -> Option<&Edge> {
+    pub fn find_edge(&self, from: NodeIdx, to: NodeIdx) -> Option<&Edge<Local>> {
         Some(&self.edges[self.search_edge(from, to).ok()?])
     }
-    pub fn edges_from(&self, from: NodeIdx) -> &[Edge] {
+    pub fn edges_from(&self, from: NodeIdx) -> &[Edge<Local>] {
         &self.edges[self.search_edges_for_node(from)]
     }
     pub fn block_nodes(&self, bb: BasicBlock) -> [NodeIdx; 2] {
@@ -175,17 +176,22 @@ impl<BasicBlock: Idx, Local: Idx> ProgramDepGraph<BasicBlock, Local> {
         self.edges.extend((0..block.num_statements()).flat_map(|stmt| {
             block
                 .deps(stmt)
-                .map(move |dep| Edge::new(stmts(dep), stmts(stmt), EdgeKind::DataRdep))
+                .map(move |(dep, local)| Edge::new(stmts(dep), stmts(stmt), EdgeKind::DataRdep(local)))
         }));
         self.edges.extend(
             block
                 .rdep_start()
-                .map(|rdep| Edge::new(start, stmts(rdep), EdgeKind::DataRdep)),
+                .map(|(rdep, local)| Edge::new(start, stmts(rdep), EdgeKind::DataRdep(local))),
         );
         self.edges.extend(
             block
                 .dep_end()
-                .map(|dep| Edge::new(stmts(dep), end, EdgeKind::DataRdep)),
+                .map(|(dep, local)| Edge::new(stmts(dep), end, EdgeKind::DataRdep(local))),
+        );
+        self.edges.extend(
+            block
+                .rdep_start_end()
+                .map(|local| Edge::new(start, end, EdgeKind::DataRdep(local))),
         );
     }
 
@@ -350,35 +356,49 @@ impl<BasicBlock: Idx, Local: Idx> DataDepGraph<BasicBlock, Local> {
 }
 
 pub struct BlockDataDepGraph<Local: Idx> {
-    deps: SparseBitMatrix<usize, usize>,
-    rdeps: SparseBitMatrix<usize, usize>,
-    rdep_start: HybridBitSet<usize>,
-    dep_end: HybridBitSet<usize>,
-    rw_states: RWStates<Local>,
+    deps: Vec<FxIndexMap<usize, Local>>,
+    rdeps: Vec<FxIndexMap<usize, Local>>,
+    rdep_start: FxIndexMap<usize, HybridBitSet<Local>>,
+    dep_end: FxIndexMap<usize, Local>,
+    rdep_start_end: HybridBitSet<Local>,
+    rw_states: RWCStates<Local>,
     accesses: Vec<Vec<(Local, PlaceContext)>>,
 }
 
 impl<Local: Idx> BlockDataDepGraph<Local> {
     pub fn num_statements(&self) -> usize {
-        self.rdep_start.domain_size()
+        self.rw_states.num_statements()
     }
-    pub fn is_rdep_start(&self, statement: usize) -> bool {
-        self.rdep_start.contains(statement)
+    pub fn get_rdep_start(&self, statement: usize) -> impl Iterator<Item = Local> + '_ {
+        self.rdep_start.get(&statement).into_iter().flat_map(HybridBitSet::iter)
     }
-    pub fn is_dep_end(&self, statement: usize) -> bool {
-        self.dep_end.contains(statement)
+    pub fn get_dep_end(&self, statement: usize) -> Option<Local> {
+        self.dep_end.get(&statement).copied()
     }
-    pub fn rdep_start(&self) -> impl Iterator<Item = usize> + '_ {
-        self.rdep_start.iter()
+    pub fn rdep_start(&self) -> impl Iterator<Item = (usize, Local)> + '_ {
+        self.rdep_start
+            .iter()
+            .flat_map(|(&stmt, locals)| locals.iter().map(move |local| (stmt, local)))
     }
-    pub fn dep_end(&self) -> impl Iterator<Item = usize> + '_ {
-        self.dep_end.iter()
+    pub fn dep_end(&self) -> impl Iterator<Item = (usize, Local)> + '_ {
+        self.dep_end.iter().map(|(&stmt, &local)| (stmt, local))
     }
-    pub fn deps(&self, statement: usize) -> impl Iterator<Item = usize> + '_ {
-        self.deps.iter(statement)
+    pub fn rdep_start_end(&self) -> impl Iterator<Item = Local> + '_ {
+        self.rdep_start_end.iter()
     }
-    pub fn rdeps(&self, statement: usize) -> impl Iterator<Item = usize> + '_ {
-        self.rdeps.iter(statement)
+    pub fn full_rdep_start_end(&self) -> bool {
+        (0..self.rw_states.num_locals())
+            .map(Local::new)
+            .all(|local| self.rdep_start_end.contains(local))
+    }
+    pub fn deps(&self, statement: usize) -> impl Iterator<Item = (usize, Local)> + '_ {
+        self.deps[statement].iter().map(|(&stmt, &local)| (stmt, local))
+    }
+    pub fn get_dep(&self, statement: usize, dep_statement: usize) -> Option<Local> {
+        self.deps[statement].get(&dep_statement).copied()
+    }
+    pub fn rdeps(&self, statement: usize) -> impl Iterator<Item = (usize, Local)> + '_ {
+        self.rdeps[statement].iter().map(|(&stmt, &local)| (stmt, local))
     }
     pub fn accesses(&self, statement: usize) -> &[(Local, PlaceContext)] {
         &self.accesses[statement]
@@ -386,22 +406,14 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
 
     pub(crate) fn new(statements: usize, locals: usize) -> Self {
         Self {
-            deps: SparseBitMatrix::new(statements),
-            rdeps: SparseBitMatrix::new(statements),
-            rdep_start: HybridBitSet::new_empty(statements),
-            dep_end: HybridBitSet::new_empty(statements),
-            rw_states: RWStates::new(statements, locals),
+            deps: vec![FxIndexMap::default(); statements],
+            rdeps: vec![FxIndexMap::default(); statements],
+            rdep_start: FxIndexMap::default(),
+            dep_end: FxIndexMap::default(),
+            rdep_start_end: HybridBitSet::new_empty(locals),
+            rw_states: RWCStates::new(statements, locals),
             accesses: vec![Vec::new(); statements],
         }
-    }
-    fn set_read(&mut self, statement: usize, local: Local) {
-        self.rw_states.set_read(statement, local);
-    }
-    fn set_write(&mut self, statement: usize, local: Local) {
-        self.rw_states.set_write(statement, local);
-    }
-    fn set_read_write(&mut self, statement: usize, local: Local) {
-        self.rw_states.set_read_write(statement, local);
     }
     pub fn update_deps(&mut self, stmt: usize) {
         for local in self.rw_states.get_reads(stmt) {
@@ -410,33 +422,38 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
                 .find(|&prev_stmt| self.rw_states.get_write(prev_stmt, local))
             {
                 Some(prev_stmt) => {
-                    self.deps.insert(stmt, prev_stmt);
-                    self.rdeps.insert(prev_stmt, stmt);
+                    self.deps[stmt].insert(prev_stmt, local);
+                    self.rdeps[prev_stmt].insert(stmt, local);
                 },
                 None => {
-                    self.rdep_start.insert(stmt);
+                    self.rdep_start
+                        .entry(stmt)
+                        .or_insert_with(|| HybridBitSet::new_empty(self.rw_states.num_locals()))
+                        .insert(local);
                 },
             }
         }
     }
     pub fn access_local(&mut self, local: Local, pcx: PlaceContext, statement: usize) {
         self.accesses[statement].push((local, pcx));
-        match Access::from_place_context(pcx) {
-            Access::Read => self.set_read(statement, local),
-            Access::Write => self.set_write(statement, local),
-            Access::ReadWrite => self.set_read_write(statement, local),
-            Access::NoAccess => {},
-        }
+        self.rw_states
+            .set_access(statement, local, Access::from_place_context(pcx));
     }
     pub fn update_dep_end(&mut self) {
-        let num_statements = self.num_statements();
-        for stmt in 0..num_statements {
-            for local in self.rw_states.get_writes(stmt) {
-                if !(stmt + 1..num_statements).any(|next_stmt| self.rw_states.get_read(next_stmt, local)) {
-                    self.dep_end.insert(stmt);
+        'locals: for local in (0..self.rw_states.num_locals()).map(Local::new) {
+            for stmt in (0..self.rw_states.num_statements()).rev() {
+                if self.rw_states.get_write(stmt, local) && !self.local_consumed_since(local, stmt + 1) {
+                    self.dep_end.insert(stmt, local);
+                    continue 'locals;
                 }
             }
+            if !self.local_consumed_since(local, 0) {
+                self.rdep_start_end.insert(local);
+            }
         }
+    }
+    fn local_consumed_since(&self, local: Local, stmt: usize) -> bool {
+        (stmt..self.rw_states.num_statements()).any(|prev_stmt| self.rw_states.get_consume(prev_stmt, local))
     }
 }
 
@@ -445,6 +462,7 @@ pub enum Access {
     Read,
     Write,
     ReadWrite,
+    ReadConsume,
     NoAccess,
 }
 
@@ -457,7 +475,8 @@ impl Access {
                     Copy, FakeBorrow, Inspect, Move, PlaceMention, Projection, RawBorrow, SharedBorrow,
                 };
                 match pcx {
-                    Inspect | Copy | Move | SharedBorrow | FakeBorrow | RawBorrow | Projection => Self::Read,
+                    Move => Self::ReadConsume,
+                    Inspect | Copy | SharedBorrow | FakeBorrow | RawBorrow | Projection => Self::Read,
                     PlaceMention => Self::NoAccess,
                 }
             },

@@ -1,4 +1,5 @@
-use core::iter::Iterator;
+use std::iter::Iterator;
+use std::ops::Not;
 
 use gsgdt::{Edge, Graph, GraphvizSettings, Node, NodeStyle};
 use rpl_mir::graph::{mir_control_flow_graph, mir_data_dep_graph, pat_control_fow_graph, pat_data_dep_graph};
@@ -237,6 +238,7 @@ impl MultiGraph {
     }
     pub fn to_dot<W: std::io::Write>(&self, f: &mut W, settings: &GraphvizSettings) -> std::io::Result<()> {
         writeln!(f, "digraph {} {{", self.name)?;
+        writeln!(f, "compound = true;")?;
         for graph in &self.graphs {
             graph.to_dot(f, settings, true)?;
         }
@@ -279,8 +281,8 @@ impl<B: HasBasicBlocks + HasLocals> DdgBuilder<'_, B> {
         self.config.ignore_isolated
             && self.ddg.blocks[bb].deps(stmt).next().is_none()
             && self.ddg.blocks[bb].rdeps(stmt).next().is_none()
-            && !self.ddg.blocks[bb].is_rdep_start(stmt)
-            && !self.ddg.blocks[bb].is_dep_end(stmt)
+            && self.ddg.blocks[bb].get_rdep_start(stmt).next().is_none()
+            && self.ddg.blocks[bb].get_dep_end(stmt).is_none()
             && (stmt < term
                 || matches!(
                     self.cfg_builder.cfg.blocks()[bb],
@@ -304,25 +306,39 @@ impl<B: HasBasicBlocks + HasLocals> DdgBuilder<'_, B> {
         );
         stmts
     }
-    fn new_edge(&self, from: impl Into<String>, to: impl Into<String>) -> Edge {
-        Edge::new(from.into(), to.into(), "".to_string())
+    fn new_edge(&self, from: impl Into<String>, to: impl Into<String>, l: impl Into<String>) -> Edge {
+        Edge::new(from.into(), to.into(), l.into())
     }
     fn build_data_deps(&self, bb: B::BasicBlock, block: &B::BasicBlockData) -> Vec<Edge> {
         std::iter::chain(
             self.ddg.blocks[bb]
                 .rdep_start()
-                .map(|stmt| self.new_edge(bb.in_label(), bb.stmt_label(stmt))),
+                .map(|(stmt, local)| self.new_edge(bb.in_label(), bb.stmt_label(stmt), format!("{local:?}"))),
             self.ddg.blocks[bb]
                 .dep_end()
-                .map(|stmt| self.new_edge(bb.stmt_label(stmt), bb.out_label())),
+                .map(|(stmt, local)| self.new_edge(bb.stmt_label(stmt), bb.out_label(), format!("{local:?}"))),
         )
+        .chain({
+            if self.ddg.blocks[bb].full_rdep_start_end() {
+                Some(self.new_edge(bb.in_label(), bb.out_label(), "*"))
+            } else {
+                let locals = self.ddg.blocks[bb]
+                    .rdep_start_end()
+                    .map(|local| format!("{local:?}"))
+                    .collect::<Vec<_>>();
+                locals
+                    .is_empty()
+                    .not()
+                    .then(|| self.new_edge(bb.in_label(), bb.out_label(), locals.join(",")))
+            }
+        })
         .chain(
             (0..=block.num_statements())
                 .filter(|&stmt| !self.should_ignore(bb, stmt))
                 .flat_map(|from| {
-                    self.ddg.blocks[bb]
-                        .rdeps(from)
-                        .map(move |to| self.new_edge(bb.stmt_label(from), bb.stmt_label(to)))
+                    self.ddg.blocks[bb].rdeps(from).map(move |(to, local)| {
+                        self.new_edge(bb.stmt_label(from), bb.stmt_label(to), format!("{local:?}"))
+                    })
                 }),
         )
         .collect()

@@ -1,6 +1,6 @@
 digraph ControlFlowGraph {
     bb0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb0</td></tr><tr><td align="left" balign="left">_?1 = copy ((*_?0).len)<br/>_?2 = const 0_usize<br/></td></tr><tr><td align="left">goto ?bb1</td></tr></table>>];
-    bb1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb1</td></tr><tr><td align="left" balign="left">_?10 = copy _?2<br/>_?11 = Lt(move _?10, copy _?1)<br/></td></tr><tr><td align="left">switchInt(move _?11) -&gt; [false -&gt; ?bb4, otherwise -&gt; ?bb5]</td></tr></table>>];
+    bb1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb1</td></tr><tr><td align="left" balign="left">_?10 = copy _?2<br/>_?11 = Lt(move _?10, copy _?1)<br/></td></tr><tr><td align="left">switchInt(move _?11) -&gt; [false: ?bb4, otherwise: ?bb5]</td></tr></table>>];
     bb2 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb2</td></tr><tr><td align="left">end</td></tr></table>>];
     bb3 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb3</td></tr><tr><td align="left">goto ?bb1</td></tr></table>>];
     bb4 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb4</td></tr><tr><td align="left">goto ?bb2</td></tr></table>>];

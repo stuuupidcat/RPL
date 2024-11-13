@@ -7,25 +7,29 @@ extern crate rustc_middle;
 extern crate rustc_span;
 
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, Write};
 
 use pretty_assertions::assert_eq;
 use rpl_graphviz::{pat_cfg_to_graphviz, pat_ddg_to_graphviz};
 use rpl_mir::pat::PatternsBuilder;
 use rustc_arena::DroplessArena;
 
-#[track_caller]
-fn compare_with_file(buf: Vec<u8>, file: &str) {
-    let mut file = File::open(file).unwrap();
-    let buf = String::from_utf8(buf).unwrap();
+fn read_from_file(file: &str) -> std::io::Result<String> {
+    let mut file = File::open(file)?;
     let mut expected = String::new();
-    file.read_to_string(&mut expected).unwrap();
-    assert_eq!(buf, expected);
+    file.read_to_string(&mut expected)?;
+    Ok(expected)
+}
+
+fn write_to_file(file: &str, content: &[u8]) -> std::io::Result<()> {
+    File::create(file)?.write_all(content)?;
+    Ok(())
 }
 
 macro_rules! test_case {
     ( $(#[$meta:meta])* fn $name:ident() { $($input:tt)* }) => {
         #[rpl_macros::mir_pattern]
+        #[allow(unused_variables)]
         fn $name(patterns: &mut PatternsBuilder<'_>) {
             mir! {
                 $($input)*
@@ -41,10 +45,27 @@ macro_rules! test_case {
                 let patterns = patterns.build();
                 let mut cfg = Vec::new();
                 pat_cfg_to_graphviz(&patterns, &mut cfg, &Default::default()).unwrap();
-                compare_with_file(cfg, concat!(env!("CARGO_MANIFEST_DIR"), "/tests/graphs/", stringify!($name), "_pat_cfg.dot"));
+                let cfg = String::from_utf8(cfg).unwrap();
                 let mut ddg = Vec::new();
                 pat_ddg_to_graphviz(&patterns, &mut ddg, &Default::default()).unwrap();
-                compare_with_file(ddg, concat!(env!("CARGO_MANIFEST_DIR"), "/tests/graphs/", stringify!($name), "_pat_ddg.dot"));
+                let ddg = String::from_utf8(ddg).unwrap();
+
+                let cfg_file = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/graphs/", stringify!($name), "_pat_cfg.dot");
+                let cfg_expected = read_from_file(cfg_file).unwrap_or_default();
+                let ddg_file = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/graphs/", stringify!($name), "_pat_ddg.dot");
+                let ddg_expected = read_from_file(ddg_file).unwrap_or_default();
+
+                if cfg_expected != cfg {
+                    let file = concat!(env!("CARGO_TARGET_TMPDIR"), "/", stringify!($name), "_pat_cfg.dot");
+                    write_to_file(file, cfg.as_bytes()).unwrap();
+                    assert_eq!(cfg_expected, cfg, "CFG mismatch, see {cfg_file} and {file}");
+                }
+
+                if ddg_expected != ddg {
+                    let file = concat!(env!("CARGO_TARGET_TMPDIR"), "/", stringify!($name), "_pat_ddg.dot");
+                    write_to_file(file, ddg.as_bytes()).unwrap();
+                    assert_eq!(ddg_expected, ddg, "DDG mismatch, see {ddg_file} and {file}");
+                }
             })
         }
     }
@@ -158,4 +179,36 @@ test_case! {
         _tmp = Vec::set_len(move ref_to_vec, copy len);
     }
 
+}
+
+test_case! {
+    fn unsafe_cell_alias() {
+        meta!($T:ty);
+
+        type unsafe_cell_t = core::cell::UnsafeCell<$T>;
+
+        let a: &unsafe_cell_t = _;
+        let b: &unsafe_cell_t = _;
+        let raw_a: *const unsafe_cell_t = &raw const *a;
+        let raw_b: *const unsafe_cell_t = &raw const *b;
+        let raw_mut_a: *mut $T = copy raw_a as *mut $T (PtrToPtr);
+        let raw_mut_b: *mut $T = copy raw_b as *mut $T (PtrToPtr);
+        let mut_a: &mut $T = &mut *raw_mut_a;
+        let mut_b: &mut $T = &mut *raw_mut_b;
+        (*mut_a) = _;
+        (*mut_b) = _;
+    }
+}
+
+test_case! {
+    fn control_flow() {
+        let a: &mut i32 = _;
+        let f: bool = _;
+        switchInt(copy f) {
+            false => {}
+            _ => {
+                *a = Add(copy (*a), const 1_i32);
+            }
+        }
+    }
 }

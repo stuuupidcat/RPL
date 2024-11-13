@@ -4,6 +4,10 @@ use rustc_middle::mir::{self};
 use crate::BlockDataDepGraph;
 
 impl<'tcx> Visitor<'tcx> for BlockDataDepGraph<mir::Local> {
+    fn visit_place(&mut self, place: &mir::Place<'tcx>, pcx: PlaceContext, location: mir::Location) {
+        self.access_local(place.local, pcx, location.statement_index);
+        self.super_place(place, pcx, location);
+    }
     fn visit_local(&mut self, local: mir::Local, pcx: PlaceContext, location: mir::Location) {
         self.access_local(local, pcx, location.statement_index);
     }
