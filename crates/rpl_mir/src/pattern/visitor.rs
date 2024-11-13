@@ -131,6 +131,7 @@ pub trait PatternVisitor<'tcx>: Sized {
     }
     fn super_rvalue(&mut self, rvalue: &Rvalue<'tcx>, location: Location) {
         match rvalue {
+            Rvalue::Any => {},
             Rvalue::Use(operand) | Rvalue::UnaryOp(_, operand) => self.visit_operand(operand, location),
             &Rvalue::Repeat(ref operand, konst) => {
                 self.visit_operand(operand, location);
@@ -174,6 +175,7 @@ pub trait PatternVisitor<'tcx>: Sized {
     }
     fn super_operand(&mut self, operand: &Operand<'tcx>, location: Location) {
         match operand {
+            Operand::Any => {},
             &Operand::Copy(place) => {
                 self.visit_place(
                     place,
@@ -196,7 +198,6 @@ pub trait PatternVisitor<'tcx>: Sized {
                 self.visit_place(place, store, location);
                 self.visit_rvalue(rvalue, location);
             },
-            StatementKind::Init(place) => self.visit_place(place, store, location),
         }
     }
     fn super_terminator(&mut self, terminator: &TerminatorKind<'tcx>, location: Location) {
@@ -208,7 +209,7 @@ pub trait PatternVisitor<'tcx>: Sized {
                 target: _,
             } => {
                 self.visit_operand(func, location);
-                for arg in &args.data {
+                for arg in args {
                     self.visit_operand(arg, location);
                 }
                 if let Some(destination) = destination {
@@ -260,16 +261,11 @@ impl<'tcx> PatternSuperVisitable<'tcx> for Ty<'tcx> {
                 vis.visit_ty(ty);
             },
             &TyKind::RawPtr(ty, _) => vis.visit_ty(ty),
-            &TyKind::Adt(_, args) => vis.visit_generic_args(args),
+            &TyKind::Path(PathWithArgs { ref path, args }) => {
+                vis.visit_path(path);
+                vis.visit_generic_args(args);
+            },
             TyKind::Uint(_) | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str | TyKind::Bool => {},
-            &TyKind::FnDef(ref path, args) => {
-                vis.visit_path(path);
-                vis.visit_generic_args(args);
-            },
-            &TyKind::Alias(_, ref path, args) => {
-                vis.visit_path(path);
-                vis.visit_generic_args(args);
-            },
         }
     }
 }
@@ -313,7 +309,10 @@ impl<'tcx> PatternSuperVisitable<'tcx> for ConstOperand<'tcx> {
         match *self {
             ConstOperand::ConstVar(const_var) => vis.visit_const_var(const_var),
             ConstOperand::ScalarInt(int_value) => vis.visit_scalar_int(int_value),
-            ConstOperand::ZeroSized(ty) => vis.visit_ty(ty),
+            ConstOperand::ZeroSized(PathWithArgs { ref path, args }) => {
+                vis.visit_path(path);
+                vis.visit_generic_args(args);
+            },
         }
     }
 }

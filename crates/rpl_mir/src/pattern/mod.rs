@@ -1,3 +1,4 @@
+use core::iter::IntoIterator;
 use std::ops::Index;
 
 use rustc_arena::DroplessArena;
@@ -217,7 +218,6 @@ impl LocalIdx {
 
 pub enum StatementKind<'tcx> {
     Assign(Place<'tcx>, Rvalue<'tcx>),
-    Init(Place<'tcx>),
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
@@ -325,6 +325,7 @@ pub enum TerminatorKind<'tcx> {
 }
 
 pub enum Rvalue<'tcx> {
+    Any,
     Use(Operand<'tcx>),
     Repeat(Operand<'tcx>, Const),
     Ref(RegionKind, mir::BorrowKind, Place<'tcx>),
@@ -335,13 +336,21 @@ pub enum Rvalue<'tcx> {
     NullaryOp(mir::NullOp<'tcx>, Ty<'tcx>),
     UnaryOp(mir::UnOp, Operand<'tcx>),
     Discriminant(Place<'tcx>),
-    Aggregate(AggKind<'tcx>, Box<[Operand<'tcx>]>),
+    Aggregate(AggKind<'tcx>, List<Operand<'tcx>>),
     ShallowInitBox(Operand<'tcx>, Ty<'tcx>),
     CopyForDeref(Place<'tcx>),
 }
 
 #[derive(Clone)]
 pub enum Operand<'tcx> {
+    Any,
+    Copy(Place<'tcx>),
+    Move(Place<'tcx>),
+    Constant(ConstOperand<'tcx>),
+}
+
+#[derive(Clone)]
+pub enum FnOperand<'tcx> {
     Copy(Place<'tcx>),
     Move(Place<'tcx>),
     Constant(ConstOperand<'tcx>),
@@ -353,41 +362,13 @@ pub enum RegionKind {
     ReStatic,
 }
 
-pub struct List<T, M = ListMatchMode> {
-    pub data: Box<[T]>,
-    pub mode: M,
-}
-
-impl<T> List<T> {
-    pub fn ordered(iter: impl IntoIterator<Item = T>) -> Self {
-        Self {
-            data: iter.into_iter().collect(),
-            mode: ListMatchMode::Ordered,
-        }
-    }
-    pub fn unordered(iter: impl IntoIterator<Item = T>) -> Self {
-        Self {
-            data: iter.into_iter().collect(),
-            mode: ListMatchMode::Unordered,
-        }
-    }
-}
-
-pub struct Ordered;
-
-pub type OrderedList<T> = List<T, Ordered>;
-
-#[derive(Debug)]
-pub enum ListMatchMode {
-    Ordered,
-    Unordered,
-}
+pub type List<T> = Box<[T]>;
 
 #[derive(Clone)]
 pub enum ConstOperand<'tcx> {
     ConstVar(ConstVarIdx),
     ScalarInt(IntValue),
-    ZeroSized(Ty<'tcx>),
+    ZeroSized(PathWithArgs<'tcx>),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -397,10 +378,23 @@ pub enum Const {
 }
 
 #[derive(Debug, Clone)]
+pub enum AggAdtKind {
+    Unit,
+    Tuple,
+    Struct(List<Symbol>),
+}
+
+impl From<List<Symbol>> for AggAdtKind {
+    fn from(fields: List<Symbol>) -> Self {
+        AggAdtKind::Struct(fields)
+    }
+}
+
+#[derive(Debug, Clone)]
 pub enum AggKind<'tcx> {
     Array,
     Tuple,
-    Adt(Path<'tcx>, Option<Box<[Symbol]>>),
+    Adt(PathWithArgs<'tcx>, AggAdtKind),
     RawPtr(Ty<'tcx>, mir::Mutability),
 }
 
@@ -502,6 +496,12 @@ impl From<LangItem> for Path<'_> {
     }
 }
 
+#[derive(Clone, Copy)]
+pub struct PathWithArgs<'tcx> {
+    pub path: Path<'tcx>,
+    pub args: GenericArgsRef<'tcx>,
+}
+
 // FIXME: Use interning for the types
 #[derive(Clone, Copy)]
 #[rustc_pass_by_value]
@@ -521,14 +521,12 @@ pub enum TyKind<'tcx> {
     Tuple(&'tcx [Ty<'tcx>]),
     Ref(RegionKind, Ty<'tcx>, mir::Mutability),
     RawPtr(Ty<'tcx>, mir::Mutability),
-    Adt(Path<'tcx>, GenericArgsRef<'tcx>),
+    Path(PathWithArgs<'tcx>),
     Uint(ty::UintTy),
     Int(ty::IntTy),
     Float(ty::FloatTy),
     Bool,
     Str,
-    FnDef(Path<'tcx>, GenericArgsRef<'tcx>),
-    Alias(ty::AliasTyKind, Path<'tcx>, GenericArgsRef<'tcx>),
 }
 pub struct PatternsBuilder<'tcx> {
     patterns: Patterns<'tcx>,
@@ -602,9 +600,6 @@ impl<'tcx> PatternsBuilder<'tcx> {
         self.patterns.basic_blocks[self.current].set_terminator(kind);
         self.patterns.terminator_loc(self.current)
     }
-    pub fn mk_init(&mut self, place: impl Into<Place<'tcx>>) -> Location {
-        self.mk_statement(StatementKind::Init(place.into()))
-    }
     pub fn mk_assign(&mut self, place: impl Into<Place<'tcx>>, rvalue: Rvalue<'tcx>) -> Location {
         self.mk_statement(StatementKind::Assign(place.into(), rvalue))
     }
@@ -615,13 +610,17 @@ impl<'tcx> PatternsBuilder<'tcx> {
         destination: Option<Place<'tcx>>,
     ) -> Location {
         if let Some(place) = destination
-            && let Operand::Constant(ConstOperand::ZeroSized(ty)) = func
-            && let &TyKind::FnDef(Path::LangItem(lang_item), _) = ty.kind()
-            && let Target::Variant | Target::Struct = lang_item.target()
+            && let Operand::Constant(ConstOperand::ZeroSized(
+                path_with_args @ PathWithArgs {
+                    path: Path::LangItem(lang_item),
+                    ..
+                },
+            )) = func
+            && let Target::Variant | Target::Struct | Target::Union = lang_item.target()
         {
             return self.mk_assign(
                 place,
-                Rvalue::Aggregate(AggKind::Adt(lang_item.into(), None), args.data),
+                Rvalue::Aggregate(AggKind::Adt(path_with_args, AggAdtKind::Tuple), args),
             );
         }
         let target = self.next_block();
@@ -747,11 +746,11 @@ impl<'tcx> Patterns<'tcx> {
 }
 
 impl<'tcx> Patterns<'tcx> {
+    fn mk_generic_args(&self, generics: &[GenericArgKind<'tcx>]) -> GenericArgsRef<'tcx> {
+        GenericArgsRef(self.mk_slice(generics))
+    }
     pub fn mk_type_relative(&self, ty: Ty<'tcx>, path: &str) -> Path<'tcx> {
         Path::TypeRelative(ty, Symbol::intern(path))
-    }
-    pub fn mk_generic_args(&self, generics: &[GenericArgKind<'tcx>]) -> GenericArgsRef<'tcx> {
-        GenericArgsRef(self.mk_slice(generics))
     }
     pub fn mk_var_ty(&self, ty_var: TyVarIdx) -> Ty<'tcx> {
         self.mk_ty(TyKind::TyVar(ty_var))
@@ -764,8 +763,20 @@ impl<'tcx> Patterns<'tcx> {
     pub fn mk_item_path(&self, path: &[&str]) -> ItemPath<'tcx> {
         ItemPath(self.mk_symbols(path))
     }
-    pub fn mk_adt_ty(&self, path: impl Into<Path<'tcx>>, generics: GenericArgsRef<'tcx>) -> Ty<'tcx> {
-        self.mk_ty(TyKind::Adt(path.into(), generics))
+    pub fn mk_path_with_args(
+        &self,
+        path: impl Into<Path<'tcx>>,
+        generics: &[GenericArgKind<'tcx>],
+    ) -> PathWithArgs<'tcx> {
+        let path = path.into();
+        let args = self.mk_generic_args(generics);
+        PathWithArgs { path, args }
+    }
+    pub fn mk_path_ty(&self, path_with_args: PathWithArgs<'tcx>) -> Ty<'tcx> {
+        self.mk_ty(TyKind::Path(path_with_args))
+    }
+    pub fn mk_adt_ty(&self, path_with_args: PathWithArgs<'tcx>) -> Ty<'tcx> {
+        self.mk_path_ty(path_with_args)
     }
     pub fn mk_slice_ty(&self, ty: Ty<'tcx>) -> Ty<'tcx> {
         self.mk_ty(TyKind::Slice(ty))
@@ -779,11 +790,14 @@ impl<'tcx> Patterns<'tcx> {
     pub fn mk_raw_ptr_ty(&self, ty: Ty<'tcx>, mutability: mir::Mutability) -> Ty<'tcx> {
         self.mk_ty(TyKind::RawPtr(ty, mutability))
     }
-    pub fn mk_fn(&self, func: impl Into<Path<'tcx>>, generics: GenericArgsRef<'tcx>) -> Ty<'tcx> {
-        self.mk_ty(TyKind::FnDef(func.into(), generics))
+    pub fn mk_fn(&self, path_with_args: PathWithArgs<'tcx>) -> Ty<'tcx> {
+        self.mk_path_ty(path_with_args)
     }
-    pub fn mk_zeroed(&self, ty: Ty<'tcx>) -> Operand<'tcx> {
-        Operand::Constant(ConstOperand::ZeroSized(ty))
+    pub fn mk_zeroed(&self, path_with_args: PathWithArgs<'tcx>) -> ConstOperand<'tcx> {
+        ConstOperand::ZeroSized(path_with_args)
+    }
+    pub fn mk_list<T>(&self, items: impl IntoIterator<Item = T>) -> List<T> {
+        items.into_iter().collect()
     }
     pub fn mk_projection(&self, projection: &[PlaceElem<'tcx>]) -> &'tcx [PlaceElem<'tcx>] {
         self.mk_slice(projection)

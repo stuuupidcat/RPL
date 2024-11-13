@@ -40,22 +40,16 @@ macro_rules! Parse {
 pub enum ParseError {
     #[error("unrecognized region {0}, expect `'static` or `'_`")]
     UnrecognizedRegion(String),
-    #[error("expect `{{` or `(`")]
-    ExpectBraceOrParenthesis,
     #[error("`,` is needed for single-element tuple")]
     ExpectTuple,
     #[error("type declaration with generic arguments are not supported")]
     TypeWithGenericsNotSupported,
-    #[error("expect `(`, `[`, or `{{")]
-    ExpectDelimiter,
-    #[error("expect `type`, `use`, or `let")]
-    ExpectDeclaration,
     #[error("expect integer suffix")]
     ExpectIntSuffix,
     #[error("unrecognized integer suffix {0}")]
     UnrecognizedIntSuffix(String),
-    #[error("expect `,` or `;`")]
-    ExpectCommaOrSemicolon,
+    #[error("possible missing operands?")]
+    MissingOperands,
 }
 
 impl Parse for Region {
@@ -126,10 +120,10 @@ impl Parse for Const {
     }
 }
 
-impl Parse for LangItem {
+impl Parse for LangItemWithArgs {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         let content;
-        Ok(LangItem {
+        Ok(LangItemWithArgs {
             tk_pound: input.parse()?,
             bracket: syn::bracketed!(content in input),
             kw_lang: content.parse()?,
@@ -140,14 +134,17 @@ impl Parse for LangItem {
     }
 }
 
-impl Parse for ConstOperand {
+impl Parse for ConstOperandKind {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
-        Ok(if input.peek(Token![const]) {
-            ConstOperand::Lit(input.parse()?)
-        } else if input.peek(Token![#]) {
-            ConstOperand::LangItem(input.parse()?)
+        let lookahead = input.lookahead1();
+        Ok(if lookahead.peek(syn::Lit) {
+            ConstOperandKind::Lit(input.parse()?)
+        } else if lookahead.peek(Token![#]) {
+            ConstOperandKind::LangItem(input.parse()?)
+        } else if TypePath::lookahead(&lookahead) {
+            ConstOperandKind::Type(input.parse()?)
         } else {
-            ConstOperand::Path(input.parse()?)
+            return Err(lookahead.error());
         })
     }
 }
@@ -243,7 +240,7 @@ impl PathArguments {
 impl Parse for PathArguments {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         Ok(
-            if input.peek(Token![<]) || input.peek(Token![::]) && input.peek2(Token![<]) {
+            if input.peek(Token![<]) || input.peek(Token![::]) && input.peek3(Token![<]) {
                 PathArguments::AngleBracketed(input.parse()?)
             // } else if input.peek(token::Paren) {
             //     PathArguments::Parenthesized(input.parse()?)
@@ -272,6 +269,12 @@ impl Parse for PathLeading {
         } else {
             Ok(PathLeading::None)
         }
+    }
+}
+
+impl Path {
+    fn lookahead(lookahead: &syn::parse::Lookahead1<'_>) -> bool {
+        lookahead.peek(Ident) || lookahead.peek(Token![::]) || lookahead.peek(Token![$])
     }
 }
 
@@ -319,6 +322,12 @@ impl QSelf {
         };
         let path = Path { leading, segments };
         Ok((qself, path))
+    }
+}
+
+impl TypePath {
+    fn lookahead(lookahead: &syn::parse::Lookahead1<'_>) -> bool {
+        lookahead.peek(Token![<]) || Path::lookahead(lookahead)
     }
 }
 
@@ -382,7 +391,8 @@ impl Type {
         Ok(match is_single_no_trailing(Punctuated::parse_terminated(&content)?) {
             Ok(ty) => Type::Paren(TypeParen {
                 paren,
-                ty: Box::new(ty),
+                value: Box::new(ty),
+                _parse: Default::default(),
             }),
             Err(tys) => TypeTuple { paren, tys }.into(),
         })
@@ -539,14 +549,76 @@ impl Parse for Place {
     }
 }
 
+impl Operand {
+    fn lookahead(lookahead: &syn::parse::Lookahead1<'_>) -> bool {
+        lookahead.peek(Token![_])
+            || lookahead.peek(Token![..])
+            || lookahead.peek(Token![move])
+            || lookahead.peek(kw::copy)
+            || lookahead.peek(Token![const])
+    }
+}
+
 impl Parse for Operand {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
-        Ok(if input.peek(Token![move]) {
+        let lookahead = input.lookahead1();
+        Ok(if lookahead.peek(Token![_]) {
+            Operand::Any(input.parse()?)
+        } else if lookahead.peek(Token![..]) {
+            Operand::AnyMultiple(input.parse()?)
+        } else if lookahead.peek(Token![move]) {
             Operand::Move(input.parse()?)
-        } else if input.peek(kw::copy) {
+        } else if lookahead.peek(kw::copy) {
             Operand::Copy(input.parse()?)
-        } else {
+        } else if lookahead.peek(Token![const]) {
             Operand::Constant(input.parse()?)
+        } else {
+            return Err(lookahead.error());
+        })
+    }
+}
+
+impl<T, P: ParseFn<T> + Default> Parse for Parenthesized<T, P> {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let content;
+        Ok(Parenthesized {
+            paren: syn::parenthesized!(content in input),
+            value: P::parse(&content)?,
+            _parse: P::default(),
+        })
+    }
+}
+
+impl FnOperand {
+    fn lookahead(lookahead: &syn::parse::Lookahead1<'_>) -> bool {
+        lookahead.peek(token::Paren) || PathOrLangItem::lookahead(lookahead)
+    }
+}
+
+impl Parse for FnOperand {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let lookahead = input.lookahead1();
+        Ok(if lookahead.peek(token::Paren) {
+            let content;
+            syn::parenthesized!(content in input.fork());
+            let lookahead = content.lookahead1();
+            if lookahead.peek(Token![move]) {
+                FnOperand::Move(input.parse()?)
+            } else if lookahead.peek(kw::copy) {
+                FnOperand::Copy(input.parse()?)
+            } else if lookahead.peek(Token![#]) {
+                FnOperand::LangItem(input.parse()?)
+            } else if TypePath::lookahead(&lookahead) {
+                FnOperand::Type(input.parse()?)
+            } else {
+                return Err(lookahead.error());
+            }
+        } else if lookahead.peek(Token![#]) {
+            FnOperand::LangItem(input.parse()?)
+        } else if TypePath::lookahead(&lookahead) {
+            FnOperand::Type(input.parse()?)
+        } else {
+            return Err(lookahead.error());
         })
     }
 }
@@ -557,16 +629,10 @@ impl ParenthesizedOperands {
         let paren = syn::parenthesized!(content in input);
         let operands =
             is_tuple_like(Punctuated::parse_terminated(&content)?).map_err(|_| input.error(ParseError::ExpectTuple))?;
-        Ok(ParenthesizedOperands { paren, operands })
-    }
-}
-
-impl Parse for ParenthesizedOperands {
-    fn parse(input: ParseStream<'_>) -> Result<Self> {
-        let content;
         Ok(ParenthesizedOperands {
-            paren: syn::parenthesized!(content in input),
-            operands: Punctuated::parse_terminated(&content)?,
+            paren,
+            value: operands,
+            _parse: Default::default(),
         })
     }
 }
@@ -577,32 +643,6 @@ impl Parse for BracketedOperands {
         Ok(BracketedOperands {
             bracket: syn::bracketed!(content in input),
             operands: Punctuated::parse_terminated(&content)?,
-        })
-    }
-}
-
-impl Parse for BracedOperands {
-    fn parse(input: ParseStream<'_>) -> Result<Self> {
-        let content;
-        let brace = syn::braced!(content in input);
-        let operands = Punctuated::parse_separated_nonempty(&content)?;
-        let tk_dotdot = operands.trailing_punct().then(|| content.parse()).transpose()?;
-        Ok(BracedOperands {
-            brace,
-            operands,
-            tk_dotdot,
-        })
-    }
-}
-
-impl Parse for CallOperands {
-    fn parse(input: ParseStream<'_>) -> Result<Self> {
-        Ok(if input.peek(token::Paren) {
-            CallOperands::Ordered(input.parse()?)
-        } else if input.peek(token::Brace) {
-            CallOperands::Unordered(input.parse()?)
-        } else {
-            return Err(input.error(ParseError::ExpectBraceOrParenthesis));
         })
     }
 }
@@ -701,6 +741,25 @@ impl Parse for StructFields {
     }
 }
 
+impl PathOrLangItem {
+    fn lookahead(lookahead: &syn::parse::Lookahead1<'_>) -> bool {
+        lookahead.peek(Token![#]) || Path::lookahead(lookahead)
+    }
+}
+
+impl Parse for PathOrLangItem {
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let lookahead = input.lookahead1();
+        Ok(if lookahead.peek(Token![#]) {
+            PathOrLangItem::LangItem(input.parse()?)
+        } else if Path::lookahead(&lookahead) {
+            PathOrLangItem::Path(input.parse()?)
+        } else {
+            return Err(lookahead.error());
+        })
+    }
+}
+
 impl Parse for AggregateTuple {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
         Ok(AggregateTuple {
@@ -739,14 +798,15 @@ impl Rvalue {
         let content;
         let bracket = syn::bracketed!(content in input);
         let operand = content.parse()?;
-        if content.peek(Token![;]) {
+        let lookahead = content.lookahead1();
+        if lookahead.peek(Token![;]) {
             Ok(Rvalue::Repeat(RvalueRepeat {
                 bracket,
                 operand,
                 tk_semi: content.parse()?,
                 len: content.parse()?,
             }))
-        } else if !content.is_empty() {
+        } else if lookahead.peek(Token![,]) {
             let mut operands = Punctuated::new();
             operands.push_value(operand);
             operands.push_punct(content.parse()?);
@@ -762,7 +822,7 @@ impl Rvalue {
             })
             .into())
         } else {
-            Err(content.error(ParseError::ExpectCommaOrSemicolon))
+            Err(lookahead.error())
         }
     }
     fn parse_ref_or_raw_ptr(input: ParseStream<'_>) -> Result<Self> {
@@ -786,43 +846,66 @@ impl Rvalue {
 }
 
 impl RvalueOrCall {
+    fn parse_operand(input: ParseStream<'_>) -> Result<Self> {
+        let operand: Operand = input.parse()?;
+        Ok(if input.peek(Token![as]) {
+            let content;
+            Rvalue::Cast(RvalueCast {
+                operand,
+                tk_as: input.parse()?,
+                ty: input.parse()?,
+                paren: syn::parenthesized!(content in input),
+                cast_kind: content.parse()?,
+            })
+            .into()
+        } else {
+            Rvalue::Use(RvalueUse { paren: None, operand }).into()
+        })
+    }
+
     #[allow(irrefutable_let_patterns)]
-    fn parse_operand_any_or_aggregate(input: ParseStream<'_>) -> Result<Self> {
+    fn parse_fn_operand_or_aggregate(input: ParseStream<'_>, lookahead: syn::parse::Lookahead1<'_>) -> Result<Self> {
         Ok(
-            if input.peek(Token![*]) && (input.peek2(Token![const]) || input.peek2(Token![mut])) {
+            if lookahead.peek(Token![*]) && (input.peek2(Token![const]) || input.peek2(Token![mut])) {
                 Rvalue::Aggregate(RvalueAggregate::RawPtr(input.parse()?)).into()
-            } else if let forked = input.fork()
+            } else if lookahead.peek(Token![#])
+                && let forked = input.fork()
                 && forked.parse::<Ctor>().is_ok()
             {
                 Rvalue::Aggregate(RvalueAggregate::AdtTuple(input.parse()?)).into()
-            } else if let forked = input.fork()
+            } else if Path::lookahead(&lookahead)
+                && let forked = input.fork()
                 && forked.parse::<Path>().is_ok()
                 && forked.peek(token::Brace)
             {
-                Rvalue::Aggregate(RvalueAggregate::Adt(input.parse()?)).into()
-            } else if input.fork().parse::<Operand>().is_ok() {
-                let operand: Operand = input.parse()?;
-                if input.peek(Token![as]) {
-                    let content;
-                    Rvalue::Cast(RvalueCast {
-                        operand,
-                        tk_as: input.parse()?,
-                        ty: input.parse()?,
-                        paren: syn::parenthesized!(content in input),
-                        cast_kind: content.parse()?,
-                    })
-                    .into()
-                } else if input.peek(token::Paren) || input.peek(token::Brace) {
+                Rvalue::Aggregate(RvalueAggregate::AdtStruct(input.parse()?)).into()
+            } else if FnOperand::lookahead(&lookahead) && input.fork().parse::<FnOperand>().is_ok() {
+                let operand: FnOperand = input.parse()?;
+                if input.peek(token::Paren) || input.peek(token::Brace) {
                     Call {
                         func: operand,
                         operands: input.parse()?,
                     }
                     .into()
                 } else {
-                    Rvalue::Use(RvalueUse { paren: None, operand }).into()
+                    use FnOperand::{Copy, LangItem, Move, Type};
+                    use RvalueUse;
+                    RvalueOrCall::Rvalue(match operand {
+                        Move(inner) => RvalueUse::from(inner).into(),
+                        Copy(inner) => RvalueUse::from(inner).into(),
+                        Type(TypePath { qself: Some(_), .. }) => return Err(input.error(ParseError::MissingOperands)),
+                        Type(TypePath { qself: None, path }) => {
+                            RvalueAggregate::AdtUnit(AggregateAdtUnit { adt: path.into() }).into()
+                        },
+                        LangItem(lang_item) => {
+                            RvalueAggregate::AdtUnit(AggregateAdtUnit { adt: lang_item.into() }).into()
+                        },
+                    })
                 }
-            } else {
+            } else if lookahead.peek(token::Paren) {
                 Rvalue::Aggregate(RvalueAggregate::Tuple(input.parse()?)).into()
+            } else {
+                return Err(lookahead.error());
             },
         )
     }
@@ -836,7 +919,7 @@ impl RvalueOrCall {
             Rvalue::UnaryOp(input.parse()?).into()
         } else if input.fork().parse::<BinOp>().is_ok() {
             Rvalue::BinaryOp(input.parse()?).into()
-        } else if input.peek(kw::Discriminant) {
+        } else if input.peek(kw::discriminant) {
             Rvalue::Discriminant(input.parse()?).into()
         } else {
             RvalueOrCall::Call(input.parse()?)
@@ -846,20 +929,21 @@ impl RvalueOrCall {
 
 impl Parse for RvalueOrCall {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
-        if input.peek(token::Bracket) {
+        let lookahead = input.lookahead1();
+        if lookahead.peek(token::Bracket) {
             Ok(Rvalue::parse_array(input)?.into())
-        } else if input.peek(Token![&]) {
+        } else if lookahead.peek(Token![&]) {
             Ok(Rvalue::parse_ref_or_raw_ptr(input)?.into())
-        } else if input.peek(Token![_]) {
-            Ok(RvalueOrCall::Any(input.parse()?))
-        } else if input.peek(Token![<]) {
+        } else if lookahead.peek(Token![_]) {
+            Ok(Rvalue::Any(input.parse()?).into())
+        } else if lookahead.peek(Token![<]) {
             Ok(RvalueOrCall::Call(input.parse()?))
-        } else if input.peek(kw::copy) || input.peek(Token![move]) || input.peek(Token![const]) {
-            input.call(RvalueOrCall::parse_operand_any_or_aggregate)
-        } else if input.peek(syn::Ident) && input.peek2(token::Paren) {
-            input.call(RvalueOrCall::parse_opertion_or_call)
+        } else if Operand::lookahead(&lookahead) {
+            RvalueOrCall::parse_operand(input)
+        } else if lookahead.peek(syn::Ident) && input.peek2(token::Paren) {
+            RvalueOrCall::parse_opertion_or_call(input)
         } else {
-            input.call(RvalueOrCall::parse_operand_any_or_aggregate)
+            RvalueOrCall::parse_fn_operand_or_aggregate(input, lookahead)
         }
     }
 }
@@ -891,16 +975,17 @@ impl Parse for LocalDecl {
 
 impl Parse for Declaration {
     fn parse(input: ParseStream<'_>) -> Result<Self> {
-        Ok(if input.peek(Token![type]) {
+        let lookahead = input.lookahead1();
+        Ok(if lookahead.peek(Token![type]) {
             Declaration::TypeDecl(input.parse()?)
-        } else if input.peek(Token![use]) {
+        } else if lookahead.peek(Token![use]) {
             Declaration::UsePath(input.parse()?)
-        } else if input.peek(Token![let]) && (input.peek2(Token![self]) || input.peek3(Token![self])) {
+        } else if lookahead.peek(Token![let]) && (input.peek2(Token![self]) || input.peek3(Token![self])) {
             Declaration::SelfDecl(input.parse()?)
-        } else if input.peek(Token![let]) {
+        } else if lookahead.peek(Token![let]) {
             Declaration::LocalDecl(input.parse()?)
         } else {
-            return Err(input.error(ParseError::ExpectDeclaration));
+            return Err(lookahead.error());
         })
     }
 }
@@ -993,17 +1078,18 @@ impl<End: Parse> Parse for Statement<End> {
 
 #[macro_export]
 macro_rules! macro_delimiter {
-    ($content:ident in $input:expr) => {
-        if $input.peek(::syn::token::Paren) {
+    ($content:ident in $input:expr) => {{
+        let lookahead = $input.lookahead1();
+        if lookahead.peek(::syn::token::Paren) {
             ::syn::MacroDelimiter::Paren(::syn::parenthesized!($content in $input))
-        } else if $input.peek(::syn::token::Bracket) {
+        } else if lookahead.peek(::syn::token::Bracket) {
             ::syn::MacroDelimiter::Bracket(::syn::bracketed!($content in $input))
-        } else if $input.peek(::syn::token::Brace) {
+        } else if lookahead.peek(::syn::token::Brace) {
             ::syn::MacroDelimiter::Brace(::syn::braced!($content in $input))
         } else {
-            return Err($input.error($crate::ParseError::ExpectDelimiter));
+            return Err(lookahead.error());
         }
-    }
+    }}
 }
 
 impl<K: Parse, C, P: ParseFn<C>> Parse for Macro<K, C, P> {

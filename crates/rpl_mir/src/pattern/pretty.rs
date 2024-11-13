@@ -87,6 +87,24 @@ impl fmt::Debug for Path<'_> {
     }
 }
 
+impl PathWithArgs<'_> {
+    fn fmt_as_ty(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let PathWithArgs { path, args } = self;
+        write!(f, "{path:?}{args:?}")
+    }
+}
+
+impl fmt::Debug for PathWithArgs<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let PathWithArgs { path, args } = self;
+        path.fmt(f)?;
+        if !args.is_empty() {
+            write!(f, ":: {args:?}")?;
+        }
+        Ok(())
+    }
+}
+
 impl fmt::Debug for Ty<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.kind().fmt(f)
@@ -109,16 +127,12 @@ impl fmt::Debug for TyKind<'_> {
             Self::Ref(region, ty, mir::Mutability::Not) => write!(f, "&{region} {ty:?}"),
             Self::Ref(region, ty, mir::Mutability::Mut) => write!(f, "&{region}mut {ty:?}"),
             Self::RawPtr(ty, mutability) => write!(f, "*{} {ty:?}", mutability.ptr_str()),
-            Self::Adt(path, args) => {
-                write!(f, "{path:?}{args:?}")
-            },
+            Self::Path(path_with_args) => path_with_args.fmt_as_ty(f),
             Self::Uint(uint) => uint.fmt(f),
             Self::Int(int) => int.fmt(f),
             Self::Float(float) => float.fmt(f),
             Self::Bool => f.write_str("bool"),
             Self::Str => f.write_str("str"),
-            Self::FnDef(path, args) => write!(f, "{path:?}{args:?}"),
-            Self::Alias(_alias_kind, path, args) => write!(f, "{path:?}{args:?}"),
         }
     }
 }
@@ -175,9 +189,25 @@ impl fmt::Debug for StatementKind<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Assign(place, rvalue) => write!(f, "{place:?} = {rvalue:?}"),
-            Self::Init(place) => write!(f, "{place:?} = _"),
         }
     }
+}
+
+fn fmt_list<T>(
+    f: &mut fmt::Formatter<'_>,
+    list: impl IntoIterator<Item = T>,
+    end: &str,
+    mut fmt: impl FnMut(T, &mut fmt::Formatter<'_>) -> fmt::Result,
+) -> fmt::Result {
+    let mut iter = list.into_iter();
+    if let Some(first) = iter.next() {
+        fmt(first, f)?;
+    }
+    for elem in iter {
+        write!(f, ", ")?;
+        fmt(elem, f)?;
+    }
+    f.write_str(end)
 }
 
 impl fmt::Debug for TerminatorKind<'_> {
@@ -192,7 +222,10 @@ impl fmt::Debug for TerminatorKind<'_> {
                 if let Some(destination) = destination {
                     write!(f, "{destination:?} = ")?
                 }
-                write!(f, "{func:?}{args:?} -> {target:?}")
+                func.fmt_fn_operand(f)?;
+                write!(f, "(")?;
+                fmt_list(f, args, ")", fmt::Debug::fmt)?;
+                write!(f, " -> {target:?}")
             },
             TerminatorKind::Drop { place, target } => {
                 write!(f, "drop({place:?}) -> {target:?}")
@@ -232,6 +265,7 @@ impl fmt::Debug for IntValue {
 impl fmt::Debug for Rvalue<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Any => f.write_str("_"),
             Self::Use(operand) => operand.fmt(f),
             Self::Repeat(elem, len) => write!(f, "[{elem:?}; {len:?}]"),
             Self::Ref(region, bor, place) => write!(f, "&{region}{}{place:?}", bor.mutability().prefix_str()),
@@ -240,9 +274,9 @@ impl fmt::Debug for Rvalue<'_> {
             Self::Cast(cast_kind, operand, ty) => write!(f, "{operand:?} as {ty:?} ({cast_kind:?})"),
             Self::BinaryOp(op, box [lhs, rhs]) => write!(f, "{op:?}({lhs:?}, {rhs:?})"),
             Self::NullaryOp(op, ty) => write!(f, "{op:?}({ty:?})"),
-            Self::UnaryOp(op, operand) => write!(f, "{op:?}({operand:?}"),
+            Self::UnaryOp(op, operand) => write!(f, "{op:?}({operand:?})"),
             Self::Discriminant(place) => f.debug_tuple("discriminant").field(place).finish(),
-            Self::Aggregate(agg_kind, args) => format_aggregate(agg_kind, args, f),
+            Self::Aggregate(agg_kind, operands) => format_aggregate(agg_kind, operands, f),
             Self::ShallowInitBox(operand, ty) => write!(f, "Box< {ty:?} >({operand:?})"),
             Self::CopyForDeref(place) => write!(f, "&(*{place:?})"),
         }
@@ -254,22 +288,6 @@ fn format_aggregate<'tcx>(
     operands: &[Operand<'tcx>],
     f: &mut fmt::Formatter<'_>,
 ) -> fmt::Result {
-    fn fmt_list<T>(
-        f: &mut fmt::Formatter<'_>,
-        list: impl IntoIterator<Item = T>,
-        end: &str,
-        mut fmt: impl FnMut(T, &mut fmt::Formatter<'_>) -> fmt::Result,
-    ) -> fmt::Result {
-        let mut iter = list.into_iter();
-        if let Some(first) = iter.next() {
-            fmt(first, f)?;
-        }
-        for elem in iter {
-            write!(f, ", ")?;
-            fmt(elem, f)?;
-        }
-        f.write_str(end)
-    }
     match agg_kind {
         AggKind::Array => {
             f.write_str("[")?;
@@ -279,12 +297,16 @@ fn format_aggregate<'tcx>(
             f.write_str("(")?;
             fmt_list(f, operands, ")", fmt::Debug::fmt)
         },
-        AggKind::Adt(path, None) => {
-            write!(f, "{path:?}(")?;
+        AggKind::Adt(path_with_args, AggAdtKind::Unit) => {
+            write!(f, "{path_with_args:?}")
+        },
+        AggKind::Adt(path_with_args, AggAdtKind::Tuple) => {
+            write!(f, "{path_with_args:?}")?;
+            f.write_str("(")?;
             fmt_list(f, operands, ")", fmt::Debug::fmt)
         },
-        AggKind::Adt(path, Some(fields)) => {
-            write!(f, "{path:?}{{")?;
+        AggKind::Adt(path_with_args, AggAdtKind::Struct(fields)) => {
+            write!(f, "{path_with_args:?} {{")?;
             let mut fields = fields.iter();
             fmt_list(f, operands, "}", |operand, f| {
                 let field = fields.next().ok_or(std::fmt::Error)?;
@@ -298,12 +320,24 @@ fn format_aggregate<'tcx>(
     }
 }
 
+impl Operand<'_> {
+    fn fmt_fn_operand(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Any => f.write_str("_"),
+            Self::Copy(place) => write!(f, "(copy {place:?})"),
+            Self::Move(place) => write!(f, "(move {place:?})"),
+            Self::Constant(konst) => write!(f, "{konst:?}"),
+        }
+    }
+}
+
 impl fmt::Debug for Operand<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Any => f.write_str("_"),
             Self::Copy(place) => write!(f, "copy {place:?}"),
             Self::Move(place) => write!(f, "move {place:?}"),
-            Self::Constant(konst) => konst.fmt(f),
+            Self::Constant(konst) => write!(f, "const {konst:?}"),
         }
     }
 }
@@ -312,8 +346,8 @@ impl fmt::Debug for ConstOperand<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::ConstVar(const_var) => const_var.fmt(f),
-            Self::ScalarInt(scalar) => write!(f, "const {scalar:?}"),
-            Self::ZeroSized(ty) => ty.fmt(f),
+            Self::ScalarInt(scalar) => write!(f, "{scalar:?}"),
+            Self::ZeroSized(path_with_args) => path_with_args.fmt(f),
         }
     }
 }
@@ -323,25 +357,6 @@ impl fmt::Debug for Field {
         match self {
             Self::Named(sym) => write!(f, "{sym}"),
             Self::Unnamed(field) => field.fmt(f),
-        }
-    }
-}
-
-impl<T: fmt::Debug> fmt::Debug for List<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (begin, non_exhaustive, end) = match self.mode {
-            ListMatchMode::Ordered => ("(", "", ")"),
-            ListMatchMode::Unordered => ("{", ".., ", "}"),
-        };
-        match &self.data {
-            box [] => write!(f, "{begin}{end}"),
-            box [first, rest @ ..] => {
-                write!(f, "{begin}{first:?}")?;
-                for v in rest {
-                    write!(f, ", {v:?}")?;
-                }
-                write!(f, "{non_exhaustive}{end}")
-            },
         }
     }
 }

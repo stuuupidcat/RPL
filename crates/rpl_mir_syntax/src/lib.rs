@@ -37,7 +37,7 @@ pub(crate) mod kw {
 
     // Rvalue
     syn::custom_keyword!(Len);
-    syn::custom_keyword!(Discriminant);
+    syn::custom_keyword!(discriminant);
     syn::custom_keyword!(raw);
 
     // CastKind
@@ -165,11 +165,7 @@ auto_derive! {
 
 }
 
-#[derive(Clone)]
-pub struct TypeParen {
-    paren: token::Paren,
-    pub ty: Box<Type>,
-}
+pub type TypeParen = Parenthesized<Box<Type>>;
 
 #[derive(Clone)]
 pub struct QSelf {
@@ -381,7 +377,7 @@ auto_derive! {
         TyVar(TypeVar),
 
         /// A languate item
-        LangItem(LangItem),
+        LangItem(LangItemWithArgs),
     }
 }
 
@@ -517,15 +513,6 @@ impl Place {
 }
 
 auto_derive! {
-    #[auto_derive(ToTokens, Parse)]
-    #[derive(Clone)]
-    pub struct ConstLit {
-        tk_const: Token![const],
-        pub lit: syn::Lit,
-    }
-}
-
-auto_derive! {
     #[auto_derive(ToTokens)]
     #[derive(Clone)]
     pub enum Const {
@@ -535,7 +522,7 @@ auto_derive! {
 }
 
 #[derive(Clone)]
-pub struct LangItem {
+pub struct LangItemWithArgs {
     tk_pound: Token![#],
     bracket: token::Bracket,
     kw_lang: kw::lang,
@@ -547,10 +534,19 @@ pub struct LangItem {
 auto_derive! {
     #[auto_derive(ToTokens)]
     #[derive(Clone)]
-    pub enum ConstOperand {
-        Lit(ConstLit),
-        Path(TypePath),
-        LangItem(LangItem),
+    pub enum ConstOperandKind {
+        Lit(syn::Lit),
+        Type(TypePath),
+        LangItem(LangItemWithArgs),
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct ConstOperand {
+        tk_const: Token![const],
+        pub kind: ConstOperandKind,
     }
 }
 
@@ -578,16 +574,54 @@ auto_derive! {
     #[auto_derive(ToTokens, From)]
     #[derive(Clone)]
     pub enum Operand {
+        Any(Token![_]),
+        AnyMultiple(Token![..]),
         Copy(OperandCopy),
         Move(OperandMove),
         Constant(ConstOperand),
     }
 }
 
+auto_derive! {
+    #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
+    pub enum FnOperand {
+        Copy(Parenthesized<OperandCopy>),
+        Move(Parenthesized<OperandMove>),
+        Type(TypePath),
+        LangItem(LangItemWithArgs),
+    }
+}
+
+#[derive(Clone)]
+pub struct Parenthesized<T, P = parse::ParseParse> {
+    paren: token::Paren,
+    pub value: T,
+    _parse: P,
+}
+
 #[derive(Clone)]
 pub struct RvalueUse {
     paren: Option<token::Paren>,
     pub operand: Operand,
+}
+
+impl From<Parenthesized<OperandMove>> for RvalueUse {
+    fn from(operand: Parenthesized<OperandMove>) -> Self {
+        Self {
+            paren: Some(operand.paren),
+            operand: Operand::Move(operand.value),
+        }
+    }
+}
+
+impl From<Parenthesized<OperandCopy>> for RvalueUse {
+    fn from(operand: Parenthesized<OperandCopy>) -> Self {
+        Self {
+            paren: Some(operand.paren),
+            operand: Operand::Copy(operand.value),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -715,7 +749,7 @@ pub struct RvalueUnOp {
 
 #[derive(Clone)]
 pub struct RvalueDiscriminant {
-    kw_discr: kw::Discriminant,
+    kw_discr: kw::discriminant,
     paren: token::Paren,
     pub place: Place,
 }
@@ -755,11 +789,28 @@ pub struct StructFields {
 }
 
 auto_derive! {
+    #[auto_derive(ToTokens, From)]
+    #[derive(Clone)]
+    pub enum PathOrLangItem {
+        Path(Path),
+        LangItem(LangItemWithArgs),
+    }
+}
+
+auto_derive! {
     #[auto_derive(ToTokens, Parse)]
     #[derive(Clone)]
-    pub struct AggregateAdt {
-        pub adt: Path,
+    pub struct AggregateAdtStruct {
+        pub adt: PathOrLangItem,
         pub fields: StructFields,
+    }
+}
+
+auto_derive! {
+    #[auto_derive(ToTokens, Parse)]
+    #[derive(Clone)]
+    pub struct AggregateAdtUnit {
+        pub adt: PathOrLangItem,
     }
 }
 
@@ -796,8 +847,9 @@ auto_derive! {
     pub enum RvalueAggregate {
         Array(AggregateArray),
         Tuple(AggregateTuple),
-        Adt(AggregateAdt),
+        AdtStruct(AggregateAdtStruct),
         AdtTuple(AggregateAdtTuple),
+        AdtUnit(AggregateAdtUnit),
         RawPtr(AggregateRawPtr),
     }
 }
@@ -806,6 +858,7 @@ auto_derive! {
     #[auto_derive(ToTokens, From)]
     #[derive(Clone)]
     pub enum Rvalue {
+        Any(Token![_]),
         Use(RvalueUse),
         Repeat(RvalueRepeat),
         Ref(RvalueRef),
@@ -823,11 +876,7 @@ auto_derive! {
 
 }
 
-#[derive(Clone)]
-pub struct ParenthesizedOperands {
-    paren: token::Paren,
-    pub operands: Punctuated<Operand, Token![,]>,
-}
+pub type ParenthesizedOperands = Parenthesized<Punctuated<Operand, Token![,]>, parse::PunctuatedParseTerminated>;
 
 #[derive(Clone)]
 pub struct BracketedOperands {
@@ -835,28 +884,12 @@ pub struct BracketedOperands {
     pub operands: Punctuated<Operand, Token![,]>,
 }
 
-#[derive(Clone)]
-pub struct BracedOperands {
-    brace: token::Brace,
-    pub operands: Punctuated<Operand, Token![,]>,
-    tk_dotdot: Option<Token![..]>,
-}
-
-auto_derive! {
-    #[auto_derive(ToTokens, From)]
-    #[derive(Clone)]
-    pub enum CallOperands {
-        Ordered(ParenthesizedOperands),
-        Unordered(BracedOperands),
-    }
-}
-
 auto_derive! {
     #[auto_derive(ToTokens, Parse)]
     #[derive(Clone)]
     pub struct Call {
-        pub func: Operand,
-        pub operands: CallOperands,
+        pub func: FnOperand,
+        pub operands: ParenthesizedOperands,
     }
 }
 
@@ -886,7 +919,6 @@ auto_derive! {
     pub enum RvalueOrCall {
         Rvalue(Rvalue),
         Call(Call),
-        Any(Token![_]),
     }
 }
 

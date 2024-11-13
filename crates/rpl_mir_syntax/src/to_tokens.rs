@@ -80,9 +80,9 @@ impl ToTokens for TypeGroup {
     }
 }
 
-impl ToTokens for TypeParen {
+impl<T: ToTokens, P> ToTokens for Parenthesized<T, P> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.paren.surround(tokens, |tokens| self.ty.to_tokens(tokens));
+        self.paren.surround(tokens, |tokens| self.value.to_tokens(tokens));
     }
 }
 
@@ -111,15 +111,15 @@ impl ToTokens for ParenthesizedGenericArguments {
     }
 }
 
-impl ToTokens for LangItem {
+impl ToTokens for LangItemWithArgs {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         self.tk_pound.to_tokens(tokens);
         self.bracket.surround(tokens, |tokens| {
             self.kw_lang.to_tokens(tokens);
             self.tk_eq.to_tokens(tokens);
             self.item.to_tokens(tokens);
-            self.args.to_tokens(tokens);
         });
+        self.args.to_tokens(tokens);
     }
 }
 
@@ -297,24 +297,9 @@ impl ToTokens for AggregateRawPtr {
     }
 }
 
-impl ToTokens for ParenthesizedOperands {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.paren.surround(tokens, |tokens| self.operands.to_tokens(tokens));
-    }
-}
-
 impl ToTokens for BracketedOperands {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         self.bracket.surround(tokens, |tokens| self.operands.to_tokens(tokens));
-    }
-}
-
-impl ToTokens for BracedOperands {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.brace.surround(tokens, |tokens| {
-            self.operands.to_tokens(tokens);
-            self.tk_dotdot.to_tokens(tokens);
-        });
     }
 }
 
