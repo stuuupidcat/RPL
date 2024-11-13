@@ -1,4 +1,4 @@
-//@ compile-flags: -Z mir-opt-level=3
+//@ compile-flags: -Z inline-mir
 
 pub trait ComponentSlice<T> {
     /// The components interpreted as an array, e.g. one `RGB` expands to 3 elements.
