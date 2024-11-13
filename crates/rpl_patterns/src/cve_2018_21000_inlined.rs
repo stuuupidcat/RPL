@@ -87,20 +87,20 @@ fn pattern_reversed_para(patterns: &mut pat::PatternsBuilder<'_>) -> PatternMiso
         from_vec_len = copy from_vec.len;
         to_vec_len = Div(move from_vec_len, copy tsize);
         to_vec_wrapped_len = #[ctor] alloc::raw_vec::Cap(copy to_vec_len);
-        from_vec_unique_ptr = core::ptr::unique::Unique<u8> {
+        from_vec_unique_ptr = core::ptr::unique::Unique::<u8> {
             pointer: copy from_vec_ptr,
-            _marker: core::marker::PhantomData<u8>,
+            _marker: const core::marker::PhantomData<u8>,
         };
-        to_raw_vec_inner = alloc::raw_vec::RawVecInner<alloc::alloc::Global> {
+        to_raw_vec_inner = alloc::raw_vec::RawVecInner::<alloc::alloc::Global> {
             ptr: move from_vec_unique_ptr,
             cap: copy to_vec_wrapped_len,
-            alloc: alloc::alloc::Global,
+            alloc: const alloc::alloc::Global,
         };
-        to_raw_vec = alloc::raw_vec::RawVec<$T, alloc::alloc::Global> {
+        to_raw_vec = alloc::raw_vec::RawVec::<$T, alloc::alloc::Global> {
             inner: move to_raw_vec_inner,
-            _marker: core::marker::PhantomData<$T>,
+            _marker: const core::marker::PhantomData<$T>,
         };
-        to_vec = alloc::vec::Vec<$T, alloc::alloc::Global> {
+        to_vec = alloc::vec::Vec::<$T, alloc::alloc::Global> {
             buf: move to_raw_vec,
             len: copy to_vec_cap,
         };

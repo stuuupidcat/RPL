@@ -58,12 +58,20 @@ fn test_type_decl() {
 }
 
 #[test]
+fn test_path_arguments() {
+    pass!(PathArguments!(<$T, Global>));
+    pass!(PathArguments!(::<$T, Global>));
+}
+
+#[test]
 fn test_path() {
     pass!(PathSegment!(std));
     pass!(Path!(std::mem::take));
     pass!(Path!(Vec<T>));
     pass!(Path!(core::ffi::c_str::CStr));
     pass!(Path!($crate::ffi::sqlite3session_attach));
+    pass!(Path!(alloc::raw_vec::RawVec::<$T, Global>));
+
     pass!(TypePath!(<Vec<T> >));
     pass!(TypePath!(<Vec<T> as Clone>::clone));
     pass!(TypePath!(<$crate::alloc::Vec<T> as Clone>::clone));
@@ -110,15 +118,22 @@ fn test_place() {
 
 #[test]
 fn test_operand() {
-    pass!(Operand!(std::mem::take));
+    pass!(Operand!(const std::mem::take));
     pass!(Operand!(move y));
     fail!(Operand!(copy from_ptr as), "unexpected token");
 }
 
 #[test]
+fn test_fn_operand() {
+    pass!(FnOperand!(std::mem::take));
+    pass!(FnOperand!((move y)));
+    pass!(FnOperand!((copy from_ptr)));
+}
+
+#[test]
 fn test_rvalue() {
     pass!(CastKind!(PtrToPtr));
-    pass!(RvalueCast!(from_ptr as *const u8(PtrToPtr)));
+    pass!(RvalueCast!(copy from_ptr as *const u8(PtrToPtr)));
 
     pass!(RvalueOrCall!(&x));
     pass!(RvalueOrCall!(&mut y));
@@ -128,10 +143,21 @@ fn test_rvalue() {
     pass!(RvalueOrCall!([const 0, const 1, const 2, const 3, const 4]));
     pass!(RvalueOrCall!((const 0, const 1, const 2, const 3, const 4)));
     pass!(RvalueOrCall!(Test { x: const 0 }));
-    pass!(RvalueOrCall!(*const [i32] from (ptr, meta)));
+    pass!(RvalueOrCall!(*const [i32] from (copy ptr, copy meta)));
+
+    pass!(RvalueOrCall!(
+        alloc::raw_vec::RawVec::<$T, Global> {
+            inner: move to_raw_vec_inner,
+            _marker: const core::marker::PhantomData::<$T>,
+        }
+    ));
 
     fail!(
         RvalueCast!(from_ptr as *const u8),
+        "expected one of: `_`, `..`, `move`, `copy`, `const`"
+    );
+    fail!(
+        RvalueCast!(copy from_ptr as *const u8),
         "unexpected end of input, expected parentheses"
     );
 }
@@ -152,6 +178,7 @@ fn test_call() {
 #[test]
 fn test_assign() {
     pass!(Assign!( *x = std::mem::take(move y) ));
+    pass!(Assign!( opt = #[lang = "None"] ));
 }
 
 #[test]
@@ -166,7 +193,7 @@ fn test_declaration() {
     #[rustfmt::skip]
     pass!(Declaration!( type SliceT = [$T]; ));
     pass!(Declaration!( let x: u32 = const 0_usize; ));
-    pass!(Declaration!( let to_ptr: *const u8 = from_ptr as *const u8 (PtrToPtr); ));
+    pass!(Declaration!( let to_ptr: *const u8 = copy from_ptr as *const u8 (PtrToPtr); ));
 }
 
 #[test]
@@ -230,6 +257,18 @@ fn test_loop() {
 }
 
 #[test]
+fn test_local_decl() {
+    pass!(LocalDecl!( let from_slice: SliceT = _; ));
+    pass!(LocalDecl!( let from_raw_slice: PtrSliceT = &raw const *from_slice; ));
+    pass!(LocalDecl!( let from_len: usize = Len(from_slice); ));
+    pass!(LocalDecl!( let ty_size: usize = SizeOf($T); ));
+    pass!(LocalDecl!( let to_ptr: PtrU8 = copy from_ptr as PtrU8 (PtrToPtr); ));
+    pass!(LocalDecl!( let to_len: usize = Mul(copy from_len, copy ty_size); ));
+    pass!(LocalDecl!( let to_raw_slice: PtrSliceU8 = *const SliceU8 from (copy to_ptr, copy t_len); ));
+    pass!(LocalDecl!( let to_slice: RefSliceU8 = &*to_raw_slice; ));
+}
+
+#[test]
 fn test_statement() {
     #[rustfmt::skip]
     pass!(Statement!( *x = copy y.0; ));
@@ -264,9 +303,9 @@ fn test_mir_pattern() {
         let from_raw_slice: PtrSliceT = &raw const *from_slice;
         let from_len: usize = Len(from_slice);
         let ty_size: usize = SizeOf($T);
-        let to_ptr: PtrU8 = from_ptr as PtrU8 (PtrToPtr);
-        let to_len: usize = Mul(from_len, ty_size);
-        let to_raw_slice: PtrSliceU8 = *const SliceU8 from (to_ptr, t_len);
+        let to_ptr: PtrU8 = copy from_ptr as PtrU8 (PtrToPtr);
+        let to_len: usize = Mul(copy from_len, copy ty_size);
+        let to_raw_slice: PtrSliceU8 = *const SliceU8 from (copy to_ptr, copy t_len);
         let to_slice: RefSliceU8 = &*to_raw_slice;
     });
     pass!(Mir! {
@@ -438,5 +477,63 @@ fn test_parse_cve_2021_29941_2() {
         // There cannnot be two mutable references to `vec` in the same scope
         ref_to_vec = &mut vec;
         _tmp = Vec::set_len(move ref_to_vec, copy len);
+    });
+}
+
+#[test]
+fn test_cve_2020_35892_revised() {
+    pass!(Mir! {
+        meta!($T:ty, $SlabT:ty);
+
+        let self: &mut $SlabT;
+        let len: usize;
+        let x1: usize;
+        let x2: usize;
+        let opt: #[lang = "Option"]<usize>;
+        let discr: isize;
+        let x: usize;
+        let start_ref: &usize;
+        let end_ref: &usize;
+        let start: usize;
+        let end: usize;
+        let range: core::ops::range::Range<usize>;
+        let mut iter: core::ops::range::Range<usize>;
+        let mut iter_mut: &mut core::ops::range::Range<usize>;
+        let mut base: *mut $T;
+        let offset: isize;
+        let elem_ptr: *mut $T;
+        let cmp: bool;
+
+        len = copy (*self).len;
+        range = core::ops::range::Range { start: const 0_usize, end: move len };
+        iter = move range;
+        loop {
+            iter_mut = &mut iter;
+            start_ref = &(*iter_mut).start;
+            start = copy *start_ref;
+            end_ref = &(*iter_mut).end;
+            end = copy *end;
+            cmp = Lt(move start, copy end);
+            switchInt(move cmp) {
+                false => opt = #[lang = "None"],
+                _ => {
+                    x1 = copy (*iter_mut).start;
+                    x2 = core::iter::range::Step::forward_unchecked(copy x1, const 1_usize);
+                    (*iter_mut).start = copy x2;
+                    opt = #[lang = "Some"](copy x1);
+                }
+            }
+            discr = discriminant(opt);
+            switchInt(move discr) {
+                0_isize => break,
+                1_isize => {
+                    x = copy (opt as Some).0;
+                    base = copy (*self).mem;
+                    offset = copy x as isize (IntToInt);
+                    elem_ptr = Offset(copy base, copy offset);
+                    _ = core::ptr::drop_in_place(copy elem_ptr);
+                }
+            }
+        }
     });
 }

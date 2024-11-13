@@ -80,12 +80,12 @@ impl CheckCtxt {
         match rvalue_or_call {
             RvalueOrCall::Rvalue(rvalue) => self.check_rvalue(rvalue),
             RvalueOrCall::Call(call) => self.check_call(call),
-            RvalueOrCall::Any(_) => Ok(()),
         }
     }
 
     fn check_rvalue(&self, rvalue: &Rvalue) -> syn::Result<()> {
         match rvalue {
+            Rvalue::Any(_) => Ok(()),
             Rvalue::Use(RvalueUse { operand, .. })
             | Rvalue::UnaryOp(RvalueUnOp { operand, .. })
             | Rvalue::Repeat(RvalueRepeat { operand, .. }) => self.check_operand(operand),
@@ -109,19 +109,31 @@ impl CheckCtxt {
     }
 
     fn check_call(&self, call: &Call) -> syn::Result<()> {
-        self.check_operand(&call.func)?;
-        let operands = match &call.operands {
-            CallOperands::Ordered(ParenthesizedOperands { operands, .. })
-            | CallOperands::Unordered(BracedOperands { operands, .. }) => operands,
-        };
-        for operand in operands.iter() {
+        self.check_fn_operand(&call.func)?;
+        for operand in call.operands.value.iter() {
             self.check_operand(operand)?;
         }
         Ok(())
     }
 
+    fn check_fn_operand(&self, operand: &FnOperand) -> syn::Result<()> {
+        match operand {
+            FnOperand::Copy(Parenthesized {
+                value: OperandCopy { place, .. },
+                ..
+            })
+            | FnOperand::Move(Parenthesized {
+                value: OperandMove { place, .. },
+                ..
+            }) => self.check_place(place),
+            FnOperand::Type(path) => self.check_type_path(path),
+            FnOperand::LangItem(lang_item) => self.check_lang_item_with_args(lang_item),
+        }
+    }
+
     fn check_operand(&self, operand: &Operand) -> syn::Result<()> {
         match operand {
+            Operand::Any(_) | Operand::AnyMultiple(_) => Ok(()),
             Operand::Copy(OperandCopy { place, .. }) | Operand::Move(OperandMove { place, .. }) => {
                 self.check_place(place)
             },
@@ -143,20 +155,20 @@ impl CheckCtxt {
     }
 
     fn check_const_operand(&self, konst: &ConstOperand) -> syn::Result<()> {
-        match konst {
-            ConstOperand::Lit(_) => Ok(()),
-            ConstOperand::Path(type_path) => {
+        match konst.kind {
+            ConstOperandKind::Lit(_) => Ok(()),
+            ConstOperandKind::Type(ref type_path) => {
                 if let Some(qself) = &type_path.qself {
                     self.check_type(&qself.ty)?;
                 }
                 self.check_path(&type_path.path)?;
                 Ok(())
             },
-            ConstOperand::LangItem(lang_item) => self.check_lang_item(lang_item),
+            ConstOperandKind::LangItem(ref lang_item) => self.check_lang_item_with_args(lang_item),
         }
     }
 
-    fn check_lang_item(&self, lang_item: &LangItem) -> syn::Result<()> {
+    fn check_lang_item_with_args(&self, lang_item: &LangItemWithArgs) -> syn::Result<()> {
         let value = lang_item.item.value();
         rustc_hir::LangItem::from_name(Symbol::intern(&value))
             .ok_or_else(|| syn::Error::new_spanned(lang_item, CheckError::UnknownLangItem(value)))?;
@@ -219,13 +231,13 @@ impl CheckCtxt {
                 Ok(())
             },
             RvalueAggregate::Tuple(AggregateTuple { operands }) => {
-                for operand in operands.operands.iter() {
+                for operand in operands.value.iter() {
                     self.check_operand(operand)?;
                 }
                 Ok(())
             },
-            RvalueAggregate::Adt(AggregateAdt { adt, fields }) => {
-                self.check_path(adt)?;
+            RvalueAggregate::AdtStruct(AggregateAdtStruct { adt, fields }) => {
+                self.check_path_or_lang_item(adt)?;
                 for field in fields.fields.iter() {
                     self.check_operand(&field.operand)?;
                 }
@@ -233,11 +245,12 @@ impl CheckCtxt {
             },
             RvalueAggregate::AdtTuple(AggregateAdtTuple { adt, fields, .. }) => {
                 self.check_path(adt)?;
-                for field in fields.operands.iter() {
+                for field in fields.value.iter() {
                     self.check_operand(field)?;
                 }
                 Ok(())
             },
+            RvalueAggregate::AdtUnit(AggregateAdtUnit { adt }) => self.check_path_or_lang_item(adt),
             RvalueAggregate::RawPtr(AggregateRawPtr { ty, ptr, metadata, .. }) => {
                 self.check_type(&ty.ty)?;
                 self.check_operand(ptr)?;
@@ -257,22 +270,30 @@ impl CheckCtxt {
             },
             Type::Array(TypeArray { ty, .. })
             | Type::Group(TypeGroup { ty, .. })
-            | Type::Paren(TypeParen { ty, .. })
+            | Type::Paren(TypeParen { value: ty, .. })
             | Type::Slice(TypeSlice { ty, .. })
             | Type::Ptr(TypePtr { ty, .. }) => self.check_type(ty),
-            Type::Path(TypePath { qself, path }) => {
-                if let Some(qself) = qself {
-                    self.check_type(&qself.ty)?;
-                }
-                self.check_path(path)?;
-                Ok(())
-            },
+            Type::Path(path) => self.check_type_path(path),
             Type::Tuple(TypeTuple { tys, .. }) => tys.iter().try_for_each(|ty| self.check_type(ty)),
             Type::TyVar(TypeVar { ident, .. }) => {
                 _ = self.symbols.get_ty_var(ident)?;
                 Ok(())
             },
-            Type::LangItem(lang_item) => self.check_lang_item(lang_item),
+            Type::LangItem(lang_item) => self.check_lang_item_with_args(lang_item),
+        }
+    }
+
+    fn check_type_path(&self, path: &TypePath) -> syn::Result<()> {
+        if let Some(qself) = &path.qself {
+            self.check_type(&qself.ty)?;
+        }
+        self.check_path(&path.path)
+    }
+
+    fn check_path_or_lang_item(&self, path: &PathOrLangItem) -> syn::Result<()> {
+        match path {
+            PathOrLangItem::Path(path) => self.check_path(path),
+            PathOrLangItem::LangItem(lang_item) => self.check_lang_item_with_args(lang_item),
         }
     }
 
@@ -325,7 +346,10 @@ impl CheckCtxt {
     fn check_switch_int(&self, switch_int: &SwitchInt) -> syn::Result<()> {
         self.check_operand(&switch_int.operand)?;
         let mut has_otherwise = false;
-        for SwitchTarget { value, body, .. } in &switch_int.targets {
+        for SwitchTarget {
+            ref value, ref body, ..
+        } in &switch_int.targets
+        {
             if let SwitchValue::Underscore(_) = value {
                 if has_otherwise {
                     return Err(syn::Error::new_spanned(value, CheckError::MultipleOtherwiseInSwitchInt));

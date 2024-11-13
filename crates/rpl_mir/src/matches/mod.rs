@@ -202,10 +202,13 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
                     )
                     .entered();
                     if loc_pat.statement_index < block_pat.statements.len()
-                        && let pat::StatementKind::Init(pat::Place {
-                            local: local_pat,
-                            projection: [],
-                        }) = block_pat.statements[loc_pat.statement_index]
+                        && let pat::StatementKind::Assign(
+                            pat::Place {
+                                local: local_pat,
+                                projection: [],
+                            },
+                            pat::Rvalue::Any,
+                        ) = block_pat.statements[loc_pat.statement_index]
                     {
                         if self.cx.patterns.self_idx == Some(local_pat)
                             && let self_value = mir::Local::from_u32(1)
@@ -425,10 +428,13 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
             StatementMatch::Location(loc) => self.cx.mir_ddg[loc.block].accesses(loc.statement_index),
         };
         if loc_pat.statement_index < self.cx.patterns[loc_pat.block].statements.len()
-            && let pat::StatementKind::Init(pat::Place {
-                local: local_pat,
-                projection: [],
-            }) = self.cx.patterns[loc_pat.block].statements[loc_pat.statement_index]
+            && let pat::StatementKind::Assign(
+                pat::Place {
+                    local: local_pat,
+                    projection: [],
+                },
+                pat::Rvalue::Any,
+            ) = self.cx.patterns[loc_pat.block].statements[loc_pat.statement_index]
         {
             return accesses
                 .iter()

@@ -329,25 +329,30 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
             loc.statement_index < block.statements.len(),
         ) {
             (true, true) => self.match_statement(
+                pat,
+                loc,
                 &block_pat.statements[pat.statement_index],
                 &block.statements[loc.statement_index],
             ),
-            (true, false)
-                if let pat::StatementKind::Init(place_pat) = block_pat.statements[pat.statement_index]
-                    && let mir::TerminatorKind::Call { destination, .. } = block.terminator().kind =>
-            {
-                self.match_place(place_pat, destination)
-            },
+            (true, false) => self.match_statement_with_terminator(
+                pat,
+                loc,
+                &block_pat.statements[pat.statement_index],
+                block.terminator(),
+            ),
             (false, false) => self.match_terminator(pat, loc, block_pat.terminator(), block.terminator()),
-            (true, false) | (false, true) => false,
+            (false, true) => false,
         }
     }
 
-    pub fn match_statement(&self, pat: &pat::StatementKind<'tcx>, statement: &mir::Statement<'tcx>) -> bool {
+    pub fn match_statement(
+        &self,
+        loc_pat: pat::Location,
+        loc: mir::Location,
+        pat: &pat::StatementKind<'tcx>,
+        statement: &mir::Statement<'tcx>,
+    ) -> bool {
         let matched = match (pat, &statement.kind) {
-            (&pat::StatementKind::Init(place_pat), &mir::StatementKind::Assign(box (place, _))) => {
-                self.match_place(place_pat, place)
-            },
             (
                 &pat::StatementKind::Assign(place_pat, ref rvalue_pat),
                 &mir::StatementKind::Assign(box (place, ref rvalue)),
@@ -355,7 +360,27 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
             _ => false,
         };
         if matched {
-            info!("candidate matched: {pat:?} <-> {statement:?}");
+            info!("candidate matched: {loc_pat:?} {pat:?} <-> {loc:?} {statement:?}");
+        }
+        matched
+    }
+
+    pub fn match_statement_with_terminator(
+        &self,
+        loc_pat: pat::Location,
+        loc: mir::Location,
+        pat: &pat::StatementKind<'tcx>,
+        terminator: &mir::Terminator<'tcx>,
+    ) -> bool {
+        let matched = matches!((pat, &terminator.kind), (
+            &pat::StatementKind::Assign(place_pat, pat::Rvalue::Any),
+            &mir::TerminatorKind::Call { destination, .. },
+        ) if self.match_place(place_pat, destination));
+        if matched {
+            info!(
+                "candidate matched: {loc_pat:?} {pat:?} <-> {loc:?} {:?}",
+                terminator.kind
+            );
         }
         matched
     }
@@ -396,7 +421,7 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
                 },
             ) => {
                 self.match_operand(func_pat, func)
-                    && self.match_operands(args_pat, args)
+                    && self.match_spanned_operands(args_pat, args)
                     && destination_pat.is_none_or(|destination_pat| self.match_place(destination_pat, destination))
             },
             (
@@ -406,9 +431,10 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
                 },
                 &mir::TerminatorKind::Drop { place, target: _, .. },
             ) => self.match_place(place_pat, place),
+            // Trivial matches, do not need to print
             (pat::TerminatorKind::Goto(_), mir::TerminatorKind::Goto { .. })
             | (pat::TerminatorKind::Return, mir::TerminatorKind::Return)
-            | (pat::TerminatorKind::PatEnd, _) => true,
+            | (pat::TerminatorKind::PatEnd, _) => return true,
             (
                 pat::TerminatorKind::SwitchInt { operand, targets: _ },
                 mir::TerminatorKind::SwitchInt { discr, targets: _ },
@@ -416,7 +442,10 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
             _ => false,
         };
         if matched {
-            info!(?pat, ?terminator.kind, "candidate matched");
+            info!(
+                "candidate matched: {loc_pat:?} {pat:?} <-> {loc:?} {:?}",
+                terminator.kind
+            );
         }
         matched
     }
@@ -461,6 +490,7 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
                 false
             },
 
+            (pat::Rvalue::Any, _) => true,
             (pat::Rvalue::Use(operand_pat), mir::Rvalue::Use(operand)) => self.match_operand(operand_pat, operand),
             (&pat::Rvalue::Repeat(ref operand_pat, konst_pat), &mir::Rvalue::Repeat(ref operand, konst)) => {
                 self.match_operand(operand_pat, operand) && self.match_const(konst_pat, konst)
@@ -521,19 +551,13 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
         matched
     }
 
-    fn match_operands(
+    fn match_spanned_operands(
         &self,
-        pat: &pat::List<pat::Operand<'tcx>>,
+        pat: &[pat::Operand<'tcx>],
         operands: &[rustc_span::source_map::Spanned<mir::Operand<'tcx>>],
     ) -> bool {
-        match pat.mode {
-            pat::ListMatchMode::Ordered => {
-                pat.data.len() == operands.len()
-                    && zip(&pat.data, operands)
-                        .all(|(operand_pat, operand)| self.match_operand(operand_pat, &operand.node))
-            },
-            pat::ListMatchMode::Unordered => todo!(),
-        }
+        pat.len() == operands.len()
+            && zip(pat, operands).all(|(operand_pat, operand)| self.match_operand(operand_pat, &operand.node))
     }
 
     // FIXME
@@ -543,7 +567,7 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
         path: pat::Path<'tcx>,
         def_id: DefId,
         variant_idx: VariantIdx,
-        fields: Option<&[Symbol]>,
+        adt_kind: &pat::AggAdtKind,
         field_idx: Option<FieldIdx>,
         operands_pat: &[pat::Operand<'tcx>],
         operands: &IndexSlice<FieldIdx, mir::Operand<'tcx>>,
@@ -561,10 +585,15 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
             pattern::Path::TypeRelative(_ty, _symbol) => false,
             pattern::Path::LangItem(lang_item) => self.tcx.is_lang_item(variant.def_id, lang_item),
         };
-        let fields_matched = match (fields, field_idx) {
-            (None, None) => variant.ctor.is_some() && self.match_agg_operands(operands_pat, &operands.raw),
-            (Some(&[name]), Some(field_idx)) => adt.is_union() && variant.fields[field_idx].name == name,
-            (Some(names), None) => {
+        let fields_matched = match (adt_kind, field_idx, variant.ctor) {
+            (pat::AggAdtKind::Unit, None, Some((CtorKind::Const, _)))
+            | (pat::AggAdtKind::Tuple, None, Some((CtorKind::Fn, _))) => {
+                self.match_operands(operands_pat, &operands.raw)
+            },
+            (pat::AggAdtKind::Struct(box [name]), Some(field_idx), None) => {
+                adt.is_union() && &variant.fields[field_idx].name == name
+            },
+            (pat::AggAdtKind::Struct(names), None, None) => {
                 let indices = names
                     .iter()
                     .enumerate()
@@ -601,22 +630,23 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
     ) -> bool {
         let matched = match (agg_kind_pat, agg_kind) {
             (&pat::AggKind::Array, &mir::AggregateKind::Array(_))
-            | (pat::AggKind::Tuple, mir::AggregateKind::Tuple) => self.match_agg_operands(operands_pat, &operands.raw),
-            (&pat::AggKind::Adt(path, ref fields), &mir::AggregateKind::Adt(def_id, variant_idx, _, _, field_idx)) => {
-                self.match_agg_adt(
-                    path,
-                    def_id,
-                    variant_idx,
-                    fields.as_deref(),
-                    field_idx,
-                    operands_pat,
-                    operands,
-                )
-            },
+            | (pat::AggKind::Tuple, mir::AggregateKind::Tuple) => self.match_operands(operands_pat, &operands.raw),
+            (
+                &pat::AggKind::Adt(path_with_args, ref fields),
+                &mir::AggregateKind::Adt(def_id, variant_idx, _, _, field_idx),
+            ) => self.match_agg_adt(
+                path_with_args.path,
+                def_id,
+                variant_idx,
+                fields,
+                field_idx,
+                operands_pat,
+                operands,
+            ),
             (&pat::AggKind::RawPtr(ty_pat, mutability_pat), &mir::AggregateKind::RawPtr(ty, mutability)) => {
                 self.match_ty(ty_pat, ty)
                     && mutability_pat == mutability
-                    && self.match_agg_operands(operands_pat, &operands.raw)
+                    && self.match_operands(operands_pat, &operands.raw)
             },
             _ => false,
         };
@@ -630,7 +660,7 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
         );
         matched
     }
-    fn match_agg_operands(&self, operands_pat: &[pat::Operand<'tcx>], operands: &[mir::Operand<'tcx>]) -> bool {
+    fn match_operands(&self, operands_pat: &[pat::Operand<'tcx>], operands: &[mir::Operand<'tcx>]) -> bool {
         operands_pat.len() == operands.len()
             && core::iter::zip(operands_pat, operands)
                 .all(|(operand_pat, operand)| self.match_operand(operand_pat, operand))
@@ -660,22 +690,31 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
             (pat::TyKind::Uint(ty_pat), ty::Uint(ty)) => ty_pat == ty,
             (pat::TyKind::Int(ty_pat), ty::Int(ty)) => ty_pat == ty,
             (pat::TyKind::Float(ty_pat), ty::Float(ty)) => ty_pat == ty,
-            (pat::TyKind::Adt(path, args_pat), ty::Adt(adt, args)) => {
-                self.match_path(path, adt.did()) && self.match_generic_args(args_pat, args)
+            (pat::TyKind::Path(path_with_args), ty::Adt(adt, args)) => {
+                self.match_path_with_args(path_with_args, adt.did(), args)
             },
-            (pat::TyKind::FnDef(path, _args_pat), ty::FnDef(def_id, _args)) => {
-                self.match_path(path, def_id) // && self.match_generic_args(args_pat, args)
+            (pat::TyKind::Path(path_with_args), ty::FnDef(def_id, args)) => {
+                self.match_path_with_args(path_with_args, def_id, args)
             },
-            (pat::TyKind::Alias(alias_kind_pat, path, args), ty::Alias(alias_kind, alias)) => {
-                alias_kind_pat == alias_kind
-                    && self.match_path(path, alias.def_id)
-                    && self.match_generic_args(args, alias.args)
-            },
+            // (pat::TyKind::Alias(alias_kind_pat, path, args), ty::Alias(alias_kind, alias)) => {
+            //     alias_kind_pat == alias_kind
+            //         && self.match_path(path, alias.def_id)
+            //         && self.match_generic_args(args, alias.args)
+            // },
             (pat::TyKind::Bool, ty::Bool) => true,
             _ => false,
         };
         debug!(?ty_pat, ?ty, matched, "match_ty");
         matched
+    }
+
+    fn match_path_with_args(
+        &self,
+        path_with_args: pat::PathWithArgs<'tcx>,
+        def_id: DefId,
+        args: ty::GenericArgsRef<'tcx>,
+    ) -> bool {
+        self.match_path(path_with_args.path, def_id) && self.match_generic_args(path_with_args.args, args)
     }
 
     fn match_path(&self, path: pat::Path<'tcx>, def_id: DefId) -> bool {
@@ -771,8 +810,13 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
                     value_pat.normalize(self.tcx.pointer_size().bytes()) == value.to_bits_unchecked()
                 })
             },
-            (&pat::ConstOperand::ZeroSized(ty_pat), mir::Const::Val(mir::ConstValue::ZeroSized, ty)) => {
-                self.match_ty(ty_pat, ty)
+            (&pat::ConstOperand::ZeroSized(path_with_args), mir::Const::Val(mir::ConstValue::ZeroSized, ty)) => {
+                let (def_id, args) = match *ty.kind() {
+                    ty::FnDef(def_id, args) => (def_id, args),
+                    ty::Adt(adt, args) => (adt.did(), args),
+                    _ => return false,
+                };
+                self.match_path_with_args(path_with_args, def_id, args)
             },
             _ => false,
         }
