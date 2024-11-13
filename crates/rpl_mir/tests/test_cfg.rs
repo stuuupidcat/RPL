@@ -157,7 +157,7 @@ test_case! {
         ?bb1 : {
             _?10 = copy _?2;
             _?11 = Lt(move _?10, copy _?1);
-            switchInt(move _?11) -> [false -> ?bb4, otherwise -> ?bb5];
+            switchInt(move _?11) -> [false: ?bb4, otherwise: ?bb5];
         }
         ?bb2: { end; }
         ?bb3: { goto ?bb1; }
@@ -494,7 +494,7 @@ test_case! {
             _?9 = balabala::discriminant(copy _?8) -> ?bb9;
         }
         ?bb9: {
-            switchInt(move _?9) -> [true -> ?bb11 , otherwise -> ?bb12];
+            switchInt(move _?9) -> [true: ?bb11 , otherwise: ?bb12];
         }
         ?bb10: {
             goto ?bb6;

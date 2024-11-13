@@ -242,10 +242,10 @@ impl fmt::Debug for SwitchTargets {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut targets = f.debug_list();
         for (val, bb) in &self.targets {
-            targets.entry_with(|f| write!(f, "{val:?} -> {bb:?}"));
+            targets.entry_with(|f| write!(f, "{val:?}: {bb:?}"));
         }
         if let Some(bb) = self.otherwise {
-            targets.entry_with(|f| write!(f, "otherwise -> {bb:?}"));
+            targets.entry_with(|f| write!(f, "otherwise: {bb:?}"));
         }
         targets.finish()
     }

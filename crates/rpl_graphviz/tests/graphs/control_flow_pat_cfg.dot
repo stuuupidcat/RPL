@@ -1,0 +1,10 @@
+digraph ControlFlowGraph {
+    bb0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb0</td></tr><tr><td align="left" balign="left">_?0 = _<br/>_?1 = _<br/></td></tr><tr><td align="left">switchInt(copy _?1) -&gt; [false: ?bb2, otherwise: ?bb3]</td></tr></table>>];
+    bb1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb1</td></tr><tr><td align="left">end</td></tr></table>>];
+    bb2 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb2</td></tr><tr><td align="left">goto ?bb1</td></tr></table>>];
+    bb3 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb3</td></tr><tr><td align="left" balign="left">(*_?0) = Add(copy (*_?0), const 1_i32)<br/></td></tr><tr><td align="left">goto ?bb1</td></tr></table>>];
+    bb0 -> bb2 [label="0"];
+    bb0 -> bb3 [label="otherwise"];
+    bb2 -> bb1 [label=""];
+    bb3 -> bb1 [label=""];
+}

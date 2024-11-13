@@ -6,8 +6,8 @@ use std::ops::Index;
 use rpl_mir_graph::TerminatorEdges;
 use rustc_index::bit_set::HybridBitSet;
 use rustc_index::IndexVec;
-use rustc_middle::mir;
 use rustc_middle::mir::visit::{MutatingUseContext, PlaceContext};
+use rustc_middle::mir::{self};
 use rustc_middle::ty::Ty;
 use rustc_span::Span;
 
@@ -106,10 +106,19 @@ impl<'tcx> Index<pat::TyVarIdx> for CheckingMatches<'tcx> {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub enum StatementMatch {
     Arg(mir::Local),
     Location(mir::Location),
+}
+
+impl fmt::Debug for StatementMatch {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StatementMatch::Arg(local) => local.fmt(f),
+            StatementMatch::Location(loc) => loc.fmt(f),
+        }
+    }
 }
 
 impl StatementMatch {
@@ -290,15 +299,21 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
             matches.visited.set(true);
 
             // check the statements in order of reversed dependencies
-            self.cx.pat_ddg[bb_pat]
-                .dep_end()
-                .chain((0..self.cx.patterns[bb_pat].num_statements_and_terminator()).rev())
+            (0..self.cx.patterns[bb_pat].num_statements_and_terminator())
+                .rev()
                 .all(|statement_index| {
                     let loc_pat = pat::Location {
                         block: bb_pat,
                         statement_index,
                     };
-                    self.match_stmt_in(loc_pat, bb)
+                    let matched = self.match_stmt_in(loc_pat, bb);
+                    if !matched {
+                        info!(
+                            "statement not matched: {loc_pat:?} {pat:?}",
+                            pat = self.cx.patterns[loc_pat.block].debug_stmt_at(loc_pat.statement_index),
+                        );
+                    }
+                    matched
                 })
         } && {
             matches.end.set(Some(bb));
@@ -380,14 +395,14 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
         self.direct_predecessors(bb)
             .any(|pred| self.match_stmt_in(loc_pat, pred))
     }
-    #[instrument(level = "info", skip(self), ret)]
+    #[instrument(level = "debug", skip(self), ret)]
     fn match_stmt_and_deps(&self, loc_pat: pat::Location, bb: mir::BasicBlock, stmt_match: StatementMatch) -> bool {
         let matched = &self.matches[loc_pat].matched;
         matched.get().is_none_or(|m| m == stmt_match)
             && {
                 matched.set(Some(stmt_match));
                 info!(
-                    "statement matched {pat:?} <-> {statement:?}",
+                    "statement matched {loc_pat:?} {pat:?} <-> {stmt_match:?} {statement:?}",
                     pat = self.cx.patterns[loc_pat.block].debug_stmt_at(loc_pat.statement_index),
                     statement = stmt_match.debug_with(self.cx.body),
                 );
@@ -395,12 +410,52 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
             }
             && self.cx.pat_ddg[loc_pat.block]
                 .deps(loc_pat.statement_index)
-                .all(|statement_index| {
-                    let loc_pat = pat::Location {
+                .all(|(statement_index, _local_pat)| {
+                    let dep_loc_pat = pat::Location {
                         statement_index,
                         ..loc_pat
                     };
-                    self.match_stmt_in(loc_pat, bb)
+                    self.match_stmt_in(dep_loc_pat, bb) && {
+                        /*
+                        // dep_loc_pat -----> dep_stmt
+                        //   ^                   ^
+                        //   | local_pat         | local
+                        //   |                   |
+                        // loc_pat -------> stmt_match
+                        let local = match stmt_match {
+                            StatementMatch::Arg(local) => local,
+                            StatementMatch::Location(loc) => {
+                                let Some(local) = self.matches[dep_loc_pat].matched.get().and_then(|dep_stmt| {
+                                    let dep_loc = match dep_stmt {
+                                        StatementMatch::Arg(local) => return Some(local),
+                                        StatementMatch::Location(loc) => loc,
+                                    };
+                                    let local = if dep_loc.block != loc.block {
+                                        self.cx.mir_ddg[loc.block]
+                                    }
+                                    let local = self.cx.mir_ddg[loc.block]
+                                        .get_dep(loc.statement_index, dep_loc.statement_index);
+                                    info!(
+                                        "\n\
+                                        {dep_loc_pat:?} --> {dep_loc:?}\n\
+                                        ^           ^\n\
+                                        | {local_pat:?}       | {local:?}\n\
+                                        |           | \n\
+                                        {loc_pat:?} --> {loc:?}",
+                                    );
+                                    info!(?loc_pat, ?dep_loc_pat, ?local_pat, ?loc, ?dep_loc, ?local);
+                                    local
+                                }) else {
+                                    return false;
+                                };
+                                local
+                            },
+                        };
+
+                        self.match_local(local_pat, local)
+                        */
+                        true
+                    }
                 })
             && self.match_stmt_dep_start(loc_pat, bb)
             || {
@@ -411,7 +466,10 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
     }
     #[instrument(level = "debug", skip(self), ret)]
     fn match_stmt_dep_start(&self, loc_pat: pat::Location, bb: mir::BasicBlock) -> bool {
-        !self.cx.pat_ddg[loc_pat.block].is_rdep_start(loc_pat.statement_index)
+        self.cx.pat_ddg[loc_pat.block]
+            .get_rdep_start(loc_pat.statement_index)
+            .next()
+            .is_none()
             || self.matches[loc_pat.block].start.get().is_none_or(|block| block == bb) && {
                 self.matches[loc_pat.block].start.set(Some(bb));
                 self.match_block_starts_with(loc_pat.block, bb)
