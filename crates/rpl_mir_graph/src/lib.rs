@@ -1,4 +1,6 @@
 #![feature(rustc_private)]
+#![feature(gen_blocks)]
+#![feature(iter_chain)]
 
 extern crate rustc_data_structures;
 extern crate rustc_driver;

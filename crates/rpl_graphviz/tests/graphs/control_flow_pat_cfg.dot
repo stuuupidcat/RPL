@@ -5,6 +5,6 @@ digraph ControlFlowGraph {
     bb3 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb3</td></tr><tr><td align="left" balign="left">(*_?0) = Add(copy (*_?0), const 1_i32)<br/></td></tr><tr><td align="left">goto ?bb1</td></tr></table>>];
     bb0 -> bb2 [label="0"];
     bb0 -> bb3 [label="otherwise"];
-    bb2 -> bb1 [label=""];
-    bb3 -> bb1 [label=""];
+    bb2 -> bb1 [label="goto"];
+    bb3 -> bb1 [label="goto"];
 }

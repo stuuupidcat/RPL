@@ -2,7 +2,7 @@ use core::default::Default;
 use std::ops::Index;
 
 use crate::rwstate::RWCStates;
-use rustc_data_structures::fx::FxIndexMap;
+use rustc_data_structures::fx::{FxHashMap, FxIndexMap};
 use rustc_data_structures::packed::Pu128;
 use rustc_index::bit_set::HybridBitSet;
 use rustc_index::{Idx, IndexSlice, IndexVec};
@@ -117,7 +117,7 @@ impl<BasicBlock: Idx, Local: Idx> ProgramDepGraph<BasicBlock, Local> {
             .unwrap_or_else(std::convert::identity);
         start..end
     }
-    fn add_locals(&mut self, num_locals: usize) -> impl Copy + Fn(Local) -> NodeIdx {
+    fn add_locals(&mut self, num_locals: usize) -> impl Copy + Fn(Local) -> NodeIdx + use<BasicBlock, Local> {
         self.locals_offset = self.nodes.next_index();
         let offset = self.locals_offset;
         self.nodes.extend((0..num_locals).map(Local::new).map(NodeKind::Local));
@@ -127,8 +127,8 @@ impl<BasicBlock: Idx, Local: Idx> ProgramDepGraph<BasicBlock, Local> {
         &mut self,
         num_blocks: usize,
     ) -> (
-        impl Copy + Fn(BasicBlock) -> NodeIdx,
-        impl Copy + Fn(BasicBlock) -> NodeIdx,
+        impl Copy + Fn(BasicBlock) -> NodeIdx + use<BasicBlock, Local>,
+        impl Copy + Fn(BasicBlock) -> NodeIdx + use<BasicBlock, Local>,
     ) {
         self.blocks_offset = self.nodes.next_index();
         let offset = self.blocks_offset;
@@ -145,7 +145,7 @@ impl<BasicBlock: Idx, Local: Idx> ProgramDepGraph<BasicBlock, Local> {
         &mut self,
         bb: BasicBlock,
         block: &BlockDataDepGraph<Local>,
-    ) -> impl Copy + Fn(usize) -> NodeIdx {
+    ) -> impl Copy + Fn(usize) -> NodeIdx + use<BasicBlock, Local> {
         self.stmts_offsets[bb] = self.nodes.next_index();
         let offset = self.stmts_offsets[bb];
         self.nodes
@@ -271,6 +271,7 @@ impl<'a, BasicBlock: Idx, Local: Idx> ProgramDepGraphBuilder<'a, BasicBlock, Loc
             graph.add_cfg_edges(bb, &self.cfg[bb], starts, ends);
         }
         graph.edges.sort_unstable_by_key(Edge::nodes);
+        // FIXME: add interblock dependency edges
         self.graph
     }
 }
@@ -318,15 +319,51 @@ pub enum TerminatorEdges<BasicBlock: Idx> {
     SwitchInt(SwitchTargets<BasicBlock>),
 }
 
+impl<BasicBlock: Idx> TerminatorEdges<BasicBlock> {
+    pub gen fn successors(&self) -> BasicBlock {
+        match self {
+            Self::None => {},
+            &Self::Single(bb) => yield bb,
+            &Self::Double(ret, cleanup) => {
+                yield ret;
+                yield cleanup;
+            },
+            Self::AssignOnReturn { return_, cleanup } => {
+                for &bb in std::iter::chain(return_, cleanup) {
+                    yield bb;
+                }
+            },
+            Self::SwitchInt(targets) => {
+                for &target in std::iter::chain(targets.targets.values(), &targets.otherwise) {
+                    yield target;
+                }
+            },
+        };
+    }
+}
+
 #[derive(Debug)]
 pub struct SwitchTargets<BasicBlock: Idx> {
     pub targets: FxIndexMap<Pu128, BasicBlock>,
     pub otherwise: Option<BasicBlock>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+struct Location<BasicBlock> {
+    block: BasicBlock,
+    statement_index: usize,
+}
+
+impl<BasicBlock> Location<BasicBlock> {
+    pub fn new(block: BasicBlock, statement_index: usize) -> Self {
+        Self { block, statement_index }
+    }
+}
+
 pub struct DataDepGraph<BasicBlock: Idx, Local: Idx> {
     num_locals: usize,
     pub blocks: IndexVec<BasicBlock, BlockDataDepGraph<Local>>,
+    interblock_edges: IndexVec<BasicBlock, InterblockEdges<BasicBlock, Local>>,
 }
 
 impl<BasicBlock: Idx, Local: Idx> Index<BasicBlock> for DataDepGraph<BasicBlock, Local> {
@@ -340,18 +377,114 @@ impl<BasicBlock: Idx, Local: Idx> Index<BasicBlock> for DataDepGraph<BasicBlock,
 impl<BasicBlock: Idx, Local: Idx> DataDepGraph<BasicBlock, Local> {
     pub fn new(num_blocks: usize, mut num_statements: impl FnMut(BasicBlock) -> usize, num_locals: usize) -> Self {
         Self {
-            blocks: IndexVec::from_fn_n(|bb| BlockDataDepGraph::new(num_statements(bb), num_locals), num_blocks),
             num_locals,
+            blocks: IndexVec::from_fn_n(|bb| BlockDataDepGraph::new(num_statements(bb), num_locals), num_blocks),
+            interblock_edges: IndexVec::from_fn_n(|bb| InterblockEdges::new(num_statements(bb)), num_blocks),
         }
     }
     pub fn blocks(&self) -> impl Iterator<Item = (BasicBlock, &BlockDataDepGraph<Local>)> + '_ {
         self.blocks.iter_enumerated()
+    }
+    pub fn interblock_edges(&self) -> impl Iterator<Item = (BasicBlock, usize, BasicBlock, usize, Local)> {
+        self.interblock_edges.iter_enumerated().flat_map(|(bb, edges)| {
+            edges.deps.iter().enumerate().flat_map(move |(stmt, edges)| {
+                edges
+                    .iter()
+                    .map(move |(loc, local)| (bb, stmt, loc.block, loc.statement_index, local))
+            })
+        })
+    }
+    pub fn build_interblock_edges(&mut self, cfg: &ControlFlowGraph<BasicBlock>) {
+        loop {
+            let mut changed = false;
+            for (bb, block) in self.blocks.iter_enumerated() {
+                for bb_succ in cfg.terminator_edges[bb].successors().filter(|&bb_succ| bb_succ != bb) {
+                    let (curr, succ) = self.interblock_edges.pick2_mut(bb, bb_succ);
+                    for (loc, local) in block
+                        .dep_end
+                        .iter()
+                        .map(|(&stmt, &local)| (Location::new(bb, stmt), local))
+                        .chain(curr.dep_end.iter())
+                    {
+                        //            local
+                        // Given: loc <---- (bb, OUT)
+                        // and bb <---- bb_succ in CFG
+                        //                   local
+                        // and (bb_succ, IN) <---- (bb_succ, OUT) in DDG(bb_succ)
+                        //              local
+                        // We have: loc <---- (bb_succ, OUT)
+                        changed |=
+                            succ.dep_end
+                                .union_with_intersection(loc, local, &self.blocks[bb_succ].rdep_start_end);
+                        //            local
+                        // Given: loc <---- (bb, OUT)
+                        // and bb <---- bb_succ in CFG
+                        //                   local
+                        // and (bb_succ, IN) <---- (bb_succ, stmt) in DDG(bb_succ)
+                        //              local
+                        // We have: loc <---- (bb_succ, next_stmt)
+                        for (&stmt_succ, locals_succ) in &self.blocks[bb_succ].rdep_start {
+                            changed |= succ.deps[stmt_succ].union_with_intersection(loc, local, locals_succ);
+                        }
+                    }
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
     }
     pub(crate) fn num_blocks(&self) -> usize {
         self.blocks.len()
     }
     pub(crate) fn num_locals(&self) -> usize {
         self.num_locals
+    }
+}
+
+struct InterblockEdges<BasicBlock, Local> {
+    deps: Vec<InterblockEdgesEntry<BasicBlock, Local>>,
+    dep_end: InterblockEdgesEntry<BasicBlock, Local>,
+}
+
+impl<BasicBlock: Idx, Local: Idx> InterblockEdges<BasicBlock, Local> {
+    fn new(statements: usize) -> Self {
+        Self {
+            deps: vec![Default::default(); statements],
+            dep_end: Default::default(),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct InterblockEdgesEntry<BasicBlock, Local> {
+    entry: FxHashMap<Location<BasicBlock>, Local>,
+}
+
+impl<BasicBlock, Local> Default for InterblockEdgesEntry<BasicBlock, Local> {
+    fn default() -> Self {
+        Self {
+            entry: FxHashMap::default(),
+        }
+    }
+}
+
+impl<BasicBlock: Idx, Local: Idx> InterblockEdgesEntry<BasicBlock, Local> {
+    fn union_with_intersection(
+        &mut self,
+        loc: Location<BasicBlock>,
+        local: Local,
+        locals_succ: &HybridBitSet<Local>,
+    ) -> bool {
+        if locals_succ.contains(local) {
+            let old = self.entry.insert(loc, local);
+            assert!(old.is_none_or(|l| l == local));
+            return old.is_none();
+        }
+        false
+    }
+    fn iter(&self) -> impl Iterator<Item = (Location<BasicBlock>, Local)> + '_ {
+        self.entry.iter().map(|(&loc, &local)| (loc, local))
     }
 }
 

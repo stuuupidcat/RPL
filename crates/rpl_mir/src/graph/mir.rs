@@ -11,10 +11,11 @@ pub type MirSwitchTargets = SwitchTargets<mir::BasicBlock>;
 type MirTerminatorEdges = TerminatorEdges<mir::BasicBlock>;
 
 pub fn mir_program_dep_graph(body: &mir::Body<'_>) -> MirProgramDepGraph {
-    ProgramDepGraph::build_from(&mir_control_flow_graph(body), &mir_data_dep_graph(body))
+    let cfg = mir_control_flow_graph(body);
+    ProgramDepGraph::build_from(&cfg, &mir_data_dep_graph(body, &cfg))
 }
 
-pub fn mir_data_dep_graph(body: &mir::Body<'_>) -> MirDataDepGraph {
+pub fn mir_data_dep_graph(body: &mir::Body<'_>, cfg: &MirControlFlowGraph) -> MirDataDepGraph {
     let mut graph = DataDepGraph::new(
         body.basic_blocks.len(),
         |bb| body.basic_blocks[bb].statements.len() + 1,
@@ -23,6 +24,7 @@ pub fn mir_data_dep_graph(body: &mir::Body<'_>) -> MirDataDepGraph {
     for (bb, block) in body.basic_blocks.iter_enumerated() {
         graph.blocks[bb].visit_basic_block_data(bb, block);
     }
+    graph.build_interblock_edges(cfg);
     graph
 }
 

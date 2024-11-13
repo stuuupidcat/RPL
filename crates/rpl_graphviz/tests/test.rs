@@ -58,13 +58,13 @@ macro_rules! test_case {
                 if cfg_expected != cfg {
                     let file = concat!(env!("CARGO_TARGET_TMPDIR"), "/", stringify!($name), "_pat_cfg.dot");
                     write_to_file(file, cfg.as_bytes()).unwrap();
-                    assert_eq!(cfg_expected, cfg, "CFG mismatch, see {cfg_file} and {file}");
+                    assert_eq!(cfg, cfg_expected, "CFG mismatch, see {cfg_file} and {file}");
                 }
 
                 if ddg_expected != ddg {
                     let file = concat!(env!("CARGO_TARGET_TMPDIR"), "/", stringify!($name), "_pat_ddg.dot");
                     write_to_file(file, ddg.as_bytes()).unwrap();
-                    assert_eq!(ddg_expected, ddg, "DDG mismatch, see {ddg_file} and {file}");
+                    assert_eq!(ddg, ddg_expected, "DDG mismatch, see {ddg_file} and {file}");
                 }
             })
         }

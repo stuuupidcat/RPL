@@ -71,11 +71,15 @@ subgraph cluster_bb6 {
     bb6stmt3 -> bb6stmt4 [label="_?8"];
     bb6stmt4 -> bb6stmt5 [label="_?9"];
 }
-    bb0OUT -> bb1IN [label=""];
+    bb0OUT -> bb1IN [label="goto"];
     bb1OUT -> bb4IN [label="0"];
     bb1OUT -> bb5IN [label="otherwise"];
-    bb3OUT -> bb1IN [label=""];
-    bb4OUT -> bb2IN [label=""];
+    bb3OUT -> bb1IN [label="goto"];
+    bb4OUT -> bb2IN [label="goto"];
     bb5OUT -> bb6IN [label="return"];
     bb6OUT -> bb3IN [label="return"];
+    bb0stmt1 -> bb1stmt0 [label="_?2"];
+    bb0stmt0 -> bb1stmt1 [label="_?1"];
+    bb0stmt1 -> bb5stmt0 [label="_?2"];
+    bb5stmt0 -> bb6stmt0 [label="_?3"];
 }

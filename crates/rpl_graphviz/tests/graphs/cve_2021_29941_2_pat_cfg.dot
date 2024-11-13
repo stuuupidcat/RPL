@@ -18,13 +18,13 @@ digraph ControlFlowGraph {
     bb2 -> bb3 [label="return"];
     bb3 -> bb4 [label="return"];
     bb4 -> bb5 [label="return"];
-    bb5 -> bb6 [label=""];
+    bb5 -> bb6 [label="goto"];
     bb6 -> bb8 [label="return"];
     bb7 -> bb13 [label="return"];
     bb8 -> bb9 [label="return"];
     bb9 -> bb11 [label="1"];
     bb9 -> bb12 [label="otherwise"];
-    bb10 -> bb6 [label=""];
-    bb11 -> bb10 [label=""];
-    bb12 -> bb7 [label=""];
+    bb10 -> bb6 [label="goto"];
+    bb11 -> bb10 [label="goto"];
+    bb12 -> bb7 [label="goto"];
 }

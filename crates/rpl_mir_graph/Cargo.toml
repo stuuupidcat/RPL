@@ -1,3 +1,5 @@
+cargo-features = ["edition2024"]
+
 [package]
 name = "rpl_mir_graph"
 version.workspace = true
@@ -5,7 +7,7 @@ description.workspace = true
 repository.workspace = true
 license.workspace = true
 keywords.workspace = true
-edition.workspace = true
+edition = "2024"
 
 [dependencies]
 bitflags.workspace = true
