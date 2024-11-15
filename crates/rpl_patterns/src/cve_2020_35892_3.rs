@@ -152,14 +152,14 @@ fn pattern_loop(patterns: &mut pat::PatternsBuilder<'_>) {
             start_ref = &(*iter_mut).start;
             start = copy *start_ref;
             end_ref = &(*iter_mut).end;
-            end = copy *end;
-            cmp = Lt(move start, copy end);
+            end = copy *end_ref;
+            cmp = Lt(move start, move end);
             switchInt(move cmp) {
                 false => opt = #[lang = "None"],
                 _ => {
                     x1 = copy (*iter_mut).start;
                     x2 = core::iter::range::Step::forward_unchecked(copy x1, const 1_usize);
-                    (*iter_mut).start = copy x2;
+                    (*iter_mut).start = move x2;
                     opt = #[lang = "Some"](copy x1);
                 }
             }

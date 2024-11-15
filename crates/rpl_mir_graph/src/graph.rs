@@ -354,6 +354,12 @@ struct Location<BasicBlock> {
     statement_index: usize,
 }
 
+impl<BasicBlock: Idx> std::fmt::Debug for Location<BasicBlock> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}[{}]", self.block, self.statement_index)
+    }
+}
+
 impl<BasicBlock> Location<BasicBlock> {
     pub fn new(block: BasicBlock, statement_index: usize) -> Self {
         Self { block, statement_index }
@@ -384,6 +390,57 @@ impl<BasicBlock: Idx, Local: Idx> DataDepGraph<BasicBlock, Local> {
     }
     pub fn blocks(&self) -> impl Iterator<Item = (BasicBlock, &BlockDataDepGraph<Local>)> + '_ {
         self.blocks.iter_enumerated()
+    }
+    pub fn deps(&self, bb_from: BasicBlock, stmt_from: usize) -> impl Iterator<Item = ((BasicBlock, usize), Local)> {
+        self.blocks[bb_from]
+            .deps(stmt_from)
+            .map(move |(stmt, local)| ((bb_from, stmt), local))
+            .chain(
+                self.interblock_edges[bb_from].deps[stmt_from]
+                    .iter()
+                    .map(|(loc, local)| ((loc.block, loc.statement_index), local)),
+            )
+    }
+    #[instrument(level = "debug", skip_all, fields(?bb, dep_loc = %format!("{dep_bb:?}[{dep_stmt}]")), ret)]
+    pub fn get_dep_end(&self, bb: BasicBlock, dep_bb: BasicBlock, dep_stmt: usize) -> Option<Local> {
+        let mut ret = None;
+        if bb == dep_bb {
+            ret = ret.or(self.blocks[bb].get_dep_end(dep_stmt));
+        }
+        ret.or_else(|| {
+            self.interblock_edges[bb]
+                .dep_end
+                .entry
+                .get(&Location {
+                    block: dep_bb,
+                    statement_index: dep_stmt,
+                })
+                .copied()
+        })
+    }
+    pub fn dep_end(&self, bb: BasicBlock) -> impl Iterator<Item = ((BasicBlock, usize), Local)> + '_ {
+        self.blocks[bb]
+            .dep_end()
+            .map(move |(stmt, local)| ((bb, stmt), local))
+            .chain(
+                self.interblock_edges[bb]
+                    .dep_end
+                    .iter()
+                    .map(|(loc, local)| ((loc.block, loc.statement_index), local)),
+            )
+    }
+    #[instrument(level = "debug", skip(self), ret)]
+    pub fn get_dep(&self, bb: BasicBlock, stmt: usize, dep_bb: BasicBlock, dep_stmt: usize) -> Option<Local> {
+        let mut ret = None;
+        if bb == dep_bb {
+            ret = ret.or(self.blocks[bb].get_dep(stmt, dep_stmt));
+        }
+        ret.or_else(|| {
+            self.interblock_edges[bb].deps[stmt]
+                .entry
+                .get(&(Location::new(dep_bb, dep_stmt)))
+                .copied()
+        })
     }
     pub fn interblock_edges(&self) -> impl Iterator<Item = (BasicBlock, usize, BasicBlock, usize, Local)> {
         self.interblock_edges.iter_enumerated().flat_map(|(bb, edges)| {
@@ -502,9 +559,11 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
     pub fn num_statements(&self) -> usize {
         self.rw_states.num_statements()
     }
+    #[instrument(level = "debug", skip(self))]
     pub fn get_rdep_start(&self, statement: usize) -> impl Iterator<Item = Local> + '_ {
         self.rdep_start.get(&statement).into_iter().flat_map(HybridBitSet::iter)
     }
+    #[instrument(level = "debug", skip(self), ret)]
     pub fn get_dep_end(&self, statement: usize) -> Option<Local> {
         self.dep_end.get(&statement).copied()
     }
@@ -527,6 +586,7 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
     pub fn deps(&self, statement: usize) -> impl Iterator<Item = (usize, Local)> + '_ {
         self.deps[statement].iter().map(|(&stmt, &local)| (stmt, local))
     }
+    #[instrument(level = "debug", skip(self))]
     pub fn get_dep(&self, statement: usize, dep_statement: usize) -> Option<Local> {
         self.deps[statement].get(&dep_statement).copied()
     }

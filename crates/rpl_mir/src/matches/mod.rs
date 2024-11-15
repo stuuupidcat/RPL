@@ -3,6 +3,7 @@ use std::fmt;
 use std::num::NonZero;
 use std::ops::Index;
 
+use itertools::Itertools;
 use rpl_mir_graph::TerminatorEdges;
 use rustc_index::bit_set::HybridBitSet;
 use rustc_index::IndexVec;
@@ -112,6 +113,18 @@ pub enum StatementMatch {
     Location(mir::Location),
 }
 
+impl From<mir::Local> for StatementMatch {
+    fn from(local: mir::Local) -> Self {
+        StatementMatch::Arg(local)
+    }
+}
+
+impl From<mir::Location> for StatementMatch {
+    fn from(loc: mir::Location) -> Self {
+        StatementMatch::Location(loc)
+    }
+}
+
 impl fmt::Debug for StatementMatch {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -122,12 +135,12 @@ impl fmt::Debug for StatementMatch {
 }
 
 impl StatementMatch {
-    fn is_in_block(self, block: mir::BasicBlock) -> bool {
-        match self {
-            StatementMatch::Arg(_) => true,
-            StatementMatch::Location(loc) => loc.block == block,
-        }
-    }
+    // fn is_in_block(self, block: mir::BasicBlock) -> bool {
+    //     match self {
+    //         StatementMatch::Arg(_) => true,
+    //         StatementMatch::Location(loc) => loc.block == block,
+    //     }
+    // }
 
     pub fn debug_with<'a, 'tcx>(self, body: &'a mir::Body<'tcx>) -> impl core::fmt::Debug + use<'a, 'tcx> {
         struct DebugStatementMatch<'a, 'tcx> {
@@ -269,7 +282,7 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
     fn do_match(&mut self) -> bool {
         self.build_candidates();
         self.matches.log_candidates();
-        !self.matches.has_empty_candidates() && self.match_block(pat::BasicBlock::ZERO)
+        !self.matches.has_empty_candidates() && self.match_only_candidates() && self.match_block(pat::BasicBlock::ZERO)
     }
     #[instrument(level = "debug", skip(self), ret)]
     fn match_block(&self, bb_pat: pat::BasicBlock) -> bool {
@@ -281,49 +294,119 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
     #[instrument(level = "debug", skip(self), ret)]
     fn match_block_starts_with(&self, bb_pat: pat::BasicBlock, bb: mir::BasicBlock) -> bool {
         let matches = &self.matches[bb_pat];
-        matches.visited.get()
+        matches.start.get().is_some_and(|block| block == bb)
+            || matches.start.get().is_none()
+                && self.match_stmt_deps_of(bb_pat, bb, self.cx.pat_ddg[bb_pat].rdep_start(), |stmt| {
+                    self.cx.mir_ddg[bb].get_rdep_start(stmt).next().is_some()
+                })
+                && {
+                    matches.start.set(Some(bb));
+                    self.match_block(bb_pat)
+                }
             || {
-                matches.start.set(Some(bb));
-                self.match_block(bb_pat)
-            }
-            || {
-                matches.visited.set(false);
                 matches.start.set(None);
                 false
             }
     }
     #[instrument(level = "info", skip(self), ret)]
     fn match_block_ends_with(&self, bb_pat: pat::BasicBlock, bb: mir::BasicBlock) -> bool {
-        let matches = &self.matches[bb_pat];
-        (matches.visited.get() || {
-            matches.visited.set(true);
-
-            // check the statements in order of reversed dependencies
-            (0..self.cx.patterns[bb_pat].num_statements_and_terminator())
-                .rev()
-                .all(|statement_index| {
-                    let loc_pat = pat::Location {
-                        block: bb_pat,
-                        statement_index,
-                    };
-                    let matched = self.match_stmt_in(loc_pat, bb);
-                    if !matched {
-                        info!(
-                            "statement not matched: {loc_pat:?} {pat:?}",
-                            pat = self.cx.patterns[loc_pat.block].debug_stmt_at(loc_pat.statement_index),
-                        );
-                    }
-                    matched
-                })
-        } && {
-            matches.end.set(Some(bb));
-            // recursively check all the succesor blocks
-            self.match_successor_blocks(bb_pat, bb)
-        }) || {
-            matches.visited.set(false);
-            matches.end.set(None);
-            false
+        // FIXME: handle empty blocks
+        if self.cx.patterns[bb_pat].statements.is_empty()
+            && matches!(self.cx.patterns[bb_pat].terminator(), pat::TerminatorKind::Goto(_))
+        {
+            return true;
         }
+        let matches = &self.matches[bb_pat];
+        matches.end.get().is_some_and(|block| block == bb)
+            || matches.end.get().is_none()
+                && {
+                    // check the terminators
+                    // self.match_stmt_and_deps(self.cx.patterns.terminator_loc(bb_pat),
+                    // self.cx.body.terminator_loc(bb))
+                    // check the statements in order of reversed dependencies
+                    self.match_stmt_deps(&mut self.cx.pat_ddg.dep_end(bb_pat), &mut |loc| {
+                        self.cx
+                            .mir_ddg
+                            .get_dep_end(bb, loc.block, loc.statement_index)
+                            .is_some()
+                            || self.cx.body[loc.block].terminator().kind == mir::TerminatorKind::Return
+                        // FIXME: handle move of return value
+                    })
+                }
+                && {
+                    matches.end.set(Some(bb));
+                    // recursively check all the succesor blocks
+                    self.match_successor_blocks(bb_pat, bb)
+                }
+            || {
+                matches.end.set(None);
+                false
+            }
+    }
+    fn match_stmt_deps_of(
+        &self,
+        bb_pat: pat::BasicBlock,
+        bb: mir::BasicBlock,
+        pat: impl Iterator<Item = (usize, pat::LocalIdx)>,
+        // mut mir: impl FnMut() -> MirIter,
+        mut is_dep: impl FnMut(usize) -> bool,
+    ) -> bool {
+        self.match_stmt_deps(
+            &mut pat.map(|(stmt, local_pat)| ((bb_pat, stmt), local_pat)),
+            // || mir().map(|(stmt, local)| ((bb, stmt), local)),
+            &mut |loc| loc.block == bb && is_dep(loc.statement_index),
+        )
+    }
+    fn match_stmt_deps(
+        &self,
+        pat: &mut impl Iterator<Item = (impl IntoLocation<Location = pat::Location>, pat::LocalIdx)>,
+        // mut mir: impl FnMut() -> MirIter,
+        is_dep: &mut impl FnMut(mir::Location) -> bool,
+    ) -> bool {
+        let Some((loc_pat, local_pat)) = pat.next() else {
+            return true;
+        };
+        let loc_pat = loc_pat.into_location();
+        let matched = self.matches[loc_pat]
+            .candidates
+            .iter()
+            .any(|&stmt_match| match stmt_match {
+                StatementMatch::Arg(local) => self.match_local(local_pat, local),
+                StatementMatch::Location(loc) => {
+                    is_dep(loc)
+                        && {
+                            let matched = &self.matches[loc_pat].matched;
+                            if matched.get().is_none() {
+                                matched.set(Some(stmt_match));
+                                self.log_stmt_matched(loc_pat, stmt_match);
+                            }
+                            self.match_stmt_locals(loc_pat, stmt_match)
+                        }
+                        && self.match_stmt_and_deps(loc_pat, loc)
+                        && self.match_stmt_deps(&mut *pat, &mut *is_dep)
+                        || {
+                            self.matches[loc_pat].matched.set(None);
+                            self.unmatch_stmt_locals(loc_pat);
+                            false
+                        }
+                },
+            });
+        /*
+        let matched = mir()
+            .map(|(loc, local)| (loc.into_location(), local))
+            .filter(|&(loc, local)| {
+                self.matches[local_pat].candidates.contains(local)
+                    && self.matches[loc_pat].candidates.contains(&loc.into())
+            })
+            .any(|(loc, _local)| self.match_stmt_and_deps(loc_pat, loc));
+        */
+        if !matched {
+            info!(
+                "statement not matched: {loc_pat:?} {pat:?}",
+                pat = self.cx.patterns[loc_pat.block].debug_stmt_at(loc_pat.statement_index),
+            );
+        }
+        matched
     }
     #[instrument(level = "debug", skip(self), ret)]
     fn match_successor_blocks(&self, bb_pat: pat::BasicBlock, bb: mir::BasicBlock) -> bool {
@@ -366,118 +449,72 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
         }
     }
     #[instrument(level = "debug", skip(self), ret)]
-    fn match_stmt_in(&self, loc_pat: pat::Location, bb: mir::BasicBlock) -> bool {
+    fn match_stmt_with(&self, loc_pat: pat::Location, loc: mir::Location) -> bool {
         let matches = &self.matches[loc_pat];
         matches.matched.get().is_some()
-            || matches
-                .candidates
-                .iter()
-                .filter(|stmt_match| stmt_match.is_in_block(bb))
-                .any(|&stmt_match| self.match_stmt_and_deps(loc_pat, bb, stmt_match))
-            || self.match_stmt_in_predecessors(loc_pat, bb)
-    }
-    fn direct_predecessors(&self, bb: mir::BasicBlock) -> impl Iterator<Item = mir::BasicBlock> + use<'tcx, '_> {
-        self.cx.body.basic_blocks.predecessors()[bb]
-            .iter()
-            .copied()
-            .filter(move |&pred| match &self.cx.mir_cfg[pred] {
-                &TerminatorEdges::Single(target) => target == bb,
-                &TerminatorEdges::Double(target, cleanup) => target == bb || cleanup == bb,
-                TerminatorEdges::AssignOnReturn { return_, cleanup } => {
-                    std::iter::chain(return_, cleanup).any(|&target| target == bb)
-                },
-                TerminatorEdges::SwitchInt(targets) => targets.targets.values().any(|&target| target == bb),
-                TerminatorEdges::None => false,
+            || matches.candidates.iter().any(|&stmt_match| match stmt_match {
+                StatementMatch::Arg(_local) => self.match_stmt_locals(loc_pat, stmt_match),
+                StatementMatch::Location(loc) => self.match_stmt_and_deps(loc_pat, loc),
             })
+        // || self.match_stmt_in_predecessors(loc_pat, bb)
     }
+    // fn direct_predecessors(&self, bb: mir::BasicBlock) -> impl Iterator<Item = mir::BasicBlock> +
+    // use<'tcx, '_> {     self.cx.body.basic_blocks.predecessors()[bb]
+    //         .iter()
+    //         .copied()
+    //         .filter(move |&pred| self.cx.mir_cfg[pred].successors().any(|target| target == bb))
+    // }
+    // #[instrument(level = "debug", skip(self), ret)]
+    // fn match_stmt_in_predecessors(&self, loc_pat: pat::Location, bb: mir::BasicBlock) -> bool {
+    //     self.direct_predecessors(bb)
+    //         .any(|pred| self.match_stmt_in(loc_pat, pred))
+    // }
     #[instrument(level = "debug", skip(self), ret)]
-    fn match_stmt_in_predecessors(&self, loc_pat: pat::Location, bb: mir::BasicBlock) -> bool {
-        self.direct_predecessors(bb)
-            .any(|pred| self.match_stmt_in(loc_pat, pred))
-    }
-    #[instrument(level = "debug", skip(self), ret)]
-    fn match_stmt_and_deps(&self, loc_pat: pat::Location, bb: mir::BasicBlock, stmt_match: StatementMatch) -> bool {
+    fn match_stmt_and_deps(&self, loc_pat: pat::Location, loc: mir::Location) -> bool {
+        // let only_candidate = self.matches[loc_pat].candidates.len() == 1;
+        let loc_pat = loc_pat.into_location();
+        let loc = loc.into_location();
         let matched = &self.matches[loc_pat].matched;
+        let stmt_match = StatementMatch::Location(loc);
         matched.get().is_none_or(|m| m == stmt_match)
+            // && {
+            //     if matched.get().is_none() {
+            //         matched.set(Some(stmt_match));
+            //         self.log_stmt_matched(loc_pat, stmt_match);
+            //     }
+            //     self.match_stmt_locals(loc_pat, stmt_match)
+            // }
             && {
-                matched.set(Some(stmt_match));
-                info!(
-                    "statement matched {loc_pat:?} {pat:?} <-> {stmt_match:?} {statement:?}",
-                    pat = self.cx.patterns[loc_pat.block].debug_stmt_at(loc_pat.statement_index),
-                    statement = stmt_match.debug_with(self.cx.body),
-                );
-                self.match_stmt_locals(loc_pat, stmt_match)
+                self.match_stmt_deps(
+                    &mut self.cx.pat_ddg.deps(loc_pat.block, loc_pat.statement_index),
+                    &mut |dep_loc| {
+                        self.cx
+                            .mir_ddg
+                            .get_dep(loc.block, loc.statement_index, dep_loc.block, dep_loc.statement_index)
+                            .is_some()
+                    },
+                ) // && self.match_stmt_dep_start(loc_pat, loc.block)
             }
-            && self.cx.pat_ddg[loc_pat.block]
-                .deps(loc_pat.statement_index)
-                .all(|(statement_index, _local_pat)| {
-                    let dep_loc_pat = pat::Location {
-                        statement_index,
-                        ..loc_pat
-                    };
-                    self.match_stmt_in(dep_loc_pat, bb) && {
-                        /*
-                        // dep_loc_pat -----> dep_stmt
-                        //   ^                   ^
-                        //   | local_pat         | local
-                        //   |                   |
-                        // loc_pat -------> stmt_match
-                        let local = match stmt_match {
-                            StatementMatch::Arg(local) => local,
-                            StatementMatch::Location(loc) => {
-                                let Some(local) = self.matches[dep_loc_pat].matched.get().and_then(|dep_stmt| {
-                                    let dep_loc = match dep_stmt {
-                                        StatementMatch::Arg(local) => return Some(local),
-                                        StatementMatch::Location(loc) => loc,
-                                    };
-                                    let local = if dep_loc.block != loc.block {
-                                        self.cx.mir_ddg[loc.block]
-                                    }
-                                    let local = self.cx.mir_ddg[loc.block]
-                                        .get_dep(loc.statement_index, dep_loc.statement_index);
-                                    info!(
-                                        "\n\
-                                        {dep_loc_pat:?} --> {dep_loc:?}\n\
-                                        ^           ^\n\
-                                        | {local_pat:?}       | {local:?}\n\
-                                        |           | \n\
-                                        {loc_pat:?} --> {loc:?}",
-                                    );
-                                    info!(?loc_pat, ?dep_loc_pat, ?local_pat, ?loc, ?dep_loc, ?local);
-                                    local
-                                }) else {
-                                    return false;
-                                };
-                                local
-                            },
-                        };
-
-                        self.match_local(local_pat, local)
-                        */
-                        true
-                    }
-                })
-            && self.match_stmt_dep_start(loc_pat, bb)
-            || {
-                matched.set(None);
-                self.unmatch_stmt_locals(loc_pat);
-                false
-            }
+        // || !only_candidate && {
+        //     matched.set(None);
+        //     self.unmatch_stmt_locals(loc_pat);
+        //     false
+        // }
     }
-    #[instrument(level = "debug", skip(self), ret)]
-    fn match_stmt_dep_start(&self, loc_pat: pat::Location, bb: mir::BasicBlock) -> bool {
-        self.cx.pat_ddg[loc_pat.block]
-            .get_rdep_start(loc_pat.statement_index)
-            .next()
-            .is_none()
-            || self.matches[loc_pat.block].start.get().is_none_or(|block| block == bb) && {
-                self.matches[loc_pat.block].start.set(Some(bb));
-                self.match_block_starts_with(loc_pat.block, bb)
-            }
-            || self
-                .direct_predecessors(bb)
-                .any(|pred| self.match_stmt_dep_start(loc_pat, pred))
-    }
+    // #[instrument(level = "debug", skip(self), ret)]
+    // fn match_stmt_dep_start(&self, loc_pat: pat::Location, bb: mir::BasicBlock) -> bool {
+    //     self.cx.pat_ddg[loc_pat.block]
+    //         .get_rdep_start(loc_pat.statement_index)
+    //         .next()
+    //         .is_none()
+    //         || self.matches[loc_pat.block].start.get().is_none_or(|block| block == bb) && {
+    //             self.matches[loc_pat.block].start.set(Some(bb));
+    //             self.match_block_starts_with(loc_pat.block, bb)
+    //         }
+    //     // || self
+    //     //     .direct_predecessors(bb)
+    //     //     .any(|pred| self.match_stmt_dep_start(loc_pat, pred))
+    // }
     #[instrument(level = "debug", skip(self), ret)]
     fn match_stmt_locals(&self, loc_pat: pat::Location, stmt_match: StatementMatch) -> bool {
         let accesses_pat = self.cx.pat_ddg[loc_pat.block].accesses(loc_pat.statement_index);
@@ -510,36 +547,35 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
     }
     #[instrument(level = "debug", skip(self), ret)]
     fn match_local(&self, local_pat: pat::LocalIdx, local: mir::Local) -> bool {
-        let matched = self.matches[local_pat].matched.r#match(local);
-        if matched {
-            debug!(
-                "local matched: {local_pat:?}: {ty_pat:?} <-> {local:?}: {ty:?}",
-                ty_pat = self.cx.patterns.locals[local_pat],
-                ty = self.cx.body.local_decls[local].ty,
-            );
+        if self.matches[local_pat].matched.r#match(local) {
+            self.log_local_matched(local_pat, local);
         } else {
-            let conflicted_local = self.matches[local_pat].matched.get().unwrap().into_inner();
-            info!(
-                "local conflicted: {local_pat:?}: {ty_pat:?} !! {local:?} / {conflicted_local:?}: {ty:?}",
-                ty_pat = self.cx.patterns.locals[local_pat],
-                ty = self.cx.body.local_decls[conflicted_local].ty,
-            );
+            self.log_local_conflicted(local_pat, local);
+            return false;
         }
-        matched && self.match_local_ty(self.cx.patterns.locals[local_pat], self.cx.body.local_decls[local].ty)
+        self.match_local_ty(self.cx.patterns.locals[local_pat], self.cx.body.local_decls[local].ty)
     }
     #[instrument(level = "debug", skip(self), ret)]
     fn match_local_ty(&self, ty_pat: pat::Ty<'tcx>, ty: Ty<'tcx>) -> bool {
-        self.cx.match_ty(ty_pat, ty) && {
-            self.cx.ty_vars.iter_enumerated().all(|(ty_var, tys)| {
+        self.cx.match_ty(ty_pat, ty)
+            && self.cx.ty_vars.iter_enumerated().all(|(ty_var, tys)| {
                 let ty = match &core::mem::take(&mut *tys.borrow_mut())[..] {
                     [] => return true,
                     &[ty] => ty,
                     [..] => return false,
                 };
-                debug!("type variable matched, {ty_var:?} <-> {ty:?}");
-                self.matches[ty_var].matched.r#match(ty)
+                self.match_ty_var(ty_var, ty)
             })
+    }
+    #[instrument(level = "debug", skip(self), ret)]
+    fn match_ty_var(&self, ty_var: pat::TyVarIdx, ty: Ty<'tcx>) -> bool {
+        if self.matches[ty_var].matched.r#match(ty) {
+            self.log_ty_var_matched(ty_var, ty);
+        } else {
+            self.log_ty_var_conflicted(ty_var, ty);
+            return false;
         }
+        true
     }
     #[instrument(level = "debug", skip(self))]
     fn unmatch_stmt_locals(&self, loc_pat: pat::Location) {
@@ -554,9 +590,67 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
             self.matches[ty_var].matched.unmatch();
         }
     }
+
+    fn log_stmt_matched(&self, loc_pat: impl IntoLocation<Location = pat::Location>, stmt_match: StatementMatch) {
+        let loc_pat = loc_pat.into_location();
+        info!(
+            "statement matched {loc_pat:?} {pat:?} <-> {stmt_match:?} {statement:?}",
+            pat = self.cx.patterns[loc_pat.block].debug_stmt_at(loc_pat.statement_index),
+            statement = stmt_match.debug_with(self.cx.body),
+        );
+    }
+    fn log_local_conflicted(&self, local_pat: pat::LocalIdx, local: mir::Local) {
+        let conflicted_local = self.matches[local_pat].matched.get().unwrap().into_inner();
+        info!(
+            "local conflicted: {local_pat:?}: {ty_pat:?} !! {local:?} / {conflicted_local:?}: {ty:?}",
+            ty_pat = self.cx.patterns.locals[local_pat],
+            ty = self.cx.body.local_decls[conflicted_local].ty,
+        );
+    }
+    fn log_local_matched(&self, local_pat: pat::LocalIdx, local: mir::Local) {
+        debug!(
+            "local matched: {local_pat:?}: {ty_pat:?} <-> {local:?}: {ty:?}",
+            ty_pat = self.cx.patterns.locals[local_pat],
+            ty = self.cx.body.local_decls[local].ty,
+        );
+    }
+    fn log_ty_var_conflicted(&self, ty_var: pat::TyVarIdx, ty: Ty<'tcx>) {
+        let conflicted_ty = self.matches[ty_var].matched.get().unwrap().into_inner();
+        info!("type variable conflicted, {ty_var:?}: {ty:?} !! {conflicted_ty:?}");
+    }
+    fn log_ty_var_matched(&self, ty_var: pat::TyVarIdx, ty: Ty<'tcx>) {
+        debug!("type variable matched, {ty_var:?} <-> {ty:?}");
+    }
+
+    /// If there is only one candidate, set the matched value.
+    #[instrument(level = "debug", skip(self))]
+    fn match_only_candidates(&self) -> bool {
+        self.matches.basic_blocks.iter_enumerated().all(|(bb_pat, block_pat)| {
+            block_pat.statements.iter().enumerate().all(|(stmt_pat, matches)| {
+                if let &[stmt_match] = &matches.candidates[..] {
+                    let loc_pat = (bb_pat, stmt_pat).into_location();
+                    matches.matched.set(Some(stmt_match));
+                    self.log_stmt_matched(loc_pat, stmt_match);
+                    return self.match_stmt_locals(loc_pat, stmt_match);
+                }
+                true
+            }) && self.matches.locals.iter_enumerated().all(|(local_pat, matches)| {
+                if let Ok(local) = matches.candidates.iter().exactly_one() {
+                    return self.match_local(local_pat, local);
+                }
+                true
+            }) && self.matches.ty_vars.iter_enumerated().all(|(ty_var_idx, matches)| {
+                if let &[ty] = &matches.candidates[..] {
+                    return self.match_ty_var(ty_var_idx, ty);
+                }
+                true
+            })
+        })
+    }
 }
 
 impl<'tcx> CheckingMatches<'tcx> {
+    /// Test if there are any empty candidates in the matches.
     fn has_empty_candidates(&self) -> bool {
         self.basic_blocks.iter().any(CheckBlockMatches::has_empty_candidates)
             || self.locals.iter().any(LocalMatches::has_empty_candidates)
@@ -618,7 +712,6 @@ impl<'tcx> CheckingMatches<'tcx> {
 struct CheckBlockMatches {
     candidates: HybridBitSet<mir::BasicBlock>,
     statements: Vec<StatementMatches>,
-    visited: Cell<bool>,
     start: Cell<Option<mir::BasicBlock>>,
     end: Cell<Option<mir::BasicBlock>>,
 }
@@ -628,11 +721,11 @@ impl CheckBlockMatches {
         Self {
             candidates: HybridBitSet::new_empty(blocks.len()),
             statements: core::iter::repeat_with(Default::default).take(num_stmts).collect(),
-            visited: Cell::new(false),
             start: Cell::new(None),
             end: Cell::new(None),
         }
     }
+    /// Test if there are any empty candidates in the matches.
     fn has_empty_candidates(&self) -> bool {
         self.candidates.is_empty() || self.statements.iter().any(StatementMatches::has_empty_candidates)
     }
@@ -653,7 +746,11 @@ struct StatementMatches {
 }
 
 impl StatementMatches {
+    /// Test if there are any empty candidates in the matches.
     fn has_empty_candidates(&self) -> bool {
+        if let &[m] = &self.candidates[..] {
+            self.matched.set(Some(m));
+        }
         self.candidates.is_empty()
     }
 
@@ -675,6 +772,8 @@ impl LocalMatches {
             candidates: HybridBitSet::new_empty(num_locals),
         }
     }
+
+    /// Test if there are any empty candidates in the matches.
     fn has_empty_candidates(&self) -> bool {
         self.candidates.is_empty()
     }
@@ -699,6 +798,7 @@ impl<'tcx> TyVarMatches<'tcx> {
         self.matched.try_take()
     }
 
+    /// Test if there are any empty candidates in the matches.
     fn has_empty_candidates(&self) -> bool {
         self.candidates.is_empty()
     }
@@ -771,5 +871,48 @@ impl<T: fmt::Debug> fmt::Debug for Counted<T> {
 impl<T: Copy + fmt::Debug> fmt::Debug for CountedMatch<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.get().fmt(f)
+    }
+}
+
+trait IntoLocation: Copy {
+    type Location;
+    fn into_location(self) -> Self::Location;
+}
+
+impl IntoLocation for pat::Location {
+    type Location = pat::Location;
+
+    fn into_location(self) -> Self::Location {
+        self
+    }
+}
+
+impl IntoLocation for (pat::BasicBlock, usize) {
+    type Location = pat::Location;
+
+    fn into_location(self) -> Self::Location {
+        pat::Location {
+            block: self.0,
+            statement_index: self.1,
+        }
+    }
+}
+
+impl IntoLocation for mir::Location {
+    type Location = mir::Location;
+
+    fn into_location(self) -> Self::Location {
+        self
+    }
+}
+
+impl IntoLocation for (mir::BasicBlock, usize) {
+    type Location = mir::Location;
+
+    fn into_location(self) -> Self::Location {
+        mir::Location {
+            block: self.0,
+            statement_index: self.1,
+        }
     }
 }

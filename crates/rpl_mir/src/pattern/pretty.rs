@@ -306,9 +306,13 @@ fn format_aggregate<'tcx>(
             fmt_list(f, operands, ")", fmt::Debug::fmt)
         },
         AggKind::Adt(path_with_args, AggAdtKind::Struct(fields)) => {
-            write!(f, "{path_with_args:?} {{")?;
+            write!(f, "{path_with_args:?} ")?;
+            if fields.is_empty() {
+                return f.write_str("{}");
+            }
+            f.write_str("{ ")?;
             let mut fields = fields.iter();
-            fmt_list(f, operands, "}", |operand, f| {
+            fmt_list(f, operands, " }", |operand, f| {
                 let field = fields.next().ok_or(std::fmt::Error)?;
                 write!(f, "{field}: {operand:?}")
             })
