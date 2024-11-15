@@ -1,0 +1,26 @@
+digraph DataDependencyGraph {
+compound = true;
+subgraph cluster_bb0 {
+    bb0IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb0[IN]</td></tr></table>>];
+    bb0OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb0[OUT]</td></tr></table>>];
+    bb0stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?1 = copy ((*_?0).len)</td></tr></table>>];
+    bb0stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?2 = move _?1 as isize (IntToInt)</td></tr></table>>];
+    bb0stmt2 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?3 = copy ((*_?0).mem)</td></tr></table>>];
+    bb0stmt3 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?4 = Offset(copy _?3, copy _?2)</td></tr></table>>];
+    bb0stmt4 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?5 = copy _?4 as *const ?T0 (PtrToPtr)</td></tr></table>>];
+    bb0stmt5 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?6 = copy (*_?5)</td></tr></table>>];
+    bb0IN -> bb0stmt0 [label="_?0"];
+    bb0IN -> bb0stmt2 [label="_?0"];
+    bb0stmt1 -> bb0OUT [label="_?2"];
+    bb0stmt2 -> bb0OUT [label="_?3"];
+    bb0stmt3 -> bb0OUT [label="_?4"];
+    bb0stmt4 -> bb0OUT [label="_?5"];
+    bb0stmt5 -> bb0OUT [label="_?6"];
+    bb0IN -> bb0OUT [label="_?0"];
+    bb0stmt0 -> bb0stmt1 [label="_?1"];
+    bb0stmt1 -> bb0stmt3 [label="_?2"];
+    bb0stmt2 -> bb0stmt3 [label="_?3"];
+    bb0stmt3 -> bb0stmt4 [label="_?4"];
+    bb0stmt4 -> bb0stmt5 [label="_?5"];
+}
+}

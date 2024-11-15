@@ -23,9 +23,11 @@ extern crate rustc_macros;
 extern crate rustc_middle;
 extern crate rustc_span;
 extern crate rustc_target;
+
+extern crate itertools;
+extern crate smallvec;
 #[macro_use]
 extern crate tracing;
-extern crate smallvec;
 
 pub mod graph;
 pub mod pattern;
@@ -794,8 +796,8 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
         false
     }
 
-    fn match_const_operand(&self, konst_pat: &pat::ConstOperand<'tcx>, konst: mir::Const<'tcx>) -> bool {
-        match (konst_pat, konst) {
+    fn match_const_operand(&self, pat: &pat::ConstOperand<'tcx>, konst: mir::Const<'tcx>) -> bool {
+        let matched = match (pat, konst) {
             (&pat::ConstOperand::ConstVar(const_var), mir::Const::Ty(_, konst)) => {
                 self.match_const_var(const_var, konst)
             },
@@ -811,15 +813,19 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
                 })
             },
             (&pat::ConstOperand::ZeroSized(path_with_args), mir::Const::Val(mir::ConstValue::ZeroSized, ty)) => {
-                let (def_id, args) = match *ty.kind() {
+                let (def_id, _args) = match *ty.kind() {
                     ty::FnDef(def_id, args) => (def_id, args),
                     ty::Adt(adt, args) => (adt.did(), args),
                     _ => return false,
                 };
-                self.match_path_with_args(path_with_args, def_id, args)
+                // self.match_path_with_args(path_with_args, def_id, args)
+                // FIXME: match the arguments
+                self.match_path(path_with_args.path, def_id)
             },
             _ => false,
-        }
+        };
+        debug!(?pat, ?konst, matched, "match_const_operand");
+        matched
     }
     fn match_region(&self, pat: pat::RegionKind, region: ty::Region<'tcx>) -> bool {
         matches!(

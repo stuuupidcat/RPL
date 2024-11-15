@@ -1,0 +1,30 @@
+digraph DataDependencyGraph {
+compound = true;
+subgraph cluster_bb0 {
+    bb0IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb0[IN]</td></tr></table>>];
+    bb0OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb0[OUT]</td></tr></table>>];
+    bb0stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?0 = _</td></tr></table>>];
+    bb0stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?1 = &amp;raw const (*_?0)</td></tr></table>>];
+    bb0stmt2 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?2 = PtrMetadata(copy _?0)</td></tr></table>>];
+    bb0stmt3 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?3 = SizeOf(?T0)</td></tr></table>>];
+    bb0stmt4 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?4 = move _?1 as *const ?T0 (PtrToPtr)</td></tr></table>>];
+    bb0stmt5 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?5 = move _?4 as *const u8 (PtrToPtr)</td></tr></table>>];
+    bb0stmt6 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?6 = Mul(move _?2, move _?3)</td></tr></table>>];
+    bb0stmt7 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?7 = *const [u8] from (copy _?5, copy _?6)</td></tr></table>>];
+    bb0stmt8 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?8 = &amp;(*_?7)</td></tr></table>>];
+    bb0stmt0 -> bb0OUT [label="_?0"];
+    bb0stmt5 -> bb0OUT [label="_?5"];
+    bb0stmt6 -> bb0OUT [label="_?6"];
+    bb0stmt7 -> bb0OUT [label="_?7"];
+    bb0stmt8 -> bb0OUT [label="_?8"];
+    bb0stmt0 -> bb0stmt1 [label="_?0"];
+    bb0stmt0 -> bb0stmt2 [label="_?0"];
+    bb0stmt1 -> bb0stmt4 [label="_?1"];
+    bb0stmt2 -> bb0stmt6 [label="_?2"];
+    bb0stmt3 -> bb0stmt6 [label="_?3"];
+    bb0stmt4 -> bb0stmt5 [label="_?4"];
+    bb0stmt5 -> bb0stmt7 [label="_?5"];
+    bb0stmt6 -> bb0stmt7 [label="_?6"];
+    bb0stmt7 -> bb0stmt8 [label="_?7"];
+}
+}

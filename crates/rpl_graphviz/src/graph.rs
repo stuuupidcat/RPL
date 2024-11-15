@@ -346,13 +346,26 @@ impl<B: HasBasicBlocks + HasLocals> DdgBuilder<'_, B> {
         .collect()
     }
     fn build_interblock_edges(&self, edges: &mut Vec<Edge>) {
-        for (from_block, from_stmt, to_block, to_stmt, local) in self.ddg.interblock_edges() {
-            edges.push(self.new_edge(
-                to_block.stmt_label(to_stmt),
-                from_block.stmt_label(from_stmt),
-                format!("{local:?}"),
-            ));
-        }
+        edges.extend(
+            self.ddg
+                .interblock_edges()
+                .map(|(from_block, from_stmt, to_block, to_stmt, local)| {
+                    self.new_edge(
+                        to_block.stmt_label(to_stmt),
+                        from_block.stmt_label(from_stmt),
+                        format!("{local:?}"),
+                    )
+                }),
+        );
+        /*
+        edges.extend(self.ddg.blocks.indices().flat_map(|bb| {
+            self.ddg.dep_end(bb).filter(move |&((dep_bb, _), _)| dep_bb != bb).map(
+                move |((dep_bb, dep_stmt), local)| {
+                    self.new_edge(dep_bb.stmt_label(dep_stmt), bb.out_label(), format!("{local:?}"))
+                },
+            )
+        }));
+        */
     }
 }
 

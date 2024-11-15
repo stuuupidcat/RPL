@@ -1,0 +1,3 @@
+digraph ControlFlowGraph {
+    bb0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb0</td></tr><tr><td align="left" balign="left">_?1 = copy ((*_?0).len)<br/>_?2 = move _?1 as isize (IntToInt)<br/>_?3 = copy ((*_?0).mem)<br/>_?4 = Offset(copy _?3, copy _?2)<br/>_?5 = copy _?4 as *const ?T0 (PtrToPtr)<br/>_?6 = copy (*_?5)<br/></td></tr><tr><td align="left">end</td></tr></table>>];
+}

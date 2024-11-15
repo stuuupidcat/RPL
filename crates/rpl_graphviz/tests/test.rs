@@ -51,21 +51,23 @@ macro_rules! test_case {
                 let ddg = String::from_utf8(ddg).unwrap();
 
                 let cfg_file = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/graphs/", stringify!($name), "_pat_cfg.dot");
-                let cfg_expected = read_from_file(cfg_file).unwrap_or_default();
                 let ddg_file = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/graphs/", stringify!($name), "_pat_ddg.dot");
+
+                let cfg_expected = read_from_file(cfg_file).unwrap_or_default();
                 let ddg_expected = read_from_file(ddg_file).unwrap_or_default();
 
+                let cfg_expected_file = concat!(env!("CARGO_TARGET_TMPDIR"), "/", stringify!($name), "_pat_cfg.dot");
+                let ddg_expected_file = concat!(env!("CARGO_TARGET_TMPDIR"), "/", stringify!($name), "_pat_ddg.dot");
+
                 if cfg_expected != cfg {
-                    let file = concat!(env!("CARGO_TARGET_TMPDIR"), "/", stringify!($name), "_pat_cfg.dot");
-                    write_to_file(file, cfg.as_bytes()).unwrap();
-                    assert_eq!(cfg, cfg_expected, "CFG mismatch, see {cfg_file} and {file}");
+                    write_to_file(cfg_expected_file, cfg.as_bytes()).unwrap();
                 }
 
                 if ddg_expected != ddg {
-                    let file = concat!(env!("CARGO_TARGET_TMPDIR"), "/", stringify!($name), "_pat_ddg.dot");
-                    write_to_file(file, ddg.as_bytes()).unwrap();
-                    assert_eq!(ddg, ddg_expected, "DDG mismatch, see {ddg_file} and {file}");
+                    write_to_file(ddg_expected_file , ddg.as_bytes()).unwrap();
                 }
+                assert_eq!(cfg, cfg_expected, "CFG mismatch, see {cfg_file} and {cfg_expected_file}");
+                assert_eq!(ddg, ddg_expected, "DDG mismatch, see {ddg_file} and {ddg_expected_file}");
             })
         }
     }
@@ -76,31 +78,48 @@ test_case! {
         meta!($T:ty, $SlabT:ty);
 
         let self: &mut $SlabT;
-        let len: usize; // _2
-        let mut x0: usize; // _17
-        let x1: usize; // _14
-        let x2: usize; // _15
-        let x3: #[lang = "Option"]<usize>; // _3
-        let x: usize; // _4
-        let mut base: *mut $T; // _6
-        let offset: isize; // _7
-        let elem_ptr: *mut $T; // _5
-        let x_cmp: usize; // _16
-        let cmp: bool; // _13
+        let len: usize;
+        let x1: usize;
+        let x2: usize;
+        let opt: #[lang = "Option"]<usize>;
+        let discr: isize;
+        let x: usize;
+        let start_ref: &usize;
+        let end_ref: &usize;
+        let start: usize;
+        let end: usize;
+        let range: core::ops::range::Range<usize>;
+        let mut iter: core::ops::range::Range<usize>;
+        let mut iter_mut: &mut core::ops::range::Range<usize>;
+        let mut base: *mut $T;
+        let offset: isize;
+        let elem_ptr: *mut $T;
+        let cmp: bool;
 
         len = copy (*self).len;
-        x0 = const 0_usize;
+        range = core::ops::range::Range { start: const 0_usize, end: move len };
+        iter = move range;
         loop {
-            x_cmp = copy x0;
-            cmp = Lt(move x_cmp, copy len);
+            iter_mut = &mut iter;
+            start_ref = &(*iter_mut).start;
+            start = copy *start_ref;
+            end_ref = &(*iter_mut).end;
+            end = copy *end_ref;
+            cmp = Lt(move start, move end);
             switchInt(move cmp) {
-                false => break,
+                false => opt = #[lang = "None"],
                 _ => {
-                    x1 = copy x0;
+                    x1 = copy (*iter_mut).start;
                     x2 = core::iter::range::Step::forward_unchecked(copy x1, const 1_usize);
-                    // x0 = move x2;
-                    x3 = #[lang = "Some"](copy x1);
-                    x = copy (x3 as Some).0;
+                    (*iter_mut).start = move x2;
+                    opt = #[lang = "Some"](copy x1);
+                }
+            }
+            discr = discriminant(opt);
+            switchInt(move discr) {
+                0_isize => break,
+                1_isize => {
+                    x = copy (opt as Some).0;
                     base = copy (*self).mem;
                     offset = copy x as isize (IntToInt);
                     elem_ptr = Offset(copy base, copy offset);
@@ -108,6 +127,35 @@ test_case! {
                 }
             }
         }
+    }
+}
+
+test_case! {
+    fn cve_2020_35892_3_offset() {
+        meta!($T:ty, $SlabT:ty);
+        let self: &mut $SlabT;
+        let len: usize = copy (*self).len;
+        let len_isize: isize = move len as isize (IntToInt);
+        let base: *mut $T = copy (*self).mem;
+        let ptr_mut: *mut $T = Offset(copy base, copy len_isize);
+        let ptr: *const $T = copy ptr_mut as *const $T (PtrToPtr);
+        let elem: $T = copy (*ptr);
+    }
+}
+
+test_case! {
+    fn cve_2018_21000_const() {
+        meta!($T:ty);
+
+        let from_slice: &[$T] = _;
+        let from_raw: *const [$T] = &raw const *from_slice;
+        let from_len: usize = PtrMetadata(copy from_slice);
+        let ty_size: usize = SizeOf($T);
+        let to_ptr_t: *const T = move from_raw as *const $T (PtrToPtr);
+        let to_ptr: *const u8 = move to_ptr_t as *const u8 (PtrToPtr);
+        let to_len: usize = Mul(move from_len, move ty_size);
+        let to_raw: *const [u8] = *const [u8] from (copy to_ptr, copy to_len);
+        let to_slice: &[u8] = &*to_raw;
     }
 }
 

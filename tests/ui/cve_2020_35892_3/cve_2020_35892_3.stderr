@@ -1,3 +1,41 @@
+note: MIR pattern matched
+  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:15:5
+   |
+LL | /     fn drop(&mut self) {
+LL | |         for x in 0..self.len {
+   | |             -    -----------
+   | |             |    |  |
+   | |             |    |  _?1 = copy ((*_?0).len) <=> _3 = copy ((*_1).1: usize)
+   | |             |    _?11 = core::ops::range::Range { start: const 0_usize, end: move _?1 } <=> _2 = std::ops::Range::<usize> { start: const 0_usize, end: move _3 }
+   | |             |    _?12 = move _?11 <=> _4 = move _2
+   | |             |    _?13 = &mut _?12 <=> _6 = &mut _4
+   | |             |    _?7 = &((*_?13).start) <=> _18 = &((*_6).0: usize)
+   | |             |    _?8 = &((*_?13).end) <=> _19 = &((*_6).1: usize)
+   | |             |    _?17 = Lt(move _?9, move _?10) <=> _17 = Lt(move _22, move _23)
+   | |             |    switchInt(move _?17) -> [false: ?bb4, otherwise: ?bb5] <=> switchInt(move _17) -> [0: bb9, otherwise: bb7]
+   | |             |    _?5 = discriminant(_?4) <=> _7 = discriminant(_5)
+   | |             |    switchInt(move _?5) -> [0_isize: ?bb8, 1_isize: ?bb9] <=> switchInt(move _7) -> [0: bb4, 1: bb3, otherwise: bb2]
+   | |             |    _?4 = #[lang = "None"] <=> _5 = std::option::Option::<usize>::None
+   | |             |    _?2 = copy ((*_?13).start) <=> _20 = copy ((*_6).0: usize)
+   | |             |    _?3 = core::iter::range::Step::forward_unchecked(copy _?2, const 1_usize) -> ?bb6 <=> _21 = <usize as std::iter::Step>::forward_unchecked(copy _20, const 1_usize) -> [return: bb8, unwind continue]
+   | |             |    ((*_?13).start) = move _?3 <=> ((*_6).0: usize) = move _21
+   | |             |    _?4 = #[lang = "Some"](copy _?2) <=> _5 = std::option::Option::<usize>::Some(copy _20)
+   | |             _?6 = copy ((_?4 as Some).0) <=> _8 = copy ((_5 as Some).0: usize)
+LL | |
+LL | |             unsafe {
+LL | |                 let elem_ptr = self.mem.offset(x as isize);
+   | |                                -------- ------------------
+   | |                                |        |      |
+   | |                                |        |      _?15 = copy _?6 as isize (IntToInt) <=> _11 = copy _8 as isize (IntToInt)
+   | |                                |        _?16 = Offset(copy _?14, copy _?15) <=> _9 = Offset(copy _10, copy _11)
+   | |                                _?14 = copy ((*_?0).mem) <=> _10 = copy ((*_1).2: *mut T)
+LL | |                 ptr::drop_in_place(elem_ptr);
+   | |                 ---------------------------- core::ptr::drop_in_place(copy _?16) -> ?bb7 <=> _12 = std::ptr::drop_in_place::<T>(copy _9) -> [return: bb5, unwind continue]
+...  |
+LL | |         unsafe { libc::free(self.mem as *mut _ as *mut libc::c_void) };
+LL | |     }
+   | |_____^
+
 error: pointer out of bound
   --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:53:25
    |
