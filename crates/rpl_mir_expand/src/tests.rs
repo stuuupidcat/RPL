@@ -43,7 +43,7 @@ fn test_ty_var() {
             #[allow(non_snake_case)]
             let T_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let T_ty = patterns.mk_var_ty(T_ty_var);
+            let T_ty = patterns.pcx.mk_var_ty(T_ty_var);
         },
     );
 }
@@ -74,27 +74,27 @@ fn test_cve_2020_25016() {
             #[allow(non_snake_case)]
             let T_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let T_ty = patterns.mk_var_ty(T_ty_var);
+            let T_ty = patterns.pcx.mk_var_ty(T_ty_var);
             #[allow(non_snake_case)]
-            let SliceT_ty = patterns.mk_slice_ty(T_ty);
+            let SliceT_ty = patterns.pcx.mk_slice_ty(T_ty);
             #[allow(non_snake_case)]
-            let RefSliceT_ty = patterns.mk_ref_ty(
+            let RefSliceT_ty = patterns.pcx.mk_ref_ty(
                 ::rpl_mir::pat::RegionKind::ReAny,
                 SliceT_ty,
                 ::rustc_middle::mir::Mutability::Not
             );
             #[allow(non_snake_case)]
-            let PtrSliceT_ty = patterns.mk_raw_ptr_ty(SliceT_ty, ::rustc_middle::mir::Mutability::Not);
+            let PtrSliceT_ty = patterns.pcx.mk_raw_ptr_ty(SliceT_ty, ::rustc_middle::mir::Mutability::Not);
             #[allow(non_snake_case)]
-            let PtrU8_ty = patterns.mk_raw_ptr_ty(
-                patterns.primitive_types.u8, ::rustc_middle::mir::Mutability::Not
+            let PtrU8_ty = patterns.pcx.mk_raw_ptr_ty(
+                patterns.pcx.primitive_types.u8, ::rustc_middle::mir::Mutability::Not
             );
             #[allow(non_snake_case)]
-            let SliceU8_ty = patterns.mk_slice_ty(patterns.primitive_types.u8);
+            let SliceU8_ty = patterns.pcx.mk_slice_ty(patterns.pcx.primitive_types.u8);
             #[allow(non_snake_case)]
-            let PtrSliceU8_ty = patterns.mk_raw_ptr_ty(SliceU8_ty, ::rustc_middle::mir::Mutability::Not);
+            let PtrSliceU8_ty = patterns.pcx.mk_raw_ptr_ty(SliceU8_ty, ::rustc_middle::mir::Mutability::Not);
             #[allow(non_snake_case)]
-            let RefSliceU8_ty = patterns.mk_ref_ty(
+            let RefSliceU8_ty = patterns.pcx.mk_ref_ty(
                 ::rpl_mir::pat::RegionKind::ReAny,
                 SliceU8_ty,
                 ::rustc_middle::mir::Mutability::Not
@@ -112,12 +112,12 @@ fn test_cve_2020_25016() {
                     )
                 )
             );
-            let from_len_local = patterns.mk_local(patterns.primitive_types.usize);
+            let from_len_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
             let from_len_stmt = patterns.mk_assign(
                 from_len_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Len(from_slice_local.into_place())
             );
-            let ty_size_local = patterns.mk_local(patterns.primitive_types.usize);
+            let ty_size_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
             let ty_size_stmt = patterns.mk_assign(
                 ty_size_local.into_place(),
                 ::rpl_mir::pat::Rvalue::NullaryOp(::rustc_middle::mir::NullOp::SizeOf, T_ty)
@@ -131,7 +131,7 @@ fn test_cve_2020_25016() {
                     PtrU8_ty
                 )
             );
-            let to_len_local = patterns.mk_local(patterns.primitive_types.usize);
+            let to_len_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
             let to_len_stmt = patterns.mk_assign(
                 to_len_local.into_place(),
                 ::rpl_mir::pat::Rvalue::BinaryOp(
@@ -230,61 +230,61 @@ fn test_cve_2020_35892_revised() {
             #[allow(non_snake_case)]
             let T_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let T_ty = patterns.mk_var_ty(T_ty_var);
+            let T_ty = patterns.pcx.mk_var_ty(T_ty_var);
 
             #[allow(non_snake_case)]
             let SlabT_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let SlabT_ty = patterns.mk_var_ty(SlabT_ty_var);
+            let SlabT_ty = patterns.pcx.mk_var_ty(SlabT_ty_var);
 
-            let self_local = patterns.mk_self(patterns.mk_ref_ty(
+            let self_local = patterns.mk_self(patterns.pcx.mk_ref_ty(
                 ::rpl_mir::pat::RegionKind::ReAny,
                 SlabT_ty,
                 ::rustc_middle::mir::Mutability::Mut
             ));
-            let len_local = patterns.mk_local(patterns.primitive_types.usize);
-            let x1_local = patterns.mk_local(patterns.primitive_types.usize);
-            let x2_local = patterns.mk_local(patterns.primitive_types.usize);
-            let opt_local = patterns.mk_local(patterns.mk_adt_ty(patterns.mk_path_with_args(
-                patterns.mk_lang_item("Option"),
-                &[patterns.primitive_types.usize.into()]
+            let len_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let x1_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let x2_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let opt_local = patterns.mk_local(patterns.pcx.mk_adt_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_lang_item("Option"),
+                &[patterns.pcx.primitive_types.usize.into()]
             )));
-            let discr_local = patterns.mk_local(patterns.primitive_types.isize);
-            let x_local = patterns.mk_local(patterns.primitive_types.usize);
-            let start_ref_local = patterns.mk_local(patterns.mk_ref_ty(
+            let discr_local = patterns.mk_local(patterns.pcx.primitive_types.isize);
+            let x_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let start_ref_local = patterns.mk_local(patterns.pcx.mk_ref_ty(
                 ::rpl_mir::pat::RegionKind::ReAny,
-                patterns.primitive_types.usize,
+                patterns.pcx.primitive_types.usize,
                 ::rustc_middle::mir::Mutability::Not
             ));
-            let end_ref_local = patterns.mk_local(patterns.mk_ref_ty(
+            let end_ref_local = patterns.mk_local(patterns.pcx.mk_ref_ty(
                 ::rpl_mir::pat::RegionKind::ReAny,
-                patterns.primitive_types.usize,
+                patterns.pcx.primitive_types.usize,
                 ::rustc_middle::mir::Mutability::Not
             ));
-            let start_local = patterns.mk_local(patterns.primitive_types.usize);
-            let end_local = patterns.mk_local(patterns.primitive_types.usize);
-            let range_local = patterns.mk_local(patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["core", "ops", "range", "Range",]),
-                &[patterns.primitive_types.usize.into()]
+            let start_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let end_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let range_local = patterns.mk_local(patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["core", "ops", "range", "Range",]),
+                &[patterns.pcx.primitive_types.usize.into()]
             )));
-            let iter_local = patterns.mk_local(patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["core", "ops", "range", "Range",]),
-                &[patterns.primitive_types.usize.into()]
+            let iter_local = patterns.mk_local(patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["core", "ops", "range", "Range",]),
+                &[patterns.pcx.primitive_types.usize.into()]
             )));
-            let iter_mut_local = patterns.mk_local(patterns.mk_ref_ty(
+            let iter_mut_local = patterns.mk_local(patterns.pcx.mk_ref_ty(
                 ::rpl_mir::pat::RegionKind::ReAny,
-                patterns.mk_path_ty(patterns.mk_path_with_args(
-                    patterns.mk_item_path(&["core", "ops", "range", "Range",]),
-                    &[patterns.primitive_types.usize.into()]
+                patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                    patterns.pcx.mk_item_path(&["core", "ops", "range", "Range",]),
+                    &[patterns.pcx.primitive_types.usize.into()]
                 )),
                 ::rustc_middle::mir::Mutability::Mut
             ));
             let base_local =
-                patterns.mk_local(patterns.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
-            let offset_local = patterns.mk_local(patterns.primitive_types.isize);
+                patterns.mk_local(patterns.pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
+            let offset_local = patterns.mk_local(patterns.pcx.primitive_types.isize);
             let elem_ptr_local =
-                patterns.mk_local(patterns.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
-            let cmp_local = patterns.mk_local(patterns.primitive_types.bool);
+                patterns.mk_local(patterns.pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
+            let cmp_local = patterns.mk_local(patterns.pcx.primitive_types.bool);
             let len_stmt = patterns.mk_assign(
                 len_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(::rpl_mir::pat::Place::new(
@@ -301,8 +301,8 @@ fn test_cve_2020_35892_revised() {
                 range_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Aggregate(
                     ::rpl_mir::pat::AggKind::Adt(
-                        patterns.mk_path_with_args(
-                            patterns.mk_item_path(&["core", "ops", "range", "Range",]),
+                        patterns.pcx.mk_path_with_args(
+                            patterns.pcx.mk_item_path(&["core", "ops", "range", "Range",]),
                             &[]
                         ),
                         patterns.mk_list([
@@ -395,7 +395,7 @@ fn test_cve_2020_35892_revised() {
                             opt_local.into_place(),
                             ::rpl_mir::pat::Rvalue::Aggregate(
                                 ::rpl_mir::pat::AggKind::Adt(
-                                    patterns.mk_path_with_args(patterns.mk_lang_item("None"), &[]),
+                                    patterns.pcx.mk_path_with_args(patterns.pcx.mk_lang_item("None"), &[]),
                                     ::rpl_mir::pat::AggAdtKind::Unit
                                 ),
                                 Box::new([])
@@ -417,8 +417,8 @@ fn test_cve_2020_35892_revised() {
                             ))
                         );
                         let x2_stmt = patterns.mk_fn_call(
-                            ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(patterns.mk_path_with_args(
-                                patterns.mk_item_path(&["core", "iter", "range", "Step", "forward_unchecked",]),
+                            ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(patterns.pcx.mk_path_with_args(
+                                patterns.pcx.mk_item_path(&["core", "iter", "range", "Step", "forward_unchecked",]),
                                 &[]
                             ))),
                             patterns.mk_list([
@@ -445,7 +445,7 @@ fn test_cve_2020_35892_revised() {
                         );
                         let opt_stmt = patterns.mk_fn_call(
                             ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                                patterns.mk_path_with_args(patterns.mk_lang_item("Some"), &[])
+                                patterns.pcx.mk_path_with_args(patterns.pcx.mk_lang_item("Some"), &[])
                             )),
                             patterns.mk_list([
                                 ::rpl_mir::pat::Operand::Copy(x1_local.into_place())
@@ -498,7 +498,7 @@ fn test_cve_2020_35892_revised() {
                                 ::rpl_mir::pat::Rvalue::Cast(
                                     ::rustc_middle::mir::CastKind::IntToInt,
                                     ::rpl_mir::pat::Operand::Copy(x_local.into_place()),
-                                    patterns.primitive_types.isize
+                                    patterns.pcx.primitive_types.isize
                                 )
                             );
                             let elem_ptr_stmt = patterns.mk_assign(
@@ -513,8 +513,8 @@ fn test_cve_2020_35892_revised() {
                             );
                             patterns.mk_fn_call(
                                 ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                                    patterns.mk_path_with_args(
-                                        patterns.mk_item_path(&["core", "ptr", "drop_in_place",]),
+                                    patterns.pcx.mk_path_with_args(
+                                        patterns.pcx.mk_item_path(&["core", "ptr", "drop_in_place",]),
                                         &[]
                                     )
                                 )),
@@ -574,29 +574,29 @@ fn test_cve_2020_35892() {
             #[allow(non_snake_case)]
             let T_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let T_ty = patterns.mk_var_ty(T_ty_var);
+            let T_ty = patterns.pcx.mk_var_ty(T_ty_var);
 
             #[allow(non_snake_case)]
             let SlabT_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let SlabT_ty = patterns.mk_var_ty(SlabT_ty_var);
+            let SlabT_ty = patterns.pcx.mk_var_ty(SlabT_ty_var);
 
-            let len_local = patterns.mk_local(patterns.primitive_types.usize);
-            let x0_local = patterns.mk_local(patterns.primitive_types.usize);
-            let x1_local = patterns.mk_local(patterns.primitive_types.usize);
-            let x2_local = patterns.mk_local(patterns.primitive_types.usize);
-            let x3_local = patterns.mk_local(patterns.mk_adt_ty(patterns.mk_path_with_args(
-                patterns.mk_lang_item("Option"),
-                &[patterns.primitive_types.usize.into()]
+            let len_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let x0_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let x1_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let x2_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let x3_local = patterns.mk_local(patterns.pcx.mk_adt_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_lang_item("Option"),
+                &[patterns.pcx.primitive_types.usize.into()]
             )));
-            let x_local = patterns.mk_local(patterns.primitive_types.usize);
+            let x_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
             let base_local =
-                patterns.mk_local(patterns.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
-            let offset_local = patterns.mk_local(patterns.primitive_types.isize);
+                patterns.mk_local(patterns.pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
+            let offset_local = patterns.mk_local(patterns.pcx.primitive_types.isize);
             let elem_ptr_local =
-                patterns.mk_local(patterns.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
-            let x_cmp_local = patterns.mk_local(patterns.primitive_types.usize);
-            let cmp_local = patterns.mk_local(patterns.primitive_types.bool);
+                patterns.mk_local(patterns.pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
+            let x_cmp_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let cmp_local = patterns.mk_local(patterns.pcx.primitive_types.bool);
             let len_stmt = patterns.mk_assign(
                 len_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(::rpl_mir::pat::Place::new(
@@ -645,8 +645,8 @@ fn test_cve_2020_35892() {
                             );
                             let x2_stmt = patterns.mk_fn_call(
                                 ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                                    patterns.mk_path_with_args(
-                                        patterns.mk_item_path(&["forward_unchecked",]),
+                                    patterns.pcx.mk_path_with_args(
+                                        patterns.pcx.mk_item_path(&["forward_unchecked",]),
                                         &[]
                                     )
                                 )),
@@ -666,7 +666,7 @@ fn test_cve_2020_35892() {
                             );
                             let x3_stmt = patterns.mk_fn_call(
                                 ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                                    patterns.mk_path_with_args(patterns.mk_lang_item("Some"), &[])
+                                    patterns.pcx.mk_path_with_args(patterns.pcx.mk_lang_item("Some"), &[])
                                 )),
                                 patterns.mk_list([::rpl_mir::pat::Operand::Copy(
                                     x1_local.into_place()
@@ -708,7 +708,7 @@ fn test_cve_2020_35892() {
                                 ::rpl_mir::pat::Rvalue::Cast(
                                     ::rustc_middle::mir::CastKind::IntToInt,
                                     ::rpl_mir::pat::Operand::Copy(x_local.into_place()),
-                                    patterns.primitive_types.isize
+                                    patterns.pcx.primitive_types.isize
                                 )
                             );
                             let elem_ptr_stmt = patterns.mk_assign(
@@ -723,8 +723,8 @@ fn test_cve_2020_35892() {
                             );
                             patterns.mk_fn_call(
                                 ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                                    patterns.mk_path_with_args(
-                                        patterns.mk_item_path(&["drop_in_place",]),
+                                    patterns.pcx.mk_path_with_args(
+                                        patterns.pcx.mk_item_path(&["drop_in_place",]),
                                         &[]
                                     )
                                 )),
@@ -768,53 +768,53 @@ fn test_cve_2018_21000() {
             #[allow(non_snake_case)]
             let T1_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let T1_ty = patterns.mk_var_ty(T1_ty_var);
+            let T1_ty = patterns.pcx.mk_var_ty(T1_ty_var);
             #[allow(non_snake_case)]
             let T2_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let T2_ty = patterns.mk_var_ty(T2_ty_var);
+            let T2_ty = patterns.pcx.mk_var_ty(T2_ty_var);
             #[allow(non_snake_case)]
             let T3_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let T3_ty = patterns.mk_var_ty(T3_ty_var);
+            let T3_ty = patterns.pcx.mk_var_ty(T3_ty_var);
             #[allow(non_snake_case)]
-            let VecT1_ty = patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["std", "vec", "Vec",]),
+            let VecT1_ty = patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["std", "vec", "Vec",]),
                 &[T1_ty.into()]
             ));
             #[allow(non_snake_case)]
-            let VecT2_ty = patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["std", "vec", "Vec",]),
+            let VecT2_ty = patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["std", "vec", "Vec",]),
                 &[T2_ty.into()]
             ));
             #[allow(non_snake_case)]
-            let VecT3_ty = patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["std", "vec", "Vec",]),
+            let VecT3_ty = patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["std", "vec", "Vec",]),
                 &[T3_ty.into()]
             ));
             #[allow(non_snake_case)]
-            let PtrT1_ty = patterns.mk_raw_ptr_ty(T1_ty, ::rustc_middle::mir::Mutability::Mut);
+            let PtrT1_ty = patterns.pcx.mk_raw_ptr_ty(T1_ty, ::rustc_middle::mir::Mutability::Mut);
             #[allow(non_snake_case)]
-            let PtrT3_ty = patterns.mk_raw_ptr_ty(T3_ty, ::rustc_middle::mir::Mutability::Mut);
+            let PtrT3_ty = patterns.pcx.mk_raw_ptr_ty(T3_ty, ::rustc_middle::mir::Mutability::Mut);
             let from_vec_local = patterns.mk_local(VecT1_ty);
             let from_vec_stmt = patterns.mk_assign(from_vec_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
-            let size_local = patterns.mk_local(patterns.primitive_types.usize);
+            let size_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
             let size_stmt = patterns.mk_assign(
                 size_local.into_place(),
                 ::rpl_mir::pat::Rvalue::NullaryOp(::rustc_middle::mir::NullOp::SizeOf, T2_ty)
             );
-            let from_cap_local = patterns.mk_local(patterns.primitive_types.usize);
+            let from_cap_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
             let from_cap_stmt = patterns.mk_fn_call(
                 ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                    patterns.mk_path_with_args(
-                        patterns.mk_item_path(&["Vec", "capacity",]),
+                    patterns.pcx.mk_path_with_args(
+                        patterns.pcx.mk_item_path(&["Vec", "capacity",]),
                         &[]
                     )
                 )),
                 patterns.mk_list([::rpl_mir::pat::Operand::Move(from_vec_local.into_place())]),
                 Some(from_cap_local.into_place())
             );
-            let to_cap_local = patterns.mk_local(patterns.primitive_types.usize);
+            let to_cap_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
             let to_cap_stmt = patterns.mk_assign(
                 to_cap_local.into_place(),
                 ::rpl_mir::pat::Rvalue::BinaryOp(
@@ -825,12 +825,12 @@ fn test_cve_2018_21000() {
                     ])
                 )
             );
-            let from_len_local = patterns.mk_local(patterns.primitive_types.usize);
+            let from_len_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
             let from_len_stmt = patterns.mk_assign(
                 from_len_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Len(from_vec_local.into_place())
             );
-            let to_len_local = patterns.mk_local(patterns.primitive_types.usize);
+            let to_len_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
             let to_len_stmt = patterns.mk_assign(
                 to_len_local.into_place(),
                 ::rpl_mir::pat::Rvalue::BinaryOp(
@@ -844,8 +844,8 @@ fn test_cve_2018_21000() {
             let from_vec_ptr_local = patterns.mk_local(PtrT1_ty);
             let from_vec_ptr_stmt = patterns.mk_fn_call(
                 ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                    patterns.mk_path_with_args(
-                        patterns.mk_item_path(&["Vec", "as_mut_ptr",]),
+                    patterns.pcx.mk_path_with_args(
+                        patterns.pcx.mk_item_path(&["Vec", "as_mut_ptr",]),
                         &[]
                     )
                 )),
@@ -861,10 +861,10 @@ fn test_cve_2018_21000() {
                     PtrT3_ty
                 )
             );
-            let _tmp_local = patterns.mk_local(patterns.mk_tuple_ty(&[]));
+            let _tmp_local = patterns.mk_local(patterns.pcx.mk_tuple_ty(&[]));
             let _tmp_stmt = patterns.mk_fn_call(
-                ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(patterns.mk_path_with_args(
-                    patterns.mk_item_path(&["std", "mem", "forget",]),
+                ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(patterns.pcx.mk_path_with_args(
+                    patterns.pcx.mk_item_path(&["std", "mem", "forget",]),
                     &[]
                 ))),
                 patterns.mk_list([
@@ -875,8 +875,8 @@ fn test_cve_2018_21000() {
             let res_local = patterns.mk_local(VecT3_ty);
             let res_stmt = patterns.mk_fn_call(
                 ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                    patterns.mk_path_with_args(
-                        patterns.mk_item_path(&["Vec", "from_raw_parts",]),
+                    patterns.pcx.mk_path_with_args(
+                        patterns.pcx.mk_item_path(&["Vec", "from_raw_parts",]),
                         &[]
                     )
                 )),
@@ -916,38 +916,38 @@ fn test_cve_2020_35881_const() {
             #[allow(non_snake_case)]
             let T1_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let T1_ty = patterns.mk_var_ty(T1_ty_var);
+            let T1_ty = patterns.pcx.mk_var_ty(T1_ty_var);
             #[allow(non_snake_case)]
-            let PtrT1_ty = patterns.mk_raw_ptr_ty(
+            let PtrT1_ty = patterns.pcx.mk_raw_ptr_ty(
                 T1_ty,
                 ::rustc_middle::mir::Mutability::Not
             );
             #[allow(non_snake_case)]
-            let PtrPtrT1_ty = patterns.mk_raw_ptr_ty(
-                patterns.mk_raw_ptr_ty(
+            let PtrPtrT1_ty = patterns.pcx.mk_raw_ptr_ty(
+                patterns.pcx.mk_raw_ptr_ty(
                     T1_ty,
                     ::rustc_middle::mir::Mutability::Not
                 ),
                 ::rustc_middle::mir::Mutability::Not
             );
             #[allow(non_snake_case)]
-            let DerefPtrT1_ty = patterns.mk_ref_ty(
+            let DerefPtrT1_ty = patterns.pcx.mk_ref_ty(
                 ::rpl_mir::pat::RegionKind::ReAny,
-                patterns.mk_raw_ptr_ty(
+                patterns.pcx.mk_raw_ptr_ty(
                     T1_ty,
                     ::rustc_middle::mir::Mutability::Not
                 ),
                 ::rustc_middle::mir::Mutability::Not
             );
             #[allow(non_snake_case)]
-            let PtrT2_ty = patterns.mk_raw_ptr_ty(
-                patterns.mk_tuple_ty(&[]),
+            let PtrT2_ty = patterns.pcx.mk_raw_ptr_ty(
+                patterns.pcx.mk_tuple_ty(&[]),
                 ::rustc_middle::mir::Mutability::Not
             );
             #[allow(non_snake_case)]
-            let PtrPtrT2_ty = patterns.mk_raw_ptr_ty(
-                patterns.mk_raw_ptr_ty(
-                    patterns.mk_tuple_ty(&[]),
+            let PtrPtrT2_ty = patterns.pcx.mk_raw_ptr_ty(
+                patterns.pcx.mk_raw_ptr_ty(
+                    patterns.pcx.mk_tuple_ty(&[]),
                     ::rustc_middle::mir::Mutability::Not
                 ),
                 ::rustc_middle::mir::Mutability::Not
@@ -984,9 +984,9 @@ fn test_cve_2020_35881_const() {
                     ::rpl_mir::pat::Operand::Move(
                         ptr_to_ptr_to_data_local.into_place()
                     ),
-                    patterns.mk_raw_ptr_ty(
-                        patterns.mk_raw_ptr_ty(
-                            patterns.mk_tuple_ty(&[]),
+                    patterns.pcx.mk_raw_ptr_ty(
+                        patterns.pcx.mk_raw_ptr_ty(
+                            patterns.pcx.mk_tuple_ty(&[]),
                             ::rustc_middle::mir::Mutability::Not
                         ),
                         ::rustc_middle::mir::Mutability::Not
@@ -1035,38 +1035,38 @@ fn test_cve_2020_35881_mut() {
             #[allow(non_snake_case)]
             let T1_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let T1_ty = patterns.mk_var_ty(T1_ty_var);
+            let T1_ty = patterns.pcx.mk_var_ty(T1_ty_var);
             #[allow(non_snake_case)]
-            let PtrT1_ty = patterns.mk_raw_ptr_ty(
+            let PtrT1_ty = patterns.pcx.mk_raw_ptr_ty(
                 T1_ty,
                 ::rustc_middle::mir::Mutability::Mut
             );
             #[allow(non_snake_case)]
-            let PtrPtrT1_ty = patterns.mk_raw_ptr_ty(
-                patterns.mk_raw_ptr_ty(
+            let PtrPtrT1_ty = patterns.pcx.mk_raw_ptr_ty(
+                patterns.pcx.mk_raw_ptr_ty(
                     T1_ty,
                     ::rustc_middle::mir::Mutability::Mut
                 ),
                 ::rustc_middle::mir::Mutability::Mut
             );
             #[allow(non_snake_case)]
-            let DerefPtrT1_ty = patterns.mk_ref_ty(
+            let DerefPtrT1_ty = patterns.pcx.mk_ref_ty(
                 ::rpl_mir::pat::RegionKind::ReAny,
-                patterns.mk_raw_ptr_ty(
+                patterns.pcx.mk_raw_ptr_ty(
                     T1_ty,
                     ::rustc_middle::mir::Mutability::Mut
                 ),
                 ::rustc_middle::mir::Mutability::Mut
             );
             #[allow(non_snake_case)]
-            let PtrT2_ty = patterns.mk_raw_ptr_ty(
-                patterns.mk_tuple_ty(&[]),
+            let PtrT2_ty = patterns.pcx.mk_raw_ptr_ty(
+                patterns.pcx.mk_tuple_ty(&[]),
                 ::rustc_middle::mir::Mutability::Mut
             );
             #[allow(non_snake_case)]
-            let PtrPtrT2_ty = patterns.mk_raw_ptr_ty(
-                patterns.mk_raw_ptr_ty(
-                    patterns.mk_tuple_ty(&[]),
+            let PtrPtrT2_ty = patterns.pcx.mk_raw_ptr_ty(
+                patterns.pcx.mk_raw_ptr_ty(
+                    patterns.pcx.mk_tuple_ty(&[]),
                     ::rustc_middle::mir::Mutability::Mut
                 ),
                 ::rustc_middle::mir::Mutability::Mut
@@ -1105,9 +1105,9 @@ fn test_cve_2020_35881_mut() {
                     ::rpl_mir::pat::Operand::Move(
                         ptr_to_ptr_to_data_local.into_place()
                     ),
-                    patterns.mk_raw_ptr_ty(
-                        patterns.mk_raw_ptr_ty(
-                            patterns.mk_tuple_ty(&[]),
+                    patterns.pcx.mk_raw_ptr_ty(
+                        patterns.pcx.mk_raw_ptr_ty(
+                            patterns.pcx.mk_tuple_ty(&[]),
                             ::rustc_middle::mir::Mutability::Mut
                         ),
                         ::rustc_middle::mir::Mutability::Mut
@@ -1193,62 +1193,62 @@ fn test_cve_2021_29941_2() {
             #[allow(non_snake_case)]
             let T_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let T_ty = patterns.mk_var_ty(T_ty_var);
+            let T_ty = patterns.pcx.mk_var_ty(T_ty_var);
             #[allow(non_snake_case)]
-            let RangeT_ty = patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["std", "ops", "Range",]),
+            let RangeT_ty = patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["std", "ops", "Range",]),
                 &[T_ty.into()]
             ));
             #[allow(non_snake_case)]
-            let VecT_ty = patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["std", "vec", "Vec",]),
+            let VecT_ty = patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["std", "vec", "Vec",]),
                 &[T_ty.into()]
             ));
             #[allow(non_snake_case)]
-            let RefMutVecT_ty = patterns.mk_ref_ty(
+            let RefMutVecT_ty = patterns.pcx.mk_ref_ty(
                 ::rpl_mir::pat::RegionKind::ReAny,
-                patterns.mk_path_ty(patterns.mk_path_with_args(
-                    patterns.mk_item_path(&["std", "vec", "Vec",]),
+                patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                    patterns.pcx.mk_item_path(&["std", "vec", "Vec",]),
                     &[T_ty.into()]
                 )),
                 ::rustc_middle::mir::Mutability::Mut
             );
             #[allow(non_snake_case)]
-            let PtrMutT_ty = patterns.mk_raw_ptr_ty(
+            let PtrMutT_ty = patterns.pcx.mk_raw_ptr_ty(
                 T_ty,::rustc_middle::mir::Mutability::Mut
             );
             #[allow(non_snake_case)]
-            let RefMutSliceT_ty = patterns.mk_ref_ty(
+            let RefMutSliceT_ty = patterns.pcx.mk_ref_ty(
                 ::rpl_mir::pat::RegionKind::ReAny,
-                patterns.mk_slice_ty(T_ty),
+                patterns.pcx.mk_slice_ty(T_ty),
                 ::rustc_middle::mir::Mutability::Mut
             );
             #[allow(non_snake_case)]
-            let EnumerateRangeT_ty = patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["std", "iter", "Enumerate",]),
+            let EnumerateRangeT_ty = patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["std", "iter", "Enumerate",]),
                 &[RangeT_ty.into()]
             ));
             #[allow(non_snake_case)]
-            let RefMutEnumerateRangeT_ty = patterns.mk_ref_ty(
+            let RefMutEnumerateRangeT_ty = patterns.pcx.mk_ref_ty(
                 ::rpl_mir::pat::RegionKind::ReAny,
-                patterns.mk_path_ty(patterns.mk_path_with_args(
-                    patterns.mk_item_path(&["std", "iter", "Enumerate",]),
+                patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                    patterns.pcx.mk_item_path(&["std", "iter", "Enumerate",]),
                     &[RangeT_ty.into()]
                 )),
                 ::rustc_middle::mir::Mutability::Mut
             );
             #[allow(non_snake_case)]
-            let OptionUsizeT_ty = patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["std", "option", "Option",]),
-                &[patterns.mk_tuple_ty(&[patterns.primitive_types.usize, T_ty]).into()]
+            let OptionUsizeT_ty = patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["std", "option", "Option",]),
+                &[patterns.pcx.mk_tuple_ty(&[patterns.pcx.primitive_types.usize, T_ty]).into()]
             ));
             let iter_local = patterns.mk_local(RangeT_ty);
             let iter_stmt = patterns.mk_assign(iter_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
-            let len_local = patterns.mk_local(patterns.primitive_types.usize);
+            let len_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
             let len_stmt = patterns.mk_fn_call(
                 ::rpl_mir::pat::Operand::Constant(
                     patterns.mk_zeroed(
-                        patterns.mk_path_with_args(patterns.mk_item_path(&["RangeT", "len",]), &[])
+                        patterns.pcx.mk_path_with_args(patterns.pcx.mk_item_path(&["RangeT", "len",]), &[])
                     )
                 ),
                 patterns.mk_list([
@@ -1259,8 +1259,8 @@ fn test_cve_2021_29941_2() {
             let vec_local = patterns.mk_local(VecT_ty);
             let vec_stmt = patterns.mk_fn_call(
                 ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                    patterns.mk_path_with_args(
-                        patterns.mk_item_path(&["std", "vec", "Vec", "with_capacity",]),
+                    patterns.pcx.mk_path_with_args(
+                        patterns.pcx.mk_item_path(&["std", "vec", "Vec", "with_capacity",]),
                         &[]
                     )
                 )),
@@ -1283,8 +1283,8 @@ fn test_cve_2021_29941_2() {
             let ptr_to_vec_local = patterns.mk_local(PtrMutT_ty);
             let ptr_to_vec_stmt = patterns.mk_fn_call(
                 ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                    patterns.mk_path_with_args(
-                        patterns.mk_item_path(&["Vec", "as_mut_ptr",]),
+                    patterns.pcx.mk_path_with_args(
+                        patterns.pcx.mk_item_path(&["Vec", "as_mut_ptr",]),
                         &[]
                     )
                 )),
@@ -1296,8 +1296,8 @@ fn test_cve_2021_29941_2() {
             let slice_local = patterns.mk_local(RefMutSliceT_ty);
             let slice_stmt = patterns.mk_fn_call(
                 ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                    patterns.mk_path_with_args(
-                        patterns.mk_item_path(&["std", "slice", "from_raw_parts_mut",]),
+                    patterns.pcx.mk_path_with_args(
+                        patterns.pcx.mk_item_path(&["std", "slice", "from_raw_parts_mut",]),
                         &[]
                     )
                 )),
@@ -1310,8 +1310,8 @@ fn test_cve_2021_29941_2() {
             let enumerate_local = patterns.mk_local(EnumerateRangeT_ty);
             let enumerate_stmt = patterns.mk_fn_call(
                 ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                    patterns.mk_path_with_args(
-                        patterns.mk_item_path(&["RangeT", "enumerate" ,]),
+                    patterns.pcx.mk_path_with_args(
+                        patterns.pcx.mk_item_path(&["RangeT", "enumerate" ,]),
                         &[]
                     )
                 )),
@@ -1332,17 +1332,17 @@ fn test_cve_2021_29941_2() {
                 )
             );
             let next_local = patterns.mk_local(OptionUsizeT_ty);
-            let cmp_local = patterns.mk_local(patterns.primitive_types.isize);
-            let first_local = patterns.mk_local(patterns.primitive_types.usize);
+            let cmp_local = patterns.mk_local(patterns.pcx.primitive_types.isize);
+            let first_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
             let second_t_local = patterns.mk_local(T_ty);
-            let second_usize_local = patterns.mk_local(patterns.primitive_types.usize);
-            let _tmp_local = patterns.mk_local(patterns.mk_tuple_ty(&[]));
+            let second_usize_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let _tmp_local = patterns.mk_local(patterns.pcx.mk_tuple_ty(&[]));
             patterns.mk_loop(
                 |patterns| {
                     let next_stmt = patterns.mk_fn_call(
                         ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                            patterns.mk_path_with_args(
-                                patterns.mk_item_path(&["EnumerateRangeT", "next",]),
+                            patterns.pcx.mk_path_with_args(
+                                patterns.pcx.mk_item_path(&["EnumerateRangeT", "next",]),
                                 &[]
                             )
                         )),
@@ -1353,8 +1353,8 @@ fn test_cve_2021_29941_2() {
                     );
                     let cmp_stmt = patterns.mk_fn_call(
                         ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                            patterns.mk_path_with_args(
-                                patterns.mk_item_path(&["balabala", "discriminant",]),
+                            patterns.pcx.mk_path_with_args(
+                                patterns.pcx.mk_item_path(&["balabala", "discriminant",]),
                                 &[]
                             )
                         )),
@@ -1411,7 +1411,7 @@ fn test_cve_2021_29941_2() {
                                             ::rpl_mir::pat::Operand::Copy(
                                                 second_t_local.into_place()
                                             ),
-                                            patterns.primitive_types.usize
+                                            patterns.pcx.primitive_types.usize
                                         )
                                     );
                                     let slice_stmt = patterns.mk_assign(
@@ -1447,8 +1447,8 @@ fn test_cve_2021_29941_2() {
             );
             let _tmp_stmt = patterns.mk_fn_call(
                 ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(
-                    patterns.mk_path_with_args(
-                        patterns.mk_item_path(&["Vec", "set_len",]),
+                    patterns.pcx.mk_path_with_args(
+                        patterns.pcx.mk_item_path(&["Vec", "set_len",]),
                         &[]
                     )
                 )),
@@ -1513,46 +1513,46 @@ fn test_cve_2018_21000_inlined() {
             #[allow(non_snake_case)]
             let T_ty_var = patterns.new_ty_var();
             #[allow(non_snake_case)]
-            let T_ty = patterns.mk_var_ty(T_ty_var);
+            let T_ty = patterns.pcx.mk_var_ty(T_ty_var);
             #[allow(non_snake_case)]
-            let Global_ty = patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["alloc", "alloc", "Global",]),
+            let Global_ty = patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["alloc", "alloc", "Global",]),
                 &[]
             ));
-            let from_vec_local = patterns.mk_local(patterns.mk_path_ty(
-                patterns.mk_path_with_args(
-                    patterns.mk_item_path(&["alloc", "vec", "Vec",]),
-                    &[patterns.primitive_types.u8.into(), Global_ty.into()]
+            let from_vec_local = patterns.mk_local(patterns.pcx.mk_path_ty(
+                patterns.pcx.mk_path_with_args(
+                    patterns.pcx.mk_item_path(&["alloc", "vec", "Vec",]),
+                    &[patterns.pcx.primitive_types.u8.into(), Global_ty.into()]
                 )
             ));
             let from_vec_stmt = patterns.mk_assign(from_vec_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
-            let to_vec_local = patterns.mk_local(patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["alloc", "vec", "Vec",]),
+            let to_vec_local = patterns.mk_local(patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["alloc", "vec", "Vec",]),
                 &[T_ty.into(), Global_ty.into()]
             )));
-            let to_vec_cap_local = patterns.mk_local(patterns.primitive_types.usize);
-            let from_vec_cap_local = patterns.mk_local(patterns.primitive_types.usize);
-            let tsize_local = patterns.mk_local(patterns.primitive_types.usize);
-            let to_vec_len_local = patterns.mk_local(patterns.primitive_types.usize);
-            let from_vec_len_local = patterns.mk_local(patterns.primitive_types.usize);
-            let from_vec_ptr_local = patterns.mk_local(patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["core", "ptr", "non_null", "NonNull",]),
-                &[patterns.primitive_types.u8.into()]
+            let to_vec_cap_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let from_vec_cap_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let tsize_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let to_vec_len_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let from_vec_len_local = patterns.mk_local(patterns.pcx.primitive_types.usize);
+            let from_vec_ptr_local = patterns.mk_local(patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["core", "ptr", "non_null", "NonNull",]),
+                &[patterns.pcx.primitive_types.u8.into()]
             )));
-            let to_raw_vec_local = patterns.mk_local(patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["alloc", "raw_vec", "RawVec",]),
+            let to_raw_vec_local = patterns.mk_local(patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["alloc", "raw_vec", "RawVec",]),
                 &[T_ty.into(), Global_ty.into()]
             )));
-            let to_raw_vec_inner_local = patterns.mk_local(patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["alloc", "raw_vec", "RawVecInner",]),
+            let to_raw_vec_inner_local = patterns.mk_local(patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["alloc", "raw_vec", "RawVecInner",]),
                 &[Global_ty.into()]
             )));
-            let to_vec_wrapped_len_local = patterns.mk_local(patterns.mk_path_ty(
-                patterns.mk_path_with_args(patterns.mk_item_path(&["alloc", "raw_vec", "Cap",]), &[])
+            let to_vec_wrapped_len_local = patterns.mk_local(patterns.pcx.mk_path_ty(
+                patterns.pcx.mk_path_with_args(patterns.pcx.mk_item_path(&["alloc", "raw_vec", "Cap",]), &[])
             ));
-            let from_vec_unique_ptr_local = patterns.mk_local(patterns.mk_path_ty(patterns.mk_path_with_args(
-                patterns.mk_item_path(&["core", "ptr", "unique", "Unique",]),
-                &[patterns.primitive_types.u8.into()]
+            let from_vec_unique_ptr_local = patterns.mk_local(patterns.pcx.mk_path_ty(patterns.pcx.mk_path_with_args(
+                patterns.pcx.mk_item_path(&["core", "ptr", "unique", "Unique",]),
+                &[patterns.pcx.primitive_types.u8.into()]
             )));
             let from_vec_ptr_stmt = patterns.mk_assign(
                 from_vec_ptr_local.into_place(),
@@ -1611,8 +1611,8 @@ fn test_cve_2018_21000_inlined() {
                 to_vec_wrapped_len_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Aggregate(
                     ::rpl_mir::pat::AggKind::Adt(
-                        patterns.mk_path_with_args(
-                            patterns.mk_item_path(&["alloc", "raw_vec", "Cap",]),
+                        patterns.pcx.mk_path_with_args(
+                            patterns.pcx.mk_item_path(&["alloc", "raw_vec", "Cap",]),
                             &[]
                         ),
                         ::rpl_mir::pat::AggAdtKind::Tuple
@@ -1624,9 +1624,9 @@ fn test_cve_2018_21000_inlined() {
                 from_vec_unique_ptr_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Aggregate(
                     ::rpl_mir::pat::AggKind::Adt(
-                        patterns.mk_path_with_args(
-                            patterns.mk_item_path(&["core", "ptr", "unique", "Unique",]),
-                            &[patterns.primitive_types.u8.into()]
+                        patterns.pcx.mk_path_with_args(
+                            patterns.pcx.mk_item_path(&["core", "ptr", "unique", "Unique",]),
+                            &[patterns.pcx.primitive_types.u8.into()]
                         ),
                         patterns.mk_list([
                             ::rustc_span::Symbol::intern("pointer"),
@@ -1636,9 +1636,9 @@ fn test_cve_2018_21000_inlined() {
                     ),
                     patterns.mk_list([
                         ::rpl_mir::pat::Operand::Copy(from_vec_ptr_local.into_place()),
-                        ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(patterns.mk_path_with_args(
-                            patterns.mk_item_path(&["core", "marker", "PhantomData",]),
-                            &[patterns.primitive_types.u8.into()]
+                        ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(patterns.pcx.mk_path_with_args(
+                            patterns.pcx.mk_item_path(&["core", "marker", "PhantomData",]),
+                            &[patterns.pcx.primitive_types.u8.into()]
                         ))),
                     ]),
                 )
@@ -1647,8 +1647,8 @@ fn test_cve_2018_21000_inlined() {
                 to_raw_vec_inner_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Aggregate(
                     ::rpl_mir::pat::AggKind::Adt(
-                        patterns.mk_path_with_args(
-                            patterns.mk_item_path(&["alloc", "raw_vec", "RawVecInner",]),
+                        patterns.pcx.mk_path_with_args(
+                            patterns.pcx.mk_item_path(&["alloc", "raw_vec", "RawVecInner",]),
                             &[Global_ty.into()]
                         ),
                         patterns.mk_list([
@@ -1660,8 +1660,8 @@ fn test_cve_2018_21000_inlined() {
                     patterns.mk_list([
                         ::rpl_mir::pat::Operand::Move(from_vec_unique_ptr_local.into_place()),
                         ::rpl_mir::pat::Operand::Copy(to_vec_wrapped_len_local.into_place()),
-                        ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(patterns.mk_path_with_args(
-                            patterns.mk_item_path(&["alloc", "alloc", "Global",]),
+                        ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(patterns.pcx.mk_path_with_args(
+                            patterns.pcx.mk_item_path(&["alloc", "alloc", "Global",]),
                             &[]
                         ))),
                     ]),
@@ -1671,8 +1671,8 @@ fn test_cve_2018_21000_inlined() {
                 to_raw_vec_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Aggregate(
                     ::rpl_mir::pat::AggKind::Adt(
-                        patterns.mk_path_with_args(
-                            patterns.mk_item_path(&["alloc", "raw_vec", "RawVec",]),
+                        patterns.pcx.mk_path_with_args(
+                            patterns.pcx.mk_item_path(&["alloc", "raw_vec", "RawVec",]),
                             &[T_ty.into(), Global_ty.into()]
                         ),
                         patterns.mk_list([
@@ -1682,8 +1682,8 @@ fn test_cve_2018_21000_inlined() {
                     ),
                     patterns.mk_list([
                         ::rpl_mir::pat::Operand::Move(to_raw_vec_inner_local.into_place()),
-                        ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(patterns.mk_path_with_args(
-                            patterns.mk_item_path(&["core", "marker", "PhantomData",]),
+                        ::rpl_mir::pat::Operand::Constant(patterns.mk_zeroed(patterns.pcx.mk_path_with_args(
+                            patterns.pcx.mk_item_path(&["core", "marker", "PhantomData",]),
                             &[T_ty.into()]
                         ))),
                     ]),
@@ -1693,8 +1693,8 @@ fn test_cve_2018_21000_inlined() {
                 to_vec_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Aggregate(
                     ::rpl_mir::pat::AggKind::Adt(
-                        patterns.mk_path_with_args(
-                            patterns.mk_item_path(&["alloc", "vec", "Vec",]),
+                        patterns.pcx.mk_path_with_args(
+                            patterns.pcx.mk_item_path(&["alloc", "vec", "Vec",]),
                             &[T_ty.into(), Global_ty.into()]
                         ),
                         patterns.mk_list([

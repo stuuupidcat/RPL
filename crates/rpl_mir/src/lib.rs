@@ -57,11 +57,11 @@ use rustc_target::abi::FieldIdx;
 pub use crate::pattern as pat;
 pub use matches::{Matches, StatementMatch};
 
-pub struct CheckMirCtxt<'a, 'tcx> {
+pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     tcx: TyCtxt<'tcx>,
     param_env: ty::ParamEnv<'tcx>,
     body: &'a mir::Body<'tcx>,
-    patterns: &'a pat::Patterns<'tcx>,
+    patterns: &'a pat::MirPattern<'pcx, 'tcx>,
     pat_cfg: PatControlFlowGraph,
     pat_ddg: PatDataDepGraph,
     mir_cfg: MirControlFlowGraph,
@@ -72,8 +72,8 @@ pub struct CheckMirCtxt<'a, 'tcx> {
     ty_vars: IndexVec<pat::TyVarIdx, RefCell<Vec<Ty<'tcx>>>>,
 }
 
-impl<'a, 'tcx> CheckMirCtxt<'a, 'tcx> {
-    pub fn new(tcx: TyCtxt<'tcx>, body: &'a mir::Body<'tcx>, patterns: &'a pat::Patterns<'tcx>) -> Self {
+impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
+    pub fn new(tcx: TyCtxt<'tcx>, body: &'a mir::Body<'tcx>, patterns: &'a pat::MirPattern<'pcx, 'tcx>) -> Self {
         // let pat_pdg = crate::graph::pat_program_dep_graph(&patterns, tcx.pointer_size().bytes_usize());
         // let mir_pdg = crate::graph::mir_program_dep_graph(body);
         let pat_cfg = crate::graph::pat_control_flow_graph(patterns, tcx.pointer_size().bytes());
@@ -246,7 +246,7 @@ impl<'a, 'tcx> CheckMirCtxt<'a, 'tcx> {
     */
 }
 
-impl<'tcx> CheckMirCtxt<'_, 'tcx> {
+impl<'tcx> CheckMirCtxt<'_, '_, 'tcx> {
     pub fn match_local(&self, pat: pat::LocalIdx, local: mir::Local) -> bool {
         let mut locals = self.locals[pat].borrow_mut();
         if locals.contains(local) {
@@ -671,9 +671,9 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
     fn match_ty(&self, ty_pat: pat::Ty<'tcx>, ty: ty::Ty<'tcx>) -> bool {
         let matched = match (*ty_pat.kind(), *ty.kind()) {
             (pat::TyKind::TyVar(ty_var), _)
-                if self.patterns.ty_vars[ty_var].is_none_or(|ty_pred| ty_pred(self.tcx, self.param_env, ty)) =>
+                if ty_var.pred.is_none_or(|ty_pred| ty_pred(self.tcx, self.param_env, ty)) =>
             {
-                self.ty_vars[ty_var].borrow_mut().push(ty);
+                self.ty_vars[ty_var.idx].borrow_mut().push(ty);
                 true
             },
             (pat::TyKind::Array(ty_pat, konst_pat), ty::Array(ty, konst)) => {
@@ -779,16 +779,16 @@ impl<'tcx> CheckMirCtxt<'_, 'tcx> {
         }
     }
 
-    fn match_const(&self, konst_pat: pat::Const, konst: ty::Const<'tcx>) -> bool {
+    fn match_const(&self, konst_pat: pat::Const<'tcx>, konst: ty::Const<'tcx>) -> bool {
         match (konst_pat, konst.kind()) {
             (pat::Const::ConstVar(const_var), _) => self.match_const_var(const_var, konst),
             (pat::Const::Value(_value_pat), ty::Value(_ty, ty::ValTree::Leaf(_value))) => todo!(),
             _ => false,
         }
     }
-    fn match_const_var(&self, const_var: pat::ConstVarIdx, konst: ty::Const<'tcx>) -> bool {
+    fn match_const_var(&self, const_var: pat::ConstVar<'tcx>, konst: ty::Const<'tcx>) -> bool {
         if let ty::ConstKind::Value(ty, _) = konst.kind()
-            && self.match_ty(self.patterns.const_vars[const_var], ty)
+            && self.match_ty(const_var.ty, ty)
         {
             // self.const_vars[const_var].borrow_mut().push(konst);
             return true;

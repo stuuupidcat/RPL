@@ -1,4 +1,5 @@
-use rpl_mir::pat::PatternsBuilder;
+use rpl_context::PatCtxt;
+use rpl_mir::pat::MirPatternBuilder;
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
@@ -8,19 +9,20 @@ use rustc_span::Span;
 
 use rpl_mir::{pat, CheckMirCtxt};
 
-#[instrument(level = "info", skip(tcx))]
-pub fn check_item(tcx: TyCtxt<'_>, item_id: hir::ItemId) {
+#[instrument(level = "info", skip(tcx, pcx))]
+pub fn check_item<'tcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'_, 'tcx>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
     // let def_id = item_id.owner_id.def_id;
-    let mut check_ctxt = CheckFnCtxt { tcx };
+    let mut check_ctxt = CheckFnCtxt { tcx, pcx };
     check_ctxt.visit_item(item);
 }
 
-struct CheckFnCtxt<'tcx> {
+struct CheckFnCtxt<'pcx, 'tcx> {
     tcx: TyCtxt<'tcx>,
+    pcx: PatCtxt<'pcx, 'tcx>,
 }
 
-impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
+impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     type NestedFilter = All;
     fn nested_visit_map(&mut self) -> Self::Map {
         self.tcx.hir()
@@ -45,7 +47,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
         if self.tcx.visibility(def_id).is_public() && self.tcx.is_mir_available(def_id) {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
-            if let mut patterns_reversed_paras = PatternsBuilder::new(&self.tcx.arena.dropless)
+            if let mut patterns_reversed_paras = MirPatternBuilder::new(self.pcx)
                 && let pattern_reversed_para = pattern_reversed_para(&mut patterns_reversed_paras)
                 && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &patterns_reversed_paras.build()).check()
                 && let Some(from_raw_parts) = matches[pattern_reversed_para.from_raw_parts]
@@ -63,7 +65,7 @@ struct PatternMisorderedParam {
 }
 
 #[rpl_macros::mir_pattern]
-fn pattern_reversed_para(patterns: &mut pat::PatternsBuilder<'_>) -> PatternMisorderedParam {
+fn pattern_reversed_para(patterns: &mut pat::MirPatternBuilder<'_, '_>) -> PatternMisorderedParam {
     mir! {
         meta!{$T:ty}
 

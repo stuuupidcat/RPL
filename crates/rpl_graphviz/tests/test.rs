@@ -10,9 +10,9 @@ use std::fs::File;
 use std::io::{Read, Write};
 
 use pretty_assertions::assert_eq;
+use rpl_context::PatternCtxt;
 use rpl_graphviz::{pat_cfg_to_graphviz, pat_ddg_to_graphviz};
-use rpl_mir::pat::PatternsBuilder;
-use rustc_arena::DroplessArena;
+use rpl_mir::pat::MirPatternBuilder;
 
 fn read_from_file(file: &str) -> std::io::Result<String> {
     let mut file = File::open(file)?;
@@ -30,7 +30,7 @@ macro_rules! test_case {
     ( $(#[$meta:meta])* fn $name:ident() { $($input:tt)* }) => {
         #[rpl_macros::mir_pattern]
         #[allow(unused_variables)]
-        fn $name(patterns: &mut PatternsBuilder<'_>) {
+        fn $name(patterns: &mut MirPatternBuilder<'_, '_>) {
             mir! {
                 $($input)*
             }
@@ -38,9 +38,8 @@ macro_rules! test_case {
         #[test]
         $(#[$meta])*
         fn ${concat(test_, $name)}() {
-            let arena = DroplessArena::default();
-            rustc_span::create_session_if_not_set_then(rustc_span::edition::LATEST_STABLE_EDITION, |_| {
-                let mut patterns = PatternsBuilder::new(&arena);
+            PatternCtxt::entered_no_tcx(|pcx| {
+                let mut patterns = MirPatternBuilder::new(pcx);
                 $name(&mut patterns);
                 let patterns = patterns.build();
                 let mut cfg = Vec::new();
@@ -68,7 +67,7 @@ macro_rules! test_case {
                 }
                 assert_eq!(cfg, cfg_expected, "CFG mismatch, see {cfg_file} and {cfg_expected_file}");
                 assert_eq!(ddg, ddg_expected, "DDG mismatch, see {ddg_file} and {ddg_expected_file}");
-            })
+            });
         }
     }
 }
