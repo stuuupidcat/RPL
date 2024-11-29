@@ -11,7 +11,7 @@ mod graph;
 use std::io::{self, Write};
 
 use gsgdt::{GraphvizSettings, NodeStyle};
-use rpl_mir::pattern::Patterns;
+use rpl_mir::pattern::MirPattern;
 use rustc_middle::mir;
 use rustc_middle::mir::interpret::PointerArithmetic;
 use rustc_middle::ty::TyCtxt;
@@ -26,12 +26,12 @@ pub struct Config {
     pub pointer_bytes: PointerBytes,
 }
 
-pub fn pat_cfg_to_graphviz(patterns: &Patterns<'_>, f: &mut impl Write, config: &Config) -> io::Result<()> {
+pub fn pat_cfg_to_graphviz(patterns: &MirPattern<'_, '_>, f: &mut impl Write, config: &Config) -> io::Result<()> {
     let builder = graph::CfgBuilder::from_patterns(patterns, config.pointer_bytes.get(), config.node_style.clone());
     builder.build().to_dot(f, &config.graphviz, false)
 }
 
-pub fn pat_ddg_to_graphviz(patterns: &Patterns<'_>, f: &mut impl Write, config: &Config) -> io::Result<()> {
+pub fn pat_ddg_to_graphviz(patterns: &MirPattern<'_, '_>, f: &mut impl Write, config: &Config) -> io::Result<()> {
     let builder = graph::DdgBuilder::from_patterns(
         patterns,
         config.pointer_bytes.get(),

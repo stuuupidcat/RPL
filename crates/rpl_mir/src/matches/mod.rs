@@ -58,7 +58,7 @@ impl<'tcx> Index<pat::TyVarIdx> for Matches<'tcx> {
     }
 }
 
-pub fn matches<'tcx>(cx: &CheckMirCtxt<'_, 'tcx>) -> Option<Matches<'tcx>> {
+pub fn matches<'tcx>(cx: &CheckMirCtxt<'_, '_, 'tcx>) -> Option<Matches<'tcx>> {
     let mut matching = MatchCtxt::new(cx);
     if matching.do_match() {
         matching.matches.log_matches(cx.body);
@@ -182,14 +182,14 @@ impl StatementMatch {
     }
 }
 
-struct MatchCtxt<'a, 'tcx> {
-    cx: &'a CheckMirCtxt<'a, 'tcx>,
+struct MatchCtxt<'a, 'pcx, 'tcx> {
+    cx: &'a CheckMirCtxt<'a, 'pcx, 'tcx>,
     matches: CheckingMatches<'tcx>,
     // succeeded: Cell<bool>,
 }
 
-impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
-    fn new(cx: &'a CheckMirCtxt<'a, 'tcx>) -> Self {
+impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
+    fn new(cx: &'a CheckMirCtxt<'a, 'pcx, 'tcx>) -> Self {
         let num_blocks = cx.patterns.basic_blocks.len();
         let num_locals = cx.patterns.locals.len();
         Self {
@@ -587,7 +587,7 @@ impl<'a, 'tcx> MatchCtxt<'a, 'tcx> {
     fn unmatch_local(&self, local_pat: pat::LocalIdx) {
         self.matches[local_pat].matched.unmatch();
         if let &pat::TyKind::TyVar(ty_var) = self.cx.patterns.locals[local_pat].kind() {
-            self.matches[ty_var].matched.unmatch();
+            self.matches[ty_var.idx].matched.unmatch();
         }
     }
 

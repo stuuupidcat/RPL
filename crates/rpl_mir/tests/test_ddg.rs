@@ -9,9 +9,9 @@ extern crate rustc_span;
 use pretty_assertions::assert_eq;
 use proc_macro2::TokenStream;
 use quote::quote;
+use rpl_context::PatternCtxt;
 use rpl_mir::graph::{pat_control_flow_graph, pat_data_dep_graph};
-use rpl_mir::pat::{LocalIdx, PatternsBuilder};
-use rustc_arena::DroplessArena;
+use rpl_mir::pat::{LocalIdx, MirPatternBuilder};
 use std::fmt::Write;
 
 fn format_stmt_local((stmt, local): (usize, LocalIdx)) -> impl std::fmt::Debug {
@@ -28,16 +28,15 @@ fn format_stmt_local((stmt, local): (usize, LocalIdx)) -> impl std::fmt::Debug {
 macro_rules! test_case {
     (fn $name:ident() {$($input:tt)*} => { $($deps:tt)* }) => {
         #[rpl_macros::mir_pattern]
-        fn $name(patterns: &mut PatternsBuilder<'_>) {
+        fn $name(patterns: &mut MirPatternBuilder<'_, '_>) {
             mir! {
                 $($input)*
             }
         }
         #[test]
         fn ${concat(test_, $name)}() {
-            let arena = DroplessArena::default();
-            rustc_span::create_session_if_not_set_then(rustc_span::edition::LATEST_STABLE_EDITION, |_| {
-                let mut patterns = PatternsBuilder::new(&arena);
+            PatternCtxt::entered_no_tcx(|pcx| {
+                let mut patterns = MirPatternBuilder::new(pcx);
                 $name(&mut patterns);
                 let pattern = patterns.build();
                 let cfg = pat_control_flow_graph(&pattern, (usize::BITS / u8::BITS).into());

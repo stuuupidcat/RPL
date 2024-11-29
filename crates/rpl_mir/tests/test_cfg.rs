@@ -7,22 +7,21 @@ extern crate rustc_span;
 
 use pretty_assertions::assert_eq;
 use proc_macro2::TokenStream;
-use rpl_mir::pat::{Patterns, PatternsBuilder};
-use rustc_arena::DroplessArena;
+use rpl_context::PatternCtxt;
+use rpl_mir::pat::{MirPattern, MirPatternBuilder};
 
 macro_rules! test_case {
     (fn $name:ident() {$($input:tt)*} => {$($expected:tt)*} $(,)?) => {
         #[rpl_macros::mir_pattern]
-        fn $name(patterns: &mut PatternsBuilder<'_>) {
+        fn $name(patterns: &mut MirPatternBuilder<'_, '_>) {
             mir! {
                 $($input)*
             }
         }
         #[test]
         fn ${concat(test_, $name)}() {
-            let arena = DroplessArena::default();
-            rustc_span::create_session_if_not_set_then(rustc_span::edition::LATEST_STABLE_EDITION, |_| {
-                let mut patterns = PatternsBuilder::new(&arena);
+            PatternCtxt::entered_no_tcx(|pcx| {
+                let mut patterns = MirPatternBuilder::new(pcx);
                 $name(&mut patterns);
                 assert_eq(patterns.build(), quote::quote!($($expected)*));
             });
@@ -31,7 +30,7 @@ macro_rules! test_case {
 }
 
 #[track_caller]
-fn assert_eq(patterns: Patterns<'_>, expected: TokenStream) {
+fn assert_eq(patterns: MirPattern<'_, '_>, expected: TokenStream) {
     assert_eq!(
         format!("{patterns:?}")
             .parse::<TokenStream>()

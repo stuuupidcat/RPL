@@ -207,7 +207,7 @@ impl ToTokens for Expand<'_, &MetaItem> {
                     #[allow(non_snake_case)]
                     let #ty_var_ident = #patterns.new_ty_var();
                     #[allow(non_snake_case)]
-                    let #ty_ident = #patterns.mk_var_ty(#ty_var_ident);
+                    let #ty_ident = #patterns.pcx.mk_var_ty(#ty_var_ident);
                 );
             },
         }
@@ -444,8 +444,8 @@ impl ToTokens for Expand<'_, &Path> {
                 quote_each_token!(gen_args #args);
             }
         }
-        quote_each_token!(tokens #patterns.mk_path_with_args(
-            #patterns.mk_item_path(&[#path]), &[#gen_args]
+        quote_each_token!(tokens #patterns.pcx.mk_path_with_args(
+            #patterns.pcx.mk_item_path(&[#path]), &[#gen_args]
         ));
         if let Some(_rem) = iter.next() {
             todo!();
@@ -470,7 +470,7 @@ impl ToTokens for Expand<'_, &Type> {
         match self.value {
             Type::Array(TypeArray { box ty, len, .. }) => {
                 let ty = self.expand(ty);
-                quote_each_token!(tokens #patterns.mk_array(#ty, #len));
+                quote_each_token!(tokens #patterns.pcx.mk_array_ty(#ty, #len));
             },
             Type::Group(TypeGroup { box ty, .. }) | Type::Paren(TypeParen { value: box ty, .. }) => {
                 self.expand(ty).to_tokens(tokens);
@@ -478,19 +478,19 @@ impl ToTokens for Expand<'_, &Type> {
             Type::Never(_) => todo!(),
             Type::Path(TypePath { qself: None, path }) if let Some(ident) = path.as_ident() => {
                 if crate::is_primitive(ident) {
-                    quote_each_token!(tokens #patterns.primitive_types.#ident);
+                    quote_each_token!(tokens #patterns.pcx.primitive_types.#ident);
                 } else {
                     ident.as_ty().to_tokens(tokens);
                 }
             },
             Type::Path(TypePath { path, .. }) => {
                 let path = self.expand(path);
-                quote_each_token!(tokens #patterns.mk_path_ty(#path));
+                quote_each_token!(tokens #patterns.pcx.mk_path_ty(#path));
             },
             Type::Ptr(TypePtr { mutability, box ty, .. }) => {
                 let ty = self.expand(ty);
                 let mutability = self.expand(*mutability);
-                quote_each_token!(tokens #patterns.mk_raw_ptr_ty(#ty, #mutability));
+                quote_each_token!(tokens #patterns.pcx.mk_raw_ptr_ty(#ty, #mutability));
             },
             Type::Reference(TypeReference {
                 region,
@@ -501,20 +501,20 @@ impl ToTokens for Expand<'_, &Type> {
                 let region = self.expand(region.kind());
                 let ty = self.expand(ty);
                 let mutability = self.expand(*mutability);
-                quote_each_token!(tokens #patterns.mk_ref_ty(#region, #ty, #mutability));
+                quote_each_token!(tokens #patterns.pcx.mk_ref_ty(#region, #ty, #mutability));
             },
             Type::Slice(TypeSlice { box ty, .. }) => {
                 let ty = self.expand(ty);
-                quote_each_token!(tokens #patterns.mk_slice_ty(#ty));
+                quote_each_token!(tokens #patterns.pcx.mk_slice_ty(#ty));
             },
             Type::Tuple(TypeTuple { tys, .. }) => {
                 let tys = self.expand_punctuated(tys);
-                quote_each_token!(tokens #patterns.mk_tuple_ty(&[#tys]));
+                quote_each_token!(tokens #patterns.pcx.mk_tuple_ty(&[#tys]));
             },
             Type::TyVar(TypeVar { ident, .. }) => ident.as_ty().to_tokens(tokens),
             Type::LangItem(lang_item) => {
                 let lang_item = self.expand(lang_item);
-                quote_each_token!(tokens #patterns.mk_adt_ty(#lang_item));
+                quote_each_token!(tokens #patterns.pcx.mk_adt_ty(#lang_item));
             },
         }
     }
@@ -529,8 +529,8 @@ impl ToTokens for Expand<'_, &LangItemWithArgs> {
             let args = self.expand_punctuated(&args.args);
             quote_each_token!(gen_args #args);
         }
-        quote_each_token!(tokens #patterns.mk_path_with_args(
-            #patterns.mk_lang_item(#item), &[#gen_args]
+        quote_each_token!(tokens #patterns.pcx.mk_path_with_args(
+            #patterns.pcx.mk_lang_item(#item), &[#gen_args]
         ));
     }
 }
@@ -697,7 +697,7 @@ impl ToTokens for Expand<'_, &Const> {
                 todo!("{}", path.to_token_stream());
                 // let path = self.expand(path);
                 // quote_each_token!(tokens ::rpl_mir::pat::ConstOperand::ZeroSized(
-                //     #patterns.mk_item_path(&[#path]),
+                //     #patterns.pcx.mk_item_path(&[#path]),
                 // ));
             },
             Const::Path(TypePath {
@@ -709,7 +709,6 @@ impl ToTokens for Expand<'_, &Const> {
         }
     }
 }
-
 impl ToTokens for Expand<'_, &syn::Lit> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
         match self.value {

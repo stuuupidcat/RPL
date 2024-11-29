@@ -27,8 +27,8 @@ impl<'a, 'tcx, L: BlockLabel> CfgBuilderImpl<'a, mir::Body<'tcx>, L> {
         }
     }
 }
-impl<'a, 'tcx, L: BlockLabel> CfgBuilderImpl<'a, pat::Patterns<'tcx>, L> {
-    pub fn from_patterns(patterns: &'a pat::Patterns<'tcx>, pointer_bytes: u64, node_style: NodeStyle) -> Self {
+impl<'a, 'pcx, 'tcx, L: BlockLabel> CfgBuilderImpl<'a, pat::MirPattern<'pcx, 'tcx>, L> {
+    pub fn from_patterns(patterns: &'a pat::MirPattern<'pcx, 'tcx>, pointer_bytes: u64, node_style: NodeStyle) -> Self {
         CfgBuilderImpl {
             basic_blocks: patterns,
             cfg: pat_control_flow_graph(patterns, pointer_bytes),
@@ -67,9 +67,9 @@ impl<'a, 'tcx> DdgBuilder<'a, mir::Body<'tcx>> {
         }
     }
 }
-impl<'a, 'tcx> DdgBuilder<'a, pat::Patterns<'tcx>> {
+impl<'a, 'pcx, 'tcx> DdgBuilder<'a, pat::MirPattern<'pcx, 'tcx>> {
     pub fn from_patterns(
-        patterns: &'a pat::Patterns<'tcx>,
+        patterns: &'a pat::MirPattern<'pcx, 'tcx>,
         pointer_bytes: u64,
         node_style: NodeStyle,
         config: DdgConfig,
@@ -386,7 +386,7 @@ impl<'tcx> HasBasicBlocks for mir::Body<'tcx> {
         &self.basic_blocks
     }
 }
-impl<'tcx> HasBasicBlocks for pat::Patterns<'tcx> {
+impl<'tcx> HasBasicBlocks for pat::MirPattern<'_, 'tcx> {
     type BasicBlock = pat::BasicBlock;
 
     type BasicBlockData = pat::BasicBlockData<'tcx>;
@@ -399,7 +399,7 @@ impl<'tcx> HasBasicBlocks for pat::Patterns<'tcx> {
 impl HasLocals for mir::Body<'_> {
     type Local = mir::Local;
 }
-impl HasLocals for pat::Patterns<'_> {
+impl HasLocals for pat::MirPattern<'_, '_> {
     type Local = pat::LocalIdx;
 }
 
