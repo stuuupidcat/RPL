@@ -55,7 +55,7 @@ impl<'tcx> Deref for PatCtxt<'_, 'tcx> {
     type Target = PatternCtxt<'tcx>;
 
     fn deref(&self) -> &Self::Target {
-        &self.pcx
+        self.pcx
     }
 }
 

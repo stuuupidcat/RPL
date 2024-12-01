@@ -1,15 +1,6 @@
 [workspace]
 members = [
-    "crates/rpl_driver",
-    "crates/rpl_graphviz",
-    "crates/rpl_interface",
-    "crates/rpl_macros",
-    "crates/rpl_mir",
-    "crates/rpl_mir_expand",
-    "crates/rpl_mir_graph",
-    "crates/rpl_mir_syntax",
-    "crates/rpl_patterns",
-    "crates/rpl_utils",
+    "crates/*",
     "./"
 ]
 
@@ -23,6 +14,7 @@ keywords = ["Bug detection"]
 repository = "https://github.com/stuuupidcat/RPL"
 
 [workspace.dependencies]
+rpl_context = { path = "./crates/rpl_context" }
 rpl_driver = { path = "./crates/rpl_driver" }
 rpl_graphviz = { path = "./crates/rpl_graphviz" }
 rpl_interface = { path = "./crates/rpl_interface" }
@@ -48,6 +40,8 @@ thiserror = "1.0"
 pretty_assertions = "1.4"
 bitflags = "2.5"
 gsgdt = "0.1.2"
+syn_derive = "0.2"
+derive_more = { version = "1.0", features = ["from", "into_iterator", "deref", "display"] }
 
 [package]
 name = "rpl"

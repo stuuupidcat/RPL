@@ -1,10 +1,45 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_each_token, quote_token, ToTokens};
+use syn::parse::{Parse, ParseStream};
 use syn::punctuated::{Pair, Pairs, Punctuated};
 use syn::Ident;
 use syntax::*;
 
-use crate::MirPatternFn;
+const MACRO_MIR: &str = "mir";
+
+pub struct MirPatternFn {
+    pub(crate) item_fn: syn::ItemFn,
+}
+
+impl Parse for MirPatternFn {
+    fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
+        let item_fn = input.parse()?;
+        Ok(MirPatternFn { item_fn })
+    }
+}
+
+impl MirPatternFn {
+    pub(crate) fn expand_macro_mir(mut self) -> syn::Result<TokenStream> {
+        let inputs = self.item_fn.sig.inputs.iter().collect::<Vec<_>>();
+        let patterns = if let [syn::FnArg::Typed(patterns)] = inputs[..]
+            && let box syn::Pat::Ident(ref patterns) = patterns.pat
+        {
+            Some(&patterns.ident)
+        } else {
+            None
+        };
+        for stmt in &mut self.item_fn.block.stmts {
+            if let syn::Stmt::Macro(syn::StmtMacro { mac, .. }) = stmt
+                && mac.path.is_ident(MACRO_MIR)
+            {
+                mac.path = syn::parse_quote!(::rpl_macros::identity);
+                let mir = syn::parse2(mac.tokens.clone())?;
+                mac.tokens = crate::expand_mir(mir, patterns)?;
+            }
+        }
+        Ok(self.item_fn.into_token_stream())
+    }
+}
 
 pub(crate) struct ExpandCtxt<'ecx> {
     patterns: &'ecx Ident,
@@ -228,12 +263,11 @@ impl ToTokens for Expand<'_, &Declaration> {
             Declaration::TypeDecl(type_decl) => self.expand(type_decl).to_tokens(tokens),
             Declaration::UsePath(use_path) => self.expand(use_path).to_tokens(tokens),
             Declaration::LocalDecl(local_decl) => self.expand(local_decl).to_tokens(tokens),
-            Declaration::SelfDecl(self_value) => self.expand(self_value).to_tokens(tokens),
         }
     }
 }
 
-impl<End> ToTokens for Expand<'_, &Statement<End>> {
+impl<End: Parse + ToTokens> ToTokens for Expand<'_, &Statement<End>> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self.value {
             Statement::Assign(assign, _) => self.expand(assign).to_tokens(tokens),
@@ -346,28 +380,22 @@ impl ToTokens for Expand<'_, &UsePath> {
 
 impl ToTokens for Expand<'_, &LocalDecl> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let LocalDecl { ident, ty, init, .. } = self.value;
+        let LocalDecl { local, ty, init, .. } = self.value;
         let ExpandCtxt { patterns, .. } = self.ecx;
         let ty = self.expand(ty);
-        let local = ident.as_local();
-        quote_each_token!(tokens let #local = #patterns.mk_local(#ty); );
+        let ident = local.as_local();
+        let mk_local_or_self = match local {
+            PlaceLocal::Local(_) => format_ident!("mk_local"),
+            PlaceLocal::SelfValue(_) => format_ident!("mk_self"),
+        };
+        quote_each_token!(tokens let #ident = #patterns.#mk_local_or_self(#ty); );
         if let Some(LocalInit { rvalue_or_call, .. }) = init {
             self.expand(Assign {
-                place: &Place::Local(ident.clone().into()),
+                place: &Place::Local(local.clone()),
                 rvalue_or_call,
             })
             .to_tokens(tokens);
         }
-    }
-}
-
-impl ToTokens for Expand<'_, &SelfDecl> {
-    fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let SelfDecl { ty, .. } = self.value;
-        let ExpandCtxt { patterns, .. } = self.ecx;
-        let ty = self.expand(ty);
-        let local = "self".as_local();
-        quote_each_token!(tokens let #local = #patterns.mk_self(#ty); );
     }
 }
 
