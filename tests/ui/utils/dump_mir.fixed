@@ -1,3 +1,4 @@
+//@ compile-flags: -Z inline-mir=false
 //@ normalize-stderr-test: "see `.*/mir_dump/(.*)` for dumpped" -> "see `./mir_dump/$1` for dumpped"
 //@ normalize-stderr-test: "/.*/lib/rustlib/src/rust/library" -> "$$SRC_DIR"
 

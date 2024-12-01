@@ -100,12 +100,12 @@ impl rustc_driver::Callbacks for RplCallbacks {
         // // run on the unoptimized MIR. On the other hand this results in some false negatives. If
         // // MIR passes can be enabled / disabled separately, we should figure out, what passes to
         // // use for RPL.
-        // config.opts.unstable_opts.mir_opt_level = Some(0);
 
-        // Detecting side effects depends on some phases of MIR optimizations.
-        // Analyzing unused assigments of non-volatile variables depends on an unoptimized version of
-        // iterators.
-        // config.opts.unstable_opts.mir_opt_level = Some(0);
+        // Disable optimizations because it can affect undefined behaviors.
+        _ = config.opts.unstable_opts.mir_opt_level.get_or_insert(1);
+
+        // We rely on `-Z inline-mir` to get the inlined MIR.
+        _ = config.opts.unstable_opts.inline_mir.get_or_insert(true);
 
         // Disable flattening and inlining of format_args!(), so the HIR matches with the AST.
         config.opts.unstable_opts.flatten_format_args = false;

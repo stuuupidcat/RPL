@@ -1,5 +1,5 @@
 error: it is unsound to cast any slice `&[T]` to a byte slice `&[u8]`
-  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:24:13
+  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:22:13
    |
 LL | /             core::slice::from_raw_parts(
 LL | |
@@ -9,13 +9,13 @@ LL | |             )
    | |_____________^
    |
 note: trying to cast from this value of `&[T]` type
-  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:21:21
+  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:19:21
    |
 LL |         let slice = self.as_slice();
    |                     ^^^^^^^^^^^^^^^
 
 error: it is unsound to cast any slice `&mut [T]` to a byte slice `&mut [u8]`
-  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:37:13
+  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:35:13
    |
 LL | /             core::slice::from_raw_parts_mut(
 LL | |
@@ -25,7 +25,7 @@ LL | |             )
    | |_____________^
    |
 note: trying to cast from this value of `&mut [T]` type
-  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:34:21
+  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:32:21
    |
 LL |         let slice = self.as_mut_slice();
    |                     ^^^^^^^^^^^^^^^^^^^

@@ -1,5 +1,5 @@
 note: MIR pattern matched
-  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:15:5
+  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:13:5
    |
 LL | /     fn drop(&mut self) {
 LL | |         for x in 0..self.len {
@@ -37,7 +37,7 @@ LL | |     }
    | |_____^
 
 error: pointer out of bound
-  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:53:25
+  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:51:25
    |
 LL |             last_elem_ptr = self.mem.offset(self.len as isize);
    |                                      -------------------------
@@ -49,7 +49,7 @@ LL |             last_elem = ptr::read(last_elem_ptr);
    |                         ^^^^^^^^^^^^^^^^^^^^^^^^ pointer read here
    |
 help: this is because `self.len` exceeds the container's length by one
-  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:48:45
+  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:46:45
    |
 LL |             last_elem_ptr = self.mem.offset(self.len as isize);
    |                                             ^^^^^^^^
