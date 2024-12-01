@@ -486,7 +486,7 @@ impl std::ops::DerefMut for SwitchIntBuilder<'_, '_, '_> {
     }
 }
 
-impl<'tcx> MirPattern<'_, 'tcx> {
+impl MirPattern<'_, '_> {
     pub fn terminator_loc(&self, block: BasicBlock) -> Location {
         // assert the terminator is set
         let _ = self.basic_blocks[block].terminator();
@@ -495,7 +495,7 @@ impl<'tcx> MirPattern<'_, 'tcx> {
     }
 }
 
-impl<'pcx, 'tcx> MirPattern<'pcx, 'tcx> {
+impl<'tcx> MirPattern<'_, 'tcx> {
     pub fn mk_ty_var(&mut self, pred: Option<TyPred<'tcx>>) -> TyVar<'tcx> {
         let idx = self.ty_vars.next_index();
         let ty_var = TyVar { idx, pred };

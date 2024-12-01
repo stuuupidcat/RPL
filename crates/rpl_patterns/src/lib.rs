@@ -34,7 +34,7 @@ static ALL_PATTERNS: &[for<'tcx> fn(TyCtxt<'tcx>, PatCtxt<'_, 'tcx>, ItemId)] = 
     cve_2020_35892_3::check_item,
 ];
 
-pub fn check_item<'tcx>(tcx: TyCtxt<'tcx>, item: ItemId) {
+pub fn check_item(tcx: TyCtxt<'_>, item: ItemId) {
     rustc_data_structures::sync::par_for_each_in(ALL_PATTERNS, |check| {
         PatternCtxt::entered(tcx, |pcx| check(tcx, pcx, item))
     })

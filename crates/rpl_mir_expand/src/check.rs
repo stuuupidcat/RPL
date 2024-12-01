@@ -1,9 +1,10 @@
 use crate::symbol_table::CheckError;
 use crate::SymbolTable;
-use proc_macro2::Ident;
+use quote::ToTokens;
 use rpl_mir_syntax::*;
 use rustc_span::Symbol;
-use syn::Token;
+use syn::parse::Parse;
+use syn::Ident;
 
 pub(crate) fn check_mir(mir: &Mir) -> syn::Result<()> {
     rustc_span::create_session_if_not_set_then(rustc_span::edition::LATEST_STABLE_EDITION, |_| {
@@ -46,18 +47,17 @@ impl CheckCtxt {
         match decl {
             Declaration::TypeDecl(TypeDecl { ty, ident, .. }) => self.symbols.add_type(ident.clone(), ty.clone()),
             Declaration::UsePath(UsePath { path, .. }) => self.symbols.add_path(path.clone()),
-            Declaration::LocalDecl(LocalDecl { ident, ty, init, .. }) => {
-                self.symbols.add_local(ident.clone(), ty.clone());
+            Declaration::LocalDecl(LocalDecl { local, ty, init, .. }) => {
+                self.symbols.add_local(local.clone(), ty.clone())?;
                 if let Some(LocalInit { rvalue_or_call, .. }) = init {
                     self.check_rvalue_or_call(rvalue_or_call)?;
                 }
                 Ok(())
             },
-            Declaration::SelfDecl(self_value) => self.symbols.add_self_value(self_value.clone()),
         }
     }
 
-    fn check_stmt<End>(&self, stmt: &Statement<End>) -> syn::Result<()> {
+    fn check_stmt<End: ToTokens + Parse>(&self, stmt: &Statement<End>) -> syn::Result<()> {
         match stmt {
             Statement::Assign(
                 Assign {
@@ -180,8 +180,7 @@ impl CheckCtxt {
 
     fn check_place(&self, place: &Place) -> syn::Result<()> {
         match place {
-            Place::Local(PlaceLocal::Local(local)) => self.check_local(local),
-            &Place::Local(PlaceLocal::SelfValue(self_value)) => self.check_self_value(self_value),
+            Place::Local(local) => self.check_place_local(local),
 
             Place::Paren(PlaceParen { place, .. })
             | Place::Deref(PlaceDeref { place, .. })
@@ -211,13 +210,13 @@ impl CheckCtxt {
         }
     }
 
-    fn check_self_value(&self, self_value: Token![self]) -> syn::Result<()> {
-        self.symbols.get_self_value(self_value.span)?;
+    fn check_local(&self, ident: &Ident) -> syn::Result<()> {
+        self.symbols.get_place_local(&ident.clone().into())?;
         Ok(())
     }
 
-    fn check_local(&self, local: &Ident) -> syn::Result<()> {
-        self.symbols.get_local(local)?;
+    fn check_place_local(&self, local: &PlaceLocal) -> syn::Result<()> {
+        self.symbols.get_place_local(local)?;
         Ok(())
     }
 
