@@ -1,3 +1,5 @@
+//@ compile-flags: -Z inline-mir
+
 extern crate libc;
 
 use std::ops::Index;
