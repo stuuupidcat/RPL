@@ -30,7 +30,7 @@ macro_rules! test_case {
     ( $(#[$meta:meta])* fn $name:ident() { $($input:tt)* }) => {
         #[rpl_macros::mir_pattern]
         #[allow(unused_variables)]
-        fn $name(patterns: &mut MirPatternBuilder<'_, '_>) {
+        fn $name(patterns: &mut MirPatternBuilder<'_>) {
             mir! {
                 $($input)*
             }

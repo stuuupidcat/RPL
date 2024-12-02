@@ -556,7 +556,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         self.match_local_ty(self.cx.patterns.locals[local_pat], self.cx.body.local_decls[local].ty)
     }
     #[instrument(level = "debug", skip(self), ret)]
-    fn match_local_ty(&self, ty_pat: pat::Ty<'tcx>, ty: Ty<'tcx>) -> bool {
+    fn match_local_ty(&self, ty_pat: pat::Ty<'pcx>, ty: Ty<'tcx>) -> bool {
         self.cx.match_ty(ty_pat, ty)
             && self.cx.ty_vars.iter_enumerated().all(|(ty_var, tys)| {
                 let ty = match &core::mem::take(&mut *tys.borrow_mut())[..] {

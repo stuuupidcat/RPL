@@ -28,7 +28,7 @@ fn format_stmt_local((stmt, local): (usize, LocalIdx)) -> impl std::fmt::Debug {
 macro_rules! test_case {
     (fn $name:ident() {$($input:tt)*} => { $($deps:tt)* }) => {
         #[rpl_macros::mir_pattern]
-        fn $name(patterns: &mut MirPatternBuilder<'_, '_>) {
+        fn $name(patterns: &mut MirPatternBuilder<'_>) {
             mir! {
                 $($input)*
             }

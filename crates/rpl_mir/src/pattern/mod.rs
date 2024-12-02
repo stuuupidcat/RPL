@@ -36,17 +36,17 @@ impl From<(BasicBlock, usize)> for Location {
     }
 }
 
-pub struct MirPattern<'pcx, 'tcx> {
-    pub pcx: PatCtxt<'pcx, 'tcx>,
-    pub(crate) ty_vars: IndexVec<TyVarIdx, TyVar<'tcx>>,
-    pub(crate) const_vars: IndexVec<ConstVarIdx, ConstVar<'tcx>>,
+pub struct MirPattern<'pcx> {
+    pub pcx: PatCtxt<'pcx>,
+    pub(crate) ty_vars: IndexVec<TyVarIdx, TyVar>,
+    pub(crate) const_vars: IndexVec<ConstVarIdx, ConstVar<'pcx>>,
     pub(crate) self_idx: Option<LocalIdx>,
-    pub locals: IndexVec<LocalIdx, Ty<'tcx>>,
-    pub basic_blocks: IndexVec<BasicBlock, BasicBlockData<'tcx>>,
+    pub locals: IndexVec<LocalIdx, Ty<'pcx>>,
+    pub basic_blocks: IndexVec<BasicBlock, BasicBlockData<'pcx>>,
 }
 
-impl<'tcx> Index<BasicBlock> for MirPattern<'_, 'tcx> {
-    type Output = BasicBlockData<'tcx>;
+impl<'pcx> Index<BasicBlock> for MirPattern<'pcx> {
+    type Output = BasicBlockData<'pcx>;
 
     fn index(&self, bb: BasicBlock) -> &Self::Output {
         &self.basic_blocks[bb]
@@ -54,13 +54,13 @@ impl<'tcx> Index<BasicBlock> for MirPattern<'_, 'tcx> {
 }
 
 #[derive(Default)]
-pub struct BasicBlockData<'tcx> {
-    pub statements: Vec<StatementKind<'tcx>>,
-    pub terminator: Option<TerminatorKind<'tcx>>,
+pub struct BasicBlockData<'pcx> {
+    pub statements: Vec<StatementKind<'pcx>>,
+    pub terminator: Option<TerminatorKind<'pcx>>,
 }
 
-impl<'tcx> BasicBlockData<'tcx> {
-    pub fn terminator(&self) -> &TerminatorKind<'tcx> {
+impl<'pcx> BasicBlockData<'pcx> {
+    pub fn terminator(&self) -> &TerminatorKind<'pcx> {
         self.terminator.as_ref().expect("terminator not set")
     }
     pub fn debug_stmt_at(&self, index: usize) -> &dyn core::fmt::Debug {
@@ -70,7 +70,7 @@ impl<'tcx> BasicBlockData<'tcx> {
             self.terminator()
         }
     }
-    fn set_terminator(&mut self, terminator: TerminatorKind<'tcx>) {
+    fn set_terminator(&mut self, terminator: TerminatorKind<'pcx>) {
         assert!(self.terminator.is_none(), "terminator already set");
         self.terminator = Some(terminator);
     }
@@ -97,7 +97,7 @@ impl<'tcx> BasicBlockData<'tcx> {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub enum PlaceElem<'tcx> {
+pub enum PlaceElem<'pcx> {
     Deref,
     Field(Field),
     Index(LocalIdx),
@@ -112,18 +112,18 @@ pub enum PlaceElem<'tcx> {
         from_end: bool,
     },
     Downcast(Symbol),
-    OpaqueCast(Ty<'tcx>),
-    Subtype(Ty<'tcx>),
+    OpaqueCast(Ty<'pcx>),
+    Subtype(Ty<'pcx>),
 }
 
 #[derive(Clone, Copy)]
-pub struct Place<'tcx> {
+pub struct Place<'pcx> {
     pub local: LocalIdx,
-    pub projection: &'tcx [PlaceElem<'tcx>],
+    pub projection: &'pcx [PlaceElem<'pcx>],
 }
 
-impl<'tcx> Place<'tcx> {
-    pub fn new(local: LocalIdx, projection: &'tcx [PlaceElem<'tcx>]) -> Self {
+impl<'pcx> Place<'pcx> {
+    pub fn new(local: LocalIdx, projection: &'pcx [PlaceElem<'pcx>]) -> Self {
         Self { local, projection }
     }
     pub fn as_local(&self) -> Option<LocalIdx> {
@@ -138,7 +138,7 @@ impl<'tcx> Place<'tcx> {
     ///
     /// Given a place without projections, the iterator is empty.
     #[inline]
-    pub fn iter_projections(self) -> impl DoubleEndedIterator<Item = (Place<'tcx>, PlaceElem<'tcx>)> {
+    pub fn iter_projections(self) -> impl DoubleEndedIterator<Item = (Place<'pcx>, PlaceElem<'pcx>)> {
         self.projection.iter().enumerate().map(move |(i, proj)| {
             let base = Place {
                 local: self.local,
@@ -156,13 +156,13 @@ impl From<LocalIdx> for Place<'_> {
 }
 
 impl LocalIdx {
-    pub fn into_place<'tcx>(self) -> Place<'tcx> {
+    pub fn into_place<'pcx>(self) -> Place<'pcx> {
         self.into()
     }
 }
 
-pub enum StatementKind<'tcx> {
-    Assign(Place<'tcx>, Rvalue<'tcx>),
+pub enum StatementKind<'pcx> {
+    Assign(Place<'pcx>, Rvalue<'pcx>),
 }
 
 #[derive(Default)]
@@ -171,20 +171,20 @@ pub struct SwitchTargets {
     pub otherwise: Option<BasicBlock>,
 }
 
-pub enum TerminatorKind<'tcx> {
+pub enum TerminatorKind<'pcx> {
     SwitchInt {
-        operand: Operand<'tcx>,
+        operand: Operand<'pcx>,
         targets: SwitchTargets,
     },
     Goto(BasicBlock),
     Call {
-        func: Operand<'tcx>,
-        args: List<Operand<'tcx>>,
-        destination: Option<Place<'tcx>>,
+        func: Operand<'pcx>,
+        args: List<Operand<'pcx>>,
+        destination: Option<Place<'pcx>>,
         target: BasicBlock,
     },
     Drop {
-        place: Place<'tcx>,
+        place: Place<'pcx>,
         target: BasicBlock,
     },
     Return,
@@ -192,45 +192,45 @@ pub enum TerminatorKind<'tcx> {
     PatEnd,
 }
 
-pub enum Rvalue<'tcx> {
+pub enum Rvalue<'pcx> {
     Any,
-    Use(Operand<'tcx>),
-    Repeat(Operand<'tcx>, Const<'tcx>),
-    Ref(RegionKind, mir::BorrowKind, Place<'tcx>),
-    RawPtr(mir::Mutability, Place<'tcx>),
-    Len(Place<'tcx>),
-    Cast(mir::CastKind, Operand<'tcx>, Ty<'tcx>),
-    BinaryOp(mir::BinOp, Box<[Operand<'tcx>; 2]>),
-    NullaryOp(mir::NullOp<'tcx>, Ty<'tcx>),
-    UnaryOp(mir::UnOp, Operand<'tcx>),
-    Discriminant(Place<'tcx>),
-    Aggregate(AggKind<'tcx>, List<Operand<'tcx>>),
-    ShallowInitBox(Operand<'tcx>, Ty<'tcx>),
-    CopyForDeref(Place<'tcx>),
+    Use(Operand<'pcx>),
+    Repeat(Operand<'pcx>, Const<'pcx>),
+    Ref(RegionKind, mir::BorrowKind, Place<'pcx>),
+    RawPtr(mir::Mutability, Place<'pcx>),
+    Len(Place<'pcx>),
+    Cast(mir::CastKind, Operand<'pcx>, Ty<'pcx>),
+    BinaryOp(mir::BinOp, Box<[Operand<'pcx>; 2]>),
+    NullaryOp(mir::NullOp<'pcx>, Ty<'pcx>),
+    UnaryOp(mir::UnOp, Operand<'pcx>),
+    Discriminant(Place<'pcx>),
+    Aggregate(AggKind<'pcx>, List<Operand<'pcx>>),
+    ShallowInitBox(Operand<'pcx>, Ty<'pcx>),
+    CopyForDeref(Place<'pcx>),
 }
 
 #[derive(Clone)]
-pub enum Operand<'tcx> {
+pub enum Operand<'pcx> {
     Any,
-    Copy(Place<'tcx>),
-    Move(Place<'tcx>),
-    Constant(ConstOperand<'tcx>),
+    Copy(Place<'pcx>),
+    Move(Place<'pcx>),
+    Constant(ConstOperand<'pcx>),
 }
 
 #[derive(Clone)]
-pub enum FnOperand<'tcx> {
-    Copy(Place<'tcx>),
-    Move(Place<'tcx>),
-    Constant(ConstOperand<'tcx>),
+pub enum FnOperand<'pcx> {
+    Copy(Place<'pcx>),
+    Move(Place<'pcx>),
+    Constant(ConstOperand<'pcx>),
 }
 
 pub type List<T> = Box<[T]>;
 
 #[derive(Clone)]
-pub enum ConstOperand<'tcx> {
-    ConstVar(ConstVar<'tcx>),
+pub enum ConstOperand<'pcx> {
+    ConstVar(ConstVar<'pcx>),
     ScalarInt(IntValue),
-    ZeroSized(PathWithArgs<'tcx>),
+    ZeroSized(PathWithArgs<'pcx>),
 }
 
 #[derive(Debug, Clone)]
@@ -247,11 +247,11 @@ impl From<List<Symbol>> for AggAdtKind {
 }
 
 #[derive(Debug, Clone)]
-pub enum AggKind<'tcx> {
+pub enum AggKind<'pcx> {
     Array,
     Tuple,
-    Adt(PathWithArgs<'tcx>, AggAdtKind),
-    RawPtr(Ty<'tcx>, mir::Mutability),
+    Adt(PathWithArgs<'pcx>, AggAdtKind),
+    RawPtr(Ty<'pcx>, mir::Mutability),
 }
 
 #[derive(Clone, Copy)]
@@ -284,8 +284,8 @@ impl From<FieldIdx> for Field {
     }
 }
 
-pub struct MirPatternBuilder<'pcx, 'tcx> {
-    pattern: MirPattern<'pcx, 'tcx>,
+pub struct MirPatternBuilder<'pcx> {
+    pattern: MirPattern<'pcx>,
     loop_stack: Vec<Loop>,
     current: BasicBlock,
 }
@@ -295,8 +295,8 @@ struct Loop {
     exit: BasicBlock,
 }
 
-impl<'pcx, 'tcx> MirPatternBuilder<'pcx, 'tcx> {
-    pub fn new(pcx: PatCtxt<'pcx, 'tcx>) -> Self {
+impl<'pcx> MirPatternBuilder<'pcx> {
+    pub fn new(pcx: PatCtxt<'pcx>) -> Self {
         let mut pattern = MirPattern {
             pcx,
             locals: IndexVec::new(),
@@ -312,25 +312,25 @@ impl<'pcx, 'tcx> MirPatternBuilder<'pcx, 'tcx> {
             current,
         }
     }
-    pub fn build(mut self) -> MirPattern<'pcx, 'tcx> {
+    pub fn build(mut self) -> MirPattern<'pcx> {
         self.new_block_if_terminated();
         self.pattern.basic_blocks[self.current].set_terminator(TerminatorKind::PatEnd);
         self.pattern
     }
 
-    pub fn new_ty_var(&mut self) -> TyVar<'tcx> {
+    pub fn new_ty_var(&mut self) -> TyVar {
         self.pattern.mk_ty_var(None)
     }
-    pub fn set_ty_var_pred(&mut self, ty_var: TyVarIdx, pred: TyPred<'tcx>) {
+    pub fn set_ty_var_pred(&mut self, ty_var: TyVarIdx, pred: TyPred) {
         self.pattern.ty_vars[ty_var].pred = Some(pred);
     }
-    pub fn mk_const_var(&mut self, ty: Ty<'tcx>) -> ConstVar<'tcx> {
+    pub fn mk_const_var(&mut self, ty: Ty<'pcx>) -> ConstVar<'pcx> {
         self.pattern.mk_const_var(ty)
     }
-    pub fn mk_local(&mut self, ty: Ty<'tcx>) -> LocalIdx {
+    pub fn mk_local(&mut self, ty: Ty<'pcx>) -> LocalIdx {
         self.pattern.locals.push(ty)
     }
-    pub fn mk_self(&mut self, ty: Ty<'tcx>) -> LocalIdx {
+    pub fn mk_self(&mut self, ty: Ty<'pcx>) -> LocalIdx {
         *self.pattern.self_idx.insert(self.pattern.locals.push(ty))
     }
     fn new_block_if_terminated(&mut self) {
@@ -342,7 +342,7 @@ impl<'pcx, 'tcx> MirPatternBuilder<'pcx, 'tcx> {
         self.new_block_if_terminated();
         self.pattern.basic_blocks.next_index()
     }
-    fn mk_statement(&mut self, kind: StatementKind<'tcx>) -> Location {
+    fn mk_statement(&mut self, kind: StatementKind<'pcx>) -> Location {
         self.new_block_if_terminated();
 
         let block = self.current;
@@ -351,18 +351,18 @@ impl<'pcx, 'tcx> MirPatternBuilder<'pcx, 'tcx> {
         self.pattern.basic_blocks[block].statements.push(kind);
         Location { block, statement_index }
     }
-    fn set_terminator(&mut self, kind: TerminatorKind<'tcx>) -> Location {
+    fn set_terminator(&mut self, kind: TerminatorKind<'pcx>) -> Location {
         self.pattern.basic_blocks[self.current].set_terminator(kind);
         self.pattern.terminator_loc(self.current)
     }
-    pub fn mk_assign(&mut self, place: impl Into<Place<'tcx>>, rvalue: Rvalue<'tcx>) -> Location {
+    pub fn mk_assign(&mut self, place: impl Into<Place<'pcx>>, rvalue: Rvalue<'pcx>) -> Location {
         self.mk_statement(StatementKind::Assign(place.into(), rvalue))
     }
     pub fn mk_fn_call(
         &mut self,
-        func: Operand<'tcx>,
-        args: List<Operand<'tcx>>,
-        destination: Option<Place<'tcx>>,
+        func: Operand<'pcx>,
+        args: List<Operand<'pcx>>,
+        destination: Option<Place<'pcx>>,
     ) -> Location {
         if let Some(place) = destination
             && let Operand::Constant(ConstOperand::ZeroSized(
@@ -386,16 +386,12 @@ impl<'pcx, 'tcx> MirPatternBuilder<'pcx, 'tcx> {
             target,
         })
     }
-    pub fn mk_drop(&mut self, place: impl Into<Place<'tcx>>) -> Location {
+    pub fn mk_drop(&mut self, place: impl Into<Place<'pcx>>) -> Location {
         let target = self.next_block();
         let place = place.into();
         self.set_terminator(TerminatorKind::Drop { place, target })
     }
-    pub fn mk_switch_int(
-        &mut self,
-        operand: Operand<'tcx>,
-        f: impl FnOnce(SwitchIntBuilder<'_, 'pcx, 'tcx>),
-    ) -> Location {
+    pub fn mk_switch_int(&mut self, operand: Operand<'pcx>, f: impl FnOnce(SwitchIntBuilder<'_, 'pcx>)) -> Location {
         self.new_block_if_terminated();
         let current = self.current;
         self.pattern.basic_blocks[current].set_terminator(TerminatorKind::SwitchInt {
@@ -418,7 +414,7 @@ impl<'pcx, 'tcx> MirPatternBuilder<'pcx, 'tcx> {
         self.pattern.basic_blocks[self.current].set_goto(block);
         self.pattern.terminator_loc(self.current)
     }
-    pub fn mk_loop(&mut self, f: impl FnOnce(&mut MirPatternBuilder<'pcx, 'tcx>)) -> Location {
+    pub fn mk_loop(&mut self, f: impl FnOnce(&mut MirPatternBuilder<'pcx>)) -> Location {
         let enter = self.pattern.basic_blocks.push(BasicBlockData::default());
         self.mk_goto(enter);
         let exit = self.pattern.basic_blocks.push(BasicBlockData::default());
@@ -440,22 +436,22 @@ impl<'pcx, 'tcx> MirPatternBuilder<'pcx, 'tcx> {
     }
 }
 
-impl<'pcx, 'tcx> std::ops::Deref for MirPatternBuilder<'pcx, 'tcx> {
-    type Target = MirPattern<'pcx, 'tcx>;
+impl<'pcx> std::ops::Deref for MirPatternBuilder<'pcx> {
+    type Target = MirPattern<'pcx>;
 
     fn deref(&self) -> &Self::Target {
         &self.pattern
     }
 }
 
-pub struct SwitchIntBuilder<'a, 'pcx, 'tcx> {
-    builder: &'a mut MirPatternBuilder<'pcx, 'tcx>,
+pub struct SwitchIntBuilder<'a, 'pcx> {
+    builder: &'a mut MirPatternBuilder<'pcx>,
     next: BasicBlock,
     targets: &'a mut SwitchTargets,
 }
 
-impl<'pcx, 'tcx> SwitchIntBuilder<'_, 'pcx, 'tcx> {
-    pub fn mk_switch_target(&mut self, value: impl Into<IntValue>, f: impl FnOnce(&mut MirPatternBuilder<'pcx, 'tcx>)) {
+impl<'pcx> SwitchIntBuilder<'_, 'pcx> {
+    pub fn mk_switch_target(&mut self, value: impl Into<IntValue>, f: impl FnOnce(&mut MirPatternBuilder<'pcx>)) {
         let Self { builder, next, targets } = self;
         let target = builder.pattern.basic_blocks.push(BasicBlockData::default());
         targets.targets.insert(value.into(), target);
@@ -463,7 +459,7 @@ impl<'pcx, 'tcx> SwitchIntBuilder<'_, 'pcx, 'tcx> {
         f(builder);
         builder.mk_goto(*next);
     }
-    pub fn mk_otherwise(self, f: impl FnOnce(&mut MirPatternBuilder<'pcx, 'tcx>)) {
+    pub fn mk_otherwise(self, f: impl FnOnce(&mut MirPatternBuilder<'pcx>)) {
         let Self { builder, next, targets } = self;
         let target = builder.pattern.basic_blocks.push(BasicBlockData::default());
         targets.otherwise = Some(target);
@@ -473,20 +469,20 @@ impl<'pcx, 'tcx> SwitchIntBuilder<'_, 'pcx, 'tcx> {
     }
 }
 
-impl<'pcx, 'tcx> std::ops::Deref for SwitchIntBuilder<'_, 'pcx, 'tcx> {
-    type Target = MirPatternBuilder<'pcx, 'tcx>;
+impl<'pcx> std::ops::Deref for SwitchIntBuilder<'_, 'pcx> {
+    type Target = MirPatternBuilder<'pcx>;
     fn deref(&self) -> &Self::Target {
         self.builder
     }
 }
 
-impl std::ops::DerefMut for SwitchIntBuilder<'_, '_, '_> {
+impl std::ops::DerefMut for SwitchIntBuilder<'_, '_> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.builder
     }
 }
 
-impl MirPattern<'_, '_> {
+impl MirPattern<'_> {
     pub fn terminator_loc(&self, block: BasicBlock) -> Location {
         // assert the terminator is set
         let _ = self.basic_blocks[block].terminator();
@@ -495,26 +491,26 @@ impl MirPattern<'_, '_> {
     }
 }
 
-impl<'tcx> MirPattern<'_, 'tcx> {
-    pub fn mk_ty_var(&mut self, pred: Option<TyPred<'tcx>>) -> TyVar<'tcx> {
+impl<'pcx> MirPattern<'pcx> {
+    pub fn mk_ty_var(&mut self, pred: Option<TyPred>) -> TyVar {
         let idx = self.ty_vars.next_index();
         let ty_var = TyVar { idx, pred };
         self.ty_vars.push(ty_var);
         ty_var
     }
-    pub fn mk_const_var(&mut self, ty: Ty<'tcx>) -> ConstVar<'tcx> {
+    pub fn mk_const_var(&mut self, ty: Ty<'pcx>) -> ConstVar<'pcx> {
         let idx = self.const_vars.next_index();
         let const_var = ConstVar { idx, ty };
         self.const_vars.push(const_var);
         const_var
     }
-    pub fn mk_zeroed(&self, path_with_args: PathWithArgs<'tcx>) -> ConstOperand<'tcx> {
+    pub fn mk_zeroed(&self, path_with_args: PathWithArgs<'pcx>) -> ConstOperand<'pcx> {
         ConstOperand::ZeroSized(path_with_args)
     }
     pub fn mk_list<T>(&self, items: impl IntoIterator<Item = T>) -> List<T> {
         items.into_iter().collect()
     }
-    pub fn mk_projection(&self, projection: &[PlaceElem<'tcx>]) -> &'tcx [PlaceElem<'tcx>] {
+    pub fn mk_projection(&self, projection: &[PlaceElem<'pcx>]) -> &'pcx [PlaceElem<'pcx>] {
         self.pcx.mk_slice(projection)
     }
 }
