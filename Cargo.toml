@@ -20,9 +20,9 @@ rpl_graphviz = { path = "./crates/rpl_graphviz" }
 rpl_interface = { path = "./crates/rpl_interface" }
 rpl_macros = { path = "./crates/rpl_macros" }
 rpl_mir = { path = "./crates/rpl_mir" }
-rpl_mir_expand = { path = "./crates/rpl_mir_expand" }
 rpl_mir_graph = { path = "./crates/rpl_mir_graph" }
-rpl_mir_syntax = { path = "./crates/rpl_mir_syntax" }
+rpl_pat_expand = { path = "./crates/rpl_pat_expand" }
+rpl_pat_syntax = { path = "./crates/rpl_pat_syntax" }
 rpl_patterns = { path = "./crates/rpl_patterns" }
 rpl_utils = { path = "./crates/rpl_utils" }
 rustc_tools_util = "0.3.0"

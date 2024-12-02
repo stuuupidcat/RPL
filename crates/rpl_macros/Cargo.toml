@@ -11,8 +11,8 @@ edition.workspace = true
 proc-macro = true
 
 [dependencies]
-rpl_mir_syntax.workspace = true
-rpl_mir_expand.workspace = true
+rpl_pat_expand.workspace = true
+rpl_pat_syntax.workspace = true
 syn.workspace = true
 quote.workspace = true
 
