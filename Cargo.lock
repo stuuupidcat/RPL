@@ -952,8 +952,8 @@ name = "rpl_macros"
 version = "0.1.0"
 dependencies = [
  "quote",
- "rpl_mir_expand",
- "rpl_mir_syntax",
+ "rpl_pat_expand",
+ "rpl_pat_syntax",
  "syn",
 ]
 
@@ -971,18 +971,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "rpl_mir_expand"
-version = "0.1.0"
-dependencies = [
- "pretty_assertions",
- "proc-macro2",
- "quote",
- "rpl_mir_syntax",
- "syn",
- "thiserror",
-]
-
-[[package]]
 name = "rpl_mir_graph"
 version = "0.1.0"
 dependencies = [
@@ -994,7 +982,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "rpl_mir_syntax"
+name = "rpl_pat_expand"
+version = "0.1.0"
+dependencies = [
+ "pretty_assertions",
+ "proc-macro2",
+ "quote",
+ "rpl_pat_syntax",
+ "syn",
+ "thiserror",
+]
+
+[[package]]
+name = "rpl_pat_syntax"
 version = "0.1.0"
 dependencies = [
  "derive_more",

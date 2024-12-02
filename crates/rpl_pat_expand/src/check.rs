@@ -1,7 +1,7 @@
 use crate::symbol_table::CheckError;
 use crate::SymbolTable;
 use quote::ToTokens;
-use rpl_mir_syntax::*;
+use rpl_pat_syntax::*;
 use rustc_span::Symbol;
 use syn::parse::Parse;
 use syn::Ident;
