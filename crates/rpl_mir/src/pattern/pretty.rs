@@ -24,7 +24,7 @@ impl fmt::Debug for Place<'_> {
     }
 }
 
-fn fmt_projection<'pcx>(f: &mut fmt::Formatter<'_>, place: Place<'pcx>, proj: &PlaceElem<'pcx>) -> fmt::Result {
+fn fmt_projection<'tcx>(f: &mut fmt::Formatter<'_>, place: Place<'tcx>, proj: &PlaceElem<'tcx>) -> fmt::Result {
     struct FromEnd(bool);
     impl fmt::Display for FromEnd {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -143,9 +143,9 @@ impl fmt::Debug for Rvalue<'_> {
     }
 }
 
-fn format_aggregate<'pcx>(
-    agg_kind: &AggKind<'pcx>,
-    operands: &[Operand<'pcx>],
+fn format_aggregate<'tcx>(
+    agg_kind: &AggKind<'tcx>,
+    operands: &[Operand<'tcx>],
     f: &mut fmt::Formatter<'_>,
 ) -> fmt::Result {
     match agg_kind {
@@ -225,7 +225,7 @@ impl fmt::Debug for Field {
     }
 }
 
-impl fmt::Debug for MirPattern<'_> {
+impl fmt::Debug for MirPattern<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let new_line = if f.alternate() { "\n" } else { " " };
         let indent = if f.alternate() { "    " } else { "" };
