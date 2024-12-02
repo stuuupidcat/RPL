@@ -1,7 +1,6 @@
 use std::ops::Not;
 
-use rpl_context::PatCtxt;
-use rpl_mir::pat::MirPatternBuilder;
+use rpl_mir::pat::PatternsBuilder;
 use rpl_mir::{pat, CheckMirCtxt};
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
@@ -10,20 +9,19 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::{sym, Span, Symbol};
 
-#[instrument(level = "info", skip(tcx, pcx))]
-pub fn check_item<'tcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'_, 'tcx>, item_id: hir::ItemId) {
+#[instrument(level = "info", skip(tcx))]
+pub fn check_item(tcx: TyCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
     // let def_id = item_id.owner_id.def_id;
-    let mut check_ctxt = CheckFnCtxt { tcx, pcx };
+    let mut check_ctxt = CheckFnCtxt { tcx };
     check_ctxt.visit_item(item);
 }
 
-struct CheckFnCtxt<'pcx, 'tcx> {
+struct CheckFnCtxt<'tcx> {
     tcx: TyCtxt<'tcx>,
-    pcx: PatCtxt<'pcx, 'tcx>,
 }
 
-impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
+impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
     type NestedFilter = All;
     fn nested_visit_map(&mut self) -> Self::Map {
         self.tcx.hir()
@@ -55,7 +53,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
-            if let mut patterns_cast = MirPatternBuilder::new(self.pcx)
+            if let mut patterns_cast = PatternsBuilder::new(&self.tcx.arena.dropless)
                 && let pattern_cast = pattern_cast(&mut patterns_cast)
                 && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &patterns_cast.build()).check()
                 && let Some(cast_from) = matches[pattern_cast.cast_from]
@@ -71,7 +69,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     ty,
                     mutability: ty::Mutability::Not.into(),
                 });
-            } else if let mut patterns_cast_mut = MirPatternBuilder::new(self.pcx)
+            } else if let mut patterns_cast_mut = PatternsBuilder::new(&self.tcx.arena.dropless)
                 && let pattern_cast_mut = pattern_cast_mut(&mut patterns_cast_mut)
                 && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &patterns_cast_mut.build()).check()
                 && let Some(cast_from) = matches[pattern_cast_mut.cast_from]
@@ -100,7 +98,7 @@ struct PatternCast {
 }
 
 #[rpl_macros::mir_pattern]
-fn pattern_cast(patterns: &mut pat::MirPatternBuilder<'_, '_>) -> PatternCast {
+fn pattern_cast(patterns: &mut pat::PatternsBuilder<'_>) -> PatternCast {
     mir! {
         meta!($T:ty);
 
@@ -115,17 +113,17 @@ fn pattern_cast(patterns: &mut pat::MirPatternBuilder<'_, '_>) -> PatternCast {
         let to_slice: &[u8] = &*to_raw;
     }
 
-    patterns.set_ty_var_pred(T_ty_var.idx, is_all_safe_trait);
+    patterns.set_ty_var(T_ty_var, is_all_safe_trait);
 
     PatternCast {
-        ty_var: T_ty_var.idx,
+        ty_var: T_ty_var,
         cast_from: from_slice_stmt,
         cast_to: to_slice_stmt,
     }
 }
 
 #[rpl_macros::mir_pattern]
-fn pattern_cast_mut(patterns: &mut pat::MirPatternBuilder<'_, '_>) -> PatternCast {
+fn pattern_cast_mut(patterns: &mut pat::PatternsBuilder<'_>) -> PatternCast {
     mir! {
         meta!($T:ty);
 
@@ -141,10 +139,10 @@ fn pattern_cast_mut(patterns: &mut pat::MirPatternBuilder<'_, '_>) -> PatternCas
         let to_slice_mut: &mut [u8] = &mut *to_raw_mut;
     }
 
-    patterns.set_ty_var_pred(T_ty_var.idx, is_all_safe_trait);
+    patterns.set_ty_var(T_ty_var, is_all_safe_trait);
 
     PatternCast {
-        ty_var: T_ty_var.idx,
+        ty_var: T_ty_var,
         cast_from: from_slice_mut_stmt,
         cast_to: to_slice_mut_stmt,
     }

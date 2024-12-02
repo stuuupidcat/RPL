@@ -5,15 +5,13 @@ pub use rustc_middle::mir::visit::{MutatingUseContext, NonMutatingUseContext, Pl
 pub trait PatternVisitor<'tcx>: Sized {
     fn visit_local(&mut self, _local: LocalIdx, _pcx: PlaceContext, _location: Location) {}
     fn visit_scalar_int(&mut self, _scalar_int: IntValue) {}
-    fn visit_ty_var(&mut self, _ty_var: TyVar<'tcx>) {}
+    fn visit_ty_var(&mut self, _ty_var: TyVarIdx) {}
+    fn visit_const_var(&mut self, _const_var: ConstVarIdx) {}
 
-    fn visit_const_var(&mut self, const_var: ConstVar<'tcx>) {
-        const_var.visit_with(self);
-    }
     fn visit_ty(&mut self, ty: Ty<'tcx>) {
         ty.visit_with(self);
     }
-    fn visit_const(&mut self, konst: Const<'tcx>) {
+    fn visit_const(&mut self, konst: Const) {
         konst.visit_with(self);
     }
     fn visit_generic_args(&mut self, args: GenericArgsRef<'tcx>) {
@@ -278,18 +276,12 @@ impl<'tcx> PatternSuperVisitable<'tcx> for GenericArgsRef<'tcx> {
     }
 }
 
-impl<'tcx> PatternSuperVisitable<'tcx> for Const<'tcx> {
+impl<'tcx> PatternSuperVisitable<'tcx> for Const {
     fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
         match *self {
             Const::ConstVar(const_var) => vis.visit_const_var(const_var),
             Const::Value(int_value) => vis.visit_scalar_int(int_value),
         }
-    }
-}
-
-impl<'tcx> PatternSuperVisitable<'tcx> for ConstVar<'tcx> {
-    fn super_visit_with<V: PatternVisitor<'tcx>>(&self, vis: &mut V) {
-        vis.visit_ty(self.ty);
     }
 }
 

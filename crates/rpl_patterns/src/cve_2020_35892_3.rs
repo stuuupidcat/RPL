@@ -1,5 +1,4 @@
-use rpl_context::PatCtxt;
-use rpl_mir::pat::{self, MirPatternBuilder};
+use rpl_mir::pat::{self, PatternsBuilder};
 use rpl_mir::{CheckMirCtxt, Matches};
 use rustc_errors::MultiSpan;
 use rustc_hir::def_id::LocalDefId;
@@ -9,28 +8,27 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::Span;
 
-#[instrument(level = "info", skip(tcx, pcx))]
-pub fn check_item<'tcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'_, 'tcx>, item_id: hir::ItemId) {
+#[instrument(level = "info", skip(tcx))]
+pub fn check_item(tcx: TyCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
     // let def_id = item_id.owner_id.def_id;
-    let mut check_ctxt = CheckFnCtxt::new(tcx, pcx);
+    let mut check_ctxt = CheckFnCtxt::new(tcx);
     check_ctxt.visit_item(item);
 }
 
-struct CheckFnCtxt<'pcx, 'tcx> {
+struct CheckFnCtxt<'tcx> {
     tcx: TyCtxt<'tcx>,
-    pcx: PatCtxt<'pcx, 'tcx>,
     loop_matches: Option<Matches<'tcx>>,
 }
 
-impl<'pcx, 'tcx> CheckFnCtxt<'pcx, 'tcx> {
-    fn new(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx, 'tcx>) -> Self {
+impl<'tcx> CheckFnCtxt<'tcx> {
+    fn new(tcx: TyCtxt<'tcx>) -> Self {
         let loop_matches = None;
-        Self { tcx, pcx, loop_matches }
+        Self { tcx, loop_matches }
     }
 }
 
-impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
+impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
     type NestedFilter = All;
     fn nested_visit_map(&mut self) -> Self::Map {
         self.tcx.hir()
@@ -58,7 +56,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
 
             #[allow(irrefutable_let_patterns)]
-            if let mut patterns = MirPatternBuilder::new(self.pcx)
+            if let mut patterns = PatternsBuilder::new(&self.tcx.arena.dropless)
                 && let () = pattern_loop(&mut patterns)
                 && let patterns = patterns.build()
                 && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &patterns).check()
@@ -91,7 +89,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 #[allow(rustc::untranslatable_diagnostic)]
                 #[allow(rustc::diagnostic_outside_of_impl)]
                 self.tcx.dcx().span_note(multi_span, "MIR pattern matched");
-            } else if let mut patterns = MirPatternBuilder::new(self.pcx)
+            } else if let mut patterns = PatternsBuilder::new(&self.tcx.arena.dropless)
                 && let pattern_offset_by_len = pattern_offset_by_len(&mut patterns)
                 && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &patterns.build()).check()
                 && let Some(read) = matches[pattern_offset_by_len.read]
@@ -115,7 +113,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     len_local,
                 });
             }
-            let mut patterns = MirPatternBuilder::new(self.pcx);
+            let mut patterns = PatternsBuilder::new(&self.tcx.arena.dropless);
             pattern_loop(&mut patterns);
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
@@ -123,7 +121,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 #[rpl_macros::mir_pattern]
-fn pattern_loop(patterns: &mut pat::MirPatternBuilder<'_, '_>) {
+fn pattern_loop(patterns: &mut pat::PatternsBuilder<'_>) {
     mir! {
         meta!($T:ty, $SlabT:ty);
 
@@ -179,7 +177,7 @@ fn pattern_loop(patterns: &mut pat::MirPatternBuilder<'_, '_>) {
         }
     }
 
-    patterns.set_ty_var_pred(SlabT_ty_var.idx, |_tcx, _params_env, ty| ty.is_adt());
+    patterns.set_ty_var(SlabT_ty_var, |_tcx, _params_env, ty| ty.is_adt());
 }
 
 struct PatternOffsetByLen {
@@ -189,7 +187,7 @@ struct PatternOffsetByLen {
 }
 
 #[rpl_macros::mir_pattern]
-fn pattern_offset_by_len(patterns: &mut pat::MirPatternBuilder<'_, '_>) -> PatternOffsetByLen {
+fn pattern_offset_by_len(patterns: &mut pat::PatternsBuilder<'_>) -> PatternOffsetByLen {
     mir! {
         meta!($T:ty, $SlabT:ty);
         let self: &mut $SlabT;
@@ -201,7 +199,7 @@ fn pattern_offset_by_len(patterns: &mut pat::MirPatternBuilder<'_, '_>) -> Patte
         let elem: $T = copy (*ptr);
     }
 
-    patterns.set_ty_var_pred(SlabT_ty_var.idx, |_tcx, _params_env, ty| ty.is_adt());
+    patterns.set_ty_var(SlabT_ty_var, |_tcx, _params_env, ty| ty.is_adt());
 
     PatternOffsetByLen {
         len: len_stmt,

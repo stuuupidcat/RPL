@@ -10,7 +10,6 @@ edition.workspace = true
 [dependencies]
 rpl_macros.workspace = true
 rpl_mir.workspace = true
-rpl_context.workspace = true
 
 [features]
 
