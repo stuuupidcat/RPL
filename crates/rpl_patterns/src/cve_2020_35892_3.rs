@@ -10,7 +10,7 @@ use rustc_middle::ty::TyCtxt;
 use rustc_span::Span;
 
 #[instrument(level = "info", skip(tcx, pcx))]
-pub fn check_item<'tcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'_, 'tcx>, item_id: hir::ItemId) {
+pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
     // let def_id = item_id.owner_id.def_id;
     let mut check_ctxt = CheckFnCtxt::new(tcx, pcx);
@@ -19,12 +19,12 @@ pub fn check_item<'tcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'_, 'tcx>, item_id: hir:
 
 struct CheckFnCtxt<'pcx, 'tcx> {
     tcx: TyCtxt<'tcx>,
-    pcx: PatCtxt<'pcx, 'tcx>,
+    pcx: PatCtxt<'pcx>,
     loop_matches: Option<Matches<'tcx>>,
 }
 
 impl<'pcx, 'tcx> CheckFnCtxt<'pcx, 'tcx> {
-    fn new(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx, 'tcx>) -> Self {
+    fn new(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>) -> Self {
         let loop_matches = None;
         Self { tcx, pcx, loop_matches }
     }
@@ -123,7 +123,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 #[rpl_macros::mir_pattern]
-fn pattern_loop(patterns: &mut pat::MirPatternBuilder<'_, '_>) {
+fn pattern_loop(patterns: &mut pat::MirPatternBuilder<'_>) {
     mir! {
         meta!($T:ty, $SlabT:ty);
 
@@ -189,7 +189,7 @@ struct PatternOffsetByLen {
 }
 
 #[rpl_macros::mir_pattern]
-fn pattern_offset_by_len(patterns: &mut pat::MirPatternBuilder<'_, '_>) -> PatternOffsetByLen {
+fn pattern_offset_by_len(patterns: &mut pat::MirPatternBuilder<'_>) -> PatternOffsetByLen {
     mir! {
         meta!($T:ty, $SlabT:ty);
         let self: &mut $SlabT;

@@ -143,13 +143,13 @@ impl fmt::Debug for IntValue {
     }
 }
 
-impl fmt::Debug for TyVar<'_> {
+impl fmt::Debug for TyVar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.idx.fmt(f)
     }
 }
 
-impl fmt::Display for TyVar<'_> {
+impl fmt::Display for TyVar {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self, f)
     }

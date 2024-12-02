@@ -17,10 +17,10 @@ rustc_index::newtype_index! {
 // FIXME: Use interning for the types
 #[derive(Clone, Copy)]
 #[rustc_pass_by_value]
-pub struct Ty<'tcx>(pub(crate) &'tcx TyKind<'tcx>);
+pub struct Ty<'pcx>(pub(crate) &'pcx TyKind<'pcx>);
 
-impl<'tcx> Ty<'tcx> {
-    pub fn kind(self) -> &'tcx TyKind<'tcx> {
+impl<'pcx> Ty<'pcx> {
+    pub fn kind(self) -> &'pcx TyKind<'pcx> {
         self.0
     }
 }
@@ -32,14 +32,14 @@ pub enum RegionKind {
 }
 
 #[derive(Clone, Copy)]
-pub enum TyKind<'tcx> {
-    TyVar(TyVar<'tcx>),
-    Array(Ty<'tcx>, Const<'tcx>),
-    Slice(Ty<'tcx>),
-    Tuple(&'tcx [Ty<'tcx>]),
-    Ref(RegionKind, Ty<'tcx>, mir::Mutability),
-    RawPtr(Ty<'tcx>, mir::Mutability),
-    Path(PathWithArgs<'tcx>),
+pub enum TyKind<'pcx> {
+    TyVar(TyVar),
+    Array(Ty<'pcx>, Const<'pcx>),
+    Slice(Ty<'pcx>),
+    Tuple(&'pcx [Ty<'pcx>]),
+    Ref(RegionKind, Ty<'pcx>, mir::Mutability),
+    RawPtr(Ty<'pcx>, mir::Mutability),
+    Path(PathWithArgs<'pcx>),
     Uint(ty::UintTy),
     Int(ty::IntTy),
     Float(ty::FloatTy),
@@ -48,10 +48,10 @@ pub enum TyKind<'tcx> {
 }
 
 #[derive(Clone, Copy)]
-pub enum GenericArgKind<'tcx> {
+pub enum GenericArgKind<'pcx> {
     Lifetime(RegionKind),
-    Type(Ty<'tcx>),
-    Const(Const<'tcx>),
+    Type(Ty<'pcx>),
+    Const(Const<'pcx>),
 }
 
 impl From<RegionKind> for GenericArgKind<'_> {
@@ -60,51 +60,51 @@ impl From<RegionKind> for GenericArgKind<'_> {
     }
 }
 
-impl<'tcx> From<Ty<'tcx>> for GenericArgKind<'tcx> {
-    fn from(ty: Ty<'tcx>) -> Self {
+impl<'pcx> From<Ty<'pcx>> for GenericArgKind<'pcx> {
+    fn from(ty: Ty<'pcx>) -> Self {
         GenericArgKind::Type(ty)
     }
 }
 
-impl<'tcx> From<Const<'tcx>> for GenericArgKind<'tcx> {
-    fn from(konst: Const<'tcx>) -> Self {
+impl<'pcx> From<Const<'pcx>> for GenericArgKind<'pcx> {
+    fn from(konst: Const<'pcx>) -> Self {
         GenericArgKind::Const(konst)
     }
 }
 
 #[derive(Clone, Copy)]
-pub struct ItemPath<'tcx>(pub &'tcx [Symbol]);
+pub struct ItemPath<'pcx>(pub &'pcx [Symbol]);
 
 #[derive(Clone, Copy)]
-pub enum Path<'tcx> {
-    Item(ItemPath<'tcx>),
-    TypeRelative(Ty<'tcx>, Symbol),
+pub enum Path<'pcx> {
+    Item(ItemPath<'pcx>),
+    TypeRelative(Ty<'pcx>, Symbol),
     LangItem(LangItem),
 }
 
-impl<'tcx> From<ItemPath<'tcx>> for Path<'tcx> {
-    fn from(item: ItemPath<'tcx>) -> Self {
+impl<'pcx> From<ItemPath<'pcx>> for Path<'pcx> {
+    fn from(item: ItemPath<'pcx>) -> Self {
         Path::Item(item)
     }
 }
 
-impl<'tcx> From<(Ty<'tcx>, Symbol)> for Path<'tcx> {
-    fn from((ty, path): (Ty<'tcx>, Symbol)) -> Self {
+impl<'pcx> From<(Ty<'pcx>, Symbol)> for Path<'pcx> {
+    fn from((ty, path): (Ty<'pcx>, Symbol)) -> Self {
         Path::TypeRelative(ty, path)
     }
 }
 
-impl<'tcx> From<(Ty<'tcx>, &str)> for Path<'tcx> {
-    fn from((ty, path): (Ty<'tcx>, &str)) -> Self {
+impl<'pcx> From<(Ty<'pcx>, &str)> for Path<'pcx> {
+    fn from((ty, path): (Ty<'pcx>, &str)) -> Self {
         (ty, Symbol::intern(path)).into()
     }
 }
 
 #[derive(Clone, Copy)]
-pub struct GenericArgsRef<'tcx>(pub &'tcx [GenericArgKind<'tcx>]);
+pub struct GenericArgsRef<'pcx>(pub &'pcx [GenericArgKind<'pcx>]);
 
-impl<'tcx> std::ops::Deref for GenericArgsRef<'tcx> {
-    type Target = [GenericArgKind<'tcx>];
+impl<'pcx> std::ops::Deref for GenericArgsRef<'pcx> {
+    type Target = [GenericArgKind<'pcx>];
 
     fn deref(&self) -> &Self::Target {
         self.0
@@ -118,9 +118,9 @@ impl From<LangItem> for Path<'_> {
 }
 
 #[derive(Clone, Copy)]
-pub struct PathWithArgs<'tcx> {
-    pub path: Path<'tcx>,
-    pub args: GenericArgsRef<'tcx>,
+pub struct PathWithArgs<'pcx> {
+    pub path: Path<'pcx>,
+    pub args: GenericArgsRef<'pcx>,
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy)]
@@ -200,22 +200,22 @@ impl From<bool> for IntValue {
     }
 }
 
-pub type TyPred<'tcx> = fn(TyCtxt<'tcx>, ty::ParamEnv<'tcx>, ty::Ty<'tcx>) -> bool;
+pub type TyPred = for<'tcx> fn(TyCtxt<'tcx>, ty::ParamEnv<'tcx>, ty::Ty<'tcx>) -> bool;
 
 #[derive(Debug, Clone, Copy)]
-pub enum Const<'tcx> {
-    ConstVar(ConstVar<'tcx>),
+pub enum Const<'pcx> {
+    ConstVar(ConstVar<'pcx>),
     Value(IntValue),
 }
 
 #[derive(Clone, Copy)]
-pub struct TyVar<'tcx> {
+pub struct TyVar {
     pub idx: TyVarIdx,
-    pub pred: Option<TyPred<'tcx>>,
+    pub pred: Option<TyPred>,
 }
 
 #[derive(Clone, Copy)]
-pub struct ConstVar<'tcx> {
+pub struct ConstVar<'pcx> {
     pub idx: ConstVarIdx,
-    pub ty: Ty<'tcx>,
+    pub ty: Ty<'pcx>,
 }

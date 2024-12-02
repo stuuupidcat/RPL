@@ -26,12 +26,12 @@ pub struct Config {
     pub pointer_bytes: PointerBytes,
 }
 
-pub fn pat_cfg_to_graphviz(patterns: &MirPattern<'_, '_>, f: &mut impl Write, config: &Config) -> io::Result<()> {
+pub fn pat_cfg_to_graphviz(patterns: &MirPattern<'_>, f: &mut impl Write, config: &Config) -> io::Result<()> {
     let builder = graph::CfgBuilder::from_patterns(patterns, config.pointer_bytes.get(), config.node_style.clone());
     builder.build().to_dot(f, &config.graphviz, false)
 }
 
-pub fn pat_ddg_to_graphviz(patterns: &MirPattern<'_, '_>, f: &mut impl Write, config: &Config) -> io::Result<()> {
+pub fn pat_ddg_to_graphviz(patterns: &MirPattern<'_>, f: &mut impl Write, config: &Config) -> io::Result<()> {
     let builder = graph::DdgBuilder::from_patterns(
         patterns,
         config.pointer_bytes.get(),

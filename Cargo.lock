@@ -941,6 +941,7 @@ dependencies = [
 name = "rpl_interface"
 version = "0.1.0"
 dependencies = [
+ "rpl_context",
  "rpl_driver",
  "rpl_patterns",
  "rpl_utils",

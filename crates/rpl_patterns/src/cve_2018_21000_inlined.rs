@@ -10,7 +10,7 @@ use rustc_span::Span;
 use rpl_mir::{pat, CheckMirCtxt};
 
 #[instrument(level = "info", skip(tcx, pcx))]
-pub fn check_item<'tcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'_, 'tcx>, item_id: hir::ItemId) {
+pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
     // let def_id = item_id.owner_id.def_id;
     let mut check_ctxt = CheckFnCtxt { tcx, pcx };
@@ -19,7 +19,7 @@ pub fn check_item<'tcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'_, 'tcx>, item_id: hir:
 
 struct CheckFnCtxt<'pcx, 'tcx> {
     tcx: TyCtxt<'tcx>,
-    pcx: PatCtxt<'pcx, 'tcx>,
+    pcx: PatCtxt<'pcx>,
 }
 
 impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
@@ -65,7 +65,7 @@ struct PatternMisorderedParam {
 }
 
 #[rpl_macros::mir_pattern]
-fn pattern_reversed_para(patterns: &mut pat::MirPatternBuilder<'_, '_>) -> PatternMisorderedParam {
+fn pattern_reversed_para(patterns: &mut pat::MirPatternBuilder<'_>) -> PatternMisorderedParam {
     mir! {
         meta!{$T:ty}
 

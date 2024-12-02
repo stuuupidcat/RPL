@@ -4,18 +4,18 @@ use super::{PatId, Ty};
 
 pub struct FnDef {}
 
-pub struct AdtDef<'tcx> {
+pub struct AdtDef<'pcx> {
     pid: PatId,
-    variants: Vec<VariantDef<'tcx>>,
+    variants: Vec<VariantDef<'pcx>>,
 }
 
-pub struct VariantDef<'tcx> {
-    fields: Vec<FieldDef<'tcx>>,
+pub struct VariantDef<'pcx> {
+    fields: Vec<FieldDef<'pcx>>,
 }
 
-pub struct FieldDef<'tcx> {
+pub struct FieldDef<'pcx> {
     name: Symbol,
-    ty: Ty<'tcx>,
+    ty: Ty<'pcx>,
 }
 
 pub struct Impl {

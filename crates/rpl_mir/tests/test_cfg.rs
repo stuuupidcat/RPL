@@ -13,7 +13,7 @@ use rpl_mir::pat::{MirPattern, MirPatternBuilder};
 macro_rules! test_case {
     (fn $name:ident() {$($input:tt)*} => {$($expected:tt)*} $(,)?) => {
         #[rpl_macros::mir_pattern]
-        fn $name(patterns: &mut MirPatternBuilder<'_, '_>) {
+        fn $name(patterns: &mut MirPatternBuilder<'_>) {
             mir! {
                 $($input)*
             }
@@ -30,7 +30,7 @@ macro_rules! test_case {
 }
 
 #[track_caller]
-fn assert_eq(patterns: MirPattern<'_, '_>, expected: TokenStream) {
+fn assert_eq(patterns: MirPattern<'_>, expected: TokenStream) {
     assert_eq!(
         format!("{patterns:?}")
             .parse::<TokenStream>()

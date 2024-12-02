@@ -1,3 +1,4 @@
+use rpl_context::PatternCtxt;
 // use rpl_middle::ty::RplConfig;
 use rustc_interface::interface;
 use rustc_session::parse::ParseSess;
@@ -117,7 +118,7 @@ impl rustc_driver::Callbacks for RplCallbacks {
         queries: &'tcx rustc_interface::Queries<'tcx>,
     ) -> rustc_driver::Compilation {
         queries.global_ctxt().unwrap().enter(|tcx| {
-            rpl_driver::check_crate(tcx);
+            PatternCtxt::entered(|pcx| rpl_driver::check_crate(tcx, pcx));
         });
         /*
         queries.global_ctxt().unwrap().enter(|tcx| {
