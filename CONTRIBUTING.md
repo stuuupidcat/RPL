@@ -19,6 +19,8 @@ Run `RPL_LOG=info cargo run -b rpl-driver -- path/to/test.rs` to run rpl driver 
 For `debug` and `trace` level logs, unfortunately you cannot use the nightly rustc toolchain because it disables log levels below `info` for performance. Instead, you have to use a custom rustc built from source. You have to make sure that your custom rustc toolchain is the same as that used in RPL, or otherwise it might not compile.
 
 The recommended workflow to setup a custom rustc is:
+
+- Get the latest nightly rust toolchain by running `rustup toolchain install nightly`/`rustup update nightly`;
 - Type `rustc -V` in the RPL repository to show the current toolchain it is using (currently, it is `rustc 1.84.0-nightly (86d69c705 2024-10-22)`), and remember the revision `86d69c705` in it;
 - Change your directory where you would like to put the rust source code, and clone the rust repository using `git clone https://github.com/rust-lang/rust.git && cd rust`;
 - Checkout to the given commit, and it is recommended to use `git worktree add ../rust-nightly 86d69c705 && cd ../rust-nightly`;
@@ -29,6 +31,7 @@ The recommended workflow to setup a custom rustc is:
 - Now go back to the RPL repository, you will be able to run `RPL_LOG=debug cargo +nightly-stage1 run -b rpl-driver` to build and run RPL using your custom rustc with the debug log level;
 
 But it might not work, and you will probably see this error:
+
 ```
    Compiling rpl_patterns v0.1.0 (/home/whjpji/PKU/Rust/RPL/crates/rpl_patterns)
 error: ./target/debug/deps/librpl_macros-735c931c29d05061.so: librustc_driver-649529b68e4c03de.so: cannot open shared object file: No such file or directory
@@ -39,7 +42,11 @@ error: ./target/debug/deps/librpl_macros-735c931c29d05061.so: librustc_driver-64
 ```
 
 I haven't found a good solution but here is the hacks:
-- Go to the directory where your `rust-nightly` locates and run `ln -sf build/host/stage1 ~/.rustup/toolchain/nightly-stage1` to link your custom toolchain to directory that is easy to find;
-- Add `export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.rustup/toolchains/nightly-stage1/lib/rustlib/x86_64-unknown-linux-gnu/lib` to the end of the `~/.bashrc` file (or `~/.zshrc` if you use ZSH)
+
+- Go to the directory where your `rust-nightly` locates and run `ln -sf build/host/stage1 ~/.rustup/toolchains/nightly-stage1` to link your custom toolchain to directory that is easy to find;
+- Add
+  - `export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.rustup/toolchains/nightly-stage1/lib/rustlib/x86_64-unknown-linux-gnu/lib`(for Linux) or
+  - `export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$HOME/.rustup/toolchains/nightly-stage1/lib/rustlib/x86_64-apple-darwin/lib`(for MacOS)
+    to the end of the `~/.bashrc` file (or `~/.zshrc` if you use ZSH)
 - Run `source ~/.bashrc` (or `source ~/.zshrc` if you use ZSH);
 - Now return to the RPL repository and you may succeed to run `RPL_LOG=debug cargo +nightly-stage1 run -b rpl-driver` and you will see the debugging logs printed on the screen;
