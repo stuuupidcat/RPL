@@ -21,7 +21,7 @@ use rustc_middle::ty::TyCtxt;
 
 pub(crate) mod errors;
 
-mod cve_2018_21000_inlined;
+mod cve_2018_21000;
 mod cve_2020_25016;
 mod cve_2020_35892_3;
 // mod cve_2020_35873;
@@ -29,7 +29,8 @@ mod cve_2020_35892_3;
 rustc_fluent_macro::fluent_messages! { "../messages.en.ftl" }
 
 static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
-    cve_2018_21000_inlined::check_item,
+    cve_2018_21000::t_to_u8::check_item,
+    cve_2018_21000::u8_to_t::check_item,
     cve_2020_25016::check_item,
     cve_2020_35892_3::check_item,
 ];

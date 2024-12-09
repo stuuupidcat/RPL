@@ -2,7 +2,7 @@
 members = [
     "crates/*",
     "./"
-]
+, "tests/ui/cve_2024_27284"]
 
 [workspace.package]
 version = "0.1.0"

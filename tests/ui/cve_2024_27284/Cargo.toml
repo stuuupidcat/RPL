@@ -1,0 +1,12 @@
+[package]
+name = "cve_2024_27284"
+version.workspace = true
+edition.workspace = true
+description.workspace = true
+publish.workspace = true
+license.workspace = true
+keywords.workspace = true
+repository.workspace = true
+
+[dependencies]
+cassandra-cpp-sys = "1.1.1"

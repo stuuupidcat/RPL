@@ -501,9 +501,15 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                 &pat::Rvalue::Ref(region_pat, borrow_kind_pat, place_pat),
                 &mir::Rvalue::Ref(region, borrow_kind, place),
             ) => {
-                self.match_region(region_pat, region)
-                    && borrow_kind_pat == borrow_kind
-                    && self.match_place(place_pat, place)
+                // Considering "Two-phase borrows"
+                // TODO: There may be other places using `==` to compare `BorrowKind`
+                let is_borrow_kind_equal: bool = match (borrow_kind_pat, borrow_kind) {
+                    (rustc_middle::mir::BorrowKind::Shared, rustc_middle::mir::BorrowKind::Shared)
+                    | (rustc_middle::mir::BorrowKind::Mut { .. }, rustc_middle::mir::BorrowKind::Mut { .. })
+                    | (rustc_middle::mir::BorrowKind::Fake(_), rustc_middle::mir::BorrowKind::Fake(_)) => true,
+                    _ => false,
+                };
+                self.match_region(region_pat, region) && is_borrow_kind_equal && self.match_place(place_pat, place)
             },
             (&pat::Rvalue::RawPtr(mutability_pat, place_pat), &mir::Rvalue::RawPtr(mutability, place)) => {
                 mutability_pat == mutability && self.match_place(place_pat, place)
