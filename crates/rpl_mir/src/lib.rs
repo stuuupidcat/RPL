@@ -48,7 +48,7 @@ use rustc_index::bit_set::HybridBitSet;
 use rustc_index::{IndexSlice, IndexVec};
 use rustc_middle::mir::interpret::PointerArithmetic;
 use rustc_middle::mir::tcx::PlaceTy;
-use rustc_middle::ty::{Ty, TyCtxt};
+use rustc_middle::ty::{GenericArgsRef, Ty, TyCtxt};
 use rustc_middle::{mir, ty};
 use rustc_span::symbol::kw;
 use rustc_span::Symbol;
@@ -503,6 +503,8 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             ) => {
                 // Considering "Two-phase borrows"
                 // TODO: There may be other places using `==` to compare `BorrowKind`
+                // FIXME: #[allow(clippy::match_like_matches_macro)]
+                #[allow(clippy::match_like_matches_macro)]
                 let is_borrow_kind_equal: bool = match (borrow_kind_pat, borrow_kind) {
                     (rustc_middle::mir::BorrowKind::Shared, rustc_middle::mir::BorrowKind::Shared)
                     | (rustc_middle::mir::BorrowKind::Mut { .. }, rustc_middle::mir::BorrowKind::Mut { .. })
@@ -572,16 +574,19 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
     #[allow(clippy::too_many_arguments)]
     fn match_agg_adt(
         &self,
-        path: pat::Path<'pcx>,
+        path_with_args: pat::PathWithArgs<'pcx>,
         def_id: DefId,
         variant_idx: VariantIdx,
         adt_kind: &pat::AggAdtKind,
         field_idx: Option<FieldIdx>,
         operands_pat: &[pat::Operand<'pcx>],
         operands: &IndexSlice<FieldIdx, mir::Operand<'tcx>>,
+        gargs: GenericArgsRef<'tcx>,
     ) -> bool {
         let adt = self.tcx.adt_def(def_id);
         let variant = adt.variant(variant_idx);
+        let path = path_with_args.path;
+        let gargs_pat = path_with_args.args;
         let variant_matched = match path {
             pattern::Path::Item(path) => match self.match_item_path(path, def_id) {
                 Some([]) => {
@@ -617,7 +622,9 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             },
             _ => false,
         };
-        let matched = variant_matched && fields_matched;
+        let generics = self.tcx.generics_of(def_id);
+        let gargs_matched = self.match_generic_args(gargs_pat, gargs, generics);
+        let matched = variant_matched && fields_matched && gargs_matched;
         debug!(
             ?path,
             ?variant.def_id,
@@ -641,15 +648,16 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             | (pat::AggKind::Tuple, mir::AggregateKind::Tuple) => self.match_operands(operands_pat, &operands.raw),
             (
                 &pat::AggKind::Adt(path_with_args, ref fields),
-                &mir::AggregateKind::Adt(def_id, variant_idx, _, _, field_idx),
+                &mir::AggregateKind::Adt(def_id, variant_idx, gargs, _, field_idx),
             ) => self.match_agg_adt(
-                path_with_args.path,
+                path_with_args,
                 def_id,
                 variant_idx,
                 fields,
                 field_idx,
                 operands_pat,
                 operands,
+                gargs,
             ),
             (&pat::AggKind::RawPtr(ty_pat, mutability_pat), &mir::AggregateKind::RawPtr(ty, mutability)) => {
                 self.match_ty(ty_pat, ty)
@@ -722,7 +730,8 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         def_id: DefId,
         args: ty::GenericArgsRef<'tcx>,
     ) -> bool {
-        self.match_path(path_with_args.path, def_id) && self.match_generic_args(path_with_args.args, args)
+        let generics = self.tcx.generics_of(def_id);
+        self.match_path(path_with_args.path, def_id) && self.match_generic_args(path_with_args.args, args, generics)
     }
 
     fn match_path(&self, path: pat::Path<'pcx>, def_id: DefId) -> bool {
@@ -764,12 +773,29 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         matched.then_some(pat_iter.as_slice())
     }
 
-    fn match_generic_args(&self, args_pat: pat::GenericArgsRef<'pcx>, args: ty::GenericArgsRef<'tcx>) -> bool {
-        args_pat.len() == args.len()
-            && zip(&*args_pat, args).all(|(&arg_pat, arg)| self.match_generic_arg(arg_pat, arg))
-        /*
-            FIXME: Default generic arguments like alloc::vec::Vec<T> = alloc::vec::Vec<T, alloc::alloc::Global>
-        */
+    fn match_generic_args(
+        &self,
+        args_pat: pat::GenericArgsRef<'pcx>,
+        args: ty::GenericArgsRef<'tcx>,
+        generics: &'tcx ty::Generics,
+    ) -> bool {
+        // Is it necessary to call this function?
+        let args_all = generics.own_args(args);
+        let args_no_default = generics.own_args_no_defaults(self.tcx, args);
+        if args_pat.len() < args_no_default.len() || args_pat.len() > args_all.len() {
+            false
+        } else {
+            // FIXME:
+            // directly zip args_all[..args_pat.len()]?
+            args_pat
+                .iter()
+                .zip(
+                    args_no_default
+                        .iter()
+                        .chain(args_all[args_no_default.len()..args_pat.len()].iter()),
+                )
+                .all(|(pat, arg)| self.match_generic_arg(*pat, *arg))
+        }
     }
 
     fn match_generic_arg(&self, arg_pat: pat::GenericArgKind<'pcx>, arg: ty::GenericArg<'tcx>) -> bool {

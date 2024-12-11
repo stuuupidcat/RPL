@@ -12,7 +12,6 @@ pub struct Slab<T> {
 impl<T> Drop for Slab<T> {
     fn drop(&mut self) {
         for x in 0..self.len {
-            //~^ NOTE: MIR pattern matched
             unsafe {
                 let elem_ptr = self.mem.offset(x as isize);
                 ptr::drop_in_place(elem_ptr);

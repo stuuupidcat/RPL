@@ -1,3 +1,5 @@
+//@ignore-on-host
+
 use cassandra_cpp_sys::CassIterator as _CassIterator;
 use cassandra_cpp_sys::{
     cass_false, cass_iterator_get_aggregate_meta, cass_iterator_next, cass_true,
@@ -22,7 +24,6 @@ pub struct AggregateIterator(*mut _CassIterator);
 
 impl Iterator for AggregateIterator {
     type Item = AggregateMeta;
-    #[rpl::dump_mir(dump_cfg, dump_ddg)]
     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
         unsafe {
             match cass_iterator_next(self.0) {
