@@ -70,13 +70,13 @@ pub mod u8_to_t {
         mir! {
             meta!{$T:ty}
 
-            type VecU8 = alloc::vec::Vec::<u8, alloc::alloc::Global>;
-            type VecT = alloc::vec::Vec::<$T, alloc::alloc::Global>;
+            type VecU8 = alloc::vec::Vec::<u8>;
+            type VecT = alloc::vec::Vec::<$T>;
             type NonNullU8 = core::ptr::non_null::NonNull::<u8>;
             type UniqueU8 = core::ptr::unique::Unique::<u8>;
             type Cap = alloc::raw_vec::Cap;
-            type RawVecInner = alloc::raw_vec::RawVecInner::<alloc::alloc::Global>;
-            type RawVecT = alloc::raw_vec::RawVec::<$T, alloc::alloc::Global>;
+            type RawVecInner = alloc::raw_vec::RawVecInner;
+            type RawVecT = alloc::raw_vec::RawVec::<$T>;
 
             let from_vec: VecU8 = _; // _1
             let mut from_vec_mut_borrow: &mut VecU8;         // _3
@@ -144,18 +144,18 @@ pub mod u8_to_t {
                 _marker: const core::marker::PhantomData::<u8>
             };
             // _21 = alloc::raw_vec::RawVecInner { ptr: move _23, cap: copy _22, alloc: const std::alloc::Global };
-            to_vec_raw_inner = alloc::raw_vec::RawVecInner::<alloc::alloc::Global> {
+            to_vec_raw_inner = alloc::raw_vec::RawVecInner {
                 ptr: move to_vec_unique,
                 cap: copy to_vec_wrong_cap_2,
                 alloc: const alloc::alloc::Global
             };
             // _19 = alloc::raw_vec::RawVec::<T> { inner: move _21, _marker: const ZeroSized: std::marker::PhantomData<T> };
-            to_vec_raw = alloc::raw_vec::RawVec::<$T, alloc::alloc::Global> {
+            to_vec_raw = alloc::raw_vec::RawVec::<$T> {
                 inner: move to_vec_raw_inner,
                 _marker: const core::marker::PhantomData::<$T>
             };
             // _0 = std::vec::Vec::<T> { buf: move _19, len: copy _4 };
-            to_vec = alloc::vec::Vec::<$T, alloc::alloc::Global> {
+            to_vec = alloc::vec::Vec::<$T> {
                 buf: move to_vec_raw,
                 len: copy to_vec_cap
             };
@@ -239,13 +239,13 @@ pub mod t_to_u8 {
         mir! {
             meta!{$T:ty}
 
-            type VecU8 = alloc::vec::Vec::<u8, alloc::alloc::Global>;
-            type VecT = alloc::vec::Vec::<$T, alloc::alloc::Global>;
+            type VecU8 = alloc::vec::Vec::<u8>;
+            type VecT = alloc::vec::Vec::<$T>;
             type NonNullU8 = core::ptr::non_null::NonNull::<u8>;
             type UniqueU8 = core::ptr::unique::Unique::<u8>;
             type Cap = alloc::raw_vec::Cap;
-            type RawVecInner = alloc::raw_vec::RawVecInner::<alloc::alloc::Global>;
-            type RawVecU8 = alloc::raw_vec::RawVec::<u8, alloc::alloc::Global>;
+            type RawVecInner = alloc::raw_vec::RawVecInner;
+            type RawVecU8 = alloc::raw_vec::RawVec::<u8>;
 
             let from_vec: VecT = _; // _1
             let mut from_vec_immutable_borrow_1: &VecT; // _4
@@ -309,18 +309,18 @@ pub mod t_to_u8 {
                 _marker: const core::marker::PhantomData::<u8>
             };
             // _18 = alloc::raw_vec::RawVecInner { ptr: move _19, cap: copy _17, alloc: const std::alloc::Global };
-            to_vec_raw_inner = alloc::raw_vec::RawVecInner::<alloc::alloc::Global> {
+            to_vec_raw_inner = alloc::raw_vec::RawVecInner {
                 ptr: move to_vec_unique,
                 cap: copy to_vec_wrong_cap,
                 alloc: const alloc::alloc::Global
             };
             // _16 = alloc::raw_vec::RawVec::<u8> { inner: move _18, _marker: const std::marker::PhantomData::<u8> };
-            to_vec_raw = alloc::raw_vec::RawVec::<u8, alloc::alloc::Global> {
+            to_vec_raw = alloc::raw_vec::RawVec::<u8> {
                 inner: move to_vec_raw_inner,
                 _marker: const core::marker::PhantomData::<u8>
             };
             // _0 = std::vec::Vec::<u8> { buf: move _16, len: copy _2 };
-            to_vec = alloc::vec::Vec::<u8, alloc::alloc::Global> {
+            to_vec = alloc::vec::Vec::<u8> {
                 buf: move to_vec_raw,
                 len: copy to_vec_cap
             };
