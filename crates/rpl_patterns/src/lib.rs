@@ -23,6 +23,7 @@ pub(crate) mod errors;
 
 mod cve_2018_21000;
 mod cve_2020_25016;
+mod cve_2020_35881;
 mod cve_2020_35892_3;
 // mod cve_2020_35873;
 
@@ -33,6 +34,9 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     cve_2018_21000::u8_to_t::check_item,
     cve_2020_25016::check_item,
     cve_2020_35892_3::check_item,
+    cve_2020_35881::const_const_Transmute_ver::check_item,
+    cve_2020_35881::mut_mut_Transmute_ver::check_item,
+    cve_2020_35881::mut_const_PtrToPtr_ver::check_item,
 ];
 
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item: ItemId) {

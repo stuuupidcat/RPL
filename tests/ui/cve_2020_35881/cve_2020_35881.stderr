@@ -1,0 +1,24 @@
+error: wrong assumption of fat pointer layout
+  --> tests/ui/cve_2020_35881/cve_2020_35881.rs:4:6
+   |
+LL |     *mem::transmute::<*const *const T, *const *const ()>(&val)
+   |     -^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |     ||
+   |     |ptr transmute here
+   |     try to get data ptr from first 8 bytes here
+   |
+   = help: the Rust Compiler does not expose the layout of fat pointers
+
+error: wrong assumption of fat pointer layout
+  --> tests/ui/cve_2020_35881/cve_2020_35881.rs:9:6
+   |
+LL |     *mem::transmute::<*mut *mut T, *mut *mut ()>(&mut val)
+   |     -^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |     ||
+   |     |ptr transmute here
+   |     try to get data ptr from first 8 bytes here
+   |
+   = help: the Rust Compiler does not expose the layout of fat pointers
+
+error: aborting due to 2 previous errors
+
