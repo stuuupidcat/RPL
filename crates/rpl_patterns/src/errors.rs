@@ -60,3 +60,15 @@ pub struct MisorderedParameters {
     #[primary_span]
     pub span: Span,
 }
+
+// for cve_2020_35881
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_wrong_assumption_of_fat_pointer_layout)]
+#[help]
+pub struct WrongAssumptionOfFatPointerLayout {
+    #[primary_span]
+    #[label(rpl_patterns_ptr_transmute_label)]
+    pub ptr_transmute: Span,
+    #[label(rpl_patterns_get_data_ptr_label)]
+    pub data_ptr_get: Span,
+}

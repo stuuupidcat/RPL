@@ -12,3 +12,8 @@ rpl_patterns_use_after_drop = use a pointer from `{$ty}` after dropped
 
 rpl_patterns_misordered_parameters = misordered parameters `len` and `cap` in `Vec::from_raw_parts`
     .help = the correct order is `Vec::from_raw_parts(ptr, len, cap)`
+
+rpl_patterns_wrong_assumption_of_fat_pointer_layout = wrong assumption of fat pointer layout
+    .ptr_transmute_label = ptr transmute here 
+    .get_data_ptr_label = try to get data ptr from first 8 bytes here
+    .help = the Rust Compiler does not expose the layout of fat pointers
