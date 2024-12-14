@@ -1,0 +1,11 @@
+error: it is usually a bug to pass a buffer pointer to an extern function without specifying its length
+  --> tests/ui/cve_2019_15548/cve_2019_15548.rs:19:29
+   |
+LL |         let ret = ll::instr(mem::transmute(buf));
+   |                             ^^^^^^^^^^^^^^^^^^^ the function is called here
+   |
+   = note: `-D lengthless-buffer-passed-to-extern-function` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(lengthless_buffer_passed_to_extern_function)]`
+
+error: aborting due to 1 previous error
+

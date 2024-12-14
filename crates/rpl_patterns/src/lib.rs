@@ -7,6 +7,7 @@ extern crate rustc_driver;
 extern crate rustc_errors;
 extern crate rustc_fluent_macro;
 extern crate rustc_hir;
+extern crate rustc_lint_defs;
 extern crate rustc_macros;
 extern crate rustc_middle;
 extern crate rustc_span;
@@ -22,16 +23,21 @@ use rustc_middle::ty::TyCtxt;
 pub(crate) mod errors;
 
 mod cve_2018_21000;
+mod cve_2019_15548;
+mod cve_2019_15548_2;
 mod cve_2020_25016;
 mod cve_2020_35881;
 mod cve_2020_35892_3;
 // mod cve_2020_35873;
+mod lints;
 
 rustc_fluent_macro::fluent_messages! { "../messages.en.ftl" }
 
 static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     cve_2018_21000::t_to_u8::check_item,
     cve_2018_21000::u8_to_t::check_item,
+    cve_2019_15548::check_item,
+    cve_2019_15548_2::check_item,
     cve_2020_25016::check_item,
     cve_2020_35892_3::check_item,
     cve_2020_35881::const_const_Transmute_ver::check_item,
