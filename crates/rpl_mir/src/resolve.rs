@@ -41,20 +41,25 @@ use rustc_span::Symbol;
 pub enum PatItemKind {
     // Type namespace
     /// [DefKind::Mod]
+    #[expect(dead_code)]
     Mod,
     /// [DefKind::Struct], [DefKind::Union], [DefKind::Enum], [DefKind::TyAlias],
     /// [DefKind::ForeignTy] and [DefKind::AssocTy]
     Type,
     /// [DefKind::Variant]
+    #[expect(dead_code)]
     Variant,
     /// [DefKind::Trait] and [DefKind::TraitAlias]
+    #[expect(dead_code)]
     Trait,
     /// [DefKind::Fn], [DefKind::AssocFn]
     Fn,
     /// [DefKind::Const], [DefKind::AssocConst]
+    #[expect(dead_code)]
     Const,
     /// [DefKind::Static]
     // FIXME: add fields to support more operations.
+    #[expect(dead_code)]
     Static,
     /// [DefKind::Ctor]
     Ctor,
