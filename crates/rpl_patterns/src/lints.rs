@@ -6,17 +6,16 @@ declare_lint! {
     ///
     /// ### Example
     ///
-    /// ```rust,compile_fail
+    /// ```rust
     /// #![deny(lengthless_buffer_passed_to_extern_function)]
-    /// use libc::{c_char, c_int};
-    /// extern unsafe fn gets(c: *const c_char) -> c_int {
+    /// extern fn gets(c: *const i8) -> i32 {
     ///     0
     /// }
     ///
     /// fn main() {
-    ///     let mut p = [8; u8];
+    ///     let mut p = [8u8; 64];
     ///     unsafe {
-    ///         gets(p as *const c_char)
+    ///         gets(&p as *const u8 as *const i8);
     ///     }
     /// }
     /// ```
