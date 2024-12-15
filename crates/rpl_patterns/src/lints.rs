@@ -27,7 +27,7 @@ declare_lint! {
     /// When you pass a lengthless buffer to an extern function, the most probable
     /// situation is that you are using some old style C API which fills the buffer
     /// as much as it has, and it's never safe to use.
-    /// 
+    ///
     /// However, in some cases, the size of the buffer may be fixed, and this lint
     /// can be suppressed then.
     pub LENGTHLESS_BUFFER_PASSED_TO_EXTERN_FUNCTION,

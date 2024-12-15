@@ -753,8 +753,8 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
     }
 
     /// Resolve definition path from `path`.
-    /// 
-    // FIXME: when searching in the same crate, an item path should always be resolved to the same item, so this can be cached for performance.
+    // FIXME: when searching in the same crate, an item path should always be resolved to the same item,
+    // so this can be cached for performance.
     fn match_item_path_by_def_path(&self, path: pat::ItemPath<'pcx>, def_id: DefId) -> bool {
         let res = resolve::def_path_res(self.tcx, path.0);
         let mut res = res.into_iter().filter_map(|res| match res {
