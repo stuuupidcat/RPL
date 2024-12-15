@@ -10,6 +10,83 @@ use rustc_span::def_id::DefId;
 use rustc_span::symbol::Ident;
 use rustc_span::Symbol;
 
+/// Kind of an item path in pattern.
+///
+/// Matching a subset of [DefKind]. There 31 variants in [DefKind] currently.
+///
+/// Ignored as it's not visible from MIR:
+///
+/// - [DefKind::Macro]
+///
+/// Ignored as it's not accessible from root:
+///
+/// - [DefKind::TyParam]
+/// - [DefKind::ConstParam]
+/// - [DefKind::AnonConst]
+/// - [DefKind::InlineConst]
+/// - [DefKind::OpaqueTy]
+/// - [DefKind::Field]
+/// - [DefKind::LifetimeParam]
+/// - [DefKind::GlobalAsm]
+/// - [DefKind::Closure]
+/// - [DefKind::SyntheticCoroutineBody]
+///
+/// Ignored as it's a container of items:
+///
+/// - [DefKind::ExternCrate]
+/// - [DefKind::Use]
+/// - [DefKind::ForeignMod]
+/// - [DefKind::Impl]
+#[derive(Debug)]
+pub enum PatItemKind {
+    // Type namespace
+    /// [DefKind::Mod]
+    Mod,
+    /// [DefKind::Struct], [DefKind::Union], [DefKind::Enum], [DefKind::TyAlias],
+    /// [DefKind::ForeignTy] and [DefKind::AssocTy]
+    Type,
+    /// [DefKind::Variant]
+    Variant,
+    /// [DefKind::Trait] and [DefKind::TraitAlias]
+    Trait,
+    /// [DefKind::Fn], [DefKind::AssocFn]
+    Fn,
+    /// [DefKind::Const], [DefKind::AssocConst]
+    Const,
+    /// [DefKind::Static]
+    // FIXME: add fields to support more operations.
+    Static,
+    /// [DefKind::Ctor]
+    Ctor,
+}
+
+impl PatItemKind {
+    #[instrument(level = "debug", ret)]
+    fn match_resolve(&self, res: &Res) -> bool {
+        match self {
+            Self::Mod => matches!(res, Res::Def(DefKind::Mod, _)),
+            Self::Type => matches!(
+                res,
+                Res::Def(
+                    DefKind::Struct
+                        | DefKind::Union
+                        | DefKind::Enum
+                        | DefKind::TyAlias
+                        | DefKind::ForeignTy
+                        | DefKind::AssocTy,
+                    _
+                ) | Res::PrimTy(_)
+            ),
+            Self::Variant => matches!(res, Res::Def(DefKind::Variant, _)),
+            Self::Trait => matches!(res, Res::Def(DefKind::Trait | DefKind::TraitAlias, _)),
+            Self::Fn => matches!(res, Res::Def(DefKind::Fn | DefKind::AssocFn, _)),
+            Self::Const => matches!(res, Res::Def(DefKind::Const | DefKind::AssocConst, _)),
+            Self::Static => matches!(res, Res::Def(DefKind::Static { .. }, _)),
+            Self::Ctor => matches!(res, Res::Def(DefKind::Ctor(..), _)),
+        }
+    }
+}
+
 /// Resolves a def path like `std::vec::Vec`.
 ///
 /// Can return multiple resolutions when there are multiple versions of the same crate, e.g.
@@ -20,7 +97,7 @@ use rustc_span::Symbol;
 ///
 /// This function is expensive and should be used sparingly.
 #[instrument(level = "debug", skip(tcx), ret)]
-pub fn def_path_res(tcx: TyCtxt<'_>, path: &[Symbol]) -> Vec<Res> {
+pub fn def_path_res(tcx: TyCtxt<'_>, path: &[Symbol], kind: PatItemKind) -> Vec<Res> {
     let (base, path) = match path {
         [primitive] => {
             return vec![PrimTy::from_name(*primitive).map_or(Res::Err, Res::PrimTy)];
@@ -45,7 +122,7 @@ pub fn def_path_res(tcx: TyCtxt<'_>, path: &[Symbol]) -> Vec<Res> {
 
     trace!(?crates);
 
-    def_path_res_with_base(tcx, crates, path)
+    def_path_res_with_base(tcx, crates, path, kind)
 }
 
 /// Resolves a def path like `vec::Vec` with the base `std`.
@@ -53,7 +130,7 @@ pub fn def_path_res(tcx: TyCtxt<'_>, path: &[Symbol]) -> Vec<Res> {
 /// This is lighter than [`def_path_res`], and should be called with [`find_crates`] looking up
 /// items from the same crate repeatedly, although should still be used sparingly.
 #[instrument(level = "debug", skip(tcx), ret)]
-pub fn def_path_res_with_base(tcx: TyCtxt<'_>, mut base: Vec<Res>, mut path: &[Symbol]) -> Vec<Res> {
+pub fn def_path_res_with_base(tcx: TyCtxt<'_>, mut base: Vec<Res>, mut path: &[Symbol], kind: PatItemKind) -> Vec<Res> {
     while let [segment, rest @ ..] = path {
         path = rest;
         // let segment = Symbol::intern(segment);
@@ -63,23 +140,32 @@ pub fn def_path_res_with_base(tcx: TyCtxt<'_>, mut base: Vec<Res>, mut path: &[S
             .into_iter()
             .filter_map(|res| res.opt_def_id())
             .flat_map(|def_id| {
-                // When the current def_id is e.g. `struct S`, check the impl items in
-                // `impl S { ... }`
-                let inherent_impl_children = tcx
-                    .inherent_impls(def_id)
-                    .iter()
-                    .flat_map(|&impl_def_id| item_children_by_name(tcx, impl_def_id, segment));
+                let mut children = Vec::new();
 
-                let direct_children = item_children_by_name(tcx, def_id, segment);
+                // Some items that may be contained in an `impl`.
+                if matches!(
+                    kind,
+                    PatItemKind::Const | PatItemKind::Fn | PatItemKind::Type | PatItemKind::Variant
+                ) {
+                    // When the current def_id is e.g. `struct S`, check the impl items in
+                    // `impl S { ... }`
+                    children.extend(
+                        tcx.inherent_impls(def_id)
+                            .iter()
+                            .flat_map(|&impl_def_id| item_children_by_name(tcx, impl_def_id, segment)),
+                    );
+                }
 
-                inherent_impl_children.chain(direct_children)
+                children.extend(item_children_by_name(tcx, def_id, segment));
+
+                children
             })
             .collect();
 
         trace!(?segment, ?rest, ?base);
     }
 
-    base
+    base.into_iter().filter(|res| kind.match_resolve(res)).collect()
 }
 
 #[instrument(level = "trace", skip(tcx), ret)]
