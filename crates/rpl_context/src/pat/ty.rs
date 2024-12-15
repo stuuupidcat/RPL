@@ -77,6 +77,7 @@ pub struct ItemPath<'pcx>(pub &'pcx [Symbol]);
 
 #[derive(Clone, Copy)]
 pub enum Path<'pcx> {
+    /// Such as `std::vec::Vec`?
     Item(ItemPath<'pcx>),
     TypeRelative(Ty<'pcx>, Symbol),
     LangItem(LangItem),

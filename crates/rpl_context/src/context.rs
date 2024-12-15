@@ -79,6 +79,7 @@ impl<'pcx> PatternCtxt<'pcx> {
         Registry::new(NonZero::new(1).unwrap()).register();
         rustc_span::create_session_if_not_set_then(rustc_span::edition::LATEST_STABLE_EDITION, |_| Self::entered(f))
     }
+    /// Maps strings to their interned representation
     pub fn mk_symbols(&self, syms: &[&str]) -> &'pcx [Symbol] {
         self.arena.alloc_from_iter(syms.iter().copied().map(Symbol::intern))
     }

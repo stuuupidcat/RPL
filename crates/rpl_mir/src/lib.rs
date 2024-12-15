@@ -772,6 +772,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
 
     fn match_item_path(&self, path: pat::ItemPath<'pcx>, def_id: DefId) -> Option<&[Symbol]> {
         let &[krate, ref in_crate @ ..] = path.0 else {
+            // an empty `ItemPath`
             return None;
         };
         let def_path = self.tcx.def_path(def_id);
@@ -788,6 +789,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         let matched = matched
             && std::iter::zip(pat_iter.by_ref(), iter.by_ref())
                 .all(|(&path, data)| data.data.get_opt_name().is_some_and(|name| name == path));
+        // Check that `iter` (from `def_path`) is not longer than `pat_iter` (from `path`)
         let matched = matched && iter.next().is_none();
         debug!(?path, ?def_id, matched, "match_item_path");
         matched.then_some(pat_iter.as_slice())
