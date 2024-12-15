@@ -65,7 +65,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             {
                 debug!(?ptr);
                 self.tcx.emit_node_span_lint(
-                    &LENGTHLESS_BUFFER_PASSED_TO_EXTERN_FUNCTION,
+                    LENGTHLESS_BUFFER_PASSED_TO_EXTERN_FUNCTION,
                     self.tcx.local_def_id_to_hir_id(def_id),
                     ptr,
                     crate::errors::LengthlessBufferPassedToExternFunction { ptr },
