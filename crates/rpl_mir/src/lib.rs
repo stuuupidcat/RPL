@@ -33,6 +33,7 @@ pub mod graph;
 pub mod pattern;
 
 mod matches;
+mod resolve;
 
 use std::cell::RefCell;
 use std::iter::zip;
@@ -41,7 +42,7 @@ use crate::graph::{MirControlFlowGraph, MirDataDepGraph, PatControlFlowGraph, Pa
 use rpl_mir_graph::TerminatorEdges;
 use rustc_abi::VariantIdx;
 use rustc_hash::FxHashMap;
-use rustc_hir::def::CtorKind;
+use rustc_hir::def::{CtorKind, Res};
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::definitions::DefPathData;
 use rustc_index::bit_set::HybridBitSet;
@@ -736,7 +737,8 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
 
     fn match_path(&self, path: pat::Path<'pcx>, def_id: DefId) -> bool {
         let matched = match path {
-            pat::Path::Item(path) => matches!(self.match_item_path(path, def_id), Some([])),
+            // pat::Path::Item(path) => matches!(self.match_item_path(path, def_id), Some([])),
+            pat::Path::Item(path) => self.match_item_path_by_def_path(path, def_id),
             pat::Path::TypeRelative(ty, name) => {
                 self.tcx.item_name(def_id) == name
                     && self
@@ -748,6 +750,24 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         };
         debug!(?path, ?def_id, matched, "match_path");
         matched
+    }
+
+    /// Resolve definition path from `path`.
+    /// 
+    // FIXME: when searching in the same crate, an item path should always be resolved to the same item, so this can be cached for performance.
+    fn match_item_path_by_def_path(&self, path: pat::ItemPath<'pcx>, def_id: DefId) -> bool {
+        let res = resolve::def_path_res(self.tcx, path.0);
+        let mut res = res.into_iter().filter_map(|res| match res {
+            Res::Def(_, id) => Some(id),
+            _ => None,
+        });
+        let pat_id = if let Some(id) = res.next() { id } else { return false };
+        // FIXME: there should be at most one item matching specific item kind
+        assert!(res.next().is_none());
+
+        trace!(?pat_id, ?def_id);
+
+        pat_id == def_id
     }
 
     fn match_item_path(&self, path: pat::ItemPath<'pcx>, def_id: DefId) -> Option<&[Symbol]> {
