@@ -1,7 +1,7 @@
 use std::ops::Not;
 
 use rpl_context::PatCtxt;
-use rpl_mir::pat::MirPatternBuilder;
+use rpl_mir::pat::MirPattern;
 use rpl_mir::{pat, CheckMirCtxt};
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
@@ -57,9 +57,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
-            if let mut patterns_ptr = MirPatternBuilder::new(self.pcx)
-                && let pattern_ptr = pattern_pass_a_pointer_to_c(&mut patterns_ptr)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &patterns_ptr.build()).check()
+            if let pattern_ptr = pattern_pass_a_pointer_to_c(self.pcx)
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern_ptr.pattern).check()
                 && let Some(ptr) = matches[pattern_ptr.ptr]
                 && let ptr = ptr.span_no_inline(body)
             {
@@ -76,23 +75,27 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     }
 }
 
-struct PatternPointer {
+struct PatternPointer<'pcx> {
+    pattern: MirPattern<'pcx>,
     ptr: pat::Location,
 }
 
 // FIXME: this should work for `libc::char` but not hard encoded `i8`.
 // FIXME: this should work for functions other than `crate::ll::instr`.
-#[rpl_macros::mir_pattern]
-fn pattern_pass_a_pointer_to_c(patterns: &mut pat::MirPatternBuilder) -> PatternPointer {
-    mir! {
-        // type c_char = libc::c_char;
-        type c_char = i8;
+#[rpl_macros::pattern_def]
+fn pattern_pass_a_pointer_to_c(pcx: PatCtxt<'_>) -> PatternPointer<'_> {
+    rpl! {
+        fn $pattern (..) -> _ = mir! {
+            // type c_char = libc::c_char;
+            type c_char = i8;
 
-        let ptr: *const c_char = _;
-        _ = $crate::ll::instr(move ptr);
+            let ptr: *const c_char = _;
+            _ = $crate::ll::instr(move ptr);
+        }
     }
 
     PatternPointer {
+        pattern,
         ptr: ptr_stmt,
         // ty_var: c_char_ty,
     }

@@ -34,6 +34,7 @@ pub enum RegionKind {
 #[derive(Clone, Copy)]
 pub enum TyKind<'pcx> {
     TyVar(TyVar),
+    AdtVar(Symbol),
     Array(Ty<'pcx>, Const<'pcx>),
     Slice(Ty<'pcx>),
     Tuple(&'pcx [Ty<'pcx>]),

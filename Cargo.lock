@@ -985,11 +985,13 @@ dependencies = [
 name = "rpl_pat_expand"
 version = "0.1.0"
 dependencies = [
+ "derive_more",
  "pretty_assertions",
  "proc-macro2",
  "quote",
  "rpl_pat_syntax",
  "syn",
+ "syn_derive",
  "thiserror",
 ]
 

@@ -7,32 +7,33 @@ extern crate rustc_span;
 
 use pretty_assertions::assert_eq;
 use proc_macro2::TokenStream;
-use rpl_context::PatternCtxt;
-use rpl_mir::pat::{MirPattern, MirPatternBuilder};
+use rpl_context::{PatCtxt, PatternCtxt};
+use rpl_mir::pat::MirPattern;
 
 macro_rules! test_case {
     (fn $name:ident() {$($input:tt)*} => {$($expected:tt)*} $(,)?) => {
-        #[rpl_macros::mir_pattern]
-        fn $name(patterns: &mut MirPatternBuilder<'_>) {
-            mir! {
-                $($input)*
+        #[rpl_macros::pattern_def]
+        fn $name(pcx: PatCtxt<'_>) -> MirPattern<'_> {
+            rpl! {
+                fn $pattern (..) -> _ = mir! {
+                    $($input)*
+                }
             }
+            pattern
         }
         #[test]
         fn ${concat(test_, $name)}() {
             PatternCtxt::entered_no_tcx(|pcx| {
-                let mut patterns = MirPatternBuilder::new(pcx);
-                $name(&mut patterns);
-                assert_eq(patterns.build(), quote::quote!($($expected)*));
+                assert_eq($name(pcx), quote::quote!($($expected)*));
             });
         }
     };
 }
 
 #[track_caller]
-fn assert_eq(patterns: MirPattern<'_>, expected: TokenStream) {
+fn assert_eq(mir_pattern: MirPattern<'_>, expected: TokenStream) {
     assert_eq!(
-        format!("{patterns:?}")
+        format!("{mir_pattern:?}")
             .parse::<TokenStream>()
             .unwrap()
             .to_string()

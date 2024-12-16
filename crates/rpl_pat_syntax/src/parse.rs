@@ -1,4 +1,7 @@
+use core::unreachable;
+
 use syn::parse::{Parse, ParseStream, Result};
+use syn::token::Token;
 use syn::{Ident, Token};
 
 use crate::*;
@@ -17,6 +20,8 @@ pub enum ParseError {
     UnrecognizedIntSuffix(String),
     #[error("possible missing operands?")]
     MissingOperands,
+    #[error("expect `{}`", _0())]
+    ExpectToken(fn() -> &'static str),
 }
 
 impl Region {
@@ -87,6 +92,12 @@ impl AngleBracketedGenericArguments {
             args: parse_angle_bracketed(input)?,
             tk_gt: input.parse()?,
         })
+    }
+    pub fn peek(input: ParseStream<'_>) -> bool {
+        input.peek(Token![<]) || input.peek(Token![::]) && input.peek3(Token![<])
+    }
+    pub fn parse_opt(input: ParseStream<'_>) -> Result<Option<Self>> {
+        Self::peek(input).then(|| input.parse()).transpose()
     }
 }
 
@@ -254,6 +265,8 @@ impl Parse for Type {
             } else {
                 Ok(Type::TyVar(input.parse()?))
             }
+        } else if input.peek(Token![Self]) {
+            Ok(Type::SelfType(input.parse()?))
         } else {
             Ok(Type::Path(input.parse()?))
         }
@@ -658,8 +671,45 @@ impl<K: Parse, C, P: ParseFn<C>> Parse for Macro<K, C, P> {
             tk_bang: input.parse()?,
             delim: macro_delimiter!(content in input),
             content: P::parse(&content)?,
-            parse: P::default(),
+            _parse: PhantomData,
         })
+    }
+}
+
+impl<T, P, End> Parse for PunctuatedWithEnd<T, P, End>
+where
+    T: quote::ToTokens + Parse,
+    P: quote::ToTokens + Token + Parse,
+    End: quote::ToTokens + Token + Parse,
+{
+    fn parse(input: ParseStream<'_>) -> Result<Self> {
+        let mut punctuated = Punctuated::new();
+        while !input.cursor().eof() && !End::peek(input.cursor()) {
+            punctuated.push_value(input.parse()?);
+            if !P::peek(input.cursor()) {
+                if !input.is_empty() {
+                    return Err(input.error(ParseError::ExpectToken(P::display)));
+                }
+                break;
+            }
+            punctuated.push_punct(input.parse()?);
+        }
+        let end = input.parse()?;
+        Ok(PunctuatedWithEnd { punctuated, end })
+    }
+}
+
+impl<P: syn::parse::Parse + quote::ToTokens + token::Token, T: syn::parse::Parse + quote::ToTokens> PunctAnd<P, T> {
+    pub fn parse_opt(input: ParseStream<'_>) -> Result<Option<Self>> {
+        P::peek(input.cursor()).then(|| input.parse()).transpose()
+    }
+}
+
+impl SelfParam {
+    pub fn peek(input: ParseStream<'_>) -> bool {
+        input.peek(Token![self])
+            || input.peek(Token![&])
+                && (input.peek2(Token![self]) || input.peek2(Token![mut]) && input.peek3(Token![self]))
     }
 }
 
@@ -669,8 +719,14 @@ pub struct ParseParse;
 #[derive(Default, Clone, Copy)]
 pub struct PunctuatedParseTerminated;
 
-pub trait ParseFn<T>: Default {
+#[derive(Default, Clone, Copy)]
+pub struct AttributeParseOuter;
+
+pub trait ParseFn<T> {
     fn parse(input: ParseStream<'_>) -> Result<T>;
+    fn parse_many(input: ParseStream<'_>) -> Result<Vec<T>> {
+        Ok(std::iter::from_fn(|| Self::parse(input).ok()).collect())
+    }
 }
 
 impl<T: Parse> ParseFn<T> for ParseParse {
@@ -682,5 +738,15 @@ impl<T: Parse> ParseFn<T> for ParseParse {
 impl<T: Parse, P: Parse> ParseFn<Punctuated<T, P>> for PunctuatedParseTerminated {
     fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Punctuated<T, P>> {
         Punctuated::parse_terminated(input)
+    }
+}
+
+impl ParseFn<syn::Attribute> for AttributeParseOuter {
+    fn parse(_input: ParseStream<'_>) -> Result<syn::Attribute> {
+        unreachable!()
+    }
+
+    fn parse_many(input: ParseStream<'_>) -> Result<Vec<syn::Attribute>> {
+        input.call(syn::Attribute::parse_outer)
     }
 }

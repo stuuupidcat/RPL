@@ -1,7 +1,7 @@
 use std::ops::Not;
 
 use rpl_context::PatCtxt;
-use rpl_mir::pat::MirPatternBuilder;
+use rpl_mir::pat::MirPattern;
 use rpl_mir::{pat, CheckMirCtxt};
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
@@ -55,9 +55,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
-            if let mut patterns_cast = MirPatternBuilder::new(self.pcx)
-                && let pattern_cast = pattern_cast(&mut patterns_cast)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &patterns_cast.build()).check()
+            if let pattern_cast = pattern_cast(self.pcx)
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern_cast.pattern).check()
                 && let Some(cast_from) = matches[pattern_cast.cast_from]
                 && let cast_from = cast_from.span_no_inline(body)
                 && let Some(cast_to) = matches[pattern_cast.cast_to]
@@ -71,9 +70,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     ty,
                     mutability: ty::Mutability::Not.into(),
                 });
-            } else if let mut patterns_cast_mut = MirPatternBuilder::new(self.pcx)
-                && let pattern_cast_mut = pattern_cast_mut(&mut patterns_cast_mut)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &patterns_cast_mut.build()).check()
+            } else if let pattern_cast_mut = pattern_cast_mut(self.pcx)
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern_cast_mut.pattern).check()
                 && let Some(cast_from) = matches[pattern_cast_mut.cast_from]
                 && let cast_from = cast_from.span_no_inline(body)
                 && let Some(cast_to) = matches[pattern_cast_mut.cast_to]
@@ -93,57 +91,62 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     }
 }
 
-struct PatternCast {
+struct PatternCast<'pcx> {
+    pattern: MirPattern<'pcx>,
     ty_var: pat::TyVarIdx,
     cast_from: pat::Location,
     cast_to: pat::Location,
 }
 
-#[rpl_macros::mir_pattern]
-fn pattern_cast(patterns: &mut pat::MirPatternBuilder<'_>) -> PatternCast {
-    mir! {
-        meta!($T:ty);
+#[rpl_macros::pattern_def]
+fn pattern_cast(pcx: PatCtxt<'_>) -> PatternCast<'_> {
+    rpl! {
+        fn $pattern (..) -> _ = mir! {
+            // #[export(ty_var: TyVarIdx)]
+            meta!($T:ty = is_all_safe_trait);
 
-        let from_slice: &[$T] = _;
-        let from_raw: *const [$T] = &raw const *from_slice;
-        let from_len: usize = PtrMetadata(copy from_slice);
-        let ty_size: usize = SizeOf($T);
-        let to_ptr_t: *const T = move from_raw as *const $T (PtrToPtr);
-        let to_ptr: *const u8 = move to_ptr_t as *const u8 (PtrToPtr);
-        let to_len: usize = Mul(move from_len, move ty_size);
-        let to_raw: *const [u8] = *const [u8] from (copy to_ptr, copy to_len);
-        let to_slice: &[u8] = &*to_raw;
+            // #[export(cast_from: Location)]
+            let from_slice: &[$T] = _;
+            let from_raw: *const [$T] = &raw const *from_slice;
+            let from_len: usize = PtrMetadata(copy from_slice);
+            let ty_size: usize = SizeOf($T);
+            let to_ptr_t: *const T = move from_raw as *const $T (PtrToPtr);
+            let to_ptr: *const u8 = move to_ptr_t as *const u8 (PtrToPtr);
+            let to_len: usize = Mul(move from_len, move ty_size);
+            let to_raw: *const [u8] = *const [u8] from (copy to_ptr, copy to_len);
+            // #[export(cast_to: Location)]
+            let to_slice: &[u8] = &*to_raw;
+        }
     }
 
-    patterns.set_ty_var_pred(T_ty_var.idx, is_all_safe_trait);
-
     PatternCast {
+        pattern,
         ty_var: T_ty_var.idx,
         cast_from: from_slice_stmt,
         cast_to: to_slice_stmt,
     }
 }
 
-#[rpl_macros::mir_pattern]
-fn pattern_cast_mut(patterns: &mut pat::MirPatternBuilder<'_>) -> PatternCast {
-    mir! {
-        meta!($T:ty);
-
-        let from_slice_mut: &mut [$T] = _;
-        let from_slice_ref: &[$T] = &*from_slice_mut;
-        let from_raw_mut: *mut [$T] = &raw mut *from_slice_mut;
-        let from_len_mut: usize = PtrMetadata(move from_slice_ref);
-        let ty_size_mut: usize = SizeOf($T);
-        let to_ptr_mut_t: *mut $T = move from_raw_mut as *mut $T (PtrToPtr);
-        let to_ptr_mut: *mut u8 = move to_ptr_mut_t as *mut u8 (PtrToPtr);
-        let to_len_mut: usize = Mul(move from_len_mut, move ty_size_mut);
-        let to_raw_mut: *mut [u8] = *mut [u8] from (copy to_ptr_mut, copy to_len_mut);
-        let to_slice_mut: &mut [u8] = &mut *to_raw_mut;
-    }
-
-    patterns.set_ty_var_pred(T_ty_var.idx, is_all_safe_trait);
+#[rpl_macros::pattern_def]
+fn pattern_cast_mut(pcx: PatCtxt<'_>) -> PatternCast<'_> {
+    rpl! {
+        fn $pattern (..) -> _ = mir! {
+            meta!($T:ty = is_all_safe_trait);
+            let from_slice_mut: &mut [$T] = _;
+            let from_slice_ref: &[$T] = &*from_slice_mut;
+            let from_raw_mut: *mut [$T] = &raw mut *from_slice_mut;
+            let from_len_mut: usize = PtrMetadata(move from_slice_ref);
+            let ty_size_mut: usize = SizeOf($T);
+            let to_ptr_mut_t: *mut $T = move from_raw_mut as *mut $T (PtrToPtr);
+            let to_ptr_mut: *mut u8 = move to_ptr_mut_t as *mut u8 (PtrToPtr);
+            let to_len_mut: usize = Mul(move from_len_mut, move ty_size_mut);
+            let to_raw_mut: *mut [u8] = *mut [u8] from (copy to_ptr_mut, copy to_len_mut);
+            let to_slice_mut: &mut [u8] = &mut *to_raw_mut;
+        }
+    };
 
     PatternCast {
+        pattern,
         ty_var: T_ty_var.idx,
         cast_from: from_slice_mut_stmt,
         cast_to: to_slice_mut_stmt,

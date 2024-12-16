@@ -318,11 +318,8 @@ impl<'pcx> MirPatternBuilder<'pcx> {
         self.pattern
     }
 
-    pub fn new_ty_var(&mut self) -> TyVar {
-        self.pattern.mk_ty_var(None)
-    }
-    pub fn set_ty_var_pred(&mut self, ty_var: TyVarIdx, pred: TyPred) {
-        self.pattern.ty_vars[ty_var].pred = Some(pred);
+    pub fn new_ty_var(&mut self, pred: Option<TyPred>) -> TyVar {
+        self.pattern.mk_ty_var(pred)
     }
     pub fn mk_const_var(&mut self, ty: Ty<'pcx>) -> ConstVar<'pcx> {
         self.pattern.mk_const_var(ty)
