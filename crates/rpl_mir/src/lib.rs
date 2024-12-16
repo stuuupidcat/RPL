@@ -33,15 +33,17 @@ pub mod graph;
 pub mod pattern;
 
 mod matches;
+mod resolve;
 
 use std::cell::RefCell;
 use std::iter::zip;
 
 use crate::graph::{MirControlFlowGraph, MirDataDepGraph, PatControlFlowGraph, PatDataDepGraph};
+use resolve::PatItemKind;
 use rpl_mir_graph::TerminatorEdges;
 use rustc_abi::VariantIdx;
 use rustc_hash::FxHashMap;
-use rustc_hir::def::CtorKind;
+use rustc_hir::def::{CtorKind, Res};
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::definitions::DefPathData;
 use rustc_index::bit_set::HybridBitSet;
@@ -572,6 +574,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
 
     // FIXME
     #[allow(clippy::too_many_arguments)]
+    #[instrument(level = "trace", skip(self), ret)]
     fn match_agg_adt(
         &self,
         path_with_args: pat::PathWithArgs<'pcx>,
@@ -588,12 +591,16 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         let path = path_with_args.path;
         let gargs_pat = path_with_args.args;
         let variant_matched = match path {
-            pattern::Path::Item(path) => match self.match_item_path(path, def_id) {
-                Some([]) => {
-                    variant_idx.as_u32() == 0 && matches!(adt.adt_kind(), ty::AdtKind::Struct | ty::AdtKind::Union)
-                },
-                Some(&[name]) => variant.name == name,
-                _ => false,
+            pattern::Path::Item(path) => {
+                self.match_item_path_by_def_path(path, def_id, PatItemKind::Ctor)
+                    || match self.match_item_path(path, def_id) {
+                        Some([]) => {
+                            variant_idx.as_u32() == 0
+                                && matches!(adt.adt_kind(), ty::AdtKind::Struct | ty::AdtKind::Union)
+                        },
+                        Some(&[name]) => variant.name == name,
+                        _ => false,
+                    }
             },
             pattern::Path::TypeRelative(_ty, _symbol) => false,
             pattern::Path::LangItem(lang_item) => self.tcx.is_lang_item(variant.def_id, lang_item),
@@ -724,6 +731,8 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         matched
     }
 
+    /// Match type path
+    #[instrument(level = "trace", skip(self), ret)]
     fn match_path_with_args(
         &self,
         path_with_args: pat::PathWithArgs<'pcx>,
@@ -731,12 +740,15 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         args: ty::GenericArgsRef<'tcx>,
     ) -> bool {
         let generics = self.tcx.generics_of(def_id);
-        self.match_path(path_with_args.path, def_id) && self.match_generic_args(path_with_args.args, args, generics)
+        self.match_path(path_with_args.path, def_id, PatItemKind::Fn)
+            && self.match_generic_args(path_with_args.args, args, generics)
     }
 
-    fn match_path(&self, path: pat::Path<'pcx>, def_id: DefId) -> bool {
+    #[instrument(level = "trace", skip(self), ret)]
+    fn match_path(&self, path: pat::Path<'pcx>, def_id: DefId, kind: PatItemKind) -> bool {
         let matched = match path {
-            pat::Path::Item(path) => matches!(self.match_item_path(path, def_id), Some([])),
+            // pat::Path::Item(path) => matches!(self.match_item_path(path, def_id), Some([])),
+            pat::Path::Item(path) => self.match_item_path_by_def_path(path, def_id, kind),
             pat::Path::TypeRelative(ty, name) => {
                 self.tcx.item_name(def_id) == name
                     && self
@@ -750,8 +762,29 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         matched
     }
 
+    /// Resolve definition path from `path`.
+    // FIXME: when searching in the same crate, if with the same kind, an item path should always be resolved to the
+    // same item, so this can be cached for performance.
+    #[instrument(level = "trace", skip(self), ret)]
+    fn match_item_path_by_def_path(&self, path: pat::ItemPath<'pcx>, def_id: DefId, kind: PatItemKind) -> bool {
+        let res = resolve::def_path_res(self.tcx, path.0, kind);
+        trace!(?res);
+        let mut res = res.into_iter().filter_map(|res| match res {
+            Res::Def(_, id) => Some(id),
+            _ => None,
+        });
+        let pat_id = if let Some(id) = res.next() { id } else { return false };
+        // FIXME: there should be at most one item matching specific item kind
+        assert!(res.next().is_none());
+
+        trace!(?pat_id, ?def_id);
+
+        pat_id == def_id
+    }
+
     fn match_item_path(&self, path: pat::ItemPath<'pcx>, def_id: DefId) -> Option<&[Symbol]> {
         let &[krate, ref in_crate @ ..] = path.0 else {
+            // an empty `ItemPath`
             return None;
         };
         let def_path = self.tcx.def_path(def_id);
@@ -768,6 +801,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         let matched = matched
             && std::iter::zip(pat_iter.by_ref(), iter.by_ref())
                 .all(|(&path, data)| data.data.get_opt_name().is_some_and(|name| name == path));
+        // Check that `iter` (from `def_path`) is not longer than `pat_iter` (from `path`)
         let matched = matched && iter.next().is_none();
         debug!(?path, ?def_id, matched, "match_item_path");
         matched.then_some(pat_iter.as_slice())
@@ -828,6 +862,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         false
     }
 
+    #[instrument(level = "trace", skip(self), ret)]
     fn match_const_operand(&self, pat: &pat::ConstOperand<'pcx>, konst: mir::Const<'tcx>) -> bool {
         let matched = match (pat, konst) {
             (&pat::ConstOperand::ConstVar(const_var), mir::Const::Ty(_, konst)) => {
@@ -845,14 +880,14 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                 })
             },
             (&pat::ConstOperand::ZeroSized(path_with_args), mir::Const::Val(mir::ConstValue::ZeroSized, ty)) => {
-                let (def_id, _args) = match *ty.kind() {
-                    ty::FnDef(def_id, args) => (def_id, args),
-                    ty::Adt(adt, args) => (adt.did(), args),
+                let (def_id, _args, kind) = match *ty.kind() {
+                    ty::FnDef(def_id, args) => (def_id, args, PatItemKind::Fn),
+                    ty::Adt(adt, args) => (adt.did(), args, PatItemKind::Type),
                     _ => return false,
                 };
                 // self.match_path_with_args(path_with_args, def_id, args)
                 // FIXME: match the arguments
-                self.match_path(path_with_args.path, def_id)
+                self.match_path(path_with_args.path, def_id, kind)
             },
             _ => false,
         };

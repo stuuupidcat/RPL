@@ -1711,3 +1711,104 @@ fn test_cve_2018_21000_inlined() {
         }
     );
 }
+
+#[test]
+fn test_cve_2019_15548_libc_c_char() {
+    pass!(
+        Mir! {
+            type c_char = libc::c_char;
+
+            let ptr: *const c_char = _;
+            _ = $crate::ll::instr(move ptr);
+        },
+        quote! {
+            #[allow(non_snake_case)]
+            let c_char_ty = patterns
+                .pcx
+                .mk_path_ty(patterns
+                    .pcx.
+                    mk_path_with_args(
+                        patterns
+                            .pcx
+                            .mk_item_path(
+                                &[
+                                    "libc",
+                                    "c_char",
+                                ]
+                            ),
+                        &[]
+                    )
+                );
+            let ptr_local = patterns
+                .mk_local(
+                    patterns
+                        .pcx
+                        .mk_raw_ptr_ty(c_char_ty, ::rustc_middle::mir::Mutability::Not)
+                );
+            let ptr_stmt = patterns
+                .mk_assign(ptr_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
+            patterns
+                .mk_fn_call(
+                    ::rpl_mir::pat::Operand::Constant(
+                        patterns
+                            .mk_zeroed(
+                                patterns
+                                    .pcx
+                                    .mk_path_with_args(
+                                        patterns.pcx.mk_item_path(&[
+                                            "crate",
+                                            "ll",
+                                            "instr",
+                                        ]),
+                                        &[]
+                                    )
+                            )
+                    ),
+                    patterns
+                        .mk_list([::rpl_mir::pat::Operand::Move(ptr_local.into_place())]),
+                    None
+                );
+        }
+    )
+}
+
+#[test]
+fn test_cve_2019_15548_2() {
+    pass!(
+        Mir! {
+            type c_char = i8;
+
+            let ptr: *const c_char = _;
+            _ = $crate::ll::instr(move ptr);
+        },
+        quote! {
+            #[allow(non_snake_case)]
+            let c_char_ty = patterns.pcx.primitive_types.i8;
+            let ptr_local = patterns
+                .mk_local(
+                    patterns
+                        .pcx
+                        .mk_raw_ptr_ty(c_char_ty, ::rustc_middle::mir::Mutability::Not)
+                );
+            let ptr_stmt = patterns
+                .mk_assign(ptr_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
+            patterns
+                .mk_fn_call(
+                    ::rpl_mir::pat::Operand::Constant(
+                        patterns
+                            .mk_zeroed(
+                                patterns
+                                    .pcx
+                                    .mk_path_with_args(
+                                        patterns.pcx.mk_item_path(&["crate", "ll", "instr", ]),
+                                        &[]
+                                    )
+                            )
+                    ),
+                    patterns
+                        .mk_list([::rpl_mir::pat::Operand::Move(ptr_local.into_place())]),
+                    None
+                );
+        }
+    )
+}

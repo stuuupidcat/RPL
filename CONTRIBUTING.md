@@ -4,6 +4,14 @@
 - Use `cargo uitest` (short for `cargo test --test compile-test`) to run compile tests.
 - Use `cargo uibless` (short for `cargo test --test compile-test --bless`) to run compile tests (in bless mode), which means the `.stderr` file will be automatically fixed according to the compiler outputs.
 
+## Test Directives
+
+You can control the way a test is built and interpreted through adding test directives.
+
+See <https://rustc-dev-guide.rust-lang.org/tests/directives.html> for more information.
+
+The currently mostly used one is `//@ ignore-on-host`.
+
 # Installation
 
 First, use `cargo install --path .` in current directory to install RPL as a cargo subcommand.

@@ -1,5 +1,5 @@
 use rustc_errors::IntoDiagArg;
-use rustc_macros::Diagnostic;
+use rustc_macros::{Diagnostic, LintDiagnostic};
 use rustc_middle::ty::{self, Ty};
 use rustc_span::Span;
 
@@ -71,4 +71,22 @@ pub struct WrongAssumptionOfFatPointerLayout {
     pub ptr_transmute: Span,
     #[label(rpl_patterns_get_data_ptr_label)]
     pub data_ptr_get: Span,
+}
+
+// for cve_2019_15548
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_rust_str_as_c_str)]
+pub struct RustStrAsCStr {
+    #[note]
+    pub cast_from: Span,
+    #[primary_span]
+    pub cast_to: Span,
+}
+
+// another pattern for cve_2019_15548
+#[derive(LintDiagnostic)]
+#[diag(rpl_patterns_lengthless_buffer_passed_to_extern_function)]
+pub struct LengthlessBufferPassedToExternFunction {
+    #[label(rpl_patterns_label)]
+    pub ptr: Span,
 }

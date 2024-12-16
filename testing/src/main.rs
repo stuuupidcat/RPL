@@ -1,5 +1,3 @@
-//@compile-flags: -lncurses
-//@compile-flags: -Z inline-mir=false
 
 use std::mem;
 
@@ -17,13 +15,12 @@ pub fn instr(s: &mut String) -> i32 {
     unsafe {
         let buf = s.as_bytes().as_ptr();
         let ret = ll::instr(mem::transmute(buf));
-        //~^ ERROR: it is usually a bug to pass a buffer pointer to an extern function without specifying its length
 
-        let capacity = s.capacity();
-        match s.find('\0') {
-            Some(index) => s.as_mut_vec().set_len(index as usize),
-            None => s.as_mut_vec().set_len(capacity),
-        }
+        // let capacity = s.capacity();
+        // match s.find('\0') {
+        //     Some(index) => s.as_mut_vec().set_len(index as usize),
+        //     None => s.as_mut_vec().set_len(capacity),
+        // }
 
         ret
     }
