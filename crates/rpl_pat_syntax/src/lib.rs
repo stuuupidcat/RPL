@@ -3,6 +3,8 @@
 
 use derive_more::{Deref, Display, From, IntoIterator};
 use proc_macro2::Span;
+use std::borrow::Borrow;
+use std::marker::PhantomData;
 use syn::punctuated::Punctuated;
 use syn::{token, Ident, Token};
 use syn_derive::{Parse, ToTokens};
@@ -23,6 +25,11 @@ pub(crate) mod kw {
     syn::custom_keyword!(ty);
     syn::custom_keyword!(lang);
     syn::custom_keyword!(ctor);
+    syn::custom_keyword!(mir);
+
+    // export
+    syn::custom_keyword!(export);
+    syn::custom_keyword!(Statement);
 
     // Statement
     syn::custom_keyword!(drop);
@@ -100,7 +107,7 @@ pub enum PtrMutability {
     Mut(Token![mut]),
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct TypeDecl {
     tk_type: Token![type],
     pub ident: Ident,
@@ -116,7 +123,7 @@ pub struct TypeDecl {
     tk_semi: Token![;],
 }
 
-#[derive(Clone, Parse, ToTokens)]
+#[derive(Parse, ToTokens)]
 pub struct TypeArray {
     #[syn(bracketed)]
     bracket: token::Bracket,
@@ -151,7 +158,6 @@ pub struct TypeFnPtr {
 }
 */
 
-#[derive(Clone)]
 pub struct TypeGroup {
     tk_group: token::Group,
     pub ty: Box<Type>,
@@ -164,25 +170,24 @@ pub struct TypeNever {
 
 pub type TypeParen = Parenthesized<Box<Type>>;
 
-#[derive(Clone)]
 pub struct GenericConst {
     brace: Option<token::Brace>,
     pub konst: Const,
 }
 
-#[derive(Clone, ToTokens, Parse, From)]
+#[derive(ToTokens, Parse, From)]
 pub enum GenericArgument {
     /// A region argument.
     #[parse(peek = syn::Lifetime)]
     Region(Region),
     /// A type argument.
-    #[parse(peek_func = |input| input.fork().parse::<Type>().is_ok())]
+    #[parse(peek_func = |input| input.parse::<Type>().is_ok())]
     Type(Type),
     /// A const argument.
     Const(GenericConst),
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct AngleBracketedGenericArguments {
     tk_colon2: Option<Token![::]>,
     tk_lt: Token![<],
@@ -191,14 +196,14 @@ pub struct AngleBracketedGenericArguments {
     tk_gt: Token![>],
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub enum ReturnType {
     #[parse(peek = Token![->])]
     Type(Token![->], Box<Type>),
     Default,
 }
 
-#[derive(Clone, Parse, ToTokens)]
+#[derive(Parse, ToTokens)]
 pub struct ParenthesizedGenericArguments {
     #[syn(parenthesized)]
     paren: token::Paren,
@@ -210,10 +215,10 @@ pub struct ParenthesizedGenericArguments {
     pub output: syn::ReturnType,
 }
 
-#[derive(Clone, ToTokens, Parse, From)]
+#[derive(ToTokens, Parse, From)]
 pub enum PathArguments {
     /// The `<'a, T>` in `std::slice::iter<'a, T>`.
-    #[parse(peek_func = |input| input.peek(Token![<]) || input.peek(Token![::]) && input.peek3(Token![<]))]
+    #[parse(peek_func = AngleBracketedGenericArguments::peek)]
     AngleBracketed(AngleBracketedGenericArguments),
     // /// The `(A, B) -> C` in `Fn(A, B) -> C`.
     // #[parse(peek = token::Paren)]
@@ -221,7 +226,7 @@ pub enum PathArguments {
     None,
 }
 
-#[derive(Clone, Parse, ToTokens)]
+#[derive(Parse, ToTokens)]
 pub struct PathSegment {
     pub ident: Ident,
     pub arguments: PathArguments,
@@ -243,7 +248,7 @@ pub enum PathLeading {
     None,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct Path {
     pub leading: PathLeading,
     #[parse(Punctuated::parse_separated_nonempty)]
@@ -263,7 +268,6 @@ impl Path {
     }
 }
 
-#[derive(Clone)]
 pub struct QSelf {
     tk_lt: Token![<],
     pub ty: Box<Type>,
@@ -272,20 +276,19 @@ pub struct QSelf {
     tk_gt: Token![>],
 }
 
-#[derive(Clone)]
 pub struct TypePath {
     pub qself: Option<QSelf>,
     pub path: Path,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct TypePtr {
     tk_star: Token![*],
     pub mutability: PtrMutability,
     pub ty: Box<Type>,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct TypeReference {
     tk_and: Token![&],
     #[parse(Region::parse_opt)]
@@ -294,7 +297,7 @@ pub struct TypeReference {
     pub ty: Box<Type>,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct TypeSlice {
     #[syn(bracketed)]
     bracket: token::Bracket,
@@ -302,7 +305,7 @@ pub struct TypeSlice {
     pub ty: Box<Type>,
 }
 
-#[derive(Clone, ToTokens)]
+#[derive(ToTokens)]
 pub struct TypeTuple {
     #[syn(parenthesized)]
     paren: token::Paren,
@@ -310,13 +313,13 @@ pub struct TypeTuple {
     pub tys: Punctuated<Type, Token![,]>,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct TypeVar {
     tk_dollar: Token![$],
     pub ident: Ident,
 }
 
-#[derive(Clone, ToTokens, From)]
+#[derive(ToTokens, From)]
 pub enum Type {
     /// A fixed size array type: `[T; n]`.
     Array(TypeArray),
@@ -351,14 +354,17 @@ pub enum Type {
     /// A tuple type: `(A, B, C, String)`.
     Tuple(TypeTuple),
 
-    /// A `TyVar` from `meta!($T:ty)`.
+    /// A `TyVar` from `meta!($T:ty)` or other pattern.
     TyVar(TypeVar),
 
     /// A languate item
     LangItem(LangItemWithArgs),
+
+    /// The `Self` type
+    SelfType(Token![Self]),
 }
 
-#[derive(Clone, ToTokens, Parse, From, Display)]
+#[derive(ToTokens, Parse, From, Display)]
 pub enum PlaceLocal {
     #[parse(peek = Ident)]
     #[display("{_0}")]
@@ -377,7 +383,7 @@ impl PlaceLocal {
     }
 }
 
-#[derive(Clone, ToTokens)]
+#[derive(ToTokens)]
 pub struct PlaceParen {
     #[syn(parenthesized)]
     paren: token::Paren,
@@ -385,20 +391,20 @@ pub struct PlaceParen {
     pub place: Box<Place>,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct PlaceDeref {
     tk_star: Token![*],
     pub place: Box<Place>,
 }
 
-#[derive(Clone, ToTokens)]
+#[derive(ToTokens)]
 pub struct PlaceField {
     pub place: Box<Place>,
     tk_dot: Token![.],
     pub field: syn::Member,
 }
 
-#[derive(Clone, ToTokens)]
+#[derive(ToTokens)]
 pub struct PlaceIndex {
     pub place: Box<Place>,
     #[syn(bracketed)]
@@ -407,7 +413,7 @@ pub struct PlaceIndex {
     pub index: Ident,
 }
 
-#[derive(Clone, ToTokens)]
+#[derive(ToTokens)]
 pub struct PlaceConstIndex {
     pub place: Box<Place>,
     #[syn(bracketed)]
@@ -422,7 +428,7 @@ pub struct PlaceConstIndex {
     pub min_length: syn::Index,
 }
 
-#[derive(Clone, ToTokens)]
+#[derive(ToTokens)]
 pub struct PlaceSubslice {
     pub place: Box<Place>,
     #[syn(bracketed)]
@@ -437,14 +443,14 @@ pub struct PlaceSubslice {
     pub to: syn::Index,
 }
 
-#[derive(Clone, ToTokens)]
+#[derive(ToTokens)]
 pub struct PlaceDowncast {
     pub place: Box<Place>,
     tk_as: Token![as],
     pub variant: Ident,
 }
 
-#[derive(Clone, ToTokens, From)]
+#[derive(ToTokens, From)]
 pub enum Place {
     /// `local`
     Local(PlaceLocal),
@@ -462,6 +468,12 @@ pub enum Place {
     Subslice(PlaceSubslice),
     /// `place as Variant`
     DownCast(PlaceDowncast),
+}
+
+impl Borrow<PlaceLocal> for Place {
+    fn borrow(&self) -> &PlaceLocal {
+        self.local()
+    }
 }
 
 impl Place {
@@ -491,14 +503,14 @@ impl Place {
     }
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub enum Const {
     #[parse(peek = syn::Lit)]
     Lit(syn::Lit),
     Path(TypePath),
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct LangItemWithArgs {
     tk_pound: Token![#],
     #[syn(bracketed)]
@@ -509,11 +521,11 @@ pub struct LangItemWithArgs {
     tk_eq: Token![=],
     #[syn(in = bracket)]
     pub item: syn::LitStr,
-    #[parse(|input| input.peek(Token![<]).then(|| input.parse()).transpose())]
+    #[parse(AngleBracketedGenericArguments::parse_opt)]
     pub args: Option<AngleBracketedGenericArguments>,
 }
 
-#[derive(Clone, Parse, ToTokens)]
+#[derive(Parse, ToTokens)]
 pub enum ConstOperandKind {
     #[parse(peek = syn::Lit)]
     Lit(syn::Lit),
@@ -522,25 +534,25 @@ pub enum ConstOperandKind {
     Type(TypePath),
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct ConstOperand {
     tk_const: Token![const],
     pub kind: ConstOperandKind,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct OperandCopy {
     kw_copy: kw::copy,
     pub place: Place,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct OperandMove {
     tk_move: Token![move],
     pub place: Place,
 }
 
-#[derive(Clone, Parse, ToTokens, From)]
+#[derive(Parse, ToTokens, From)]
 pub enum Operand {
     #[parse(peek = Token![_])]
     Any(Token![_]),
@@ -554,7 +566,7 @@ pub enum Operand {
     Constant(ConstOperand),
 }
 
-#[derive(Clone, ToTokens, From)]
+#[derive(ToTokens, From)]
 pub enum FnOperand {
     Copy(Parenthesized<OperandCopy>),
     Move(Parenthesized<OperandMove>),
@@ -562,19 +574,18 @@ pub enum FnOperand {
     LangItem(LangItemWithArgs),
 }
 
-#[derive(Clone, Parse, ToTokens)]
+#[derive(Parse, ToTokens)]
 pub struct Parenthesized<T: quote::ToTokens, P: parse::ParseFn<T> = parse::ParseParse> {
     #[syn(parenthesized)]
     paren: token::Paren,
     #[syn(in = paren)]
     #[parse(P::parse)]
     pub value: T,
-    #[parse(|_| Ok(P::default()))]
+    #[parse(|_| Ok(PhantomData))]
     #[to_tokens(|_, _| {})]
-    _parse: P,
+    _parse: PhantomData<P>,
 }
 
-#[derive(Clone)]
 pub struct RvalueUse {
     paren: Option<token::Paren>,
     pub operand: Operand,
@@ -598,7 +609,7 @@ impl From<Parenthesized<OperandCopy>> for RvalueUse {
     }
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct RvalueRepeat {
     #[syn(bracketed)]
     bracket: token::Bracket,
@@ -610,7 +621,7 @@ pub struct RvalueRepeat {
     pub len: syn::LitInt,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct RvalueRef {
     tk_and: Token![&],
     #[parse(Region::parse_opt)]
@@ -619,7 +630,7 @@ pub struct RvalueRef {
     pub place: Place,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct RvalueRawPtr {
     tk_and: Token![&],
     kw_raw: kw::raw,
@@ -627,7 +638,7 @@ pub struct RvalueRawPtr {
     pub place: Place,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct RvalueLen {
     kw_len: kw::Len,
     #[syn(parenthesized)]
@@ -646,7 +657,7 @@ pub enum CastKind {
     Transmute(kw::Transmute),
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct RvalueCast {
     pub operand: Operand,
     tk_as: Token![as],
@@ -674,7 +685,7 @@ pub enum BinOp {
     #[parse(peek = kw::Offset)] Offset(kw::Offset),
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct RvalueBinOp {
     pub op: BinOp,
     #[syn(parenthesized)]
@@ -695,7 +706,7 @@ pub enum NullOp {
     // OffsetOf(kw::OffsetOf),
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct RvalueNullOp {
     pub op: NullOp,
     #[syn(parenthesized)]
@@ -712,7 +723,7 @@ pub enum UnOp {
     #[parse(peek = kw::PtrMetadata)] PtrMetadata(kw::PtrMetadata),
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct RvalueUnOp {
     pub op: UnOp,
     #[syn(parenthesized)]
@@ -721,7 +732,7 @@ pub struct RvalueUnOp {
     pub operand: Operand,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct RvalueDiscriminant {
     kw_discr: kw::discriminant,
     #[syn(parenthesized)]
@@ -730,7 +741,7 @@ pub struct RvalueDiscriminant {
     pub place: Place,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct AggregateArray {
     // bracket: token::Bracket,
     // pub ty: Box<Type>,
@@ -740,47 +751,46 @@ pub struct AggregateArray {
     pub operands: BracketedOperands,
 }
 
-#[derive(Clone, ToTokens, Parse, From)]
+#[derive(ToTokens, Parse, From)]
 pub struct AggregateTuple {
     #[parse(ParenthesizedOperands::parse_tuple_like)]
     pub operands: ParenthesizedOperands,
 }
 
-#[derive(Clone, ToTokens, Parse, From)]
+#[derive(ToTokens, Parse, From)]
 pub struct StructField {
     pub ident: Ident,
     tk_colon: Token![:],
     pub operand: Operand, /* FIXME _marker: std::marker::PhantomData `::` <u8> */
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct StructFields {
     #[syn(braced)]
     brace: token::Brace,
     #[syn(in = brace)]
-    #[parse(Punctuated::parse_terminated)]
-    pub fields: Punctuated<StructField, Token![,]>,
+    pub fields: PunctuatedWithEnd<StructField>,
 }
 
-#[derive(Clone, ToTokens, Parse, From)]
+#[derive(ToTokens, Parse, From)]
 pub enum PathOrLangItem {
     #[parse(peek = Token![#])]
     LangItem(LangItemWithArgs),
     Path(Path),
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct AggregateAdtStruct {
     pub adt: PathOrLangItem,
     pub fields: StructFields,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct AggregateAdtUnit {
     pub adt: PathOrLangItem,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct Ctor {
     pub pound: Token![#],
     #[syn(bracketed)]
@@ -789,14 +799,14 @@ pub struct Ctor {
     pub kw_ctor: kw::ctor,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct AggregateAdtTuple {
     ctor: Ctor,
     pub adt: Path,
     pub fields: ParenthesizedOperands,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct AggregateRawPtr {
     pub ty: TypePtr,
     kw_from: kw::from,
@@ -810,7 +820,7 @@ pub struct AggregateRawPtr {
     pub metadata: Operand,
 }
 
-#[derive(Clone, ToTokens, From)]
+#[derive(ToTokens, From)]
 pub enum RvalueAggregate {
     Array(AggregateArray),
     Tuple(AggregateTuple),
@@ -820,7 +830,7 @@ pub enum RvalueAggregate {
     RawPtr(AggregateRawPtr),
 }
 
-#[derive(Clone, ToTokens, From)]
+#[derive(ToTokens, From)]
 pub enum Rvalue {
     Any(Token![_]),
     Use(RvalueUse),
@@ -840,7 +850,7 @@ pub enum Rvalue {
 
 pub type ParenthesizedOperands = Parenthesized<Punctuated<Operand, Token![,]>, parse::PunctuatedParseTerminated>;
 
-#[derive(Clone, Parse, ToTokens)]
+#[derive(Parse, ToTokens)]
 pub struct BracketedOperands {
     #[syn(bracketed)]
     bracket: token::Bracket,
@@ -849,7 +859,7 @@ pub struct BracketedOperands {
     pub operands: Punctuated<Operand, Token![,]>,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct Call {
     pub func: FnOperand,
     pub operands: ParenthesizedOperands,
@@ -860,50 +870,39 @@ pub struct Macro<K, C, P = parse::ParseParse> {
     tk_bang: Token![!],
     delim: syn::MacroDelimiter,
     pub content: C,
-    parse: P,
+    _parse: PhantomData<P>,
 }
 
-// `Token![!]` is not `Clone`able.
-impl<K: Clone, C: Clone, P: Clone> Clone for Macro<K, C, P> {
-    fn clone(&self) -> Self {
-        Self {
-            kw: self.kw.clone(),
-            tk_bang: self.tk_bang,
-            delim: self.delim.clone(),
-            content: self.content.clone(),
-            parse: self.parse.clone(),
-        }
-    }
-}
-
-#[derive(Clone, ToTokens, From)]
+#[derive(ToTokens, From)]
 pub enum RvalueOrCall {
     Rvalue(Rvalue),
     Call(Call),
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct UsePath {
     tk_use: Token![use],
     pub path: Path,
     tk_semi: Token![;],
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct LocalInit {
     tk_eq: Token![=],
     pub rvalue_or_call: RvalueOrCall,
 }
 
-#[derive(Clone, Parse, ToTokens)]
+#[derive(Parse, ToTokens)]
 pub struct LocalDecl {
+    pub attrs: Attributes,
     tk_let: Token![let],
     tk_mut: Option<Token![mut]>,
+    // FIXME: change it to `ident: Ident`
     pub local: PlaceLocal,
     tk_colon: Token![:],
     pub ty: Type,
-    #[parse(|input| input.peek(Token![=]).then(|| input.parse()).transpose())]
-    pub init: Option<LocalInit>,
+    #[parse(PunctAnd::parse_opt)]
+    pub init: Option<PunctAnd<Token![=], RvalueOrCall>>,
     tk_semi: Token![;],
 }
 
@@ -913,21 +912,21 @@ impl LocalDecl {
     }
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct Assign {
     pub place: Place,
     tk_eq: Token![=],
     pub rvalue_or_call: RvalueOrCall,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct CallIgnoreRet {
     tk_underscore: Token![_],
     tk_eq: Token![=],
     pub call: Call,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct Drop {
     kw_drop: kw::drop,
     #[syn(parenthesized)]
@@ -936,24 +935,23 @@ pub struct Drop {
     pub place: Place,
 }
 
-#[derive(Clone, ToTokens, Parse, From)]
+#[derive(ToTokens, Parse, From)]
 pub enum Declaration {
     #[parse(peek = Token![type])]
     TypeDecl(TypeDecl),
     #[parse(peek = Token![use])]
     UsePath(UsePath),
-    #[parse(peek = Token![let])]
     LocalDecl(LocalDecl),
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct Loop {
     pub label: Option<syn::Label>,
     tk_loop: Token![loop],
     pub block: Block,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub enum Control {
     #[parse(peek = Token![break])]
     Break(Token![break], Option<syn::Label>),
@@ -961,16 +959,21 @@ pub enum Control {
     Continue(Token![continue], Option<syn::Label>),
 }
 
-#[derive(Clone, ToTokens, Parse, IntoIterator, Deref)]
-pub struct Many<T: syn::parse::Parse + quote::ToTokens>(
-    #[parse(|input| Ok(std::iter::from_fn(|| input.parse().ok()).collect()))]
+#[derive(ToTokens, Parse, IntoIterator, Deref)]
+pub struct Many<T: quote::ToTokens, P: parse::ParseFn<T> = parse::ParseParse>(
+    #[parse(P::parse_many)]
     #[to_tokens(|tokens, elems: &Vec<T>| elems.iter().for_each(|elem| elem.to_tokens(tokens)))]
     #[into_iterator(owned, ref)]
     #[deref]
     pub Vec<T>,
+    #[parse(|_| Ok(PhantomData))]
+    #[to_tokens(|_, _| {})]
+    PhantomData<P>,
 );
 
-#[derive(Clone, ToTokens, Parse)]
+type Attributes = Many<syn::Attribute, parse::AttributeParseOuter>;
+
+#[derive(ToTokens, Parse)]
 pub struct Block {
     #[syn(braced)]
     brace: token::Brace,
@@ -978,28 +981,29 @@ pub struct Block {
     pub statements: Many<Statement>,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub enum SwitchBody {
     #[parse(peek = token::Brace)]
     Block(Block),
-    Statement(Statement<syn::parse::Nothing>, Token![,]),
+    Statement(StatementKind<syn::parse::Nothing>, Token![,]),
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
 pub struct SwitchTarget {
+    pub attrs: Attributes,
     pub value: SwitchValue,
     tk_arrow: Token![=>],
     pub body: SwitchBody,
 }
 
-#[derive(Clone, ToTokens, From)]
+#[derive(ToTokens, From)]
 pub enum SwitchValue {
     Bool(syn::LitBool),
     Int(syn::LitInt),
     Underscore(Token![_]),
 }
 
-#[derive(Clone, Parse, ToTokens)]
+#[derive(Parse, ToTokens)]
 pub struct SwitchInt {
     kw_switch_int: kw::switchInt,
     #[syn(parenthesized)]
@@ -1012,8 +1016,8 @@ pub struct SwitchInt {
     pub targets: Many<SwitchTarget>,
 }
 
-#[derive(Clone, Parse, ToTokens)]
-pub enum Statement<End: quote::ToTokens + syn::parse::Parse = Token![;]> {
+#[derive(Parse, ToTokens)]
+pub enum StatementKind<End: quote::ToTokens + syn::parse::Parse = Token![;]> {
     #[parse(peek = Token![_])]
     Call(CallIgnoreRet, End),
     #[parse(peek_func = |input| input.peek(kw::drop) && input.peek2(token::Paren))]
@@ -1027,12 +1031,25 @@ pub enum Statement<End: quote::ToTokens + syn::parse::Parse = Token![;]> {
     Assign(Assign, End),
 }
 
-#[derive(Clone, Copy, ToTokens, Parse, From)]
-pub enum MetaKind {
-    Ty(kw::ty),
+#[derive(ToTokens, Parse)]
+pub struct Statement<End: quote::ToTokens + syn::parse::Parse = Token![;]> {
+    pub attrs: Attributes,
+    pub kind: StatementKind<End>,
 }
 
-#[derive(Clone, ToTokens, Parse)]
+#[derive(ToTokens, Parse)]
+pub struct TyVar {
+    kw_ty: kw::ty,
+    #[parse(PunctAnd::parse_opt)]
+    pub ty_pred: Option<PunctAnd<Token![=], syn::Expr>>,
+}
+
+#[derive(ToTokens, Parse, From)]
+pub enum MetaKind {
+    Ty(TyVar),
+}
+
+#[derive(ToTokens, Parse)]
 pub struct MetaItem {
     tk_dollar: Token![$],
     pub ident: Ident,
@@ -1051,4 +1068,232 @@ pub struct Mir {
     pub metas: Many<Meta>,
     pub declarations: Many<Declaration>,
     pub statements: Many<Statement>,
+}
+
+#[derive(Clone, Copy, Parse, ToTokens)]
+pub enum ExportKind {
+    #[parse(peek = kw::Statement)]
+    Statement(kw::Statement),
+}
+
+#[derive(Parse, ToTokens)]
+pub struct Export {
+    kw_export: kw::export,
+    #[syn(parenthesized)]
+    paran: token::Paren,
+    #[syn(in = paran)]
+    pub ident: Ident,
+    #[syn(in = paran)]
+    tk_colon: syn::Token![:],
+    #[syn(in = paran)]
+    pub kind: ExportKind,
+}
+
+#[derive(Parse, ToTokens)]
+pub enum IdentPat {
+    #[parse(peek = Token![_])]
+    Underscore(Token![_]),
+    #[parse(peek = Token![$])]
+    Pat(Token![$], Ident),
+    #[parse(peek = Ident)]
+    Ident(Ident),
+}
+
+#[derive(Parse, ToTokens)]
+pub struct ParamPat {
+    pub mutability: Mutability,
+    tk_dollar: Token![$],
+    pub ident: Ident,
+    tk_colon: Token![:],
+}
+
+#[derive(Parse, ToTokens)]
+pub struct NormalParam {
+    #[parse(|input| input.peek(Ident).then(|| input.parse()).transpose())]
+    pub ident: Option<ParamPat>,
+    pub ty: Type,
+}
+
+#[derive(Parse, ToTokens)]
+pub struct PunctAnd<P: syn::parse::Parse + quote::ToTokens, T: syn::parse::Parse + quote::ToTokens> {
+    punct: P,
+    pub value: T,
+}
+
+#[derive(Parse, ToTokens)]
+pub struct SelfParam {
+    pub reference: Option<Token![&]>,
+    pub mutability: Mutability,
+    pub tk_self: Token![self],
+    #[parse(PunctAnd::parse_opt)]
+    pub ty: Option<PunctAnd<Token![:], Type>>,
+}
+
+#[derive(Parse, ToTokens)]
+pub enum FnParamKind {
+    #[parse(peek_func = SelfParam::peek)]
+    SelfParam(SelfParam),
+    Param(NormalParam),
+}
+
+#[derive(Parse, ToTokens)]
+pub struct FnParam {
+    pub attrs: Attributes,
+    pub kind: FnParamKind,
+    pub ident: IdentPat,
+    tk_colon: Token![:],
+    pub ty: Type,
+}
+
+#[derive(ToTokens, IntoIterator, Deref)]
+pub struct PunctuatedWithEnd<T: quote::ToTokens, P: quote::ToTokens = Token![,], End: quote::ToTokens = Token![..]> {
+    #[into_iterator(owned, ref)]
+    #[deref]
+    pub punctuated: Punctuated<T, P>,
+    pub end: Option<End>,
+}
+
+#[derive(Parse, ToTokens)]
+pub enum FnRet {
+    #[parse(peek_func = |input| input.peek(Token![->]) && input.peek3(Token![_]))]
+    Any(Token![->], Token![_]),
+    Ret(ReturnType),
+}
+
+#[derive(Parse, ToTokens)]
+pub struct FnSig {
+    tk_fn: Token![fn],
+    pub ident: IdentPat,
+    #[syn(parenthesized)]
+    paren: token::Paren,
+    #[syn(in = paren)]
+    pub params: PunctuatedWithEnd<FnParam>,
+    pub ret: FnRet,
+}
+
+#[derive(Parse, ToTokens)]
+pub struct MirBody {
+    tk_eq: Token![=],
+    kw_mir: kw::mir,
+    tk_bang: Token![!],
+    #[syn(braced)]
+    brace: token::Brace,
+    #[syn(in = brace)]
+    pub mir: Mir,
+}
+
+#[derive(Parse, ToTokens)]
+pub enum FnBody {
+    #[parse(peek = Token![;])]
+    Empty(Token![;]),
+    #[parse(peek = Token![=])]
+    Mir(MirBody),
+    // Hir(HirBody),
+}
+
+#[derive(Parse, ToTokens)]
+pub struct FnPat {
+    pub sig: FnSig,
+    pub body: FnBody,
+}
+
+#[derive(Parse, ToTokens)]
+pub struct Field {
+    pub ident: IdentPat,
+    tk_colon: Token![:],
+    pub ty: Type,
+}
+
+#[derive(Parse, ToTokens)]
+pub struct Variant {
+    pub ident: IdentPat,
+    #[syn(braced)]
+    brace: token::Brace,
+    #[syn(in = brace)]
+    #[parse(Punctuated::parse_terminated)]
+    pub fields: Punctuated<Field, Token![,]>,
+}
+
+#[derive(Parse, ToTokens)]
+pub struct Struct {
+    tk_struct: Token![struct],
+    tk_dollar: Token![$],
+    pub ident: Ident,
+    #[syn(braced)]
+    brace: token::Brace,
+    #[syn(in = brace)]
+    pub variant: Variant,
+}
+
+#[derive(Parse, ToTokens)]
+pub struct Enum {
+    tk_enum: Token![enum],
+    tk_dollar: Token![$],
+    pub ident: Ident,
+    #[syn(braced)]
+    brace: token::Brace,
+    #[syn(in = brace)]
+    #[parse(Punctuated::parse_terminated)]
+    pub variants: Punctuated<Variant, Token![,]>,
+}
+
+#[derive(Parse, ToTokens)]
+pub enum ImplKind {
+    #[parse(peek_func = |input| input.parse::<Path>().is_ok() && input.peek(Token![for]))]
+    Trait(Path, Token![for]),
+    Inherent,
+}
+
+impl ImplKind {
+    pub fn as_path(&self) -> Option<&Path> {
+        match self {
+            ImplKind::Trait(path, _) => Some(path),
+            ImplKind::Inherent => None,
+        }
+    }
+}
+
+#[derive(Parse, ToTokens)]
+pub enum ImplItemKind {
+    Fn(FnPat),
+}
+
+#[derive(Parse, ToTokens)]
+pub struct ImplItem {
+    pub attrs: Attributes,
+    pub kind: ImplItemKind,
+}
+
+#[derive(Parse, ToTokens)]
+pub struct Impl {
+    tk_impl: Token![impl],
+    pub kind: ImplKind,
+    pub ty: Type,
+    #[syn(braced)]
+    pub brace: token::Brace,
+    #[syn(in = brace)]
+    pub items: Many<ImplItem>,
+}
+
+#[derive(Parse, ToTokens)]
+pub enum ItemKind {
+    #[parse(peek = Token![fn])]
+    Fn(FnPat),
+    #[parse(peek = Token![struct])]
+    Struct(Struct),
+    #[parse(peek = Token![enum])]
+    Enum(Enum),
+    #[parse(peek = Token![impl])]
+    Impl(Impl),
+}
+
+#[derive(Parse, ToTokens)]
+pub struct Item {
+    pub attrs: Attributes,
+    pub kind: ItemKind,
+}
+
+#[derive(Parse, ToTokens)]
+pub struct Pattern {
+    pub items: Many<Item>,
 }

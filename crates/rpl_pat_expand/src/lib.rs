@@ -30,9 +30,6 @@ pub(crate) mod symbol_table;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use check::check_mir;
-pub use expand::{expand, expand_mir, MirPatternFn};
-#[cfg(test)]
-pub(crate) use expand::{expand_impl, Expand};
-pub(crate) use symbol_table::is_primitive;
-pub use symbol_table::SymbolTable;
+pub(crate) use check::check_pattern;
+pub use expand::{expand, expand_pattern, PatternDefFn};
+pub(crate) use symbol_table::{is_primitive, SymbolTable};

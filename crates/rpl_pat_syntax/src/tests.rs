@@ -186,6 +186,7 @@ fn test_meta() {
     pass!(Meta!(meta!($T:ty);));
     pass!(Meta!(meta![$T:ty, $U:ty]; ));
     pass!(Meta!(meta! { $T:ty, $U:ty, }));
+    pass!(Meta!(meta!($T:ty = is_all_safe_trait); ));
 }
 
 #[test]
@@ -284,6 +285,12 @@ fn test_statement() {
     pass!(Statement!( _ = drop_in_place(copy elem_ptr); ));
     pass!(Statement!( *x = std::mem::take(move y); ));
     pass!(Statement!(drop(y[x]);));
+    pass!(Statement!(
+        from_vec_unique_ptr = core::ptr::unique::Unique::<u8> {
+            pointer: copy from_vec_ptr,
+            _marker: const core::marker::PhantomData::<u8>,
+        };
+    ));
 }
 
 #[test]

@@ -63,7 +63,7 @@ pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     tcx: TyCtxt<'tcx>,
     param_env: ty::ParamEnv<'tcx>,
     body: &'a mir::Body<'tcx>,
-    patterns: &'a pat::MirPattern<'pcx>,
+    pattern: &'a pat::MirPattern<'pcx>,
     pat_cfg: PatControlFlowGraph,
     pat_ddg: PatDataDepGraph,
     mir_cfg: MirControlFlowGraph,
@@ -75,18 +75,18 @@ pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
 }
 
 impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
-    pub fn new(tcx: TyCtxt<'tcx>, body: &'a mir::Body<'tcx>, patterns: &'a pat::MirPattern<'pcx>) -> Self {
+    pub fn new(tcx: TyCtxt<'tcx>, body: &'a mir::Body<'tcx>, pattern: &'a pat::MirPattern<'pcx>) -> Self {
         // let pat_pdg = crate::graph::pat_program_dep_graph(&patterns, tcx.pointer_size().bytes_usize());
         // let mir_pdg = crate::graph::mir_program_dep_graph(body);
-        let pat_cfg = crate::graph::pat_control_flow_graph(patterns, tcx.pointer_size().bytes());
-        let pat_ddg = crate::graph::pat_data_dep_graph(patterns, &pat_cfg);
+        let pat_cfg = crate::graph::pat_control_flow_graph(pattern, tcx.pointer_size().bytes());
+        let pat_ddg = crate::graph::pat_data_dep_graph(pattern, &pat_cfg);
         let mir_cfg = crate::graph::mir_control_flow_graph(body);
         let mir_ddg = crate::graph::mir_data_dep_graph(body, &mir_cfg);
         Self {
             tcx,
             param_env: tcx.param_env_reveal_all_normalized(body.source.def_id()),
             body,
-            patterns,
+            pattern,
             pat_cfg,
             pat_ddg,
             mir_cfg,
@@ -95,9 +95,9 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
             // mir_pdg,
             locals: IndexVec::from_elem_n(
                 RefCell::new(HybridBitSet::new_empty(body.local_decls.len())),
-                patterns.locals.len(),
+                pattern.locals.len(),
             ),
-            ty_vars: IndexVec::from_elem(RefCell::new(Vec::new()), &patterns.ty_vars),
+            ty_vars: IndexVec::from_elem(RefCell::new(Vec::new()), &pattern.ty_vars),
         }
     }
     pub fn check(&self) -> Option<Matches<'tcx>> {
@@ -254,7 +254,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         if locals.contains(local) {
             return true;
         }
-        let matched = self.match_ty(self.patterns.locals[pat], self.body.local_decls[local].ty);
+        let matched = self.match_ty(self.pattern.locals[pat], self.body.local_decls[local].ty);
         debug!(?pat, ?local, matched, "match_local");
         if matched {
             locals.insert(local);
@@ -326,7 +326,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
     }
 
     pub fn match_statement_or_terminator(&self, pat: pat::Location, loc: mir::Location) -> bool {
-        let block_pat = &self.patterns[pat.block];
+        let block_pat = &self.pattern[pat.block];
         let block = &self.body[loc.block];
         match (
             pat.statement_index < block_pat.statements.len(),
@@ -397,7 +397,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         terminator: &mir::Terminator<'tcx>,
     ) -> bool {
         let matched = match (
-            self.patterns[loc_pat.block].terminator(),
+            self.pattern[loc_pat.block].terminator(),
             &self.body[loc.block].terminator().kind,
         ) {
             // (&pat::StatementKind::Init(local_pat) ,

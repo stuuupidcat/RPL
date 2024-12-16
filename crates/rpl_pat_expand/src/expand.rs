@@ -1,27 +1,31 @@
+use derive_more::Deref;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_each_token, quote_token, ToTokens};
+use std::borrow::Borrow;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::{Pair, Pairs, Punctuated};
 use syn::Ident;
 use syntax::*;
 
-const MACRO_MIR: &str = "mir";
+use crate::SymbolTable;
 
-pub struct MirPatternFn {
+const MACRO_RPL: &str = "rpl";
+
+pub struct PatternDefFn {
     pub(crate) item_fn: syn::ItemFn,
 }
 
-impl Parse for MirPatternFn {
+impl Parse for PatternDefFn {
     fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
         let item_fn = input.parse()?;
-        Ok(MirPatternFn { item_fn })
+        Ok(PatternDefFn { item_fn })
     }
 }
 
-impl MirPatternFn {
-    pub(crate) fn expand_macro_mir(mut self) -> syn::Result<TokenStream> {
+impl PatternDefFn {
+    pub(crate) fn expand_macro_rpl(mut self) -> syn::Result<TokenStream> {
         let inputs = self.item_fn.sig.inputs.iter().collect::<Vec<_>>();
-        let patterns = if let [syn::FnArg::Typed(patterns)] = inputs[..]
+        let pcx = if let [syn::FnArg::Typed(patterns)] = inputs[..]
             && let box syn::Pat::Ident(ref patterns) = patterns.pat
         {
             Some(&patterns.ident)
@@ -30,46 +34,45 @@ impl MirPatternFn {
         };
         for stmt in &mut self.item_fn.block.stmts {
             if let syn::Stmt::Macro(syn::StmtMacro { mac, .. }) = stmt
-                && mac.path.is_ident(MACRO_MIR)
+                && mac.path.is_ident(MACRO_RPL)
             {
                 mac.path = syn::parse_quote!(::rpl_macros::identity);
-                let mir = syn::parse2(mac.tokens.clone())?;
-                mac.tokens = crate::expand_mir(mir, patterns)?;
+                let pattern = syn::parse2(std::mem::take(&mut mac.tokens))?;
+                mac.tokens = crate::expand_pattern(&pattern, pcx)?;
             }
         }
         Ok(self.item_fn.into_token_stream())
     }
 }
 
-pub(crate) struct ExpandCtxt<'ecx> {
-    patterns: &'ecx Ident,
+#[derive(Clone, Copy)]
+struct ExpandCtxt<'pat> {
+    pcx: &'pat Ident,
+    symbols: &'pat SymbolTable<'pat>,
 }
 
-pub(crate) fn expand_impl<T>(value: T, patterns: &Ident, tokens: &mut TokenStream)
-where
-    for<'ecx> Expand<'ecx, T>: ToTokens,
-{
-    let ecx = ExpandCtxt::new(patterns);
-    ecx.expand(value).to_tokens(tokens);
+#[derive(Clone, Copy)]
+struct ExpandMirCtxt<'pat> {
+    pcx: &'pat Ident,
+    mir_pat: &'pat Ident,
+    symbols: &'pat SymbolTable<'pat>,
 }
 
-pub fn expand(mir_pattern: MirPatternFn) -> TokenStream {
+pub fn expand(mir_pattern: PatternDefFn) -> TokenStream {
     mir_pattern
-        .expand_macro_mir()
+        .expand_macro_rpl()
         .unwrap_or_else(syn::Error::into_compile_error)
 }
 
-static PARAM_PATTERNS: &str = "patterns";
+static PARAM_PCX: &str = "pcx";
 
-pub fn expand_mir(mir: Mir, tcx_and_patterns: Option<&Ident>) -> syn::Result<TokenStream> {
-    crate::check_mir(&mir)?;
-    let patterns = match tcx_and_patterns {
-        None => &syn::Ident::new(PARAM_PATTERNS, proc_macro2::Span::call_site()),
-        Some(patterns) => patterns,
+pub fn expand_pattern(pattern: &Pattern, pcx: Option<&Ident>) -> syn::Result<TokenStream> {
+    let symbols = crate::check_pattern(pattern)?;
+    let pcx = match pcx {
+        None => &syn::Ident::new(PARAM_PCX, proc_macro2::Span::call_site()),
+        Some(pcx) => pcx,
     };
-    let mut tokens = TokenStream::new();
-    expand_impl(&mir, patterns, &mut tokens);
-    Ok(tokens)
+    Ok(ExpandCtxt::new(pcx, &symbols).expand(pattern).to_token_stream())
 }
 
 trait ToSymbol: Sized + ToString {
@@ -125,69 +128,112 @@ impl ExpandIdent for PlaceLocal {
     }
 }
 
-impl<'ecx> ExpandCtxt<'ecx> {
-    pub(crate) fn new(patterns: &'ecx Ident) -> Self {
-        Self { patterns }
+impl<'pat> ExpandCtxt<'pat> {
+    fn new(pcx: &'pat Ident, symbols: &'pat SymbolTable<'pat>) -> Self {
+        Self { pcx, symbols }
     }
-    pub(crate) fn expand<T>(&self, value: T) -> Expand<'_, T> {
+    fn expand<T>(self, value: T) -> Expand<'pat, T> {
         Expand { value, ecx: self }
     }
-    fn expand_projections<'a>(&self, place: &'a Place) -> Expand<'_, Projections<'a>> {
-        Expand {
-            value: Projections(place),
-            ecx: self,
+    fn expand_mir<T>(self, value: T, mir_pat: &'pat Ident) -> ExpandMir<'pat, T> {
+        ExpandMir {
+            value,
+            ecx: ExpandMirCtxt {
+                pcx: self.pcx,
+                mir_pat,
+                symbols: self.symbols,
+            },
         }
     }
     fn expand_punctuated<'a, U: 'a, P: 'a>(
-        &'ecx self,
+        &'pat self,
         value: &'a Punctuated<U, P>,
-    ) -> ExpandPunctPairs<'ecx, 'a, U, P> {
-        self.expand_with(value, Punctuated::pairs)
+    ) -> ExpandPunctPairs<'pat, 'a, U, P> {
+        self.expand_pairs(value, Punctuated::pairs)
+    }
+    fn expand_pairs<'a, U: 'a, I, F: Fn(&'a U) -> I>(
+        &'pat self,
+        value: &'a U,
+        to_pairs: F,
+    ) -> ExpandPairs<'pat, &'a U, F> {
+        ExpandPairs {
+            pairs: value,
+            to_pairs,
+            ecx: *self,
+        }
+    }
+}
+
+impl<'pat> ExpandMirCtxt<'pat> {
+    fn expand<T>(&self, value: T) -> ExpandMir<'_, T> {
+        ExpandMir { value, ecx: *self }
+    }
+    fn expand_projections<'a>(&self, place: &'a Place) -> ExpandMir<'_, Projections<'a>> {
+        self.expand(Projections(place))
+    }
+    fn expand_punctuated<'a, U: 'a, P: 'a>(
+        &'pat self,
+        value: &'a Punctuated<U, P>,
+    ) -> ExpandMirPunctPairs<'pat, 'a, U, P> {
+        self.expand_pairs(value, Punctuated::pairs)
     }
     #[allow(clippy::type_complexity)] // FIXME: return type too complex
     fn expand_punctuated_mapped<'a, U: 'a, V: 'a, P: 'a>(
-        &'ecx self,
+        &'pat self,
         value: &'a Punctuated<U, P>,
         f: fn(&'a U) -> V,
-    ) -> ExpandPunct<'ecx, 'a, U, P, impl Fn(&'a Punctuated<U, P>) -> impl IntoIterator<Item = Pair<V, &'a P>>> {
-        self.expand_with(value, move |value| value.pairs().map_value(f))
+    ) -> ExpandMirPunct<'pat, 'a, U, P, impl Fn(&'a Punctuated<U, P>) -> impl IntoIterator<Item = Pair<V, &'a P>>> {
+        self.expand_pairs(value, move |value| value.pairs().map_value(f))
     }
-    fn expand_with<'a, U: 'a, I, F: Fn(&'a U) -> I>(&'ecx self, value: &'a U, f: F) -> ExpandWith<'ecx, &'a U, F> {
-        ExpandWith { value, f, ecx: self }
+    fn expand_pairs<'a, U: 'a, I, F: Fn(&'a U) -> I>(
+        &'pat self,
+        value: &'a U,
+        to_pairs: F,
+    ) -> ExpandMirPairs<'pat, &'a U, F> {
+        ExpandMirPairs {
+            pairs: value,
+            to_pairs,
+            ecx: *self,
+        }
     }
 }
 
-type ExpandPunct<'ecx, 'a, U, P, F> = ExpandWith<'ecx, &'a Punctuated<U, P>, F>;
+type ExpandPunct<'ecx, 'a, U, P, F> = ExpandPairs<'ecx, &'a Punctuated<U, P>, F>;
 type ExpandPunctPairs<'ecx, 'a, U, P> = ExpandPunct<'ecx, 'a, U, P, fn(&'a Punctuated<U, P>) -> Pairs<'a, U, P>>;
+type ExpandMirPunct<'ecx, 'a, U, P, F> = ExpandMirPairs<'ecx, &'a Punctuated<U, P>, F>;
+type ExpandMirPunctPairs<'ecx, 'a, U, P> = ExpandMirPunct<'ecx, 'a, U, P, fn(&'a Punctuated<U, P>) -> Pairs<'a, U, P>>;
 
-pub(crate) struct Expand<'ecx, T> {
+#[derive(Deref)]
+struct Expand<'ecx, T> {
     value: T,
-    ecx: &'ecx ExpandCtxt<'ecx>,
+    #[deref]
+    ecx: ExpandCtxt<'ecx>,
 }
 
-struct ExpandWith<'ecx, T, F> {
+#[derive(Deref)]
+struct ExpandMir<'ecx, T> {
     value: T,
-    f: F,
-    ecx: &'ecx ExpandCtxt<'ecx>,
+    #[deref]
+    ecx: ExpandMirCtxt<'ecx>,
 }
 
-impl<'ecx, T> std::ops::Deref for Expand<'ecx, T> {
-    type Target = ExpandCtxt<'ecx>;
-
-    fn deref(&self) -> &Self::Target {
-        self.ecx
-    }
+#[derive(Deref)]
+struct ExpandPairs<'ecx, T, F> {
+    pairs: T,
+    to_pairs: F,
+    #[deref]
+    ecx: ExpandCtxt<'ecx>,
 }
 
-impl<'ecx, T, F> std::ops::Deref for ExpandWith<'ecx, T, F> {
-    type Target = ExpandCtxt<'ecx>;
-
-    fn deref(&self) -> &Self::Target {
-        self.ecx
-    }
+#[derive(Deref)]
+struct ExpandMirPairs<'ecx, T, F> {
+    pairs: T,
+    to_pairs: F,
+    #[deref]
+    ecx: ExpandMirCtxt<'ecx>,
 }
 
-impl<'a, T: 'a, I, F, U: 'a, P: 'a> ToTokens for ExpandWith<'_, &'a T, F>
+impl<'a, T: 'a, I, F, U: 'a, P: 'a> ToTokens for ExpandPairs<'_, &'a T, F>
 where
     F: Fn(&'a T) -> I,
     I: IntoIterator<Item = Pair<U, &'a P>>,
@@ -195,7 +241,23 @@ where
     P: ToTokens,
 {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        for pair in (self.f)(self.value) {
+        for pair in (self.to_pairs)(self.pairs) {
+            let (value, punct) = pair.into_tuple();
+            let value = self.expand(value);
+            quote_each_token!(tokens #value #punct);
+        }
+    }
+}
+
+impl<'a, T: 'a, I, F, U: 'a, P: 'a> ToTokens for ExpandMirPairs<'_, &'a T, F>
+where
+    F: Fn(&'a T) -> I,
+    I: IntoIterator<Item = Pair<U, &'a P>>,
+    for<'ecx> ExpandMir<'ecx, U>: ToTokens,
+    P: ToTokens,
+{
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        for pair in (self.to_pairs)(self.pairs) {
             let (value, punct) = pair.into_tuple();
             let value = self.expand(value);
             quote_each_token!(tokens #value #punct);
@@ -216,8 +278,65 @@ impl<'a, T: 'a, P: 'a> PairsExt<'a, T, P> for Pairs<'a, T, P> {
     }
 }
 
-impl ToTokens for Expand<'_, &Mir> {
+impl<'ecx, T: Clone> ToTokens for ExpandMir<'ecx, T>
+where
+    Expand<'ecx, T>: ToTokens,
+{
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        Expand {
+            value: self.value.clone(),
+            ecx: ExpandCtxt {
+                pcx: self.ecx.pcx,
+                symbols: self.ecx.symbols,
+            },
+        }
+        .to_tokens(tokens);
+    }
+}
+
+impl ToTokens for Expand<'_, &Pattern> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        for item in &self.value.items {
+            self.expand(item).to_tokens(tokens);
+        }
+    }
+}
+
+impl ToTokens for Expand<'_, &Item> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        self.expand(&self.value.kind).to_tokens(tokens);
+    }
+}
+
+impl ToTokens for Expand<'_, &ItemKind> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self.value {
+            ItemKind::Fn(fn_pat) => self.expand(fn_pat).to_tokens(tokens),
+            ItemKind::Struct(_struct_pat) => todo!(),
+            ItemKind::Enum(_enum_pat) => todo!(),
+            ItemKind::Impl(_impl_pat) => todo!(),
+        }
+    }
+}
+
+impl ToTokens for Expand<'_, &FnPat> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let FnPat { sig, body } = &self.value;
+        let pat_ident = match &sig.ident {
+            IdentPat::Underscore(_underscore) => &format_ident!("fn_pat"),
+            IdentPat::Pat(_, ident) | IdentPat::Ident(ident) => ident,
+        };
+        // let sig = self.expand(sig);
+        match body {
+            FnBody::Empty(_semi) => {},
+            FnBody::Mir(mir_body) => self.ecx.expand_mir(&mir_body.mir, pat_ident).to_tokens(tokens),
+        }
+    }
+}
+
+impl ToTokens for ExpandMir<'_, &Mir> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        let ExpandMirCtxt { pcx, mir_pat, .. } = self.ecx;
         let Mir {
             metas,
             declarations,
@@ -226,30 +345,38 @@ impl ToTokens for Expand<'_, &Mir> {
         let metas = metas.iter().map(|meta| self.expand(meta));
         let declarations = declarations.iter().map(|declaration| self.expand(declaration));
         let statements = statements.iter().map(|statement| self.expand(statement));
-        quote_each_token!(tokens #(#metas)* #(#declarations)* #(#statements)*);
+        quote_each_token!(tokens
+            let mut #mir_pat = ::rpl_mir::pat::MirPatternBuilder::new(#pcx);
+            #(#metas)* #(#declarations)* #(#statements)*
+            let #mir_pat = #mir_pat.build();
+        );
     }
 }
 
-impl ToTokens for Expand<'_, &MetaItem> {
+impl ToTokens for ExpandMir<'_, &MetaItem> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns } = self.ecx;
+        let ExpandMirCtxt { pcx, mir_pat, .. } = self.ecx;
         let MetaItem { ident, kind, .. } = &self.value;
         match kind {
-            MetaKind::Ty(_) => {
+            MetaKind::Ty(ty_var) => {
                 let ty_ident = ident.as_ty();
                 let ty_var_ident = ident.as_ty_var();
+                let ty_pred = match &ty_var.ty_pred {
+                    Some(syntax::PunctAnd { value: pred, .. }) => quote!(Some(#pred)),
+                    None => quote!(None),
+                };
                 quote_each_token!(tokens
                     #[allow(non_snake_case)]
-                    let #ty_var_ident = #patterns.new_ty_var();
+                    let #ty_var_ident = #mir_pat.new_ty_var(#ty_pred);
                     #[allow(non_snake_case)]
-                    let #ty_ident = #patterns.pcx.mk_var_ty(#ty_var_ident);
+                    let #ty_ident = #pcx.mk_var_ty(#ty_var_ident);
                 );
             },
         }
     }
 }
 
-impl ToTokens for Expand<'_, &Meta> {
+impl ToTokens for ExpandMir<'_, &Meta> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         for meta_item in self.value.meta.content.iter() {
             self.expand(meta_item).to_tokens(tokens);
@@ -257,7 +384,7 @@ impl ToTokens for Expand<'_, &Meta> {
     }
 }
 
-impl ToTokens for Expand<'_, &Declaration> {
+impl ToTokens for ExpandMir<'_, &Declaration> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self.value {
             Declaration::TypeDecl(type_decl) => self.expand(type_decl).to_tokens(tokens),
@@ -267,68 +394,74 @@ impl ToTokens for Expand<'_, &Declaration> {
     }
 }
 
-impl<End: Parse + ToTokens> ToTokens for Expand<'_, &Statement<End>> {
+impl<End: Parse + ToTokens> ToTokens for ExpandMir<'_, &Statement<End>> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self.value {
-            Statement::Assign(assign, _) => self.expand(assign).to_tokens(tokens),
-            Statement::Call(call, _) => self.expand(call).to_tokens(tokens),
-            Statement::Drop(drop, _) => self.expand(drop).to_tokens(tokens),
-            Statement::Control(control, _) => self.expand(control).to_tokens(tokens),
-            Statement::Loop(loop_) => self.expand(loop_).to_tokens(tokens),
-            Statement::SwitchInt(switch_int) => self.expand(switch_int).to_tokens(tokens),
+        self.expand(&self.value.kind).to_tokens(tokens);
+    }
+}
+
+impl<End: Parse + ToTokens> ToTokens for ExpandMir<'_, &StatementKind<End>> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match &self.value {
+            StatementKind::Assign(assign, _) => self.expand(assign).to_tokens(tokens),
+            StatementKind::Call(call, _) => self.expand(call).to_tokens(tokens),
+            StatementKind::Drop(drop, _) => self.expand(drop).to_tokens(tokens),
+            StatementKind::Control(control, _) => self.expand(control).to_tokens(tokens),
+            StatementKind::Loop(loop_) => self.expand(loop_).to_tokens(tokens),
+            StatementKind::SwitchInt(switch_int) => self.expand(switch_int).to_tokens(tokens),
         }
     }
 }
 
-impl ToTokens for Expand<'_, &CallIgnoreRet> {
+impl ToTokens for ExpandMir<'_, &CallIgnoreRet> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns } = self.ecx;
+        let ExpandMirCtxt { mir_pat, .. } = self.ecx;
         let Call { func, operands } = &self.value.call;
         let func = self.expand(func);
         let operands = self.expand_punctuated(&operands.value);
-        quote_each_token!(tokens #patterns.mk_fn_call(#func, #patterns.mk_list([#operands]), None); );
+        quote_each_token!(tokens #mir_pat.mk_fn_call(#func, #mir_pat.mk_list([#operands]), None); );
     }
 }
 
-impl ToTokens for Expand<'_, &Control> {
+impl ToTokens for ExpandMir<'_, &Control> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns } = self.ecx;
+        let ExpandMirCtxt { mir_pat, .. } = self.ecx;
         match self.value {
             Control::Break(_, _) => {
-                quote_each_token!(tokens #patterns.mk_break(););
+                quote_each_token!(tokens #mir_pat.mk_break(););
             },
             Control::Continue(_, _) => {
-                quote_each_token!(tokens #patterns.mk_continue(););
+                quote_each_token!(tokens #mir_pat.mk_continue(););
             },
         }
     }
 }
 
-impl ToTokens for Expand<'_, &Loop> {
+impl ToTokens for ExpandMir<'_, &Loop> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns } = self.ecx;
+        let ExpandMirCtxt { mir_pat, .. } = self.ecx;
         let statements = self
             .value
             .block
             .statements
             .iter()
             .map(|statement| self.expand(statement));
-        quote_each_token!(tokens #patterns.mk_loop(|#patterns| { #(#statements)* }););
+        quote_each_token!(tokens #mir_pat.mk_loop(|#mir_pat| { #(#statements)* }););
     }
 }
 
-impl ToTokens for Expand<'_, &SwitchInt> {
+impl ToTokens for ExpandMir<'_, &SwitchInt> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns } = self.ecx;
+        let ExpandMirCtxt { mir_pat, .. } = self.ecx;
         let operand = self.expand(&self.value.operand);
         let targets = self.value.targets.iter().map(|target| self.expand(target));
-        quote_each_token!(tokens #patterns.mk_switch_int(#operand, |mut #patterns| { #(#targets)* }););
+        quote_each_token!(tokens #mir_pat.mk_switch_int(#operand, |mut #mir_pat| { #(#targets)* }););
     }
 }
 
-impl ToTokens for Expand<'_, &SwitchTarget> {
+impl ToTokens for ExpandMir<'_, &SwitchTarget> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns } = self.ecx;
+        let ExpandMirCtxt { mir_pat, .. } = self.ecx;
         let SwitchTarget { value, body, .. } = self.value;
         let body = self.expand(body);
         let value = match value {
@@ -336,19 +469,19 @@ impl ToTokens for Expand<'_, &SwitchTarget> {
             SwitchValue::Int(lit_int) => Some(quote!(#lit_int)),
             SwitchValue::Underscore(_) => None,
         };
-        let body = quote!(|#patterns| { #body });
+        let body = quote!(|#mir_pat| { #body });
         match value {
             Some(value) => {
-                quote_each_token!(tokens #patterns.mk_switch_target(#value, #body););
+                quote_each_token!(tokens #mir_pat.mk_switch_target(#value, #body););
             },
             None => {
-                quote_each_token!(tokens #patterns.mk_otherwise(#body););
+                quote_each_token!(tokens #mir_pat.mk_otherwise(#body););
             },
         }
     }
 }
 
-impl ToTokens for Expand<'_, &SwitchBody> {
+impl ToTokens for ExpandMir<'_, &SwitchBody> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self.value {
             SwitchBody::Statement(statement, _) => self.expand(statement).to_tokens(tokens),
@@ -356,7 +489,7 @@ impl ToTokens for Expand<'_, &SwitchBody> {
         }
     }
 }
-impl ToTokens for Expand<'_, &Block> {
+impl ToTokens for ExpandMir<'_, &Block> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         for statement in &self.value.statements {
             self.expand(statement).to_tokens(tokens);
@@ -378,20 +511,23 @@ impl ToTokens for Expand<'_, &UsePath> {
     }
 }
 
-impl ToTokens for Expand<'_, &LocalDecl> {
+impl ToTokens for ExpandMir<'_, &LocalDecl> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        let ExpandMirCtxt { mir_pat, .. } = self.ecx;
         let LocalDecl { local, ty, init, .. } = self.value;
-        let ExpandCtxt { patterns, .. } = self.ecx;
         let ty = self.expand(ty);
         let ident = local.as_local();
         let mk_local_or_self = match local {
             PlaceLocal::Local(_) => format_ident!("mk_local"),
             PlaceLocal::SelfValue(_) => format_ident!("mk_self"),
         };
-        quote_each_token!(tokens let #ident = #patterns.#mk_local_or_self(#ty); );
-        if let Some(LocalInit { rvalue_or_call, .. }) = init {
+        quote_each_token!(tokens let #ident = #mir_pat.#mk_local_or_self(#ty); );
+        if let Some(PunctAnd {
+            value: rvalue_or_call, ..
+        }) = init
+        {
             self.expand(Assign {
-                place: &Place::Local(local.clone()),
+                place: local,
                 rvalue_or_call,
             })
             .to_tokens(tokens);
@@ -399,12 +535,12 @@ impl ToTokens for Expand<'_, &LocalDecl> {
     }
 }
 
-struct Assign<'a> {
-    place: &'a Place,
+struct Assign<'a, P = Place> {
+    place: &'a P,
     rvalue_or_call: &'a RvalueOrCall,
 }
 
-impl ToTokens for Expand<'_, &syntax::Assign> {
+impl ToTokens for ExpandMir<'_, &syntax::Assign> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         self.expand(Assign {
             place: &self.value.place,
@@ -414,34 +550,37 @@ impl ToTokens for Expand<'_, &syntax::Assign> {
     }
 }
 
-impl ToTokens for Expand<'_, Assign<'_>> {
+impl<'a, P: Borrow<PlaceLocal>> ToTokens for ExpandMir<'_, Assign<'a, P>>
+where
+    for<'ecx> ExpandMir<'ecx, &'a P>: ToTokens,
+{
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns } = self.ecx;
+        let ExpandMirCtxt { mir_pat, .. } = self.ecx;
         let Assign { place, rvalue_or_call } = self.value;
-        let local = place.local();
+        let local = place.borrow();
         let stmt = local.as_stmt();
         quote_each_token!(tokens let #stmt = );
         let place = self.expand(place);
         match rvalue_or_call {
             RvalueOrCall::Rvalue(rvalue) => {
                 let rvalue = self.expand(rvalue);
-                quote_each_token!(tokens #patterns.mk_assign(#place, #rvalue); );
+                quote_each_token!(tokens #mir_pat.mk_assign(#place, #rvalue); );
             },
             RvalueOrCall::Call(Call { func, operands }) => {
                 let func = self.expand(func);
                 let operands = self.expand_punctuated(&operands.value);
-                quote_each_token!(tokens #patterns.mk_fn_call(#func, #patterns.mk_list([#operands]), Some(#place)); );
+                quote_each_token!(tokens #mir_pat.mk_fn_call(#func, #mir_pat.mk_list([#operands]), Some(#place)); );
             },
         }
     }
 }
 
-impl ToTokens for Expand<'_, &Drop> {
+impl ToTokens for ExpandMir<'_, &Drop> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns, .. } = self.ecx;
+        let ExpandMirCtxt { mir_pat, .. } = self.ecx;
         let Drop { ref place, .. } = self.value;
         let stmt = place.local().as_stmt();
-        quote_each_token!(tokens let #stmt = #patterns.mk_drop(#place); );
+        quote_each_token!(tokens let #stmt = #mir_pat.mk_drop(#place); );
     }
 }
 
@@ -457,7 +596,7 @@ impl RegionExt for Option<Region> {
 
 impl ToTokens for Expand<'_, &Path> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns } = self.ecx;
+        let ExpandCtxt { pcx, .. } = self.ecx;
         let mut iter = self.value.segments.iter();
         let mut path = TokenStream::new();
         if let PathLeading::Crate(_) = self.value.leading {
@@ -472,8 +611,8 @@ impl ToTokens for Expand<'_, &Path> {
                 quote_each_token!(gen_args #args);
             }
         }
-        quote_each_token!(tokens #patterns.pcx.mk_path_with_args(
-            #patterns.pcx.mk_item_path(&[#path]), &[#gen_args]
+        quote_each_token!(tokens #pcx.mk_path_with_args(
+            #pcx.mk_item_path(&[#path]), &[#gen_args]
         ));
         if let Some(_rem) = iter.next() {
             todo!();
@@ -494,11 +633,11 @@ impl ToTokens for Expand<'_, &GenericArgument> {
 
 impl ToTokens for Expand<'_, &Type> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns } = self.ecx;
+        let ExpandCtxt { pcx, .. } = self.ecx;
         match self.value {
             Type::Array(TypeArray { box ty, len, .. }) => {
                 let ty = self.expand(ty);
-                quote_each_token!(tokens #patterns.pcx.mk_array_ty(#ty, #len));
+                quote_each_token!(tokens #pcx.mk_array_ty(#ty, #len));
             },
             Type::Group(TypeGroup { box ty, .. }) | Type::Paren(TypeParen { value: box ty, .. }) => {
                 self.expand(ty).to_tokens(tokens);
@@ -506,19 +645,19 @@ impl ToTokens for Expand<'_, &Type> {
             Type::Never(_) => todo!(),
             Type::Path(TypePath { qself: None, path }) if let Some(ident) = path.as_ident() => {
                 if crate::is_primitive(ident) {
-                    quote_each_token!(tokens #patterns.pcx.primitive_types.#ident);
+                    quote_each_token!(tokens #pcx.primitive_types.#ident);
                 } else {
                     ident.as_ty().to_tokens(tokens);
                 }
             },
             Type::Path(TypePath { path, .. }) => {
                 let path = self.expand(path);
-                quote_each_token!(tokens #patterns.pcx.mk_path_ty(#path));
+                quote_each_token!(tokens #pcx.mk_path_ty(#path));
             },
             Type::Ptr(TypePtr { mutability, box ty, .. }) => {
                 let ty = self.expand(ty);
                 let mutability = self.expand(*mutability);
-                quote_each_token!(tokens #patterns.pcx.mk_raw_ptr_ty(#ty, #mutability));
+                quote_each_token!(tokens #pcx.mk_raw_ptr_ty(#ty, #mutability));
             },
             Type::Reference(TypeReference {
                 region,
@@ -529,41 +668,42 @@ impl ToTokens for Expand<'_, &Type> {
                 let region = self.expand(region.kind());
                 let ty = self.expand(ty);
                 let mutability = self.expand(*mutability);
-                quote_each_token!(tokens #patterns.pcx.mk_ref_ty(#region, #ty, #mutability));
+                quote_each_token!(tokens #pcx.mk_ref_ty(#region, #ty, #mutability));
             },
             Type::Slice(TypeSlice { box ty, .. }) => {
                 let ty = self.expand(ty);
-                quote_each_token!(tokens #patterns.pcx.mk_slice_ty(#ty));
+                quote_each_token!(tokens #pcx.mk_slice_ty(#ty));
             },
             Type::Tuple(TypeTuple { tys, .. }) => {
                 let tys = self.expand_punctuated(tys);
-                quote_each_token!(tokens #patterns.pcx.mk_tuple_ty(&[#tys]));
+                quote_each_token!(tokens #pcx.mk_tuple_ty(&[#tys]));
             },
             Type::TyVar(TypeVar { ident, .. }) => ident.as_ty().to_tokens(tokens),
             Type::LangItem(lang_item) => {
                 let lang_item = self.expand(lang_item);
-                quote_each_token!(tokens #patterns.pcx.mk_adt_ty(#lang_item));
+                quote_each_token!(tokens #pcx.mk_adt_ty(#lang_item));
             },
+            Type::SelfType(_) => todo!(),
         }
     }
 }
 
 impl ToTokens for Expand<'_, &LangItemWithArgs> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns } = self.ecx;
+        let ExpandCtxt { pcx, .. } = self.ecx;
         let LangItemWithArgs { item, args, .. } = self.value;
         let mut gen_args = TokenStream::new();
         if let Some(args) = args {
             let args = self.expand_punctuated(&args.args);
             quote_each_token!(gen_args #args);
         }
-        quote_each_token!(tokens #patterns.pcx.mk_path_with_args(
-            #patterns.pcx.mk_lang_item(#item), &[#gen_args]
+        quote_each_token!(tokens #pcx.mk_path_with_args(
+            #pcx.mk_lang_item(#item), &[#gen_args]
         ));
     }
 }
 
-impl ToTokens for Expand<'_, &Rvalue> {
+impl ToTokens for ExpandMir<'_, &Rvalue> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
         quote_each_token!(tokens ::rpl_mir::pat::Rvalue::);
         match self.value {
@@ -634,7 +774,7 @@ impl ToTokens for Expand<'_, &Rvalue> {
     }
 }
 
-impl ToTokens for Expand<'_, &Operand> {
+impl ToTokens for ExpandMir<'_, &Operand> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
         quote_each_token!(tokens ::rpl_mir::pat::Operand::);
         match self.value {
@@ -656,9 +796,9 @@ impl ToTokens for Expand<'_, &Operand> {
     }
 }
 
-impl ToTokens for Expand<'_, &FnOperand> {
+impl ToTokens for ExpandMir<'_, &FnOperand> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns } = self.ecx;
+        let ExpandMirCtxt { mir_pat, .. } = self.ecx;
         quote_each_token!(tokens ::rpl_mir::pat::Operand::);
         match self.value {
             FnOperand::Copy(Parenthesized {
@@ -677,7 +817,7 @@ impl ToTokens for Expand<'_, &FnOperand> {
             },
             FnOperand::Type(TypePath { qself: None, path }) => {
                 let path = self.expand(path);
-                quote_each_token!(tokens Constant(#patterns.mk_zeroed(#path)));
+                quote_each_token!(tokens Constant(#mir_pat.mk_zeroed(#path)));
             },
             FnOperand::Type(TypePath {
                 qself: Some(_qself),
@@ -687,21 +827,21 @@ impl ToTokens for Expand<'_, &FnOperand> {
             },
             FnOperand::LangItem(lang_item) => {
                 let lang_item = self.expand(lang_item);
-                quote_each_token!(tokens Constant(#patterns.mk_zeroed(#lang_item)));
+                quote_each_token!(tokens Constant(#mir_pat.mk_zeroed(#lang_item)));
             },
         }
     }
 }
 
-impl ToTokens for Expand<'_, &ConstOperandKind> {
+impl ToTokens for ExpandMir<'_, &ConstOperandKind> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns } = self.ecx;
+        let ExpandMirCtxt { mir_pat, .. } = self.ecx;
         match self.value {
             ConstOperandKind::Lit(lit) => self.expand(lit).to_tokens(tokens),
             ConstOperandKind::Type(TypePath { qself: None, path }) => {
                 // todo!();
                 let path = self.expand(path);
-                quote_each_token!(tokens #patterns.mk_zeroed(#path));
+                quote_each_token!(tokens #mir_pat.mk_zeroed(#path));
             },
             ConstOperandKind::Type(TypePath {
                 qself: Some(_qself),
@@ -711,7 +851,7 @@ impl ToTokens for Expand<'_, &ConstOperandKind> {
             },
             ConstOperandKind::LangItem(lang_item) => {
                 let lang_item = self.expand(lang_item);
-                quote_each_token!(tokens #patterns.mk_zeroed(#lang_item));
+                quote_each_token!(tokens #mir_pat.mk_zeroed(#lang_item));
             },
         }
     }
@@ -756,6 +896,7 @@ impl ToTokens for Expand<'_, &syn::Lit> {
     }
 }
 
+#[derive(Clone, Copy)]
 struct Projections<'a>(&'a Place);
 
 impl ToTokens for Expand<'_, Projections<'_>> {
@@ -840,20 +981,27 @@ impl ToTokens for Expand<'_, &syn::Member> {
     }
 }
 
-impl ToTokens for Expand<'_, &Place> {
+impl ToTokens for Expand<'_, &PlaceLocal> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns, .. } = self.ecx;
+        let local = self.value.as_local();
+        quote_each_token!(tokens #local.into_place());
+    }
+}
+
+impl ToTokens for ExpandMir<'_, &Place> {
+    fn to_tokens(&self, mut tokens: &mut TokenStream) {
+        let ExpandMirCtxt { mir_pat, .. } = self.ecx;
         if let Place::Local(local) = self.value {
-            let local = local.as_local();
-            quote_each_token!(tokens #local.into_place());
+            self.expand(local).to_tokens(tokens);
         } else {
             let local = self.value.local().as_local();
             let projections = self.expand_projections(self.value);
-            quote_each_token!(tokens ::rpl_mir::pat::Place::new(#local, #patterns.mk_projection(&[#projections])));
+            quote_each_token!(tokens ::rpl_mir::pat::Place::new(#local, #mir_pat.mk_projection(&[#projections])));
         }
     }
 }
 
+#[derive(Clone)]
 struct IdentSymbol(String);
 
 impl ToTokens for Expand<'_, IdentSymbol> {
@@ -863,19 +1011,19 @@ impl ToTokens for Expand<'_, IdentSymbol> {
     }
 }
 
-impl ToTokens for Expand<'_, &RvalueAggregate> {
+impl ToTokens for ExpandMir<'_, &RvalueAggregate> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { patterns, .. } = self.ecx;
+        let ExpandMirCtxt { mir_pat, .. } = self.ecx;
         quote_each_token!(tokens ::rpl_mir::pat::AggKind::);
         match self.value {
             RvalueAggregate::Array(AggregateArray { operands, .. }) => {
                 // let ty = self.expand(ty);
                 let operands = self.expand_punctuated(&operands.operands);
-                quote_each_token!(tokens Array, #patterns.mk_list([#operands]));
+                quote_each_token!(tokens Array, #mir_pat.mk_list([#operands]));
             },
             RvalueAggregate::Tuple(AggregateTuple { operands }) => {
                 let operands = self.expand_punctuated(&operands.value);
-                quote_each_token!(tokens Tuple, #patterns.mk_list([#operands]));
+                quote_each_token!(tokens Tuple, #mir_pat.mk_list([#operands]));
             },
             RvalueAggregate::AdtStruct(AggregateAdtStruct {
                 adt,
@@ -885,8 +1033,8 @@ impl ToTokens for Expand<'_, &RvalueAggregate> {
                 let operands = self.expand_punctuated_mapped(fields, |f| &f.operand);
                 let fields = self.expand_punctuated_mapped(fields, |f| f.ident.to_symbol());
                 quote_each_token!(tokens
-                    Adt(#adt, #patterns.mk_list([#fields]).into()),
-                    #patterns.mk_list([#operands]),
+                    Adt(#adt, #mir_pat.mk_list([#fields]).into()),
+                    #mir_pat.mk_list([#operands]),
                 );
             },
             RvalueAggregate::AdtTuple(AggregateAdtTuple { adt, fields, .. }) => {
@@ -894,7 +1042,7 @@ impl ToTokens for Expand<'_, &RvalueAggregate> {
                 let operands = self.expand_punctuated(&fields.value);
                 quote_each_token!(tokens
                     Adt(#adt, ::rpl_mir::pat::AggAdtKind::Tuple),
-                    #patterns.mk_list([#operands]),
+                    #mir_pat.mk_list([#operands]),
                 );
             },
             RvalueAggregate::AdtUnit(AggregateAdtUnit { adt }) => {
@@ -911,7 +1059,7 @@ impl ToTokens for Expand<'_, &RvalueAggregate> {
                 let mutability = self.expand(*mutability);
                 let ptr = self.expand(ptr);
                 let metadata = self.expand(metadata);
-                quote_each_token!(tokens RawPtr(#ty, #mutability), #patterns.mk_list([#ptr, #metadata]));
+                quote_each_token!(tokens RawPtr(#ty, #mutability), #mir_pat.mk_list([#ptr, #metadata]));
             },
         }
     }
@@ -936,6 +1084,7 @@ impl ToTokens for Expand<'_, RegionKind> {
     }
 }
 
+#[derive(Clone, Copy)]
 struct BorrowKind(Mutability);
 
 impl ToTokens for Expand<'_, BorrowKind> {

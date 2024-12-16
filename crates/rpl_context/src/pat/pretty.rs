@@ -80,6 +80,7 @@ impl fmt::Debug for TyKind<'_> {
             Self::Float(float) => float.fmt(f),
             Self::Bool => f.write_str("bool"),
             Self::Str => f.write_str("str"),
+            Self::AdtVar(adt_var) => write!(f, "${adt_var}"),
         }
     }
 }

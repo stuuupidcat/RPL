@@ -10,9 +10,9 @@ use std::fs::File;
 use std::io::{Read, Write};
 
 use pretty_assertions::assert_eq;
-use rpl_context::PatternCtxt;
+use rpl_context::{PatCtxt, PatternCtxt};
 use rpl_graphviz::{pat_cfg_to_graphviz, pat_ddg_to_graphviz};
-use rpl_mir::pat::MirPatternBuilder;
+use rpl_mir::pat::MirPattern;
 
 fn read_from_file(file: &str) -> std::io::Result<String> {
     let mut file = File::open(file)?;
@@ -28,20 +28,21 @@ fn write_to_file(file: &str, content: &[u8]) -> std::io::Result<()> {
 
 macro_rules! test_case {
     ( $(#[$meta:meta])* fn $name:ident() { $($input:tt)* }) => {
-        #[rpl_macros::mir_pattern]
+        #[rpl_macros::pattern_def]
         #[allow(unused_variables)]
-        fn $name(patterns: &mut MirPatternBuilder<'_>) {
-            mir! {
-                $($input)*
+        fn $name(pcx: PatCtxt<'_>) -> MirPattern<'_> {
+            rpl! {
+                fn $pattern (..) -> _ = mir! {
+                    $($input)*
+                }
             }
+            pattern
         }
         #[test]
         $(#[$meta])*
         fn ${concat(test_, $name)}() {
             PatternCtxt::entered_no_tcx(|pcx| {
-                let mut patterns = MirPatternBuilder::new(pcx);
-                $name(&mut patterns);
-                let patterns = patterns.build();
+                let patterns = $name(pcx);
                 let mut cfg = Vec::new();
                 pat_cfg_to_graphviz(&patterns, &mut cfg, &Default::default()).unwrap();
                 let cfg = String::from_utf8(cfg).unwrap();
