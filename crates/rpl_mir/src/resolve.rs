@@ -1,17 +1,15 @@
 //! Resolve an item path.
 //!
 //! See <https://doc.rust-lang.org/nightly/nightly-rustc/src/clippy_utils/lib.rs.html#691>
-use rpl_context::cvt_prim_ty::CvtPrimTy;
 use rpl_context::{pat, PatCtxt};
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::def_id::{CrateNum, LocalDefId, LOCAL_CRATE};
 use rustc_hir::{ImplItemRef, ItemKind, Node, OwnerId, PrimTy, TraitItemRef};
 use rustc_middle::ty::fast_reject::SimplifiedType;
-use rustc_middle::ty::{FloatTy, GenericArg, IntTy, Mutability, Ty, TyCtxt, UintTy};
+use rustc_middle::ty::{FloatTy, GenericArg, IntTy, Mutability, TyCtxt, UintTy};
 use rustc_span::def_id::DefId;
 use rustc_span::symbol::Ident;
 use rustc_span::Symbol;
-use rustc_type_ir::TyKind;
 
 /// Kind of an item path in pattern.
 ///
@@ -118,18 +116,6 @@ impl PatItemKind {
             | DefKind::Closure
             | DefKind::SyntheticCoroutineBody => None?,
         })
-    }
-}
-
-#[expect(dead_code)]
-fn prim_ty_to_ty<'tcx>(tcx: TyCtxt<'tcx>, ty: PrimTy) -> Ty<'tcx> {
-    match ty {
-        PrimTy::Int(int_ty) => Ty::new(tcx, TyKind::Int(CvtPrimTy::cvt(int_ty))),
-        PrimTy::Uint(uint_ty) => Ty::new(tcx, TyKind::Uint(CvtPrimTy::cvt(uint_ty))),
-        PrimTy::Float(float_ty) => Ty::new(tcx, TyKind::Float(CvtPrimTy::cvt(float_ty))),
-        PrimTy::Str => Ty::new(tcx, TyKind::Str),
-        PrimTy::Bool => Ty::new(tcx, TyKind::Bool),
-        PrimTy::Char => Ty::new(tcx, TyKind::Char),
     }
 }
 
