@@ -139,7 +139,7 @@ impl<'pcx> PatternCtxt<'pcx> {
     pub fn mk_var_ty(&self, ty_var: pat::TyVar) -> Ty<'pcx> {
         self.mk_ty(TyKind::TyVar(ty_var))
     }
-    fn mk_ty(&self, kind: TyKind<'pcx>) -> Ty<'pcx> {
+    pub(crate) fn mk_ty(&self, kind: TyKind<'pcx>) -> Ty<'pcx> {
         Ty(self.arena.alloc(kind))
     }
 }

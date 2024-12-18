@@ -80,14 +80,12 @@ struct PatternPointer<'pcx> {
     ptr: pat::Location,
 }
 
-// FIXME: this should work for `libc::char` but not hard encoded `i8`.
 // FIXME: this should work for functions other than `crate::ll::instr`.
 #[rpl_macros::pattern_def]
 fn pattern_pass_a_pointer_to_c(pcx: PatCtxt<'_>) -> PatternPointer<'_> {
     rpl! {
         fn $pattern (..) -> _ = mir! {
-            // type c_char = libc::c_char;
-            type c_char = i8;
+            type c_char = libc::c_char;
 
             let ptr: *const c_char = _;
             _ = $crate::ll::instr(move ptr);

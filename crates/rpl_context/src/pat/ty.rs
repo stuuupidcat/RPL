@@ -1,8 +1,11 @@
 use rustc_data_structures::packed::Pu128;
-use rustc_hir::LangItem;
+use rustc_hir::{LangItem, PrimTy};
 use rustc_middle::mir;
 use rustc_middle::ty::{self, TyCtxt};
 use rustc_span::Symbol;
+
+use crate::cvt_prim_ty::CvtPrimTy;
+use crate::PatCtxt;
 
 rustc_index::newtype_index! {
     #[debug_format = "?T{}"]
@@ -22,6 +25,12 @@ pub struct Ty<'pcx>(pub(crate) &'pcx TyKind<'pcx>);
 impl<'pcx> Ty<'pcx> {
     pub fn kind(self) -> &'pcx TyKind<'pcx> {
         self.0
+    }
+    pub fn from_ty_lossy(pcx: PatCtxt<'pcx>, ty: ty::Ty<'_>) -> Option<Self> {
+        Some(pcx.mk_ty(TyKind::from_ty_lossy(pcx, ty)?))
+    }
+    pub fn from_prim_ty(pcx: PatCtxt<'pcx>, ty: PrimTy) -> Self {
+        pcx.mk_ty(TyKind::from(ty))
     }
 }
 
@@ -46,6 +55,58 @@ pub enum TyKind<'pcx> {
     Float(ty::FloatTy),
     Bool,
     Str,
+    Char,
+}
+
+impl From<PrimTy> for TyKind<'_> {
+    fn from(ty: PrimTy) -> Self {
+        match ty {
+            PrimTy::Int(int_ty) => TyKind::Int(CvtPrimTy::cvt(int_ty)),
+            PrimTy::Uint(uint_ty) => TyKind::Uint(CvtPrimTy::cvt(uint_ty)),
+            PrimTy::Float(float_ty) => TyKind::Float(CvtPrimTy::cvt(float_ty)),
+            PrimTy::Str => TyKind::Str,
+            PrimTy::Bool => TyKind::Bool,
+            PrimTy::Char => TyKind::Char,
+        }
+    }
+}
+
+impl<'pcx> TyKind<'pcx> {
+    //FIXME: this is incomplete
+    //FIXME: add a new `TyKind` for resolved types, just like `rustc_middle::ty::TyKind`
+    //FIXME: this may breaks uniqueness of `Ty`
+    pub fn from_ty_lossy(pcx: PatCtxt<'pcx>, ty: ty::Ty<'_>) -> Option<Self> {
+        Some(match ty.kind() {
+            ty::TyKind::Bool => Self::Bool,
+            ty::TyKind::Char => Self::Char,
+            ty::TyKind::Int(int_ty) => Self::Int(*int_ty),
+            ty::TyKind::Uint(uint_ty) => Self::Uint(*uint_ty),
+            ty::TyKind::Float(float_ty) => Self::Float(*float_ty),
+            ty::TyKind::Adt(_, _) => None?,  //FIXME
+            ty::TyKind::Foreign(_) => None?, //FIXME
+            ty::TyKind::Str => Self::Str,
+            ty::TyKind::Array(_, _) => None?, //FIXME
+            ty::TyKind::Pat(_, _) => None?,   //FIXME
+            ty::TyKind::Slice(ty) => Self::Slice(pcx.mk_ty(Self::from_ty_lossy(pcx, *ty)?)),
+            ty::TyKind::RawPtr(ty, mutability) => Self::RawPtr(pcx.mk_ty(Self::from_ty_lossy(pcx, *ty)?), *mutability),
+            ty::TyKind::Ref(_, _, _) => None?,           //FIXME
+            ty::TyKind::FnDef(_, _) => None?,            //FIXME
+            ty::TyKind::FnPtr(_, _) => None?,            //FIXME
+            ty::TyKind::Dynamic(_, _, _) => None?,       //FIXME
+            ty::TyKind::Closure(_, _) => None?,          //FIXME
+            ty::TyKind::CoroutineClosure(_, _) => None?, //FIXME
+            ty::TyKind::Coroutine(_, _) => None?,        //FIXME
+            ty::TyKind::CoroutineWitness(_, _) => None?, //FIXME
+            ty::TyKind::Never => None?,                  //FIXME
+            ty::TyKind::Tuple(_) => None?,               //FIXME
+            ty::TyKind::Alias(_, _) => None?,            //FIXME
+            ty::TyKind::Param(_) => None?,               //FIXME
+            ty::TyKind::Bound(_, _) => None?,            //FIXME
+            ty::TyKind::Placeholder(_) => None?,         //FIXME
+            ty::TyKind::Infer(_) => None?,               //FIXME
+            ty::TyKind::Error(_) => None?,
+        })
+    }
 }
 
 #[derive(Clone, Copy)]
