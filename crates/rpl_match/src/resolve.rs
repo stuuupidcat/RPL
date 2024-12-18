@@ -10,6 +10,7 @@ use rustc_middle::ty::{FloatTy, GenericArg, IntTy, Mutability, TyCtxt, UintTy};
 use rustc_span::def_id::DefId;
 use rustc_span::symbol::Ident;
 use rustc_span::Symbol;
+use rustc_type_ir::TyKind;
 
 /// Kind of an item path in pattern.
 ///
