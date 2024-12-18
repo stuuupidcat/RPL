@@ -1,14 +1,17 @@
 //! Resolve an item path.
 //!
 //! See https://doc.rust-lang.org/nightly/nightly-rustc/src/clippy_utils/lib.rs.html#691
+use rpl_context::cvt_prim_ty::CvtPrimTy;
+use rpl_context::{pat, PatCtxt};
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::def_id::{CrateNum, LocalDefId, LOCAL_CRATE};
 use rustc_hir::{ImplItemRef, ItemKind, Node, OwnerId, PrimTy, TraitItemRef};
 use rustc_middle::ty::fast_reject::SimplifiedType;
-use rustc_middle::ty::{FloatTy, IntTy, Mutability, TyCtxt, UintTy};
+use rustc_middle::ty::{FloatTy, GenericArg, IntTy, Mutability, Ty, TyCtxt, UintTy};
 use rustc_span::def_id::DefId;
 use rustc_span::symbol::Ident;
 use rustc_span::Symbol;
+use rustc_type_ir::TyKind;
 
 /// Kind of an item path in pattern.
 ///
@@ -41,25 +44,20 @@ use rustc_span::Symbol;
 pub enum PatItemKind {
     // Type namespace
     /// [DefKind::Mod]
-    #[expect(dead_code)]
     Mod,
     /// [DefKind::Struct], [DefKind::Union], [DefKind::Enum], [DefKind::TyAlias],
     /// [DefKind::ForeignTy] and [DefKind::AssocTy]
     Type,
     /// [DefKind::Variant]
-    #[expect(dead_code)]
     Variant,
     /// [DefKind::Trait] and [DefKind::TraitAlias]
-    #[expect(dead_code)]
     Trait,
     /// [DefKind::Fn], [DefKind::AssocFn]
     Fn,
     /// [DefKind::Const], [DefKind::AssocConst]
-    #[expect(dead_code)]
     Const,
     /// [DefKind::Static]
     // FIXME: add fields to support more operations.
-    #[expect(dead_code)]
     Static,
     /// [DefKind::Ctor]
     Ctor,
@@ -90,6 +88,85 @@ impl PatItemKind {
             Self::Ctor => matches!(res, Res::Def(DefKind::Ctor(..), _)),
         }
     }
+
+    pub(crate) fn infer_from_def_kind(kind: DefKind) -> Option<Self> {
+        Some(match kind {
+            DefKind::Mod => Self::Mod,
+            DefKind::Struct | DefKind::Union | DefKind::Enum => Self::Type,
+            DefKind::Variant => Self::Variant,
+            DefKind::Trait => Self::Trait,
+            DefKind::TyAlias | DefKind::ForeignTy => Self::Type,
+            DefKind::TraitAlias => Self::Trait,
+            DefKind::AssocTy | DefKind::TyParam => Self::Type,
+            DefKind::Fn => Self::Fn,
+            DefKind::Const | DefKind::ConstParam => Self::Const,
+            DefKind::Static { .. } => Self::Static,
+            DefKind::Ctor(..) => Self::Ctor,
+            DefKind::AssocFn => Self::Fn,
+            DefKind::AssocConst => Self::Const,
+            DefKind::Macro(..)
+            | DefKind::ExternCrate
+            | DefKind::Use
+            | DefKind::ForeignMod
+            | DefKind::AnonConst
+            | DefKind::InlineConst
+            | DefKind::OpaqueTy
+            | DefKind::Field
+            | DefKind::LifetimeParam
+            | DefKind::GlobalAsm
+            | DefKind::Impl { .. }
+            | DefKind::Closure
+            | DefKind::SyntheticCoroutineBody => None?,
+        })
+    }
+}
+
+#[expect(dead_code)]
+fn prim_ty_to_ty<'tcx>(tcx: TyCtxt<'tcx>, ty: PrimTy) -> Ty<'tcx> {
+    match ty {
+        PrimTy::Int(int_ty) => Ty::new(tcx, TyKind::Int(CvtPrimTy::cvt(int_ty))),
+        PrimTy::Uint(uint_ty) => Ty::new(tcx, TyKind::Uint(CvtPrimTy::cvt(uint_ty))),
+        PrimTy::Float(float_ty) => Ty::new(tcx, TyKind::Float(CvtPrimTy::cvt(float_ty))),
+        PrimTy::Str => Ty::new(tcx, TyKind::Str),
+        PrimTy::Bool => Ty::new(tcx, TyKind::Bool),
+        PrimTy::Char => Ty::new(tcx, TyKind::Char),
+    }
+}
+
+pub fn ty_res<'tcx, 'pcx>(
+    pcx: PatCtxt<'pcx>,
+    tcx: TyCtxt<'tcx>,
+    path: &[Symbol],
+    args: &[GenericArg<'tcx>],
+) -> Option<pat::Ty<'pcx>> {
+    let res = def_path_res(tcx, path, PatItemKind::Type);
+    let res: Vec<_> = res
+        .into_iter()
+        .filter_map(|res| match res {
+            Res::Def(_, def_id) => pat::Ty::from_ty_lossy(pcx, tcx.type_of(def_id).skip_binder()),
+            // Res::Def(_, def_id) => pat::Ty::from_ty_lossy(pcx, tcx.type_of(def_id).instantiate(tcx, args)),
+            Res::PrimTy(prim_ty) => {
+                if args.is_empty() {
+                    Some(pat::Ty::from_prim_ty(pcx, prim_ty))
+                } else {
+                    None
+                }
+            },
+            Res::SelfTyParam { .. }
+            | Res::SelfTyAlias { .. }
+            | Res::SelfCtor(..)
+            | Res::Local(_)
+            | Res::ToolMod
+            | Res::NonMacroAttr(..)
+            | Res::Err => None,
+        })
+        .collect();
+    //FIXME: implement `PartialEq` correctly for `pat::Ty` so that we can deduplicate `res`
+    // res.dedup();
+    if res.len() > 1 {
+        info!(?res, "ambiguous type path");
+    }
+    res.first().copied()
 }
 
 /// Resolves a def path like `std::vec::Vec`.
@@ -169,6 +246,8 @@ pub fn def_path_res_with_base(tcx: TyCtxt<'_>, mut base: Vec<Res>, mut path: &[S
 
         trace!(?segment, ?rest, ?base);
     }
+
+    // trace!(?base);
 
     base.into_iter().filter(|res| kind.match_resolve(res)).collect()
 }
