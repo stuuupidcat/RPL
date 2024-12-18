@@ -12,6 +12,9 @@ rpl_macros.workspace = true
 rpl_mir.workspace = true
 rpl_context.workspace = true
 
+[dev-dependencies]
+libc.workspace = true
+
 [features]
 
 [package.metadata.rust-analyzer]

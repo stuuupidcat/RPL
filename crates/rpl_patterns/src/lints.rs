@@ -8,14 +8,15 @@ declare_lint! {
     ///
     /// ```rust
     /// #![deny(lengthless_buffer_passed_to_extern_function)]
-    /// extern fn gets(c: *const i8) -> i32 {
+    /// use libc::c_char;
+    /// extern fn gets(c: *const c_char) -> i32 {
     ///     0
     /// }
     ///
     /// fn main() {
     ///     let mut p = [8u8; 64];
     ///     unsafe {
-    ///         gets(&p as *const u8 as *const i8);
+    ///         gets(&p as *const u8 as *const c_char);
     ///     }
     /// }
     /// ```
@@ -43,7 +44,8 @@ declare_lint! {
     ///
     /// ```rust
     /// #![deny(rust_string_pointer_as_c_string_pointer)]
-    /// extern fn gets(c: *const i8) -> i32 {
+    /// use libc::c_char;
+    /// extern fn gets(c: *const c_char) -> i32 {
     ///     0
     /// }
     ///
@@ -51,7 +53,7 @@ declare_lint! {
     ///     let mut p = String::from("hello");
     ///     let p = p.as_bytes().as_ptr();
     ///     unsafe {
-    ///         gets(&p as *const libc::c_char);
+    ///         gets(p as *const c_char);
     ///     }
     /// }
     /// ```
