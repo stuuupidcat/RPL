@@ -36,7 +36,8 @@ declare_lint! {
 }
 
 declare_lint! {
-    /// The `rust_string_pointer_as_c_string_pointer` lint detects a Rust string pointer used as a C string pointer directly, for example, using `as` or `std::mem::transmute`
+    /// The `rust_string_pointer_as_c_string_pointer` lint detects a Rust string pointer
+    /// used as a C string pointer directly, for example, using `as` or `std::mem::transmute`
     ///
     /// ### Example
     ///
@@ -59,7 +60,8 @@ declare_lint! {
     ///
     /// ### Explanation
     ///
-    /// C strings normally end with a `\0`, while Rust strings do not. And Rust strings must contain valid UTF-8.
+    /// C strings normally end with a `\0`, while Rust strings do not. And
+    /// Rust strings must contain valid UTF-8.
     pub RUST_STRING_POINTER_AS_C_STRING_POINTER,
     Deny,
     "detects a Rust string pointer used as a C string pointer directly"
