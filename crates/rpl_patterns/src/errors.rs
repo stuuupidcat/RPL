@@ -74,12 +74,13 @@ pub struct WrongAssumptionOfFatPointerLayout {
 }
 
 // for cve_2019_15548
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_rust_str_as_c_str)]
+#[help]
 pub struct RustStrAsCStr {
-    #[note]
+    #[label(rpl_patterns_label)]
     pub cast_from: Span,
-    #[primary_span]
+    #[note]
     pub cast_to: Span,
 }
 

@@ -10,6 +10,8 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::Span;
 
+use crate::lints::RUST_STRING_POINTER_AS_C_STRING_POINTER;
+
 #[instrument(level = "info", skip(tcx, pcx))]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
@@ -63,9 +65,12 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 && let cast_to = cast_to.span_no_inline(body)
             {
                 debug!(?cast_from, ?cast_to);
-                self.tcx
-                    .dcx()
-                    .emit_err(crate::errors::RustStrAsCStr { cast_from, cast_to });
+                self.tcx.emit_node_span_lint(
+                    RUST_STRING_POINTER_AS_C_STRING_POINTER,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    cast_from,
+                    crate::errors::RustStrAsCStr { cast_from, cast_to },
+                );
             }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
@@ -78,21 +83,19 @@ struct PatternCast<'pcx> {
     cast_to: pat::Location,
 }
 
-// FIXME: this does not work due to the lack of name resolution.
-// FIXME: this should work for `libc::char` but not hard encoded `i8`.
 // FIXME: this should work for functions other than `crate::ll::instr`.
+// FIXME: this should work when `inline-mir` is on.
 #[rpl_macros::pattern_def]
 fn pattern_rust_str_as_c_str(pcx: PatCtxt<'_>) -> PatternCast<'_> {
     rpl! {
         fn $pattern (..) -> _ = mir! {
             meta!($T:ty);
 
-            // type c_char = libc::c_char;
-            type c_char = i8;
+            type c_char = libc::c_char;
 
             let src: &alloc::string::String = _;
             let bytes: &[u8] = alloc::string::String::as_bytes(move src);
-            let ptr: *const u8 = core::slice::as_ptr(copy bytes);
+            let ptr: *const u8 = slice::as_ptr(copy bytes);
             let dst: *const c_char = copy ptr as *const c_char (Transmute);
             let ret: $T = $crate::ll::instr(move dst);
         }

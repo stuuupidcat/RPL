@@ -34,3 +34,33 @@ declare_lint! {
     Warn,
     "detects a lengthless buffer passed to extern function"
 }
+
+declare_lint! {
+    /// The `rust_string_pointer_as_c_string_pointer` lint detects a Rust string pointer used as a C string pointer directly, for example, using `as` or `std::mem::transmute`
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(rust_string_pointer_as_c_string_pointer)]
+    /// extern fn gets(c: *const i8) -> i32 {
+    ///     0
+    /// }
+    ///
+    /// fn main() {
+    ///     let mut p = String::from("hello");
+    ///     let p = p.as_bytes().as_ptr();
+    ///     unsafe {
+    ///         gets(&p as *const libc::c_char);
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// C strings normally end with a `\0`, while Rust strings do not. And Rust strings must contain valid UTF-8.
+    pub RUST_STRING_POINTER_AS_C_STRING_POINTER,
+    Deny,
+    "detects a Rust string pointer used as a C string pointer directly"
+}
