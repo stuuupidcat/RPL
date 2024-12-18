@@ -1,6 +1,6 @@
 //! Resolve an item path.
 //!
-//! See https://doc.rust-lang.org/nightly/nightly-rustc/src/clippy_utils/lib.rs.html#691
+//! See <https://doc.rust-lang.org/nightly/nightly-rustc/src/clippy_utils/lib.rs.html#691>
 use rpl_context::cvt_prim_ty::CvtPrimTy;
 use rpl_context::{pat, PatCtxt};
 use rustc_hir::def::{DefKind, Res};
