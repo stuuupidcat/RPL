@@ -1,5 +1,3 @@
-//@ ignore-on-host
-
 extern crate libc;
 
 use libc::{sockaddr, sockaddr_storage, socklen_t};
@@ -14,14 +12,17 @@ struct Addr {
 
 impl Addr {
     /// Creates a raw socket address from `SocketAddr`.
+    // #[rpl::dump_mir(dump_cfg, dump_ddg)]
     fn new(addr: std::net::SocketAddr) -> Self {
         let (addr, len): (*const sockaddr, socklen_t) = match &addr {
             SocketAddr::V4(addr) => (
                 addr as *const SocketAddrV4 as *const sockaddr,
+                //~^ ERROR: wrong assumption of layout compatibility from `std::net::SocketAddrV4` to `libc::sockaddr`
                 mem::size_of_val(addr) as socklen_t,
             ),
             SocketAddr::V6(addr) => (
                 addr as *const SocketAddrV6 as *const sockaddr,
+                //~^ ERROR: wrong assumption of layout compatibility from `std::net::SocketAddrV6` to `libc::sockaddr`
                 mem::size_of_val(addr) as socklen_t,
             ),
         };

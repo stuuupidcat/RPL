@@ -91,3 +91,17 @@ pub struct LengthlessBufferPassedToExternFunction {
     #[label(rpl_patterns_label)]
     pub ptr: Span,
 }
+
+// for cve_2021_27376
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_wrong_assumption_of_layout_compatibility)]
+#[help]
+pub struct WrongAssumptionOfLayoutCompatibility {
+    #[label(rpl_patterns_label)]
+    #[note]
+    pub cast_from: Span,
+    #[primary_span]
+    pub cast_to: Span,
+    pub type_from: &'static str,
+    pub type_to: &'static str,
+}

@@ -25,3 +25,7 @@ rpl_patterns_rust_str_as_c_str = it is usually a bug to cast a `&str` to a `*con
 
 rpl_patterns_lengthless_buffer_passed_to_extern_function = it is usually a bug to pass a buffer pointer to an extern function without specifying its length
     .label = the pointer is passed here
+
+rpl_patterns_wrong_assumption_of_layout_compatibility = wrong assumption of layout compatibility from `{$type_from}` to `{$type_to}`
+    .note  = casted from this
+    .help  = it's not guaranteed by Rust standard library. See https://github.com/rust-lang/rust/pull/78802

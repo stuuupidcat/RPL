@@ -28,6 +28,7 @@ mod cve_2019_15548_2;
 mod cve_2020_25016;
 mod cve_2020_35881;
 mod cve_2020_35892_3;
+mod cve_2021_27376;
 // mod cve_2020_35873;
 mod lints;
 
@@ -43,6 +44,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     cve_2020_35881::const_const_Transmute_ver::check_item,
     cve_2020_35881::mut_mut_Transmute_ver::check_item,
     cve_2020_35881::mut_const_PtrToPtr_ver::check_item,
+    cve_2021_27376::check_item,
 ];
 
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item: ItemId) {
