@@ -327,7 +327,7 @@ pub fn find_crates(tcx: TyCtxt<'_>, name: Symbol) -> Vec<Res> {
         .copied()
         .filter(move |&num| tcx.crate_name(num) == name)
         .filter(move |&num| {
-            // Find crates that are 
+            // Find crates that are
             // either has been included as a part of prelude
             // or directly depended by local crate
             matches!(name.as_str(), "std" | "core" | "alloc")
