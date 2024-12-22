@@ -326,6 +326,10 @@ pub fn find_crates(tcx: TyCtxt<'_>, name: Symbol) -> Vec<Res> {
         .iter()
         .copied()
         .filter(move |&num| tcx.crate_name(num) == name)
+        .filter(move |&num| {
+            // Find crates that are directly depended by local crate.
+            tcx.extern_crate(num).map(|krate| krate.is_direct()).unwrap_or(false)
+        })
         .map(CrateNum::as_def_id)
         .map(|id| Res::Def(tcx.def_kind(id), id))
         .collect()
