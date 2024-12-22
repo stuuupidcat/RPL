@@ -1884,3 +1884,34 @@ fn test_cve_2019_15548_2_i8() {
         }
     )
 }
+
+#[test]
+fn test_cve_2021_27376() {
+    mir_test_case!(
+        pat! {
+            let src: *const std::net::SocketAddrV4 = _;
+            let dst: *const libc::sockaddr = move src as *const libc::sockaddr (PtrToPtr);
+        } => quote! {
+            let src_local = pattern.mk_local(pcx.mk_raw_ptr_ty(
+                pcx.mk_path_ty(pcx.mk_path_with_args(pcx.mk_item_path(&["std", "net", "SocketAddrV4", ]), &[])),
+                ::rustc_middle::mir::Mutability::Not
+            ));
+            let src_stmt = pattern.mk_assign(src_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
+            let dst_local = pattern.mk_local(pcx.mk_raw_ptr_ty(
+                pcx.mk_path_ty(pcx.mk_path_with_args(pcx.mk_item_path(&["libc", "sockaddr", ]), &[])),
+                ::rustc_middle::mir::Mutability::Not
+            ));
+            let dst_stmt = pattern.mk_assign(
+                dst_local.into_place(),
+                ::rpl_mir::pat::Rvalue::Cast(
+                    ::rustc_middle::mir::CastKind::PtrToPtr,
+                    ::rpl_mir::pat::Operand::Move(src_local.into_place()),
+                    pcx.mk_raw_ptr_ty(
+                        pcx.mk_path_ty(pcx.mk_path_with_args(pcx.mk_item_path(&["libc", "sockaddr", ]), &[])),
+                        ::rustc_middle::mir::Mutability::Not
+                    )
+                )
+            );
+        }
+    );
+}
