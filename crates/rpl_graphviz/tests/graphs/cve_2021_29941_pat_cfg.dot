@@ -1,0 +1,7 @@
+digraph ControlFlowGraph {
+    bb0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb0</td></tr><tr><td align="left" balign="left">_?0 = _<br/></td></tr><tr><td align="left">_?1 = std::iter::ExactSizeIterator::len(move _?0) -&gt; ?bb1</td></tr></table>>];
+    bb1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb1</td></tr><tr><td align="left" balign="left">_?2 = _<br/></td></tr><tr><td align="left">alloc::vec::Vec::set_len(move _?2, copy _?1) -&gt; ?bb2</td></tr></table>>];
+    bb2 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb2</td></tr><tr><td align="left">end</td></tr></table>>];
+    bb0 -> bb1 [label="return"];
+    bb1 -> bb2 [label="return"];
+}

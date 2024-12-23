@@ -244,6 +244,20 @@ test_case! {
 }
 
 test_case! {
+    fn cve_2021_29941() {
+        meta!{
+            $T:ty,
+            $I:ty,
+        }
+
+        let iter: $I = _;
+        let len: usize = std::iter::ExactSizeIterator::len(move iter);
+        let vec: &mut alloc::vec::Vec<$T> = _;
+        _ = alloc::vec::Vec::set_len(move vec, copy len);
+    }
+}
+
+test_case! {
     fn unsafe_cell_alias() {
         meta!($T:ty);
 

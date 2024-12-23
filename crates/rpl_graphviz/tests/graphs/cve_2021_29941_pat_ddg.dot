@@ -1,0 +1,29 @@
+digraph DataDependencyGraph {
+compound = true;
+subgraph cluster_bb0 {
+    bb0IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb0[IN]</td></tr></table>>];
+    bb0OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb0[OUT]</td></tr></table>>];
+    bb0stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?0 = _</td></tr></table>>];
+    bb0stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?1 = std::iter::ExactSizeIterator::len(move _?0) -&gt; ?bb1</td></tr></table>>];
+    bb0stmt1 -> bb0OUT [label="_?1"];
+    bb0IN -> bb0OUT [label="_?2"];
+    bb0stmt0 -> bb0stmt1 [label="_?0"];
+}
+subgraph cluster_bb1 {
+    bb1IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb1[IN]</td></tr></table>>];
+    bb1OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb1[OUT]</td></tr></table>>];
+    bb1stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?2 = _</td></tr></table>>];
+    bb1stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">alloc::vec::Vec::set_len(move _?2, copy _?1) -&gt; ?bb2</td></tr></table>>];
+    bb1IN -> bb1stmt1 [label="_?1"];
+    bb1IN -> bb1OUT [label="_?0,_?1"];
+    bb1stmt0 -> bb1stmt1 [label="_?2"];
+}
+subgraph cluster_bb2 {
+    bb2IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb2[IN]</td></tr></table>>];
+    bb2OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb2[OUT]</td></tr></table>>];
+    bb2IN -> bb2OUT [label="*"];
+}
+    bb0OUT -> bb1IN [label="return"];
+    bb1OUT -> bb2IN [label="return"];
+    bb0stmt1 -> bb1stmt1 [label="_?1"];
+}
