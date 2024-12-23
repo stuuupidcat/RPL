@@ -1,5 +1,3 @@
-use core::unreachable;
-
 use syn::parse::{Parse, ParseStream, Result};
 use syn::token::Token;
 use syn::{Ident, Token};
@@ -732,13 +730,16 @@ pub struct ParseParse;
 #[derive(Default, Clone, Copy)]
 pub struct PunctuatedParseTerminated;
 
-#[derive(Default, Clone, Copy)]
-pub struct AttributeParseOuter;
-
 pub trait ParseFn<T> {
     fn parse(input: ParseStream<'_>) -> Result<T>;
     fn parse_many(input: ParseStream<'_>) -> Result<Vec<T>> {
-        Ok(std::iter::from_fn(|| Self::parse(input).ok()).collect())
+        Ok(std::iter::from_fn(|| {
+            if Self::parse(&input.fork()).is_ok() {
+                return Self::parse(input).ok();
+            }
+            None
+        })
+        .collect())
     }
 }
 
@@ -751,15 +752,5 @@ impl<T: Parse> ParseFn<T> for ParseParse {
 impl<T: Parse, P: Parse> ParseFn<Punctuated<T, P>> for PunctuatedParseTerminated {
     fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Punctuated<T, P>> {
         Punctuated::parse_terminated(input)
-    }
-}
-
-impl ParseFn<syn::Attribute> for AttributeParseOuter {
-    fn parse(_input: ParseStream<'_>) -> Result<syn::Attribute> {
-        unreachable!()
-    }
-
-    fn parse_many(input: ParseStream<'_>) -> Result<Vec<syn::Attribute>> {
-        input.call(syn::Attribute::parse_outer)
     }
 }
