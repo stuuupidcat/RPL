@@ -59,7 +59,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 
             #[allow(irrefutable_let_patterns)]
             if let pattern = pattern_loop(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern).check()
             {
                 let matches = self.loop_matches.insert(matches);
                 let mut multi_span = MultiSpan::from_span(span);
@@ -86,7 +86,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 #[allow(rustc::diagnostic_outside_of_impl)]
                 self.tcx.dcx().span_note(multi_span, "MIR pattern matched");
             } else if let pattern_offset_by_len = pattern_offset_by_len(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern_offset_by_len.pattern).check()
+                && let Some(matches) =
+                    CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern_offset_by_len.pattern).check()
                 && let Some(read) = matches[pattern_offset_by_len.read]
                 && let read = read.span_no_inline(body)
                 && let Some(ptr) = matches[pattern_offset_by_len.ptr]

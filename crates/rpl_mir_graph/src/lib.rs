@@ -13,7 +13,6 @@ extern crate tracing;
 pub(crate) mod rwstate;
 
 mod graph;
-mod mir;
 
 pub use graph::{
     Access, BlockDataDepGraph, ControlFlowGraph, DataDepGraph, Edge, EdgeKind, NodeIdx, NodeKind, ProgramDepGraph,

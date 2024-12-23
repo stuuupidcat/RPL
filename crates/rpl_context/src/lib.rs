@@ -1,6 +1,9 @@
 #![allow(internal_features)]
 #![feature(rustc_private)]
 #![feature(rustc_attrs)]
+#![feature(debug_closure_helpers)]
+#![feature(box_patterns)]
+#![feature(let_chains)]
 
 extern crate rustc_arena;
 extern crate rustc_ast;
@@ -10,6 +13,7 @@ extern crate rustc_hir;
 extern crate rustc_index;
 extern crate rustc_middle;
 extern crate rustc_span;
+extern crate rustc_target;
 
 mod context;
 pub mod cvt_prim_ty;

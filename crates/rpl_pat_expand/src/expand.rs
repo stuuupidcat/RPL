@@ -135,6 +135,9 @@ impl<'pat> ExpandCtxt<'pat> {
     fn expand<T>(self, value: T) -> Expand<'pat, T> {
         Expand { value, ecx: self }
     }
+    fn expand_projections<'a>(&self, place: &'a Place) -> Expand<'_, Projections<'a>> {
+        self.expand(Projections(place))
+    }
     fn expand_mir<T>(self, value: T, mir_pat: &'pat Ident) -> ExpandMir<'pat, T> {
         ExpandMir {
             value,
@@ -167,9 +170,6 @@ impl<'pat> ExpandCtxt<'pat> {
 impl<'pat> ExpandMirCtxt<'pat> {
     fn expand<T>(&self, value: T) -> ExpandMir<'_, T> {
         ExpandMir { value, ecx: *self }
-    }
-    fn expand_projections<'a>(&self, place: &'a Place) -> ExpandMir<'_, Projections<'a>> {
-        self.expand(Projections(place))
     }
     fn expand_punctuated<'a, U: 'a, P: 'a>(
         &'pat self,
@@ -336,7 +336,7 @@ impl ToTokens for Expand<'_, &FnPat> {
 
 impl ToTokens for ExpandMir<'_, &Mir> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandMirCtxt { pcx, mir_pat, .. } = self.ecx;
+        let ExpandMirCtxt { mir_pat, .. } = self.ecx;
         let Mir {
             metas,
             declarations,
@@ -346,7 +346,7 @@ impl ToTokens for ExpandMir<'_, &Mir> {
         let declarations = declarations.iter().map(|declaration| self.expand(declaration));
         let statements = statements.iter().map(|statement| self.expand(statement));
         quote_each_token!(tokens
-            let mut #mir_pat = ::rpl_mir::pat::MirPatternBuilder::new(#pcx);
+            let mut #mir_pat = ::rpl_mir::pat::MirPatternBuilder::new();
             #(#metas)* #(#declarations)* #(#statements)*
             let #mir_pat = #mir_pat.build();
         );
@@ -988,15 +988,15 @@ impl ToTokens for Expand<'_, &PlaceLocal> {
     }
 }
 
-impl ToTokens for ExpandMir<'_, &Place> {
+impl ToTokens for Expand<'_, &Place> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandMirCtxt { mir_pat, .. } = self.ecx;
+        let ExpandCtxt { pcx, .. } = self.ecx;
         if let Place::Local(local) = self.value {
             self.expand(local).to_tokens(tokens);
         } else {
             let local = self.value.local().as_local();
             let projections = self.expand_projections(self.value);
-            quote_each_token!(tokens ::rpl_mir::pat::Place::new(#local, #mir_pat.mk_projection(&[#projections])));
+            quote_each_token!(tokens ::rpl_mir::pat::Place::new(#local, #pcx.mk_slice(&[#projections])));
         }
     }
 }

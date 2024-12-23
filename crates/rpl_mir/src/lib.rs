@@ -32,7 +32,6 @@ extern crate smallvec;
 extern crate tracing;
 
 pub mod graph;
-pub mod pattern;
 
 mod matches;
 mod resolve;
@@ -42,6 +41,7 @@ use std::iter::zip;
 
 use crate::graph::{MirControlFlowGraph, MirDataDepGraph, PatControlFlowGraph, PatDataDepGraph};
 use resolve::{ty_res, PatItemKind};
+use rpl_context::PatCtxt;
 use rpl_mir_graph::TerminatorEdges;
 use rustc_abi::VariantIdx;
 use rustc_hash::FxHashMap;
@@ -58,37 +58,44 @@ use rustc_span::symbol::kw;
 use rustc_span::Symbol;
 use rustc_target::abi::FieldIdx;
 
-pub use crate::pattern as pat;
 pub use matches::{Matches, StatementMatch};
+pub use rpl_context::pat;
 
 pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     tcx: TyCtxt<'tcx>,
+    pcx: PatCtxt<'pcx>,
     param_env: ty::ParamEnv<'tcx>,
     body: &'a mir::Body<'tcx>,
-    pattern: &'a pat::MirPattern<'pcx>,
+    mir_pat: &'a pat::MirPattern<'pcx>,
     pat_cfg: PatControlFlowGraph,
     pat_ddg: PatDataDepGraph,
     mir_cfg: MirControlFlowGraph,
     mir_ddg: MirDataDepGraph,
     // pat_pdg: PatProgramDepGraph,
     // mir_pdg: MirProgramDepGraph,
-    locals: IndexVec<pat::LocalIdx, RefCell<HybridBitSet<mir::Local>>>,
+    locals: IndexVec<pat::Local, RefCell<HybridBitSet<mir::Local>>>,
     ty_vars: IndexVec<pat::TyVarIdx, RefCell<Vec<Ty<'tcx>>>>,
 }
 
 impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
-    pub fn new(tcx: TyCtxt<'tcx>, body: &'a mir::Body<'tcx>, pattern: &'a pat::MirPattern<'pcx>) -> Self {
+    pub fn new(
+        tcx: TyCtxt<'tcx>,
+        pcx: PatCtxt<'pcx>,
+        body: &'a mir::Body<'tcx>,
+        mir_pat: &'a pat::MirPattern<'pcx>,
+    ) -> Self {
         // let pat_pdg = crate::graph::pat_program_dep_graph(&patterns, tcx.pointer_size().bytes_usize());
         // let mir_pdg = crate::graph::mir_program_dep_graph(body);
-        let pat_cfg = crate::graph::pat_control_flow_graph(pattern, tcx.pointer_size().bytes());
-        let pat_ddg = crate::graph::pat_data_dep_graph(pattern, &pat_cfg);
+        let pat_cfg = crate::graph::pat_control_flow_graph(mir_pat, tcx.pointer_size().bytes());
+        let pat_ddg = crate::graph::pat_data_dep_graph(mir_pat, &pat_cfg);
         let mir_cfg = crate::graph::mir_control_flow_graph(body);
         let mir_ddg = crate::graph::mir_data_dep_graph(body, &mir_cfg);
         Self {
             tcx,
+            pcx,
             param_env: tcx.param_env_reveal_all_normalized(body.source.def_id()),
             body,
-            pattern,
+            mir_pat,
             pat_cfg,
             pat_ddg,
             mir_cfg,
@@ -97,9 +104,9 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
             // mir_pdg,
             locals: IndexVec::from_elem_n(
                 RefCell::new(HybridBitSet::new_empty(body.local_decls.len())),
-                pattern.locals.len(),
+                mir_pat.locals.len(),
             ),
-            ty_vars: IndexVec::from_elem(RefCell::new(Vec::new()), &pattern.ty_vars),
+            ty_vars: IndexVec::from_elem(RefCell::new(Vec::new()), &mir_pat.ty_vars),
         }
     }
     pub fn check(&self) -> Option<Matches<'tcx>> {
@@ -251,12 +258,12 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
 }
 
 impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
-    pub fn match_local(&self, pat: pat::LocalIdx, local: mir::Local) -> bool {
+    pub fn match_local(&self, pat: pat::Local, local: mir::Local) -> bool {
         let mut locals = self.locals[pat].borrow_mut();
         if locals.contains(local) {
             return true;
         }
-        let matched = self.match_ty(self.pattern.locals[pat], self.body.local_decls[local].ty);
+        let matched = self.match_ty(self.mir_pat.locals[pat], self.body.local_decls[local].ty);
         debug!(?pat, ?local, matched, "match_local");
         if matched {
             locals.insert(local);
@@ -328,7 +335,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
     }
 
     pub fn match_statement_or_terminator(&self, pat: pat::Location, loc: mir::Location) -> bool {
-        let block_pat = &self.pattern[pat.block];
+        let block_pat = &self.mir_pat[pat.block];
         let block = &self.body[loc.block];
         match (
             pat.statement_index < block_pat.statements.len(),
@@ -399,7 +406,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         terminator: &mir::Terminator<'tcx>,
     ) -> bool {
         let matched = match (
-            self.pattern[loc_pat.block].terminator(),
+            self.mir_pat[loc_pat.block].terminator(),
             &self.body[loc.block].terminator().kind,
         ) {
             // (&pat::StatementKind::Init(local_pat) ,
@@ -593,7 +600,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         let path = path_with_args.path;
         let gargs_pat = path_with_args.args;
         let variant_matched = match path {
-            pattern::Path::Item(path) => {
+            pat::Path::Item(path) => {
                 self.match_item_path_by_def_path(path, def_id)
                     || match self.match_item_path(path, def_id) {
                         Some([]) => {
@@ -604,8 +611,8 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                         _ => false,
                     }
             },
-            pattern::Path::TypeRelative(_ty, _symbol) => false,
-            pattern::Path::LangItem(lang_item) => self.tcx.is_lang_item(variant.def_id, lang_item),
+            pat::Path::TypeRelative(_ty, _symbol) => false,
+            pat::Path::LangItem(lang_item) => self.tcx.is_lang_item(variant.def_id, lang_item),
         };
         let fields_matched = match (adt_kind, field_idx, variant.ctor) {
             (pat::AggAdtKind::Unit, None, Some((CtorKind::Const, _)))
@@ -697,7 +704,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             info!(?path_with_args, "generics not supported yet")
         }
         match path_with_args.path {
-            pat::Path::Item(path) => ty_res(self.pattern.pcx, self.tcx, path.0, &[]),
+            pat::Path::Item(path) => ty_res(self.pcx, self.tcx, path.0, &[]),
             pat::Path::TypeRelative(..) => None,
             pat::Path::LangItem(..) => None,
         }
@@ -738,7 +745,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             (pat::TyKind::Path(path_with_args), _) => {
                 //FIXME: generics args are ignored.
                 match path_with_args.path {
-                    pat::Path::Item(path) => ty_res(self.pattern.pcx, self.tcx, path.0, &[])
+                    pat::Path::Item(path) => ty_res(self.pcx, self.tcx, path.0, &[])
                         .map(|ty_pat| self.match_ty(ty_pat, ty))
                         .unwrap_or(false),
                     _ => false, //FIXME

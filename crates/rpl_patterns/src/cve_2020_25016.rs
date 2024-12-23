@@ -56,7 +56,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
             if let pattern_cast = pattern_cast(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern_cast.pattern).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern_cast.pattern).check()
                 && let Some(cast_from) = matches[pattern_cast.cast_from]
                 && let cast_from = cast_from.span_no_inline(body)
                 && let Some(cast_to) = matches[pattern_cast.cast_to]
@@ -71,7 +71,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     mutability: ty::Mutability::Not.into(),
                 });
             } else if let pattern_cast_mut = pattern_cast_mut(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern_cast_mut.pattern).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern_cast_mut.pattern).check()
                 && let Some(cast_from) = matches[pattern_cast_mut.cast_from]
                 && let cast_from = cast_from.span_no_inline(body)
                 && let Some(cast_to) = matches[pattern_cast_mut.cast_to]

@@ -1,29 +1,57 @@
+use rustc_data_structures::fx::{FxHashMap, FxIndexMap};
+use rustc_middle::mir;
 use rustc_span::Symbol;
 
-use super::{PatId, Ty};
-
-pub struct FnDef {}
+use super::{Path, Ty};
 
 pub struct AdtDef<'pcx> {
-    pid: PatId,
-    variants: Vec<VariantDef<'pcx>>,
+    #[expect(dead_code)]
+    kind: AdtKind<'pcx>,
+}
+
+pub enum AdtKind<'pcx> {
+    Struct(VariantDef<'pcx>),
+    Enum(FxHashMap<Symbol, VariantDef<'pcx>>),
 }
 
 pub struct VariantDef<'pcx> {
-    fields: Vec<FieldDef<'pcx>>,
+    #[expect(dead_code)]
+    fields: FxHashMap<Symbol, FieldDef<'pcx>>,
 }
 
 pub struct FieldDef<'pcx> {
-    name: Symbol,
+    #[expect(dead_code)]
     ty: Ty<'pcx>,
 }
 
-pub struct Impl {
-    pid: PatId,
-    adt: PatId,
-    trait_id: Option<PatId>,
+pub struct ImplDef<'pcx> {
+    #[expect(dead_code)]
+    ty: Ty<'pcx>,
+    #[expect(dead_code)]
+    trait_id: Option<Path<'pcx>>,
+    #[expect(dead_code)]
+    fns: FxHashMap<Symbol, FnDef<'pcx>>,
 }
 
-pub struct Trait {
-    pid: PatId,
+pub struct FnDef<'pcx> {
+    #[expect(dead_code)]
+    params: FxIndexMap<Symbol, ParamDef<'pcx>>,
+    #[expect(dead_code)]
+    ret: Ty<'pcx>,
+    #[expect(dead_code)]
+    body: Option<FnBody<'pcx>>,
+}
+
+pub struct ParamDef<'pcx> {
+    #[expect(dead_code)]
+    mutability: mir::Mutability,
+    #[expect(dead_code)]
+    ty: Ty<'pcx>,
+}
+
+pub struct TraitDef {}
+
+pub enum FnBody<'pcx> {
+    Hir(),
+    Mir(&'pcx mir::Body<'pcx>),
 }

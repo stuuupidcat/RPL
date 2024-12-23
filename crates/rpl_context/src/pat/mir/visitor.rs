@@ -3,7 +3,7 @@ use super::*;
 pub use rustc_middle::mir::visit::{MutatingUseContext, NonMutatingUseContext, PlaceContext};
 
 pub trait PatternVisitor<'pcx>: Sized {
-    fn visit_local(&mut self, _local: LocalIdx, _pcx: PlaceContext, _location: Location) {}
+    fn visit_local(&mut self, _local: Local, _pcx: PlaceContext, _location: Location) {}
     fn visit_scalar_int(&mut self, _scalar_int: IntValue) {}
     fn visit_ty_var(&mut self, _ty_var: TyVar) {}
 

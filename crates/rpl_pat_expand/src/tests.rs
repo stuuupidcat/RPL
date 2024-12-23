@@ -12,7 +12,7 @@ fn mir_test_case(input: TokenStream, output: TokenStream) {
     assert_eq!(
         expanded.to_string().replace(";", ";\n"),
         quote! {
-            let mut pattern = ::rpl_mir::pat::MirPatternBuilder::new(pcx);
+            let mut pattern = ::rpl_mir::pat::MirPatternBuilder::new();
             #output
             let pattern = pattern.build();
         }
@@ -99,7 +99,7 @@ fn test_cve_2020_25016() {
                     ::rustc_middle::mir::Mutability::Not,
                     ::rpl_mir::pat::Place::new(
                         from_slice_local,
-                        pattern.mk_projection(&[::rpl_mir::pat::PlaceElem::Deref,])
+                        pcx.mk_slice(&[::rpl_mir::pat::PlaceElem::Deref,])
                     )
                 )
             );
@@ -152,7 +152,7 @@ fn test_cve_2020_25016() {
                     ::rustc_middle::mir::BorrowKind::Shared,
                     ::rpl_mir::pat::Place::new(
                         to_raw_slice_local,
-                        pattern.mk_projection(&[::rpl_mir::pat::PlaceElem::Deref,])
+                        pcx.mk_slice(&[::rpl_mir::pat::PlaceElem::Deref,])
                     )
                 )
             );
@@ -279,7 +279,7 @@ fn test_cve_2020_35892_revised() {
                 len_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(::rpl_mir::pat::Place::new(
                     self_local,
-                    pattern.mk_projection(&[
+                    pcx.mk_slice(&[
                         ::rpl_mir::pat::PlaceElem::Deref,
                         ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(
                             ::rustc_span::Symbol::intern("len")
@@ -327,7 +327,7 @@ fn test_cve_2020_35892_revised() {
                     ::rpl_mir::pat::Rvalue::Ref(
                         ::rpl_mir::pat::RegionKind::ReAny,
                         ::rustc_middle::mir::BorrowKind::Shared,
-                        ::rpl_mir::pat::Place::new(iter_mut_local, pattern.mk_projection(&[
+                        ::rpl_mir::pat::Place::new(iter_mut_local, pcx.mk_slice(&[
                             ::rpl_mir::pat::PlaceElem::Deref,
                             ::rpl_mir::pat::PlaceElem::Field(
                                 ::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("start"))
@@ -340,7 +340,7 @@ fn test_cve_2020_35892_revised() {
                     ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
                         ::rpl_mir::pat::Place::new(
                             start_ref_local,
-                            pattern.mk_projection(&[::rpl_mir::pat::PlaceElem::Deref,])
+                            pcx.mk_slice(&[::rpl_mir::pat::PlaceElem::Deref,])
                         )
                     ))
                 );
@@ -351,7 +351,7 @@ fn test_cve_2020_35892_revised() {
                         ::rustc_middle::mir::BorrowKind::Shared,
                         ::rpl_mir::pat::Place::new(
                             iter_mut_local,
-                            pattern.mk_projection(&[
+                            pcx.mk_slice(&[
                                 ::rpl_mir::pat::PlaceElem::Deref,
                                 ::rpl_mir::pat::PlaceElem::Field(
                                     ::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("end"))
@@ -365,7 +365,7 @@ fn test_cve_2020_35892_revised() {
                     ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
                         ::rpl_mir::pat::Place::new(
                             end_local,
-                            pattern.mk_projection(&[::rpl_mir::pat::PlaceElem::Deref,])
+                            pcx.mk_slice(&[::rpl_mir::pat::PlaceElem::Deref,])
                         )
                     ))
                 );
@@ -397,7 +397,8 @@ fn test_cve_2020_35892_revised() {
                             x1_local.into_place(),
                             ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
                                 ::rpl_mir::pat::Place::new(
-                                    iter_mut_local,pattern.mk_projection(&[
+                                    iter_mut_local,
+                                    pcx.mk_slice(&[
                                         ::rpl_mir::pat::PlaceElem::Deref,
                                         ::rpl_mir::pat::PlaceElem::Field(
                                             ::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("start"))
@@ -422,7 +423,7 @@ fn test_cve_2020_35892_revised() {
                         let iter_mut_stmt = pattern.mk_assign(
                             ::rpl_mir::pat::Place::new(
                                 iter_mut_local,
-                                pattern.mk_projection(&[
+                                pcx.mk_slice(&[
                                     ::rpl_mir::pat::PlaceElem::Deref,
                                     ::rpl_mir::pat::PlaceElem::Field(
                                         ::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("start"))
@@ -458,7 +459,7 @@ fn test_cve_2020_35892_revised() {
                                 ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
                                     ::rpl_mir::pat::Place::new(
                                         opt_local,
-                                        pattern.mk_projection(&[
+                                        pcx.mk_slice(&[
                                             ::rpl_mir::pat::PlaceElem::Downcast(
                                                 ::rustc_span::Symbol::intern("Some")
                                             ),
@@ -474,7 +475,7 @@ fn test_cve_2020_35892_revised() {
                                 ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
                                     ::rpl_mir::pat::Place::new(
                                         self_local,
-                                        pattern.mk_projection(&[
+                                        pcx.mk_slice(&[
                                             ::rpl_mir::pat::PlaceElem::Deref,
                                             ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(
                                                 ::rustc_span::Symbol::intern("mem")
@@ -594,7 +595,7 @@ fn test_cve_2020_35892() {
                 len_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(::rpl_mir::pat::Place::new(
                     self_local,
-                    pattern.mk_projection(&[
+                    pcx.mk_slice(&[
                         ::rpl_mir::pat::PlaceElem::Deref,
                         ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(
                             ::rustc_span::Symbol::intern("len")
@@ -671,7 +672,7 @@ fn test_cve_2020_35892() {
                                 ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
                                     ::rpl_mir::pat::Place::new(
                                         x3_local,
-                                        pattern.mk_projection(&[
+                                        pcx.mk_slice(&[
                                             ::rpl_mir::pat::PlaceElem::Downcast(
                                                 ::rustc_span::Symbol::intern("Some")
                                             ),
@@ -687,7 +688,7 @@ fn test_cve_2020_35892() {
                                 ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
                                     ::rpl_mir::pat::Place::new(
                                         self_local,
-                                        pattern.mk_projection(&[
+                                        pcx.mk_slice(&[
                                             ::rpl_mir::pat::PlaceElem::Deref,
                                             ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(
                                                 ::rustc_span::Symbol::intern("mem")
@@ -961,7 +962,7 @@ fn test_cve_2020_35881_const() {
                     ::rustc_middle::mir::Mutability::Not,
                     ::rpl_mir::pat::Place::new(
                         data_local,
-                        pattern.mk_projection(
+                        pcx.mk_slice(
                             &[::rpl_mir::pat::PlaceElem::Deref,]
                         )
                     )
@@ -991,7 +992,7 @@ fn test_cve_2020_35881_const() {
                     ::rpl_mir::pat::Operand::Copy(
                         ::rpl_mir::pat::Place::new(
                             ptr_to_ptr_to_res_local,
-                            pattern.mk_projection(
+                            pcx.mk_slice(
                                 &[::rpl_mir::pat::PlaceElem::Deref,]
                             )
                         )
@@ -1081,7 +1082,7 @@ fn test_cve_2020_35881_mut() {
                     ::rustc_middle::mir::Mutability::Mut,
                     ::rpl_mir::pat::Place::new(
                         data_local,
-                        pattern.mk_projection(
+                        pcx.mk_slice(
                             &[::rpl_mir::pat::PlaceElem::Deref,]
                         )
                     )
@@ -1111,7 +1112,7 @@ fn test_cve_2020_35881_mut() {
                     ::rpl_mir::pat::Operand::Copy(
                         ::rpl_mir::pat::Place::new(
                             ptr_to_ptr_to_res_local,
-                            pattern.mk_projection(
+                            pcx.mk_slice(
                                 &[::rpl_mir::pat::PlaceElem::Deref,]
                             )
                         )
@@ -1361,7 +1362,7 @@ fn test_cve_2021_29941_2() {
                                             ::rpl_mir::pat::Operand::Copy(
                                                 ::rpl_mir::pat::Place::new(
                                                     next_local,
-                                                    pattern.mk_projection(&[
+                                                    pcx.mk_slice(&[
                                                         ::rpl_mir::pat::PlaceElem::Downcast(
                                                             ::rustc_span::Symbol::intern("Some")
                                                         ),
@@ -1379,7 +1380,7 @@ fn test_cve_2021_29941_2() {
                                             ::rpl_mir::pat::Operand::Copy(
                                                 ::rpl_mir::pat::Place::new(
                                                     next_local,
-                                                    pattern.mk_projection(&[
+                                                    pcx.mk_slice(&[
                                                         ::rpl_mir::pat::PlaceElem::Downcast(
                                                             ::rustc_span::Symbol::intern("Some")
                                                         ),
@@ -1404,7 +1405,7 @@ fn test_cve_2021_29941_2() {
                                     let slice_stmt = pattern.mk_assign(
                                         ::rpl_mir::pat::Place::new(
                                             slice_local,
-                                            pattern.mk_projection(&[
+                                            pcx.mk_slice(&[
                                                 ::rpl_mir::pat::PlaceElem::Deref,
                                                 ::rpl_mir::pat::PlaceElem::Index(second_usize_local),
                                             ])
@@ -1543,7 +1544,7 @@ fn test_cve_2018_21000_inlined() {
             let from_vec_ptr_stmt = pattern.mk_assign(
                 from_vec_ptr_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
-                    ::rpl_mir::pat::Place::new(from_vec_local, pattern.mk_projection(&[
+                    ::rpl_mir::pat::Place::new(from_vec_local, pcx.mk_slice(&[
                         ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("buf"))),
                         ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("inner"))),
                         ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("ptr"))),
@@ -1554,7 +1555,7 @@ fn test_cve_2018_21000_inlined() {
             let from_vec_cap_stmt = pattern.mk_assign(
                 from_vec_cap_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
-                    ::rpl_mir::pat::Place::new(from_vec_local, pattern.mk_projection(&[
+                    ::rpl_mir::pat::Place::new(from_vec_local, pcx.mk_slice(&[
                         ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("buf"))),
                         ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("inner"))),
                         ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("cap"))),
@@ -1578,7 +1579,7 @@ fn test_cve_2018_21000_inlined() {
             let from_vec_len_stmt = pattern.mk_assign(
                 from_vec_len_local.into_place(),
                 ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
-                    ::rpl_mir::pat::Place::new(from_vec_local, pattern.mk_projection(&[
+                    ::rpl_mir::pat::Place::new(from_vec_local, pcx.mk_slice(&[
                         ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("len"))),
                     ]))
                 ))

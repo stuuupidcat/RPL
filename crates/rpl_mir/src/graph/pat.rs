@@ -1,12 +1,12 @@
 use crate::pat;
 use crate::pat::visitor::{PatternVisitor, PlaceContext};
 
-use rpl_mir_graph::{
-    BlockDataDepGraph, ControlFlowGraph, DataDepGraph, ProgramDepGraph, SwitchTargets, TerminatorEdges,
-};
+use rpl_mir_graph::{ControlFlowGraph, DataDepGraph, ProgramDepGraph, SwitchTargets, TerminatorEdges};
 
-pub type PatProgramDepGraph = ProgramDepGraph<pat::BasicBlock, pat::LocalIdx>;
-pub type PatDataDepGraph = DataDepGraph<pat::BasicBlock, pat::LocalIdx>;
+use super::BlockDataDepGraphVisitor;
+
+pub type PatProgramDepGraph = ProgramDepGraph<pat::BasicBlock, pat::Local>;
+pub type PatDataDepGraph = DataDepGraph<pat::BasicBlock, pat::Local>;
 pub type PatControlFlowGraph = ControlFlowGraph<pat::BasicBlock>;
 pub type PatSwitchTargets = SwitchTargets<pat::BasicBlock>;
 type PatTerminatorEdges = TerminatorEdges<pat::BasicBlock>;
@@ -23,7 +23,7 @@ pub fn pat_data_dep_graph(patterns: &pat::MirPattern<'_>, cfg: &PatControlFlowGr
         patterns.locals.len(),
     );
     for (bb, block) in patterns.basic_blocks.iter_enumerated() {
-        graph.blocks[bb].visit_basic_block_data(bb, block);
+        BlockDataDepGraphVisitor::new(&mut graph.blocks[bb]).visit_basic_block_data(bb, block);
     }
     graph.build_interblock_edges(cfg);
     graph
@@ -35,22 +35,22 @@ pub fn pat_control_flow_graph(patterns: &pat::MirPattern<'_>, pointer_bytes: u64
     })
 }
 
-impl<'tcx> PatternVisitor<'tcx> for BlockDataDepGraph<pat::LocalIdx> {
+impl<'tcx> PatternVisitor<'tcx> for BlockDataDepGraphVisitor<'_, pat::Local> {
     fn visit_place(&mut self, place: pat::Place<'_>, pcx: PlaceContext, location: pat::Location) {
-        self.access_local(place.local, pcx, location.statement_index);
+        self.graph.access_local(place.local, pcx, location.statement_index);
         self.super_place(place, pcx, location);
     }
-    fn visit_local(&mut self, local: pat::LocalIdx, pcx: PlaceContext, location: pat::Location) {
-        self.access_local(local, pcx, location.statement_index);
+    fn visit_local(&mut self, local: pat::Local, pcx: PlaceContext, location: pat::Location) {
+        self.graph.access_local(local, pcx, location.statement_index);
     }
     fn visit_statement(&mut self, statement: &pat::StatementKind<'tcx>, location: pat::Location) {
         self.super_statement(statement, location);
-        self.update_deps(location.statement_index);
+        self.graph.update_deps(location.statement_index);
     }
     fn visit_terminator(&mut self, terminator: &pat::TerminatorKind<'tcx>, location: pat::Location) {
         self.super_terminator(terminator, location);
-        self.update_deps(location.statement_index);
-        self.update_dep_end();
+        self.graph.update_deps(location.statement_index);
+        self.graph.update_dep_end();
     }
 }
 

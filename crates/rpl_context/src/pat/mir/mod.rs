@@ -1,7 +1,6 @@
 use core::iter::IntoIterator;
 use std::ops::Index;
 
-use rpl_context::PatCtxt;
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_hir::Target;
 use rustc_index::IndexVec;
@@ -12,11 +11,11 @@ use rustc_target::abi::FieldIdx;
 mod pretty;
 pub mod visitor;
 
-pub use rpl_context::pat::*;
+pub use super::*;
 
 rustc_index::newtype_index! {
     #[debug_format = "_?{}"]
-    pub struct LocalIdx {}
+    pub struct Local {}
 }
 
 rustc_index::newtype_index! {
@@ -37,11 +36,10 @@ impl From<(BasicBlock, usize)> for Location {
 }
 
 pub struct MirPattern<'pcx> {
-    pub pcx: PatCtxt<'pcx>,
-    pub(crate) ty_vars: IndexVec<TyVarIdx, TyVar>,
+    pub ty_vars: IndexVec<TyVarIdx, TyVar>,
     pub(crate) const_vars: IndexVec<ConstVarIdx, ConstVar<'pcx>>,
-    pub(crate) self_idx: Option<LocalIdx>,
-    pub locals: IndexVec<LocalIdx, Ty<'pcx>>,
+    pub self_idx: Option<Local>,
+    pub locals: IndexVec<Local, Ty<'pcx>>,
     pub basic_blocks: IndexVec<BasicBlock, BasicBlockData<'pcx>>,
 }
 
@@ -100,7 +98,7 @@ impl<'pcx> BasicBlockData<'pcx> {
 pub enum PlaceElem<'pcx> {
     Deref,
     Field(Field),
-    Index(LocalIdx),
+    Index(Local),
     ConstantIndex {
         offset: u64,
         min_length: u64,
@@ -118,15 +116,15 @@ pub enum PlaceElem<'pcx> {
 
 #[derive(Clone, Copy)]
 pub struct Place<'pcx> {
-    pub local: LocalIdx,
+    pub local: Local,
     pub projection: &'pcx [PlaceElem<'pcx>],
 }
 
 impl<'pcx> Place<'pcx> {
-    pub fn new(local: LocalIdx, projection: &'pcx [PlaceElem<'pcx>]) -> Self {
+    pub fn new(local: Local, projection: &'pcx [PlaceElem<'pcx>]) -> Self {
         Self { local, projection }
     }
-    pub fn as_local(&self) -> Option<LocalIdx> {
+    pub fn as_local(&self) -> Option<Local> {
         self.projection.is_empty().then_some(self.local)
     }
 
@@ -149,13 +147,13 @@ impl<'pcx> Place<'pcx> {
     }
 }
 
-impl From<LocalIdx> for Place<'_> {
-    fn from(local: LocalIdx) -> Self {
+impl From<Local> for Place<'_> {
+    fn from(local: Local) -> Self {
         Place { local, projection: &[] }
     }
 }
 
-impl LocalIdx {
+impl Local {
     pub fn into_place<'pcx>(self) -> Place<'pcx> {
         self.into()
     }
@@ -296,9 +294,8 @@ struct Loop {
 }
 
 impl<'pcx> MirPatternBuilder<'pcx> {
-    pub fn new(pcx: PatCtxt<'pcx>) -> Self {
+    pub fn new() -> Self {
         let mut pattern = MirPattern {
-            pcx,
             locals: IndexVec::new(),
             ty_vars: IndexVec::new(),
             const_vars: IndexVec::new(),
@@ -324,10 +321,10 @@ impl<'pcx> MirPatternBuilder<'pcx> {
     pub fn mk_const_var(&mut self, ty: Ty<'pcx>) -> ConstVar<'pcx> {
         self.pattern.mk_const_var(ty)
     }
-    pub fn mk_local(&mut self, ty: Ty<'pcx>) -> LocalIdx {
+    pub fn mk_local(&mut self, ty: Ty<'pcx>) -> Local {
         self.pattern.locals.push(ty)
     }
-    pub fn mk_self(&mut self, ty: Ty<'pcx>) -> LocalIdx {
+    pub fn mk_self(&mut self, ty: Ty<'pcx>) -> Local {
         *self.pattern.self_idx.insert(self.pattern.locals.push(ty))
     }
     fn new_block_if_terminated(&mut self) {
@@ -506,9 +503,6 @@ impl<'pcx> MirPattern<'pcx> {
     }
     pub fn mk_list<T>(&self, items: impl IntoIterator<Item = T>) -> List<T> {
         items.into_iter().collect()
-    }
-    pub fn mk_projection(&self, projection: &[PlaceElem<'pcx>]) -> &'pcx [PlaceElem<'pcx>] {
-        self.pcx.mk_slice(projection)
     }
 }
 

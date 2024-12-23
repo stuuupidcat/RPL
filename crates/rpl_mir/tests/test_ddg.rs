@@ -11,11 +11,11 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use rpl_context::{PatCtxt, PatternCtxt};
 use rpl_mir::graph::{pat_control_flow_graph, pat_data_dep_graph};
-use rpl_mir::pat::{LocalIdx, MirPattern};
+use rpl_mir::pat::{Local, MirPattern};
 use std::fmt::Write;
 
-fn format_stmt_local((stmt, local): (usize, LocalIdx)) -> impl std::fmt::Debug {
-    struct StmtLocal(usize, LocalIdx);
+fn format_stmt_local((stmt, local): (usize, Local)) -> impl std::fmt::Debug {
+    struct StmtLocal(usize, Local);
     impl std::fmt::Debug for StmtLocal {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             let &StmtLocal(stmt, local) = self;
