@@ -400,7 +400,7 @@ impl HasLocals for mir::Body<'_> {
     type Local = mir::Local;
 }
 impl HasLocals for pat::MirPattern<'_> {
-    type Local = pat::LocalIdx;
+    type Local = pat::Local;
 }
 
 impl<'tcx> BasicBlockData for mir::BasicBlockData<'tcx> {

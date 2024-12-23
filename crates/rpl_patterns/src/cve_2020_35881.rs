@@ -51,7 +51,7 @@ pub mod const_const_Transmute_ver {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern.pattern).check()
+                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern.pattern).check()
                     && let Some(ptr_transmute) = matches[pattern.ptr_transmute]
                     && let span1 = ptr_transmute.span_no_inline(body)
                     && let Some(data_ptr_get) = matches[pattern.data_ptr_get]
@@ -153,7 +153,7 @@ pub mod mut_mut_Transmute_ver {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern.pattern).check()
+                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern.pattern).check()
                     && let Some(ptr_transmute) = matches[pattern.ptr_transmute]
                     && let span1 = ptr_transmute.span_no_inline(body)
                     && let Some(data_ptr_get) = matches[pattern.data_ptr_get]
@@ -256,7 +256,7 @@ pub mod mut_const_PtrToPtr_ver {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern.pattern).check()
+                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern.pattern).check()
                     && let Some(ptr_transmute) = matches[pattern.ptr_transmute]
                     && let span1 = ptr_transmute.span_no_inline(body)
                     && let Some(data_ptr_get) = matches[pattern.data_ptr_get]

@@ -49,7 +49,7 @@ pub mod u8_to_t {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern_misordered_params = pattern_misordered_params(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern_misordered_params.pattern).check()
+                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern_misordered_params.pattern).check()
                     && let Some(from_raw_parts) = matches[pattern_misordered_params.from_raw_parts]
                     && let span = from_raw_parts.span_no_inline(body)
                 {
@@ -222,7 +222,7 @@ pub mod t_to_u8 {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern_misordered_params = pattern_misordered_params(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern_misordered_params.pattern).check()
+                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern_misordered_params.pattern).check()
                     && let Some(from_raw_parts) = matches[pattern_misordered_params.from_raw_parts]
                     && let span = from_raw_parts.span_no_inline(body)
                 {

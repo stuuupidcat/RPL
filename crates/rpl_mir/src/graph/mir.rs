@@ -1,8 +1,10 @@
 use rustc_data_structures::packed::Pu128;
-use rustc_middle::mir;
-use rustc_middle::mir::visit::Visitor;
+use rustc_middle::mir::visit::{PlaceContext, Visitor};
+use rustc_middle::mir::{self};
 
 use rpl_mir_graph::{ControlFlowGraph, DataDepGraph, ProgramDepGraph, SwitchTargets, TerminatorEdges};
+
+use super::BlockDataDepGraphVisitor;
 
 pub type MirProgramDepGraph = ProgramDepGraph<mir::BasicBlock, mir::Local>;
 pub type MirDataDepGraph = DataDepGraph<mir::BasicBlock, mir::Local>;
@@ -22,7 +24,7 @@ pub fn mir_data_dep_graph(body: &mir::Body<'_>, cfg: &MirControlFlowGraph) -> Mi
         body.local_decls.len(),
     );
     for (bb, block) in body.basic_blocks.iter_enumerated() {
-        graph.blocks[bb].visit_basic_block_data(bb, block);
+        BlockDataDepGraphVisitor::new(&mut graph.blocks[bb]).visit_basic_block_data(bb, block);
     }
     graph.build_interblock_edges(cfg);
     graph
@@ -32,6 +34,25 @@ pub fn mir_control_flow_graph(body: &mir::Body<'_>) -> MirControlFlowGraph {
     ControlFlowGraph::new(body.basic_blocks.len(), |block| {
         terminator_edges(&body[block].terminator().kind)
     })
+}
+
+impl<'tcx> Visitor<'tcx> for BlockDataDepGraphVisitor<'_, mir::Local> {
+    fn visit_place(&mut self, place: &mir::Place<'tcx>, pcx: PlaceContext, location: mir::Location) {
+        self.graph.access_local(place.local, pcx, location.statement_index);
+        self.super_place(place, pcx, location);
+    }
+    fn visit_local(&mut self, local: mir::Local, pcx: PlaceContext, location: mir::Location) {
+        self.graph.access_local(local, pcx, location.statement_index);
+    }
+    fn visit_statement(&mut self, statement: &mir::Statement<'tcx>, location: mir::Location) {
+        self.super_statement(statement, location);
+        self.graph.update_deps(location.statement_index);
+    }
+    fn visit_terminator(&mut self, terminator: &mir::Terminator<'tcx>, location: mir::Location) {
+        self.super_terminator(terminator, location);
+        self.graph.update_deps(location.statement_index);
+        self.graph.update_dep_end();
+    }
 }
 
 fn terminator_edges(termiantor: &mir::TerminatorKind<'_>) -> MirTerminatorEdges {

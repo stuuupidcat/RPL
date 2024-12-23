@@ -58,7 +58,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
             if let pattern_ptr = pattern_pass_a_pointer_to_c(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern_ptr.pattern).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern_ptr.pattern).check()
                 && let Some(ptr) = matches[pattern_ptr.ptr]
                 && let ptr = ptr.span_no_inline(body)
             {
