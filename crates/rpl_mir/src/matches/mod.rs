@@ -413,7 +413,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         use TerminatorEdges::{AssignOnReturn, Double, Single, SwitchInt};
         debug!(term_pat = ?self.cx.pat_cfg[bb_pat], term = ?self.cx.mir_cfg[bb]);
         match (&self.cx.pat_cfg[bb_pat], &self.cx.mir_cfg[bb]) {
-            (TerminatorEdges::None, TerminatorEdges::None) => true,
+            (TerminatorEdges::None, _) => true,
             (&Single(bb_pat), &Single(bb) | &Double(bb, _)) => self.match_block_starts_with(bb_pat, bb),
             (&Double(bb_pat, unwind_pat), &Double(bb, unwind)) => {
                 self.match_block_starts_with(bb_pat, bb) && self.match_block_starts_with(unwind_pat, unwind)

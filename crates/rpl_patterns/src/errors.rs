@@ -74,12 +74,13 @@ pub struct WrongAssumptionOfFatPointerLayout {
 }
 
 // for cve_2019_15548
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_rust_str_as_c_str)]
+#[help]
 pub struct RustStrAsCStr {
-    #[note]
+    #[label(rpl_patterns_label)]
     pub cast_from: Span,
-    #[primary_span]
+    #[note]
     pub cast_to: Span,
 }
 
@@ -89,4 +90,18 @@ pub struct RustStrAsCStr {
 pub struct LengthlessBufferPassedToExternFunction {
     #[label(rpl_patterns_label)]
     pub ptr: Span,
+}
+
+// for cve_2021_27376
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_wrong_assumption_of_layout_compatibility)]
+#[help]
+pub struct WrongAssumptionOfLayoutCompatibility {
+    #[label(rpl_patterns_label)]
+    #[note]
+    pub cast_from: Span,
+    #[primary_span]
+    pub cast_to: Span,
+    pub type_from: &'static str,
+    pub type_to: &'static str,
 }

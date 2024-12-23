@@ -16,6 +16,7 @@ pub fn instr(s: &mut String) -> i32 {
     /* XXX: This is probably broken. */
     unsafe {
         let buf = s.as_bytes().as_ptr();
+        //~^ ERROR: it is usually a bug to cast a `&str` to a `*const libc::c_char`, and then pass it to an extern function
         let ret = ll::instr(mem::transmute(buf));
         //~^ ERROR: it is usually a bug to pass a buffer pointer to an extern function without specifying its length
 

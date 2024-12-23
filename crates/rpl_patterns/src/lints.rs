@@ -8,14 +8,15 @@ declare_lint! {
     ///
     /// ```rust
     /// #![deny(lengthless_buffer_passed_to_extern_function)]
-    /// extern fn gets(c: *const i8) -> i32 {
+    /// use libc::c_char;
+    /// extern fn gets(c: *const c_char) -> i32 {
     ///     0
     /// }
     ///
     /// fn main() {
     ///     let mut p = [8u8; 64];
     ///     unsafe {
-    ///         gets(&p as *const u8 as *const i8);
+    ///         gets(&p as *const u8 as *const c_char);
     ///     }
     /// }
     /// ```
@@ -33,4 +34,37 @@ declare_lint! {
     pub LENGTHLESS_BUFFER_PASSED_TO_EXTERN_FUNCTION,
     Warn,
     "detects a lengthless buffer passed to extern function"
+}
+
+declare_lint! {
+    /// The `rust_string_pointer_as_c_string_pointer` lint detects a Rust string pointer
+    /// used as a C string pointer directly, for example, using `as` or `std::mem::transmute`
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(rust_string_pointer_as_c_string_pointer)]
+    /// use libc::c_char;
+    /// extern fn gets(c: *const c_char) -> i32 {
+    ///     0
+    /// }
+    ///
+    /// fn main() {
+    ///     let mut p = String::from("hello");
+    ///     let p = p.as_bytes().as_ptr();
+    ///     unsafe {
+    ///         gets(p as *const c_char);
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// C strings normally end with a `\0`, while Rust strings do not. And
+    /// Rust strings must contain valid UTF-8.
+    pub RUST_STRING_POINTER_AS_C_STRING_POINTER,
+    Deny,
+    "detects a Rust string pointer used as a C string pointer directly"
 }

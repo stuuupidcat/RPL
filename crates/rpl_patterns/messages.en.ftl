@@ -18,8 +18,14 @@ rpl_patterns_wrong_assumption_of_fat_pointer_layout = wrong assumption of fat po
     .get_data_ptr_label = try to get data ptr from first 8 bytes here
     .help = the Rust Compiler does not expose the layout of fat pointers
 
-rpl_patterns_rust_str_as_c_str = it is usually a but to cast a reference to `str` `&{$cast_from}` to a pointer to `libc::c_char` `&{$cast_to}`, and then pass it to a C function
-    .note = they may differ in terminator and encoding
+rpl_patterns_rust_str_as_c_str = it is usually a bug to cast a `&str` to a `*const libc::c_char`, and then pass it to an extern function
+    .label = the string is here
+    .note  = the `*const libc::c_char` is created here
+    .help  = try `std::ffi::CStr` instead
 
 rpl_patterns_lengthless_buffer_passed_to_extern_function = it is usually a bug to pass a buffer pointer to an extern function without specifying its length
     .label = the pointer is passed here
+
+rpl_patterns_wrong_assumption_of_layout_compatibility = wrong assumption of layout compatibility from `{$type_from}` to `{$type_to}`
+    .note  = casted from this
+    .help  = it's not guaranteed by Rust standard library. See https://github.com/rust-lang/rust/pull/78802

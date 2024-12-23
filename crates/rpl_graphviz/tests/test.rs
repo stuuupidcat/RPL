@@ -175,6 +175,13 @@ test_case! {
 }
 
 test_case! {
+    fn cve_2021_27376() {
+        let src: *const std::net::SocketAddrV4 = _;
+        let dst: *const libc::sockaddr = move src as *const libc::sockaddr (PtrToPtr);
+    }
+}
+
+test_case! {
     fn cve_2021_29941_2() {
         meta!($T:ty);
         // type ExactSizeIterT = impl std::iter::ExactSizeIterator<Item = $T>;

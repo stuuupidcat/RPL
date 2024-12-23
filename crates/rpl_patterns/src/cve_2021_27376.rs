@@ -1,5 +1,3 @@
-use std::ops::Not;
-
 use rpl_context::PatCtxt;
 use rpl_mir::pat::MirPattern;
 use rpl_mir::{pat, CheckMirCtxt};
@@ -9,8 +7,6 @@ use rustc_hir::intravisit::{self, Visitor};
 use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::Span;
-
-use crate::lints::RUST_STRING_POINTER_AS_C_STRING_POINTER;
 
 #[instrument(level = "info", skip(tcx, pcx))]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
@@ -51,13 +47,10 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         _span: Span,
         def_id: LocalDefId,
     ) -> Self::Result {
-        if self.tcx.visibility(def_id).is_public()
-            && kind.header().is_none_or(|header| header.is_unsafe().not())
-            && self.tcx.is_mir_available(def_id)
-        {
+        if self.tcx.is_mir_available(def_id) {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
-            if let pattern_cast = pattern_rust_str_as_c_str(self.pcx)
+            if let pattern_cast = pattern_cast_socket_addr_v6(self.pcx)
                 && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern_cast.pattern).check()
                 && let Some(cast_from) = matches[pattern_cast.cast_from]
                 && let cast_from = cast_from.span_no_inline(body)
@@ -65,12 +58,32 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 && let cast_to = cast_to.span_no_inline(body)
             {
                 debug!(?cast_from, ?cast_to);
-                self.tcx.emit_node_span_lint(
-                    RUST_STRING_POINTER_AS_C_STRING_POINTER,
-                    self.tcx.local_def_id_to_hir_id(def_id),
-                    cast_from,
-                    crate::errors::RustStrAsCStr { cast_from, cast_to },
-                );
+                self.tcx
+                    .dcx()
+                    .emit_err(crate::errors::WrongAssumptionOfLayoutCompatibility {
+                        cast_from,
+                        cast_to,
+                        type_from: pattern_cast.type_from,
+                        type_to: pattern_cast.type_to,
+                    });
+            }
+            #[allow(irrefutable_let_patterns)]
+            if let pattern_cast = pattern_cast_socket_addr_v4(self.pcx)
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern_cast.pattern).check()
+                && let Some(cast_from) = matches[pattern_cast.cast_from]
+                && let cast_from = cast_from.span_no_inline(body)
+                && let Some(cast_to) = matches[pattern_cast.cast_to]
+                && let cast_to = cast_to.span_no_inline(body)
+            {
+                debug!(?cast_from, ?cast_to);
+                self.tcx
+                    .dcx()
+                    .emit_err(crate::errors::WrongAssumptionOfLayoutCompatibility {
+                        cast_from,
+                        cast_to,
+                        type_from: pattern_cast.type_from,
+                        type_to: pattern_cast.type_to,
+                    });
             }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
@@ -81,23 +94,16 @@ struct PatternCast<'pcx> {
     pattern: MirPattern<'pcx>,
     cast_from: pat::Location,
     cast_to: pat::Location,
+    type_from: &'static str,
+    type_to: &'static str,
 }
 
-// FIXME: this should work for functions other than `crate::ll::instr`.
-// FIXME: this should work when `inline-mir` is on.
 #[rpl_macros::pattern_def]
-fn pattern_rust_str_as_c_str(pcx: PatCtxt<'_>) -> PatternCast<'_> {
+fn pattern_cast_socket_addr_v6(pcx: PatCtxt<'_>) -> PatternCast<'_> {
     rpl! {
         fn $pattern (..) -> _ = mir! {
-            meta!($T:ty);
-
-            type c_char = libc::c_char;
-
-            let src: &alloc::string::String = _;
-            let bytes: &[u8] = alloc::string::String::as_bytes(move src);
-            let ptr: *const u8 = slice::as_ptr(copy bytes);
-            let dst: *const c_char = copy ptr as *const c_char (Transmute);
-            let ret: $T = $crate::ll::instr(move dst);
+            let src: *const std::net::SocketAddrV6 = _;
+            let dst: *const libc::sockaddr = move src as *const libc::sockaddr (PtrToPtr);
         }
     }
 
@@ -105,5 +111,25 @@ fn pattern_rust_str_as_c_str(pcx: PatCtxt<'_>) -> PatternCast<'_> {
         pattern,
         cast_from: src_stmt,
         cast_to: dst_stmt,
+        type_from: "std::net::SocketAddrV6",
+        type_to: "libc::sockaddr",
+    }
+}
+
+#[rpl_macros::pattern_def]
+fn pattern_cast_socket_addr_v4(pcx: PatCtxt<'_>) -> PatternCast<'_> {
+    rpl! {
+        fn $pattern (..) -> _ = mir! {
+            let src: *const std::net::SocketAddrV4 = _;
+            let dst: *const libc::sockaddr = move src as *const libc::sockaddr (PtrToPtr);
+        }
+    }
+
+    PatternCast {
+        pattern,
+        cast_from: src_stmt,
+        cast_to: dst_stmt,
+        type_from: "std::net::SocketAddrV4",
+        type_to: "libc::sockaddr",
     }
 }
