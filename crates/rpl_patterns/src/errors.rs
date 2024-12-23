@@ -105,3 +105,24 @@ pub struct WrongAssumptionOfLayoutCompatibility {
     pub type_from: &'static str,
     pub type_to: &'static str,
 }
+
+// for cve_2018_20992
+// use `Vec::set_len` to extend the length of a `Vec` without initializing the new elements
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_vec_set_len_to_extend)]
+pub struct VecSetLenToExtend {
+    #[primary_span]
+    #[note]
+    pub span: Span,
+}
+
+// for cve_2018_20992
+// a workaround for without `#without!`
+#[derive(Diagnostic)]
+// use `Vec::set_len` to truncate the length of a `Vec`
+#[diag(rpl_patterns_vec_set_len_to_truncate)]
+pub struct VecSetLenToTruncate {
+    #[primary_span]
+    #[help]
+    pub span: Span,
+}

@@ -29,3 +29,9 @@ rpl_patterns_lengthless_buffer_passed_to_extern_function = it is usually a bug t
 rpl_patterns_wrong_assumption_of_layout_compatibility = wrong assumption of layout compatibility from `{$type_from}` to `{$type_to}`
     .note  = casted from this
     .help  = it's not guaranteed by Rust standard library. See https://github.com/rust-lang/rust/pull/78802
+
+rpl_patterns_vec_set_len_to_extend = Use `Vec::set_len` to extend the length of a `Vec`, including uninitialized elements
+    .note = make sure all elements are initialized before using them
+
+rpl_patterns_vec_set_len_to_truncate = Use `Vec::set_len` to truncate the length of a `Vec`
+    .help = Consider using `Vec::truncate` instead

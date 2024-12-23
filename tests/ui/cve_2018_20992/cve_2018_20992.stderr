@@ -1,0 +1,14 @@
+error: Use `Vec::set_len` to extend the length of a `Vec`, including uninitialized elements
+  --> tests/ui/cve_2018_20992/cve_2018_20992.rs:7:20
+   |
+LL |             buffer.set_len(new_len);
+   |                    ^^^^^^^^^^^^^^^^
+   |
+note: make sure all elements are initialized before using them
+  --> tests/ui/cve_2018_20992/cve_2018_20992.rs:7:20
+   |
+LL |             buffer.set_len(new_len);
+   |                    ^^^^^^^^^^^^^^^^
+
+error: aborting due to 1 previous error
+

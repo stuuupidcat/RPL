@@ -1,0 +1,246 @@
+pub mod extend {
+    use rpl_context::PatCtxt;
+    use rpl_mir::pat::MirPattern;
+    use rustc_hir as hir;
+    use rustc_hir::def_id::LocalDefId;
+    use rustc_hir::intravisit::{self, Visitor};
+    use rustc_middle::hir::nested_filter::All;
+    use rustc_middle::ty::TyCtxt;
+    use rustc_span::{Span, Symbol};
+
+    use rpl_mir::{pat, CheckMirCtxt};
+
+    #[instrument(level = "info", skip(tcx, pcx))]
+    pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
+        let item = tcx.hir().item(item_id);
+        // let def_id = item_id.owner_id.def_id;
+        let mut check_ctxt = CheckFnCtxt { tcx, pcx };
+        check_ctxt.visit_item(item);
+    }
+
+    struct CheckFnCtxt<'pcx, 'tcx> {
+        tcx: TyCtxt<'tcx>,
+        pcx: PatCtxt<'pcx>,
+    }
+
+    impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
+        type NestedFilter = All;
+        fn nested_visit_map(&mut self) -> Self::Map {
+            self.tcx.hir()
+        }
+
+        #[instrument(level = "debug", skip_all, fields(?item.owner_id))]
+        fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
+            match item.kind {
+                hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn(..) => {},
+                _ => return,
+            }
+            intravisit::walk_item(self, item);
+        }
+
+        fn visit_fn(
+            &mut self,
+            _kind: intravisit::FnKind<'tcx>,
+            _decl: &'tcx hir::FnDecl<'tcx>,
+            _body_id: hir::BodyId,
+            _span: Span,
+            def_id: LocalDefId,
+        ) -> Self::Result {
+            if self.tcx.visibility(def_id).is_public() && self.tcx.is_mir_available(def_id) {
+                let body = self.tcx.optimized_mir(def_id);
+                #[allow(irrefutable_let_patterns)]
+                if let pattern = pattern_vec_set_len_to_extend(self.pcx)
+                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.mir_pat).check()
+                    && let Some(set_len_use) = matches[pattern.set_len_use]
+                    && let span1 = set_len_use.span_no_inline(body)
+                {
+                    self.tcx
+                        .dcx()
+                        .emit_err(crate::errors::VecSetLenToExtend { span: span1 });
+                }
+            }
+        }
+    }
+
+    struct VecSetLenToExtend<'pcx> {
+        mir_pat: &'pcx MirPattern<'pcx>,
+        set_len_use: pat::Location,
+    }
+
+    #[rpl_macros::pattern_def]
+    fn pattern_vec_set_len_to_extend(pcx: PatCtxt<'_>) -> VecSetLenToExtend<'_> {
+        let set_len_use;
+        let pattern = rpl! {
+            fn $pattern(..) -> _ = mir! {
+                meta!{$T:ty}
+
+                type VecT = alloc::vec::Vec::<$T>;
+                type VecTRef = &alloc::vec::Vec::<$T>;
+                type VecTMutRef = &mut alloc::vec::Vec::<$T>;
+
+
+                let vec: VecT;   // _1;
+                let vec_ref: VecTRef; // _5;
+                let new_len: usize; // _2;
+                let old_len: usize; // _4; ..unused
+                let vec_mut_ref: VecTMutRef; // _10;
+
+                vec = _;
+                new_len = _;
+                // _5 = &_1;
+                vec_ref = &vec;
+                // _4 = copy ((*_5).1: usize);
+                old_len = copy ((*vec_ref).len);
+                // _10 = &mut _1;
+                vec_mut_ref = &mut vec;
+                // ((*10).1: usize) = _2;
+                #[export(set_len_use)]
+                (*vec_mut_ref).len = copy new_len;
+            }
+        };
+        // FIXME
+        /* let pattern = rpl! {
+            fn $pattern(..) -> _ = mir! {
+                meta!{$T:ty}
+
+                type VecT = alloc::vec::Vec::<$T>;
+                type VecTRef = &alloc::vec::Vec::<$T>;
+                type VecTMutRef = &mut alloc::vec::Vec::<$T>;
+
+                let vec: VecT;
+                let new_len: usize;
+                let vec_ref: VecTRef;
+                let old_len: usize;
+                let vec_mut_ref: VecTMutRef;
+                let cmp: bool;
+
+                vec = _;
+                new_len = _;
+                vec_ref = &vec;
+                old_len = copy ((*vec_ref).len);
+                cmp = Lt(move old_len, copy new_len);
+                #[export(set_len_use)]
+                switchInt(move cmp) {
+                    0_usize => {}
+                    _ => {
+                        vec_mut_ref = &mut vec;
+                        (*vec_mut_ref).len = copy new_len;
+                    }
+                }
+            }
+        }; */
+
+        let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
+
+        VecSetLenToExtend { mir_pat, set_len_use }
+    }
+}
+
+pub mod truncate {
+    use rpl_context::PatCtxt;
+    use rpl_mir::pat::MirPattern;
+    use rustc_hir as hir;
+    use rustc_hir::def_id::LocalDefId;
+    use rustc_hir::intravisit::{self, Visitor};
+    use rustc_middle::hir::nested_filter::All;
+    use rustc_middle::ty::TyCtxt;
+    use rustc_span::{Span, Symbol};
+
+    use rpl_mir::{pat, CheckMirCtxt};
+
+    #[instrument(level = "info", skip(tcx, pcx))]
+    pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
+        let item = tcx.hir().item(item_id);
+        // let def_id = item_id.owner_id.def_id;
+        let mut check_ctxt = CheckFnCtxt { tcx, pcx };
+        check_ctxt.visit_item(item);
+    }
+
+    struct CheckFnCtxt<'pcx, 'tcx> {
+        tcx: TyCtxt<'tcx>,
+        pcx: PatCtxt<'pcx>,
+    }
+
+    impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
+        type NestedFilter = All;
+        fn nested_visit_map(&mut self) -> Self::Map {
+            self.tcx.hir()
+        }
+
+        #[instrument(level = "debug", skip_all, fields(?item.owner_id))]
+        fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
+            match item.kind {
+                hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn(..) => {},
+                _ => return,
+            }
+            intravisit::walk_item(self, item);
+        }
+
+        fn visit_fn(
+            &mut self,
+            _kind: intravisit::FnKind<'tcx>,
+            _decl: &'tcx hir::FnDecl<'tcx>,
+            _body_id: hir::BodyId,
+            _span: Span,
+            def_id: LocalDefId,
+        ) -> Self::Result {
+            if self.tcx.visibility(def_id).is_public() && self.tcx.is_mir_available(def_id) {
+                let body = self.tcx.optimized_mir(def_id);
+                #[allow(irrefutable_let_patterns)]
+                if let pattern = pattern_vec_set_len_to_extend(self.pcx)
+                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.mir_pat).check()
+                    && let Some(set_len_use) = matches[pattern.set_len_use]
+                    && let span1 = set_len_use.span_no_inline(body)
+                {
+                    self.tcx
+                        .dcx()
+                        .emit_err(crate::errors::VecSetLenToTruncate { span: span1 });
+                }
+            }
+        }
+    }
+
+    struct VecSetLenToTruncate<'pcx> {
+        mir_pat: &'pcx MirPattern<'pcx>,
+        set_len_use: pat::Location,
+    }
+
+    #[rpl_macros::pattern_def]
+    fn pattern_vec_set_len_to_extend(pcx: PatCtxt<'_>) -> VecSetLenToTruncate<'_> {
+        let set_len_use;
+        let pattern = rpl! {
+            fn $pattern(..) -> _ = mir! {
+                meta!{$T:ty}
+
+                type VecT = alloc::vec::Vec::<$T>;
+                type VecTRef = &alloc::vec::Vec::<$T>;
+                type VecTMutRef = &mut alloc::vec::Vec::<$T>;
+
+                let vec: VecT;
+                let new_len: usize;
+                let vec_ref: VecTRef;
+                let old_len: usize;
+                let vec_mut_ref: VecTMutRef;
+                let cmp: bool;
+
+                vec = _;
+                new_len = _;
+                vec_ref = &vec;
+                old_len = copy ((*vec_ref).len);
+                cmp = Ge(move old_len, copy new_len);
+                #[export(set_len_use)]
+                switchInt(move cmp) {
+                    0_usize => {}
+                    _ => {
+                        vec_mut_ref = &mut vec;
+                        (*vec_mut_ref).len = copy new_len;
+                    }
+                }
+            }
+        };
+
+        let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
+
+        VecSetLenToTruncate { mir_pat, set_len_use }
+    }
+}
