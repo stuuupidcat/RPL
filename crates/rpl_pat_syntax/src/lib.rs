@@ -894,7 +894,8 @@ pub struct LocalInit {
 
 #[derive(Parse, ToTokens)]
 pub struct LocalDecl {
-    pub attrs: Attributes,
+    #[parse(Export::parse_opt)]
+    pub export: Option<Export>,
     tk_let: Token![let],
     tk_mut: Option<Token![mut]>,
     // FIXME: change it to `ident: Ident`
@@ -963,7 +964,7 @@ pub enum Control {
 pub struct Many<T: quote::ToTokens, P: parse::ParseFn<T> = parse::ParseParse>(
     #[parse(P::parse_many)]
     #[to_tokens(|tokens, elems: &Vec<T>| elems.iter().for_each(|elem| elem.to_tokens(tokens)))]
-    #[into_iterator(owned, ref)]
+    #[into_iterator(owned, ref, ref_mut)]
     #[deref]
     pub Vec<T>,
     #[parse(|_| Ok(PhantomData))]
@@ -971,7 +972,7 @@ pub struct Many<T: quote::ToTokens, P: parse::ParseFn<T> = parse::ParseParse>(
     PhantomData<P>,
 );
 
-type Attributes = Many<syn::Attribute, parse::AttributeParseOuter>;
+// type Attributes = Many<syn::Attribute, parse::AttributeParseOuter>;
 
 #[derive(ToTokens, Parse)]
 pub struct Block {
@@ -990,7 +991,8 @@ pub enum SwitchBody {
 
 #[derive(ToTokens, Parse)]
 pub struct SwitchTarget {
-    pub attrs: Attributes,
+    #[parse(Export::parse_opt)]
+    pub export: Option<Export>,
     pub value: SwitchValue,
     tk_arrow: Token![=>],
     pub body: SwitchBody,
@@ -1032,9 +1034,10 @@ pub enum StatementKind<End: quote::ToTokens + syn::parse::Parse = Token![;]> {
 }
 
 #[derive(ToTokens, Parse)]
-pub struct Statement<End: quote::ToTokens + syn::parse::Parse = Token![;]> {
-    pub attrs: Attributes,
-    pub kind: StatementKind<End>,
+pub struct Statement {
+    #[parse(Export::parse_opt)]
+    pub export: Option<Export>,
+    pub kind: StatementKind,
 }
 
 #[derive(ToTokens, Parse)]
@@ -1051,6 +1054,8 @@ pub enum MetaKind {
 
 #[derive(ToTokens, Parse)]
 pub struct MetaItem {
+    #[parse(Export::parse_opt)]
+    pub export: Option<Export>,
     tk_dollar: Token![$],
     pub ident: Ident,
     tk_colon: Token![:],
@@ -1077,16 +1082,27 @@ pub enum ExportKind {
 }
 
 #[derive(Parse, ToTokens)]
-pub struct Export {
-    kw_export: kw::export,
+pub struct Attribute<P: syn::parse::Parse + quote::ToTokens, I: syn::parse::Parse + quote::ToTokens> {
+    tk_pound: Token![#],
+    #[syn(bracketed)]
+    bracket: token::Bracket,
+    #[syn(in = bracket)]
+    path: P,
+    #[syn(in = bracket)]
+    pub inner: I,
+}
+
+pub type Export = Attribute<kw::export, ExportInner>;
+
+#[derive(Parse, ToTokens)]
+pub struct ExportInner {
     #[syn(parenthesized)]
     paran: token::Paren,
     #[syn(in = paran)]
     pub ident: Ident,
     #[syn(in = paran)]
-    tk_colon: syn::Token![:],
-    #[syn(in = paran)]
-    pub kind: ExportKind,
+    #[parse(PunctAnd::parse_opt)]
+    pub kind: Option<PunctAnd<Token![:], ExportKind>>,
 }
 
 #[derive(Parse, ToTokens)]
@@ -1097,6 +1113,15 @@ pub enum IdentPat {
     Pat(Token![$], Ident),
     #[parse(peek = Ident)]
     Ident(Ident),
+}
+
+impl IdentPat {
+    pub fn as_ident(&self) -> Option<&Ident> {
+        match self {
+            IdentPat::Ident(ident) => Some(ident),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Parse, ToTokens)]
@@ -1138,16 +1163,14 @@ pub enum FnParamKind {
 
 #[derive(Parse, ToTokens)]
 pub struct FnParam {
-    pub attrs: Attributes,
+    #[parse(Export::parse_opt)]
+    pub export: Option<Export>,
     pub kind: FnParamKind,
-    pub ident: IdentPat,
-    tk_colon: Token![:],
-    pub ty: Type,
 }
 
 #[derive(ToTokens, IntoIterator, Deref)]
 pub struct PunctuatedWithEnd<T: quote::ToTokens, P: quote::ToTokens = Token![,], End: quote::ToTokens = Token![..]> {
-    #[into_iterator(owned, ref)]
+    #[into_iterator(owned, ref, ref_mut)]
     #[deref]
     pub punctuated: Punctuated<T, P>,
     pub end: Option<End>,
@@ -1199,14 +1222,14 @@ pub struct FnPat {
 
 #[derive(Parse, ToTokens)]
 pub struct Field {
-    pub ident: IdentPat,
+    pub ident: Ident,
     tk_colon: Token![:],
     pub ty: Type,
 }
 
 #[derive(Parse, ToTokens)]
 pub struct Variant {
-    pub ident: IdentPat,
+    pub ident: Ident,
     #[syn(braced)]
     brace: token::Brace,
     #[syn(in = brace)]
@@ -1222,7 +1245,8 @@ pub struct Struct {
     #[syn(braced)]
     brace: token::Brace,
     #[syn(in = brace)]
-    pub variant: Variant,
+    #[parse(Punctuated::parse_terminated)]
+    pub fields: Punctuated<Field, Token![,]>,
 }
 
 #[derive(Parse, ToTokens)]
@@ -1260,7 +1284,8 @@ pub enum ImplItemKind {
 
 #[derive(Parse, ToTokens)]
 pub struct ImplItem {
-    pub attrs: Attributes,
+    #[parse(Export::parse_opt)]
+    pub export: Option<Export>,
     pub kind: ImplItemKind,
 }
 
@@ -1289,7 +1314,8 @@ pub enum ItemKind {
 
 #[derive(Parse, ToTokens)]
 pub struct Item {
-    pub attrs: Attributes,
+    #[parse(Export::parse_opt)]
+    pub export: Option<Export>,
     pub kind: ItemKind,
 }
 

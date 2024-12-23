@@ -293,8 +293,14 @@ struct Loop {
     exit: BasicBlock,
 }
 
+impl<'pcx> MirPattern<'pcx> {
+    pub fn builder() -> MirPatternBuilder<'pcx> {
+        MirPatternBuilder::new()
+    }
+}
+
 impl<'pcx> MirPatternBuilder<'pcx> {
-    pub fn new() -> Self {
+    fn new() -> Self {
         let mut pattern = MirPattern {
             locals: IndexVec::new(),
             ty_vars: IndexVec::new(),

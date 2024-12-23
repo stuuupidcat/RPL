@@ -6,7 +6,7 @@ pub mod u8_to_t {
     use rustc_hir::intravisit::{self, Visitor};
     use rustc_middle::hir::nested_filter::All;
     use rustc_middle::ty::TyCtxt;
-    use rustc_span::Span;
+    use rustc_span::{Span, Symbol};
 
     use rpl_mir::{pat, CheckMirCtxt};
 
@@ -49,7 +49,8 @@ pub mod u8_to_t {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern_misordered_params = pattern_misordered_params(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern_misordered_params.pattern).check()
+                    && let Some(matches) =
+                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_misordered_params.mir_pat).check()
                     && let Some(from_raw_parts) = matches[pattern_misordered_params.from_raw_parts]
                     && let span = from_raw_parts.span_no_inline(body)
                 {
@@ -61,13 +62,14 @@ pub mod u8_to_t {
     }
 
     struct PatternMisorderedParams<'pcx> {
-        pattern: MirPattern<'pcx>,
+        mir_pat: &'pcx MirPattern<'pcx>,
         from_raw_parts: pat::Location,
     }
 
     #[rpl_macros::pattern_def]
     fn pattern_misordered_params(pcx: PatCtxt<'_>) -> PatternMisorderedParams<'_> {
-        rpl! {
+        let from_raw_parts;
+        let pattern = rpl! {
             fn $pattern(..) -> _ = mir! {
                 meta!{$T:ty}
 
@@ -156,17 +158,19 @@ pub mod u8_to_t {
                     _marker: const core::marker::PhantomData::<$T>
                 };
                 // _0 = std::vec::Vec::<T> { buf: move _19, len: copy _4 };
+                #[export(from_raw_parts)]
                 to_vec = alloc::vec::Vec::<$T> {
                     buf: move to_vec_raw,
                     len: copy to_vec_cap
                 };
 
             }
-        }
+        };
+        let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
 
         PatternMisorderedParams {
-            pattern,
-            from_raw_parts: to_vec_stmt,
+            mir_pat,
+            from_raw_parts,
         }
     }
 }
@@ -179,7 +183,7 @@ pub mod t_to_u8 {
     use rustc_hir::intravisit::{self, Visitor};
     use rustc_middle::hir::nested_filter::All;
     use rustc_middle::ty::TyCtxt;
-    use rustc_span::Span;
+    use rustc_span::{Span, Symbol};
 
     use rpl_mir::{pat, CheckMirCtxt};
 
@@ -222,7 +226,8 @@ pub mod t_to_u8 {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern_misordered_params = pattern_misordered_params(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern_misordered_params.pattern).check()
+                    && let Some(matches) =
+                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_misordered_params.mir_pat).check()
                     && let Some(from_raw_parts) = matches[pattern_misordered_params.from_raw_parts]
                     && let span = from_raw_parts.span_no_inline(body)
                 {
@@ -234,13 +239,14 @@ pub mod t_to_u8 {
     }
 
     struct PatternMisorderedParams<'pcx> {
-        pattern: MirPattern<'pcx>,
+        mir_pat: &'pcx MirPattern<'pcx>,
         from_raw_parts: pat::Location,
     }
 
     #[rpl_macros::pattern_def]
     fn pattern_misordered_params(pcx: PatCtxt<'_>) -> PatternMisorderedParams<'_> {
-        rpl! {
+        let from_raw_parts;
+        let pattern = rpl! {
             fn $pattern(..) -> _ = mir! {
                 meta!{$T:ty}
 
@@ -252,6 +258,7 @@ pub mod t_to_u8 {
                 type RawVecInner = alloc::raw_vec::RawVecInner;
                 type RawVecU8 = alloc::raw_vec::RawVec::<u8>;
 
+                #[export(from_raw_parts)]
                 let from_vec: VecT = _; // _1
                 let mut from_vec_immutable_borrow_1: &VecT; // _4
                 let mut from_vec_immutable_borrow_2: &VecT; // _8
@@ -330,11 +337,12 @@ pub mod t_to_u8 {
                     len: copy to_vec_cap
                 };
             }
-        }
+        };
+        let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
 
         PatternMisorderedParams {
-            pattern,
-            from_raw_parts: from_vec_stmt,
+            mir_pat,
+            from_raw_parts,
         }
     }
 }

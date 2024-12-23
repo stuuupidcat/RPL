@@ -8,7 +8,7 @@ use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
-use rustc_span::Span;
+use rustc_span::{Span, Symbol};
 
 use crate::lints::LENGTHLESS_BUFFER_PASSED_TO_EXTERN_FUNCTION;
 
@@ -58,7 +58,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
             if let pattern_ptr = pattern_pass_a_pointer_to_c(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern_ptr.pattern).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_ptr.mir_pat).check()
                 && let Some(ptr) = matches[pattern_ptr.ptr]
                 && let ptr = ptr.span_no_inline(body)
             {
@@ -76,25 +76,28 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 struct PatternPointer<'pcx> {
-    pattern: MirPattern<'pcx>,
+    mir_pat: &'pcx MirPattern<'pcx>,
     ptr: pat::Location,
 }
 
 // FIXME: this should work for functions other than `crate::ll::instr`.
 #[rpl_macros::pattern_def]
 fn pattern_pass_a_pointer_to_c(pcx: PatCtxt<'_>) -> PatternPointer<'_> {
-    rpl! {
+    let ptr;
+    let pattern = rpl! {
         fn $pattern (..) -> _ = mir! {
             type c_char = libc::c_char;
 
+            #[export(ptr)]
             let ptr: *const c_char = _;
             _ = $crate::ll::instr(move ptr);
         }
-    }
+    };
+    let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
 
     PatternPointer {
-        pattern,
-        ptr: ptr_stmt,
+        mir_pat,
+        ptr,
         // ty_var: c_char_ty,
     }
 }

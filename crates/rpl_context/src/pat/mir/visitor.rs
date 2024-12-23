@@ -267,7 +267,13 @@ impl<'pcx> PatternSuperVisitable<'pcx> for Ty<'pcx> {
                 vis.visit_path(path);
                 vis.visit_generic_args(args);
             },
-            TyKind::Uint(_) | TyKind::Int(_) | TyKind::Float(_) | TyKind::Str | TyKind::Char | TyKind::Bool => {},
+            TyKind::Uint(_)
+            | TyKind::Int(_)
+            | TyKind::Float(_)
+            | TyKind::Str
+            | TyKind::Bool
+            | TyKind::Char
+            | TyKind::Any => {},
             TyKind::AdtVar(_symbol) => {},
         }
     }

@@ -9,17 +9,18 @@ use pretty_assertions::assert_eq;
 use proc_macro2::TokenStream;
 use rpl_context::{PatCtxt, PatternCtxt};
 use rpl_mir::pat::MirPattern;
+use rustc_span::Symbol;
 
 macro_rules! test_case {
     (fn $name:ident() {$($input:tt)*} => {$($expected:tt)*} $(,)?) => {
         #[rpl_macros::pattern_def]
-        fn $name(pcx: PatCtxt<'_>) -> MirPattern<'_> {
-            rpl! {
+        fn $name(pcx: PatCtxt<'_>) -> &MirPattern<'_> {
+            let pattern = rpl! {
                 fn $pattern (..) -> _ = mir! {
                     $($input)*
                 }
-            }
-            pattern
+            };
+            pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap()
         }
         #[test]
         fn ${concat(test_, $name)}() {
@@ -31,7 +32,7 @@ macro_rules! test_case {
 }
 
 #[track_caller]
-fn assert_eq(mir_pattern: MirPattern<'_>, expected: TokenStream) {
+fn assert_eq(mir_pattern: &MirPattern<'_>, expected: TokenStream) {
     assert_eq!(
         format!("{mir_pattern:?}")
             .parse::<TokenStream>()

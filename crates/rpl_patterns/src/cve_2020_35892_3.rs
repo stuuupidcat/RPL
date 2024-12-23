@@ -7,7 +7,7 @@ use rustc_hir::intravisit::{self, Visitor};
 use rustc_hir::{self as hir};
 use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
-use rustc_span::Span;
+use rustc_span::{Span, Symbol};
 
 #[instrument(level = "info", skip(tcx, pcx))]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
@@ -58,8 +58,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
 
             #[allow(irrefutable_let_patterns)]
-            if let pattern = pattern_loop(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern).check()
+            if let mir_pat = pattern_loop(self.pcx)
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, mir_pat).check()
             {
                 let matches = self.loop_matches.insert(matches);
                 let mut multi_span = MultiSpan::from_span(span);
@@ -79,7 +79,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                         #[allow(rustc::untranslatable_diagnostic)]
                         multi_span.push_span_label(
                             span,
-                            format!("{:?} <=> {:?}", pattern[bb].debug_stmt_at(index), stmt.debug_with(body)),
+                            format!("{:?} <=> {:?}", mir_pat[bb].debug_stmt_at(index), stmt.debug_with(body)),
                         );
                     });
                 #[allow(rustc::untranslatable_diagnostic)]
@@ -87,7 +87,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 self.tcx.dcx().span_note(multi_span, "MIR pattern matched");
             } else if let pattern_offset_by_len = pattern_offset_by_len(self.pcx)
                 && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern_offset_by_len.pattern).check()
+                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_offset_by_len.mir_pat).check()
                 && let Some(read) = matches[pattern_offset_by_len.read]
                 && let read = read.span_no_inline(body)
                 && let Some(ptr) = matches[pattern_offset_by_len.ptr]
@@ -116,9 +116,9 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 #[rpl_macros::pattern_def]
-fn pattern_loop(pcx: PatCtxt<'_>) -> MirPattern<'_> {
-    rpl! {
-        fn $pattern(..) -> _ = mir! {
+fn pattern_loop(pcx: PatCtxt<'_>) -> &MirPattern<'_> {
+    let pattern = rpl! {
+        fn $pattern (..) -> _ = mir! {
             meta!($T:ty, $SlabT:ty = |_tcx, _paramse_env, ty| ty.is_adt());
 
             let self: &mut $SlabT;
@@ -172,12 +172,12 @@ fn pattern_loop(pcx: PatCtxt<'_>) -> MirPattern<'_> {
                 }
             }
         }
-    }
-    pattern
+    };
+    pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap()
 }
 
 struct PatternOffsetByLen<'pcx> {
-    pattern: MirPattern<'pcx>,
+    mir_pat: &'pcx MirPattern<'pcx>,
     len: pat::Location,
     ptr: pat::Location,
     read: pat::Location,
@@ -185,23 +185,30 @@ struct PatternOffsetByLen<'pcx> {
 
 #[rpl_macros::pattern_def]
 fn pattern_offset_by_len(pcx: PatCtxt<'_>) -> PatternOffsetByLen<'_> {
-    rpl! {
+    let len;
+    let ptr;
+    let read;
+    let pattern = rpl! {
         fn $pattern(..) -> _ = mir! {
             meta!($T:ty, $SlabT:ty = |_tcx, _paramse_env, ty| ty.is_adt());
             let self: &mut $SlabT;
+            #[export(len)]
             let len: usize = copy (*self).len;
             let len_isize: isize = move len as isize (IntToInt);
             let base: *mut $T = copy (*self).mem;
+            #[export(ptr)]
             let ptr_mut: *mut $T = Offset(copy base, copy len_isize);
             let ptr: *const $T = copy ptr_mut as *const $T (PtrToPtr);
+            #[export(read)]
             let elem: $T = copy (*ptr);
         }
-    }
+    };
+    let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
 
     PatternOffsetByLen {
-        pattern,
-        len: len_stmt,
-        ptr: ptr_mut_stmt,
-        read: elem_stmt,
+        mir_pat,
+        len,
+        ptr,
+        read,
     }
 }

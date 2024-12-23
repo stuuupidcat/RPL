@@ -4,6 +4,7 @@
 #![feature(if_let_guard)]
 #![feature(impl_trait_in_fn_trait_return)]
 #![feature(let_chains)]
+#![feature(macro_metavar_expr_concat)]
 
 extern crate rpl_pat_syntax as syntax;
 

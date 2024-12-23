@@ -11,11 +11,16 @@ fn mir_test_case(input: TokenStream, output: TokenStream) {
     let expanded = crate::expand_pattern(&pattern, None).unwrap_or_else(syn::Error::into_compile_error);
     assert_eq!(
         expanded.to_string().replace(";", ";\n"),
-        quote! {
-            let mut pattern = ::rpl_mir::pat::MirPatternBuilder::new();
+        quote! {{
+            let pattern = pcx.new_pattern();
+            let fn_pat = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("pattern"), pcx.mk_any_ty());
+            let mut mir_pat = ::rpl_context::pat::MirPattern::builder();
             #output
-            let pattern = pattern.build();
-        }
+            let mir_pat = mir_pat.build();
+            let mir_pat = pcx.mk_mir_pattern(mir_pat);
+            fn_pat.set_body(::rpl_context::pat::FnBody::Mir(mir_pat));
+            &*pattern
+        }}
         .to_string()
         .replace(";", ";\n")
     );
@@ -27,13 +32,35 @@ macro_rules! mir_test_case {
     };
 }
 
+#[track_caller]
+fn test_case(input: TokenStream, output: TokenStream) {
+    let pattern = syn::parse2(input).unwrap();
+    let expanded = crate::expand_pattern(&pattern, None).unwrap_or_else(syn::Error::into_compile_error);
+    assert_eq!(
+        expanded.to_string().replace(";", ";\n"),
+        quote! {{
+            let pattern = pcx.new_pattern();
+            #output
+            &*pattern
+        }}
+        .to_string()
+        .replace(";", ";\n")
+    );
+}
+
+macro_rules! test_case {
+    (pat!{ $( $tt:tt )* } => $($output:tt)*) => {
+        test_case(quote!($($tt)*), $($output)*)
+    };
+}
+
 #[test]
 fn test_ty_var() {
     mir_test_case!(
         pat!{ meta!($T:ty); } =>
         quote! {
             #[allow(non_snake_case)]
-            let T_ty_var = pattern.new_ty_var(None);
+            let T_ty_var = mir_pat.new_ty_var(None);
             #[allow(non_snake_case)]
             let T_ty = pcx.mk_var_ty(T_ty_var);
         },
@@ -44,7 +71,7 @@ fn test_ty_var() {
 fn test_cve_2020_25016() {
     mir_test_case!(
         pat! {
-            meta!($T:ty = is_all_safe_trait);
+            meta!( #[export(ty_var)] $T:ty = is_all_safe_trait);
             type SliceT = [$T];
             type RefSliceT = &SliceT;
             type PtrSliceT = *const SliceT;
@@ -53,6 +80,7 @@ fn test_cve_2020_25016() {
             type PtrSliceU8 = *const SliceU8;
             type RefSliceU8 = &SliceU8;
 
+            #[export(cast_from)]
             let from_slice: SliceT = _;
             let from_raw_slice: PtrSliceT = &raw const *from_slice;
             let from_len: usize = Len(from_slice);
@@ -60,17 +88,19 @@ fn test_cve_2020_25016() {
             let to_ptr: PtrU8 = copy from_raw_slice as PtrU8 (PtrToPtr);
             let to_len: usize = Mul(copy from_len, copy ty_size);
             let to_raw_slice: PtrSliceU8 = *const SliceU8 from (copy to_ptr, copy to_len);
+            #[export(cast_to)]
             let to_slice: RefSliceU8 = &*to_raw_slice;
         } => quote! {
             #[allow(non_snake_case)]
-            let T_ty_var = pattern.new_ty_var(Some(is_all_safe_trait));
+            let T_ty_var = mir_pat.new_ty_var(Some(is_all_safe_trait));
             #[allow(non_snake_case)]
             let T_ty = pcx.mk_var_ty(T_ty_var);
+            ty_var = T_ty_var;
             #[allow(non_snake_case)]
             let SliceT_ty = pcx.mk_slice_ty(T_ty);
             #[allow(non_snake_case)]
             let RefSliceT_ty = pcx.mk_ref_ty(
-                ::rpl_mir::pat::RegionKind::ReAny,
+                ::rpl_context::pat::RegionKind::ReAny,
                 SliceT_ty,
                 ::rustc_middle::mir::Mutability::Not
             );
@@ -86,73 +116,73 @@ fn test_cve_2020_25016() {
             let PtrSliceU8_ty = pcx.mk_raw_ptr_ty(SliceU8_ty, ::rustc_middle::mir::Mutability::Not);
             #[allow(non_snake_case)]
             let RefSliceU8_ty = pcx.mk_ref_ty(
-                ::rpl_mir::pat::RegionKind::ReAny,
+                ::rpl_context::pat::RegionKind::ReAny,
                 SliceU8_ty,
                 ::rustc_middle::mir::Mutability::Not
             );
-            let from_slice_local = pattern.mk_local(SliceT_ty);
-            let from_slice_stmt = pattern.mk_assign(from_slice_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
-            let from_raw_slice_local = pattern.mk_local(PtrSliceT_ty);
-            let from_raw_slice_stmt = pattern.mk_assign(
+            let from_slice_local = mir_pat.mk_local(SliceT_ty);
+            cast_from = mir_pat.mk_assign(from_slice_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            let from_raw_slice_local = mir_pat.mk_local(PtrSliceT_ty);
+            mir_pat.mk_assign(
                 from_raw_slice_local.into_place(),
-                ::rpl_mir::pat::Rvalue::RawPtr(
+                ::rpl_context::pat::Rvalue::RawPtr(
                     ::rustc_middle::mir::Mutability::Not,
-                    ::rpl_mir::pat::Place::new(
+                    ::rpl_context::pat::Place::new(
                         from_slice_local,
-                        pcx.mk_slice(&[::rpl_mir::pat::PlaceElem::Deref,])
+                        pcx.mk_slice(&[::rpl_context::pat::PlaceElem::Deref,])
                     )
                 )
             );
-            let from_len_local = pattern.mk_local(pcx.primitive_types.usize);
-            let from_len_stmt = pattern.mk_assign(
+            let from_len_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            mir_pat.mk_assign(
                 from_len_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Len(from_slice_local.into_place())
+                ::rpl_context::pat::Rvalue::Len(from_slice_local.into_place())
             );
-            let ty_size_local = pattern.mk_local(pcx.primitive_types.usize);
-            let ty_size_stmt = pattern.mk_assign(
+            let ty_size_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            mir_pat.mk_assign(
                 ty_size_local.into_place(),
-                ::rpl_mir::pat::Rvalue::NullaryOp(::rustc_middle::mir::NullOp::SizeOf, T_ty)
+                ::rpl_context::pat::Rvalue::NullaryOp(::rustc_middle::mir::NullOp::SizeOf, T_ty)
             );
-            let to_ptr_local = pattern.mk_local(PtrU8_ty);
-            let to_ptr_stmt = pattern.mk_assign(
+            let to_ptr_local = mir_pat.mk_local(PtrU8_ty);
+            mir_pat.mk_assign(
                 to_ptr_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Cast(
+                ::rpl_context::pat::Rvalue::Cast(
                     ::rustc_middle::mir::CastKind::PtrToPtr,
-                    ::rpl_mir::pat::Operand::Copy(from_raw_slice_local.into_place()),
+                    ::rpl_context::pat::Operand::Copy(from_raw_slice_local.into_place()),
                     PtrU8_ty
                 )
             );
-            let to_len_local = pattern.mk_local(pcx.primitive_types.usize);
-            let to_len_stmt = pattern.mk_assign(
+            let to_len_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            mir_pat.mk_assign(
                 to_len_local.into_place(),
-                ::rpl_mir::pat::Rvalue::BinaryOp(
+                ::rpl_context::pat::Rvalue::BinaryOp(
                     ::rustc_middle::mir::BinOp::Mul,
                     Box::new([
-                        ::rpl_mir::pat::Operand::Copy(from_len_local.into_place()),
-                        ::rpl_mir::pat::Operand::Copy(ty_size_local.into_place())
+                        ::rpl_context::pat::Operand::Copy(from_len_local.into_place()),
+                        ::rpl_context::pat::Operand::Copy(ty_size_local.into_place())
                     ])
                 )
             );
-            let to_raw_slice_local = pattern.mk_local(PtrSliceU8_ty);
-            let to_raw_slice_stmt = pattern.mk_assign(
+            let to_raw_slice_local = mir_pat.mk_local(PtrSliceU8_ty);
+            mir_pat.mk_assign(
                 to_raw_slice_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Aggregate(
-                    ::rpl_mir::pat::AggKind::RawPtr(SliceU8_ty, ::rustc_middle::mir::Mutability::Not),
-                    pattern.mk_list([
-                        ::rpl_mir::pat::Operand::Copy(to_ptr_local.into_place()),
-                        ::rpl_mir::pat::Operand::Copy(to_len_local.into_place())
+                ::rpl_context::pat::Rvalue::Aggregate(
+                    ::rpl_context::pat::AggKind::RawPtr(SliceU8_ty, ::rustc_middle::mir::Mutability::Not),
+                    mir_pat.mk_list([
+                        ::rpl_context::pat::Operand::Copy(to_ptr_local.into_place()),
+                        ::rpl_context::pat::Operand::Copy(to_len_local.into_place())
                     ])
                 )
             );
-            let to_slice_local = pattern.mk_local(RefSliceU8_ty);
-            let to_slice_stmt = pattern.mk_assign(
+            let to_slice_local = mir_pat.mk_local(RefSliceU8_ty);
+            cast_to = mir_pat.mk_assign(
                 to_slice_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Ref(
-                    ::rpl_mir::pat::RegionKind::ReAny,
+                ::rpl_context::pat::Rvalue::Ref(
+                    ::rpl_context::pat::RegionKind::ReAny,
                     ::rustc_middle::mir::BorrowKind::Shared,
-                    ::rpl_mir::pat::Place::new(
+                    ::rpl_context::pat::Place::new(
                         to_raw_slice_local,
-                        pcx.mk_slice(&[::rpl_mir::pat::PlaceElem::Deref,])
+                        pcx.mk_slice(&[::rpl_context::pat::PlaceElem::Deref,])
                     )
                 )
             );
@@ -218,51 +248,51 @@ fn test_cve_2020_35892_revised() {
             }
         } => quote! {
             #[allow(non_snake_case)]
-            let T_ty_var = pattern.new_ty_var(None);
+            let T_ty_var = mir_pat.new_ty_var(None);
             #[allow(non_snake_case)]
             let T_ty = pcx.mk_var_ty(T_ty_var);
 
             #[allow(non_snake_case)]
-            let SlabT_ty_var = pattern.new_ty_var(None);
+            let SlabT_ty_var = mir_pat.new_ty_var(None);
             #[allow(non_snake_case)]
             let SlabT_ty = pcx.mk_var_ty(SlabT_ty_var);
 
-            let self_local = pattern.mk_self(pcx.mk_ref_ty(
-                ::rpl_mir::pat::RegionKind::ReAny,
+            let self_local = mir_pat.mk_self(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReAny,
                 SlabT_ty,
                 ::rustc_middle::mir::Mutability::Mut
             ));
-            let len_local = pattern.mk_local(pcx.primitive_types.usize);
-            let x1_local = pattern.mk_local(pcx.primitive_types.usize);
-            let x2_local = pattern.mk_local(pcx.primitive_types.usize);
-            let opt_local = pattern.mk_local(pcx.mk_adt_ty(pcx.mk_path_with_args(
+            let len_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let x1_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let x2_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let opt_local = mir_pat.mk_local(pcx.mk_adt_ty(pcx.mk_path_with_args(
                 pcx.mk_lang_item("Option"),
                 &[pcx.primitive_types.usize.into()]
             )));
-            let discr_local = pattern.mk_local(pcx.primitive_types.isize);
-            let x_local = pattern.mk_local(pcx.primitive_types.usize);
-            let start_ref_local = pattern.mk_local(pcx.mk_ref_ty(
-                ::rpl_mir::pat::RegionKind::ReAny,
+            let discr_local = mir_pat.mk_local(pcx.primitive_types.isize);
+            let x_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let start_ref_local = mir_pat.mk_local(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReAny,
                 pcx.primitive_types.usize,
                 ::rustc_middle::mir::Mutability::Not
             ));
-            let end_ref_local = pattern.mk_local(pcx.mk_ref_ty(
-                ::rpl_mir::pat::RegionKind::ReAny,
+            let end_ref_local = mir_pat.mk_local(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReAny,
                 pcx.primitive_types.usize,
                 ::rustc_middle::mir::Mutability::Not
             ));
-            let start_local = pattern.mk_local(pcx.primitive_types.usize);
-            let end_local = pattern.mk_local(pcx.primitive_types.usize);
-            let range_local = pattern.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
+            let start_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let end_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let range_local = mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["core", "ops", "range", "Range",]),
                 &[pcx.primitive_types.usize.into()]
             )));
-            let iter_local = pattern.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
+            let iter_local = mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["core", "ops", "range", "Range",]),
                 &[pcx.primitive_types.usize.into()]
             )));
-            let iter_mut_local = pattern.mk_local(pcx.mk_ref_ty(
-                ::rpl_mir::pat::RegionKind::ReAny,
+            let iter_mut_local = mir_pat.mk_local(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReAny,
                 pcx.mk_path_ty(pcx.mk_path_with_args(
                     pcx.mk_item_path(&["core", "ops", "range", "Range",]),
                     &[pcx.primitive_types.usize.into()]
@@ -270,246 +300,246 @@ fn test_cve_2020_35892_revised() {
                 ::rustc_middle::mir::Mutability::Mut
             ));
             let base_local =
-                pattern.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
-            let offset_local = pattern.mk_local(pcx.primitive_types.isize);
+                mir_pat.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
+            let offset_local = mir_pat.mk_local(pcx.primitive_types.isize);
             let elem_ptr_local =
-                pattern.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
-            let cmp_local = pattern.mk_local(pcx.primitive_types.bool);
-            let len_stmt = pattern.mk_assign(
+                mir_pat.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
+            let cmp_local = mir_pat.mk_local(pcx.primitive_types.bool);
+            mir_pat.mk_assign(
                 len_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(::rpl_mir::pat::Place::new(
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(::rpl_context::pat::Place::new(
                     self_local,
                     pcx.mk_slice(&[
-                        ::rpl_mir::pat::PlaceElem::Deref,
-                        ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(
+                        ::rpl_context::pat::PlaceElem::Deref,
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(
                             ::rustc_span::Symbol::intern("len")
                         )),
                     ])
                 )))
             );
-            let range_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 range_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Aggregate(
-                    ::rpl_mir::pat::AggKind::Adt(
+                ::rpl_context::pat::Rvalue::Aggregate(
+                    ::rpl_context::pat::AggKind::Adt(
                         pcx.mk_path_with_args(
                             pcx.mk_item_path(&["core", "ops", "range", "Range",]),
                             &[]
                         ),
-                        pattern.mk_list([
+                        mir_pat.mk_list([
                             ::rustc_span::Symbol::intern("start"),
                             ::rustc_span::Symbol::intern("end")
                         ]).into()
                     ),
-                    pattern.mk_list([
-                        ::rpl_mir::pat::Operand::Constant(
-                            ::rpl_mir::pat::ConstOperand::ScalarInt(0_usize.into())
+                    mir_pat.mk_list([
+                        ::rpl_context::pat::Operand::Constant(
+                            ::rpl_context::pat::ConstOperand::ScalarInt(0_usize.into())
                         ),
-                        ::rpl_mir::pat::Operand::Move(len_local.into_place())
+                        ::rpl_context::pat::Operand::Move(len_local.into_place())
                     ]),
                 )
             );
-            let iter_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 iter_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Move(range_local.into_place()))
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Move(range_local.into_place()))
             );
-            pattern.mk_loop(|pattern| {
-                let iter_mut_stmt = pattern.mk_assign(
+            mir_pat.mk_loop(|mir_pat| {
+                mir_pat.mk_assign(
                     iter_mut_local.into_place(),
-                    ::rpl_mir::pat::Rvalue::Ref(
-                        ::rpl_mir::pat::RegionKind::ReAny,
+                    ::rpl_context::pat::Rvalue::Ref(
+                        ::rpl_context::pat::RegionKind::ReAny,
                         ::rustc_middle::mir::BorrowKind::Mut {
                             kind: ::rustc_middle::mir::MutBorrowKind::Default
                         },
                         iter_local.into_place()
                     ));
-                let start_ref_stmt = pattern.mk_assign(
+                mir_pat.mk_assign(
                     start_ref_local.into_place(),
-                    ::rpl_mir::pat::Rvalue::Ref(
-                        ::rpl_mir::pat::RegionKind::ReAny,
+                    ::rpl_context::pat::Rvalue::Ref(
+                        ::rpl_context::pat::RegionKind::ReAny,
                         ::rustc_middle::mir::BorrowKind::Shared,
-                        ::rpl_mir::pat::Place::new(iter_mut_local, pcx.mk_slice(&[
-                            ::rpl_mir::pat::PlaceElem::Deref,
-                            ::rpl_mir::pat::PlaceElem::Field(
-                                ::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("start"))
+                        ::rpl_context::pat::Place::new(iter_mut_local, pcx.mk_slice(&[
+                            ::rpl_context::pat::PlaceElem::Deref,
+                            ::rpl_context::pat::PlaceElem::Field(
+                                ::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("start"))
                             ),
                         ]))
                     )
                 );
-                let start_stmt = pattern.mk_assign(
+                mir_pat.mk_assign(
                     start_local.into_place(),
-                    ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
-                        ::rpl_mir::pat::Place::new(
+                    ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(
+                        ::rpl_context::pat::Place::new(
                             start_ref_local,
-                            pcx.mk_slice(&[::rpl_mir::pat::PlaceElem::Deref,])
+                            pcx.mk_slice(&[::rpl_context::pat::PlaceElem::Deref,])
                         )
                     ))
                 );
-                let end_ref_stmt = pattern.mk_assign(
+                mir_pat.mk_assign(
                     end_ref_local.into_place(),
-                    ::rpl_mir::pat::Rvalue::Ref(
-                        ::rpl_mir::pat::RegionKind::ReAny,
+                    ::rpl_context::pat::Rvalue::Ref(
+                        ::rpl_context::pat::RegionKind::ReAny,
                         ::rustc_middle::mir::BorrowKind::Shared,
-                        ::rpl_mir::pat::Place::new(
+                        ::rpl_context::pat::Place::new(
                             iter_mut_local,
                             pcx.mk_slice(&[
-                                ::rpl_mir::pat::PlaceElem::Deref,
-                                ::rpl_mir::pat::PlaceElem::Field(
-                                    ::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("end"))
+                                ::rpl_context::pat::PlaceElem::Deref,
+                                ::rpl_context::pat::PlaceElem::Field(
+                                    ::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("end"))
                                 ),
                             ])
                         )
                     )
                 );
-                let end_stmt = pattern.mk_assign(
+                mir_pat.mk_assign(
                     end_local.into_place(),
-                    ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
-                        ::rpl_mir::pat::Place::new(
+                    ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(
+                        ::rpl_context::pat::Place::new(
                             end_local,
-                            pcx.mk_slice(&[::rpl_mir::pat::PlaceElem::Deref,])
+                            pcx.mk_slice(&[::rpl_context::pat::PlaceElem::Deref,])
                         )
                     ))
                 );
-                let cmp_stmt = pattern.mk_assign(
+                mir_pat.mk_assign(
                     cmp_local.into_place(),
-                    ::rpl_mir::pat::Rvalue::BinaryOp(
+                    ::rpl_context::pat::Rvalue::BinaryOp(
                         ::rustc_middle::mir::BinOp::Lt,
                         Box::new([
-                            ::rpl_mir::pat::Operand::Move(start_local.into_place()),
-                            ::rpl_mir::pat::Operand::Copy(end_local.into_place())
+                            ::rpl_context::pat::Operand::Move(start_local.into_place()),
+                            ::rpl_context::pat::Operand::Copy(end_local.into_place())
                         ])
                     )
                 );
-                pattern.mk_switch_int(::rpl_mir::pat::Operand::Move(cmp_local.into_place()), |mut pattern| {
-                    pattern.mk_switch_target(false, |pattern| {
-                        let opt_stmt = pattern.mk_assign(
+                mir_pat.mk_switch_int(::rpl_context::pat::Operand::Move(cmp_local.into_place()), |mut mir_pat| {
+                    mir_pat.mk_switch_target(false, |mir_pat| {
+                        mir_pat.mk_assign(
                             opt_local.into_place(),
-                            ::rpl_mir::pat::Rvalue::Aggregate(
-                                ::rpl_mir::pat::AggKind::Adt(
+                            ::rpl_context::pat::Rvalue::Aggregate(
+                                ::rpl_context::pat::AggKind::Adt(
                                     pcx.mk_path_with_args(pcx.mk_lang_item("None"), &[]),
-                                    ::rpl_mir::pat::AggAdtKind::Unit
+                                    ::rpl_context::pat::AggAdtKind::Unit
                                 ),
                                 Box::new([])
                             )
                         );
                     });
-                    pattern.mk_otherwise(|pattern| {
-                        let x1_stmt = pattern.mk_assign(
+                    mir_pat.mk_otherwise(|mir_pat| {
+                        mir_pat.mk_assign(
                             x1_local.into_place(),
-                            ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
-                                ::rpl_mir::pat::Place::new(
+                            ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(
+                                ::rpl_context::pat::Place::new(
                                     iter_mut_local,
                                     pcx.mk_slice(&[
-                                        ::rpl_mir::pat::PlaceElem::Deref,
-                                        ::rpl_mir::pat::PlaceElem::Field(
-                                            ::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("start"))
+                                        ::rpl_context::pat::PlaceElem::Deref,
+                                        ::rpl_context::pat::PlaceElem::Field(
+                                            ::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("start"))
                                         ),
                                     ])
                                 )
                             ))
                         );
-                        let x2_stmt = pattern.mk_fn_call(
-                            ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(pcx.mk_path_with_args(
+                        mir_pat.mk_fn_call(
+                            ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(pcx.mk_path_with_args(
                                 pcx.mk_item_path(&["core", "iter", "range", "Step", "forward_unchecked",]),
                                 &[]
                             ))),
-                            pattern.mk_list([
-                                ::rpl_mir::pat::Operand::Copy(x1_local.into_place()),
-                                ::rpl_mir::pat::Operand::Constant(
-                                    ::rpl_mir::pat::ConstOperand::ScalarInt(1_usize.into())
+                            mir_pat.mk_list([
+                                ::rpl_context::pat::Operand::Copy(x1_local.into_place()),
+                                ::rpl_context::pat::Operand::Constant(
+                                    ::rpl_context::pat::ConstOperand::ScalarInt(1_usize.into())
                                 )
                             ]),
                             Some(x2_local.into_place())
                         );
-                        let iter_mut_stmt = pattern.mk_assign(
-                            ::rpl_mir::pat::Place::new(
+                        mir_pat.mk_assign(
+                            ::rpl_context::pat::Place::new(
                                 iter_mut_local,
                                 pcx.mk_slice(&[
-                                    ::rpl_mir::pat::PlaceElem::Deref,
-                                    ::rpl_mir::pat::PlaceElem::Field(
-                                        ::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("start"))
+                                    ::rpl_context::pat::PlaceElem::Deref,
+                                    ::rpl_context::pat::PlaceElem::Field(
+                                        ::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("start"))
                                     ),
                                 ])
                             ),
-                            ::rpl_mir::pat::Rvalue::Use(
-                                ::rpl_mir::pat::Operand::Copy(x2_local.into_place())
+                            ::rpl_context::pat::Rvalue::Use(
+                                ::rpl_context::pat::Operand::Copy(x2_local.into_place())
                             )
                         );
-                        let opt_stmt = pattern.mk_fn_call(
-                            ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+                        mir_pat.mk_fn_call(
+                            ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                                 pcx.mk_path_with_args(pcx.mk_lang_item("Some"), &[])
                             )),
-                            pattern.mk_list([
-                                ::rpl_mir::pat::Operand::Copy(x1_local.into_place())
+                            mir_pat.mk_list([
+                                ::rpl_context::pat::Operand::Copy(x1_local.into_place())
                             ]),
                             Some(opt_local.into_place())
                         );
                     });
                 });
-                let discr_stmt = pattern.mk_assign(
+                mir_pat.mk_assign(
                     discr_local.into_place(),
-                    ::rpl_mir::pat::Rvalue::Discriminant(opt_local.into_place())
+                    ::rpl_context::pat::Rvalue::Discriminant(opt_local.into_place())
                 );
-                pattern.mk_switch_int(
-                    ::rpl_mir::pat::Operand::Move(discr_local.into_place()),
-                    |mut pattern| {
-                        pattern.mk_switch_target(0_isize, |pattern| { pattern.mk_break(); });
-                        pattern.mk_switch_target(1_isize, |pattern| {
-                            let x_stmt = pattern.mk_assign(
+                mir_pat.mk_switch_int(
+                    ::rpl_context::pat::Operand::Move(discr_local.into_place()),
+                    |mut mir_pat| {
+                        mir_pat.mk_switch_target(0_isize, |mir_pat| { mir_pat.mk_break(); });
+                        mir_pat.mk_switch_target(1_isize, |mir_pat| {
+                            mir_pat.mk_assign(
                                 x_local.into_place(),
-                                ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
-                                    ::rpl_mir::pat::Place::new(
+                                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(
+                                    ::rpl_context::pat::Place::new(
                                         opt_local,
                                         pcx.mk_slice(&[
-                                            ::rpl_mir::pat::PlaceElem::Downcast(
+                                            ::rpl_context::pat::PlaceElem::Downcast(
                                                 ::rustc_span::Symbol::intern("Some")
                                             ),
-                                            ::rpl_mir::pat::PlaceElem::Field(
-                                                ::rpl_mir::pat::Field::Unnamed(0u32.into())
+                                            ::rpl_context::pat::PlaceElem::Field(
+                                                ::rpl_context::pat::Field::Unnamed(0u32.into())
                                             ),
                                         ])
                                     )
                                 ))
                             );
-                            let base_stmt = pattern.mk_assign(
+                            mir_pat.mk_assign(
                                 base_local.into_place(),
-                                ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
-                                    ::rpl_mir::pat::Place::new(
+                                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(
+                                    ::rpl_context::pat::Place::new(
                                         self_local,
                                         pcx.mk_slice(&[
-                                            ::rpl_mir::pat::PlaceElem::Deref,
-                                            ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(
+                                            ::rpl_context::pat::PlaceElem::Deref,
+                                            ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(
                                                 ::rustc_span::Symbol::intern("mem")
                                             )),
                                         ])
                                     )
                                 ))
                             );
-                            let offset_stmt = pattern.mk_assign(
+                            mir_pat.mk_assign(
                                 offset_local.into_place(),
-                                ::rpl_mir::pat::Rvalue::Cast(
+                                ::rpl_context::pat::Rvalue::Cast(
                                     ::rustc_middle::mir::CastKind::IntToInt,
-                                    ::rpl_mir::pat::Operand::Copy(x_local.into_place()),
+                                    ::rpl_context::pat::Operand::Copy(x_local.into_place()),
                                     pcx.primitive_types.isize
                                 )
                             );
-                            let elem_ptr_stmt = pattern.mk_assign(
+                            mir_pat.mk_assign(
                                 elem_ptr_local.into_place(),
-                                ::rpl_mir::pat::Rvalue::BinaryOp(
+                                ::rpl_context::pat::Rvalue::BinaryOp(
                                     ::rustc_middle::mir::BinOp::Offset,
                                     Box::new([
-                                        ::rpl_mir::pat::Operand::Copy(base_local.into_place()),
-                                        ::rpl_mir::pat::Operand::Copy(offset_local.into_place())
+                                        ::rpl_context::pat::Operand::Copy(base_local.into_place()),
+                                        ::rpl_context::pat::Operand::Copy(offset_local.into_place())
                                     ])
                                 )
                             );
-                            pattern.mk_fn_call(
-                                ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+                            mir_pat.mk_fn_call(
+                                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                                     pcx.mk_path_with_args(
                                         pcx.mk_item_path(&["core", "ptr", "drop_in_place",]),
                                         &[]
                                     )
                                 )),
-                                pattern.mk_list([::rpl_mir::pat::Operand::Copy(
+                                mir_pat.mk_list([::rpl_context::pat::Operand::Copy(
                                     elem_ptr_local.into_place()
                                 )]),
                                 None
@@ -563,166 +593,166 @@ fn test_cve_2020_35892() {
             }
         } => quote! {
             #[allow(non_snake_case)]
-            let T_ty_var = pattern.new_ty_var(None);
+            let T_ty_var = mir_pat.new_ty_var(None);
             #[allow(non_snake_case)]
             let T_ty = pcx.mk_var_ty(T_ty_var);
 
             #[allow(non_snake_case)]
-            let SlabT_ty_var = pattern.new_ty_var(None);
+            let SlabT_ty_var = mir_pat.new_ty_var(None);
             #[allow(non_snake_case)]
             let SlabT_ty = pcx.mk_var_ty(SlabT_ty_var);
 
-            let self_local = pattern.mk_self(pcx.mk_ref_ty(
-                ::rpl_mir::pat::RegionKind::ReAny, SlabT_ty, ::rustc_middle::mir::Mutability::Mut
+            let self_local = mir_pat.mk_self(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReAny, SlabT_ty, ::rustc_middle::mir::Mutability::Mut
             ));
-            let len_local = pattern.mk_local(pcx.primitive_types.usize);
-            let x0_local = pattern.mk_local(pcx.primitive_types.usize);
-            let x1_local = pattern.mk_local(pcx.primitive_types.usize);
-            let x2_local = pattern.mk_local(pcx.primitive_types.usize);
-            let x3_local = pattern.mk_local(pcx.mk_adt_ty(pcx.mk_path_with_args(
+            let len_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let x0_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let x1_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let x2_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let x3_local = mir_pat.mk_local(pcx.mk_adt_ty(pcx.mk_path_with_args(
                 pcx.mk_lang_item("Option"),
                 &[pcx.primitive_types.usize.into()]
             )));
-            let x_local = pattern.mk_local(pcx.primitive_types.usize);
+            let x_local = mir_pat.mk_local(pcx.primitive_types.usize);
             let base_local =
-                pattern.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
-            let offset_local = pattern.mk_local(pcx.primitive_types.isize);
+                mir_pat.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
+            let offset_local = mir_pat.mk_local(pcx.primitive_types.isize);
             let elem_ptr_local =
-                pattern.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
-            let x_cmp_local = pattern.mk_local(pcx.primitive_types.usize);
-            let cmp_local = pattern.mk_local(pcx.primitive_types.bool);
-            let len_stmt = pattern.mk_assign(
+                mir_pat.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
+            let x_cmp_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let cmp_local = mir_pat.mk_local(pcx.primitive_types.bool);
+            mir_pat.mk_assign(
                 len_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(::rpl_mir::pat::Place::new(
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(::rpl_context::pat::Place::new(
                     self_local,
                     pcx.mk_slice(&[
-                        ::rpl_mir::pat::PlaceElem::Deref,
-                        ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(
+                        ::rpl_context::pat::PlaceElem::Deref,
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(
                             ::rustc_span::Symbol::intern("len")
                         )),
                     ])
                 )))
             );
-            let x0_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 x0_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Constant(
-                    ::rpl_mir::pat::ConstOperand::ScalarInt(0_usize.into())
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Constant(
+                    ::rpl_context::pat::ConstOperand::ScalarInt(0_usize.into())
                 ))
             );
-            pattern.mk_loop(|pattern| {
-                let x_cmp_stmt = pattern.mk_assign(
+            mir_pat.mk_loop(|mir_pat| {
+                mir_pat.mk_assign(
                     x_cmp_local.into_place(),
-                    ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(x0_local.into_place()))
+                    ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(x0_local.into_place()))
                 );
-                let cmp_stmt = pattern.mk_assign(
+                mir_pat.mk_assign(
                     cmp_local.into_place(),
-                    ::rpl_mir::pat::Rvalue::BinaryOp(
+                    ::rpl_context::pat::Rvalue::BinaryOp(
                         ::rustc_middle::mir::BinOp::Lt,
                         Box::new([
-                            ::rpl_mir::pat::Operand::Move(x_cmp_local.into_place()),
-                            ::rpl_mir::pat::Operand::Copy(len_local.into_place())
+                            ::rpl_context::pat::Operand::Move(x_cmp_local.into_place()),
+                            ::rpl_context::pat::Operand::Copy(len_local.into_place())
                         ])
                     )
                 );
-                pattern.mk_switch_int(
-                    ::rpl_mir::pat::Operand::Move(cmp_local.into_place()),
-                    |mut pattern| {
-                        pattern.mk_switch_target(false, |pattern| {
-                            pattern.mk_break();
+                mir_pat.mk_switch_int(
+                    ::rpl_context::pat::Operand::Move(cmp_local.into_place()),
+                    |mut mir_pat| {
+                        mir_pat.mk_switch_target(false, |mir_pat| {
+                            mir_pat.mk_break();
                         });
-                        pattern.mk_otherwise(|pattern| {
-                            let x1_stmt = pattern.mk_assign(
+                        mir_pat.mk_otherwise(|mir_pat| {
+                            mir_pat.mk_assign(
                                 x1_local.into_place(),
-                                ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
+                                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(
                                     x0_local.into_place()
                                 ))
                             );
-                            let x2_stmt = pattern.mk_fn_call(
-                                ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+                            mir_pat.mk_fn_call(
+                                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                                     pcx.mk_path_with_args(
                                         pcx.mk_item_path(&["core", "iter", "range", "Step", "forward_unchecked",]),
                                         &[]
                                     )
                                 )),
-                                pattern.mk_list([
-                                    ::rpl_mir::pat::Operand::Copy(x1_local.into_place()),
-                                    ::rpl_mir::pat::Operand::Constant(
-                                        ::rpl_mir::pat::ConstOperand::ScalarInt(1_usize.into())
+                                mir_pat.mk_list([
+                                    ::rpl_context::pat::Operand::Copy(x1_local.into_place()),
+                                    ::rpl_context::pat::Operand::Constant(
+                                        ::rpl_context::pat::ConstOperand::ScalarInt(1_usize.into())
                                     )
                                 ]),
                                 Some(x2_local.into_place())
                             );
-                            let x0_stmt = pattern.mk_assign(
+                            mir_pat.mk_assign(
                                 x0_local.into_place(),
-                                ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Move(
+                                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Move(
                                     x2_local.into_place()
                                 ))
                             );
-                            let x3_stmt = pattern.mk_fn_call(
-                                ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+                            mir_pat.mk_fn_call(
+                                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                                     pcx.mk_path_with_args(pcx.mk_lang_item("Some"), &[])
                                 )),
-                                pattern.mk_list([::rpl_mir::pat::Operand::Copy(
+                                mir_pat.mk_list([::rpl_context::pat::Operand::Copy(
                                     x1_local.into_place()
                                 )]),
                                 Some(x3_local.into_place())
                             );
-                            let x_stmt = pattern.mk_assign(
+                            mir_pat.mk_assign(
                                 x_local.into_place(),
-                                ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
-                                    ::rpl_mir::pat::Place::new(
+                                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(
+                                    ::rpl_context::pat::Place::new(
                                         x3_local,
                                         pcx.mk_slice(&[
-                                            ::rpl_mir::pat::PlaceElem::Downcast(
+                                            ::rpl_context::pat::PlaceElem::Downcast(
                                                 ::rustc_span::Symbol::intern("Some")
                                             ),
-                                            ::rpl_mir::pat::PlaceElem::Field(
-                                                ::rpl_mir::pat::Field::Unnamed(0u32.into())
+                                            ::rpl_context::pat::PlaceElem::Field(
+                                                ::rpl_context::pat::Field::Unnamed(0u32.into())
                                             ),
                                         ])
                                     )
                                 ))
                             );
-                            let base_stmt = pattern.mk_assign(
+                            mir_pat.mk_assign(
                                 base_local.into_place(),
-                                ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
-                                    ::rpl_mir::pat::Place::new(
+                                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(
+                                    ::rpl_context::pat::Place::new(
                                         self_local,
                                         pcx.mk_slice(&[
-                                            ::rpl_mir::pat::PlaceElem::Deref,
-                                            ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(
+                                            ::rpl_context::pat::PlaceElem::Deref,
+                                            ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(
                                                 ::rustc_span::Symbol::intern("mem")
                                             )),
                                         ])
                                     )
                                 ))
                             );
-                            let offset_stmt = pattern.mk_assign(
+                            mir_pat.mk_assign(
                                 offset_local.into_place(),
-                                ::rpl_mir::pat::Rvalue::Cast(
+                                ::rpl_context::pat::Rvalue::Cast(
                                     ::rustc_middle::mir::CastKind::IntToInt,
-                                    ::rpl_mir::pat::Operand::Copy(x_local.into_place()),
+                                    ::rpl_context::pat::Operand::Copy(x_local.into_place()),
                                     pcx.primitive_types.isize
                                 )
                             );
-                            let elem_ptr_stmt = pattern.mk_assign(
+                            mir_pat.mk_assign(
                                 elem_ptr_local.into_place(),
-                                ::rpl_mir::pat::Rvalue::BinaryOp(
+                                ::rpl_context::pat::Rvalue::BinaryOp(
                                     ::rustc_middle::mir::BinOp::Offset,
                                     Box::new([
-                                        ::rpl_mir::pat::Operand::Copy(base_local.into_place()),
-                                        ::rpl_mir::pat::Operand::Copy(offset_local.into_place())
+                                        ::rpl_context::pat::Operand::Copy(base_local.into_place()),
+                                        ::rpl_context::pat::Operand::Copy(offset_local.into_place())
                                     ])
                                 )
                             );
-                            pattern.mk_fn_call(
-                                ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+                            mir_pat.mk_fn_call(
+                                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                                     pcx.mk_path_with_args(
                                         pcx.mk_item_path(&["core", "ptr", "drop_in_place",]),
                                         &[]
                                     )
                                 )),
-                                pattern.mk_list([::rpl_mir::pat::Operand::Copy(
+                                mir_pat.mk_list([::rpl_context::pat::Operand::Copy(
                                     elem_ptr_local.into_place()
                                 )]),
                                 None
@@ -759,15 +789,15 @@ fn test_cve_2018_21000() {
             let res: VecT3 = Vec::from_raw_parts(copy to_vec_ptr, copy to_cap, copy to_len);
         } => quote! {
             #[allow(non_snake_case)]
-            let T1_ty_var = pattern.new_ty_var(None);
+            let T1_ty_var = mir_pat.new_ty_var(None);
             #[allow(non_snake_case)]
             let T1_ty = pcx.mk_var_ty(T1_ty_var);
             #[allow(non_snake_case)]
-            let T2_ty_var = pattern.new_ty_var(None);
+            let T2_ty_var = mir_pat.new_ty_var(None);
             #[allow(non_snake_case)]
             let T2_ty = pcx.mk_var_ty(T2_ty_var);
             #[allow(non_snake_case)]
-            let T3_ty_var = pattern.new_ty_var(None);
+            let T3_ty_var = mir_pat.new_ty_var(None);
             #[allow(non_snake_case)]
             let T3_ty = pcx.mk_var_ty(T3_ty_var);
             #[allow(non_snake_case)]
@@ -789,94 +819,94 @@ fn test_cve_2018_21000() {
             let PtrT1_ty = pcx.mk_raw_ptr_ty(T1_ty, ::rustc_middle::mir::Mutability::Mut);
             #[allow(non_snake_case)]
             let PtrT3_ty = pcx.mk_raw_ptr_ty(T3_ty, ::rustc_middle::mir::Mutability::Mut);
-            let from_vec_local = pattern.mk_local(VecT1_ty);
-            let from_vec_stmt = pattern.mk_assign(from_vec_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
-            let size_local = pattern.mk_local(pcx.primitive_types.usize);
-            let size_stmt = pattern.mk_assign(
+            let from_vec_local = mir_pat.mk_local(VecT1_ty);
+            mir_pat.mk_assign(from_vec_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            let size_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            mir_pat.mk_assign(
                 size_local.into_place(),
-                ::rpl_mir::pat::Rvalue::NullaryOp(::rustc_middle::mir::NullOp::SizeOf, T2_ty)
+                ::rpl_context::pat::Rvalue::NullaryOp(::rustc_middle::mir::NullOp::SizeOf, T2_ty)
             );
-            let from_cap_local = pattern.mk_local(pcx.primitive_types.usize);
-            let from_cap_stmt = pattern.mk_fn_call(
-                ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+            let from_cap_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                     pcx.mk_path_with_args(
                         pcx.mk_item_path(&["Vec", "capacity",]),
                         &[]
                     )
                 )),
-                pattern.mk_list([::rpl_mir::pat::Operand::Move(from_vec_local.into_place())]),
+                mir_pat.mk_list([::rpl_context::pat::Operand::Move(from_vec_local.into_place())]),
                 Some(from_cap_local.into_place())
             );
-            let to_cap_local = pattern.mk_local(pcx.primitive_types.usize);
-            let to_cap_stmt = pattern.mk_assign(
+            let to_cap_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            mir_pat.mk_assign(
                 to_cap_local.into_place(),
-                ::rpl_mir::pat::Rvalue::BinaryOp(
+                ::rpl_context::pat::Rvalue::BinaryOp(
                     ::rustc_middle::mir::BinOp::Mul,
                     Box::new([
-                        ::rpl_mir::pat::Operand::Copy(from_cap_local.into_place()),
-                        ::rpl_mir::pat::Operand::Copy(size_local.into_place())
+                        ::rpl_context::pat::Operand::Copy(from_cap_local.into_place()),
+                        ::rpl_context::pat::Operand::Copy(size_local.into_place())
                     ])
                 )
             );
-            let from_len_local = pattern.mk_local(pcx.primitive_types.usize);
-            let from_len_stmt = pattern.mk_assign(
+            let from_len_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            mir_pat.mk_assign(
                 from_len_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Len(from_vec_local.into_place())
+                ::rpl_context::pat::Rvalue::Len(from_vec_local.into_place())
             );
-            let to_len_local = pattern.mk_local(pcx.primitive_types.usize);
-            let to_len_stmt = pattern.mk_assign(
+            let to_len_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            mir_pat.mk_assign(
                 to_len_local.into_place(),
-                ::rpl_mir::pat::Rvalue::BinaryOp(
+                ::rpl_context::pat::Rvalue::BinaryOp(
                     ::rustc_middle::mir::BinOp::Mul,
                     Box::new([
-                        ::rpl_mir::pat::Operand::Copy(from_len_local.into_place()),
-                        ::rpl_mir::pat::Operand::Copy(size_local.into_place())
+                        ::rpl_context::pat::Operand::Copy(from_len_local.into_place()),
+                        ::rpl_context::pat::Operand::Copy(size_local.into_place())
                     ])
                 )
             );
-            let from_vec_ptr_local = pattern.mk_local(PtrT1_ty);
-            let from_vec_ptr_stmt = pattern.mk_fn_call(
-                ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+            let from_vec_ptr_local = mir_pat.mk_local(PtrT1_ty);
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                     pcx.mk_path_with_args(
                         pcx.mk_item_path(&["Vec", "as_mut_ptr",]),
                         &[]
                     )
                 )),
-                pattern.mk_list([::rpl_mir::pat::Operand::Move(from_vec_local.into_place())]),
+                mir_pat.mk_list([::rpl_context::pat::Operand::Move(from_vec_local.into_place())]),
                 Some(from_vec_ptr_local.into_place())
             );
-            let to_vec_ptr_local = pattern.mk_local(PtrT3_ty);
-            let to_vec_ptr_stmt = pattern.mk_assign(
+            let to_vec_ptr_local = mir_pat.mk_local(PtrT3_ty);
+            mir_pat.mk_assign(
                 to_vec_ptr_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Cast(
+                ::rpl_context::pat::Rvalue::Cast(
                     ::rustc_middle::mir::CastKind::PtrToPtr,
-                    ::rpl_mir::pat::Operand::Copy(from_vec_ptr_local.into_place()),
+                    ::rpl_context::pat::Operand::Copy(from_vec_ptr_local.into_place()),
                     PtrT3_ty
                 )
             );
-            let _tmp_local = pattern.mk_local(pcx.mk_tuple_ty(&[]));
-            let _tmp_stmt = pattern.mk_fn_call(
-                ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(pcx.mk_path_with_args(
+            let _tmp_local = mir_pat.mk_local(pcx.mk_tuple_ty(&[]));
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(pcx.mk_path_with_args(
                     pcx.mk_item_path(&["std", "mem", "forget",]),
                     &[]
                 ))),
-                pattern.mk_list([
-                    ::rpl_mir::pat::Operand::Move(from_vec_local.into_place())
+                mir_pat.mk_list([
+                    ::rpl_context::pat::Operand::Move(from_vec_local.into_place())
                 ]),
                 Some(_tmp_local.into_place())
             );
-            let res_local = pattern.mk_local(VecT3_ty);
-            let res_stmt = pattern.mk_fn_call(
-                ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+            let res_local = mir_pat.mk_local(VecT3_ty);
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                     pcx.mk_path_with_args(
                         pcx.mk_item_path(&["Vec", "from_raw_parts",]),
                         &[]
                     )
                 )),
-                pattern.mk_list([
-                    ::rpl_mir::pat::Operand::Copy(to_vec_ptr_local.into_place()),
-                    ::rpl_mir::pat::Operand::Copy(to_cap_local.into_place()),
-                    ::rpl_mir::pat::Operand::Copy(to_len_local.into_place())
+                mir_pat.mk_list([
+                    ::rpl_context::pat::Operand::Copy(to_vec_ptr_local.into_place()),
+                    ::rpl_context::pat::Operand::Copy(to_cap_local.into_place()),
+                    ::rpl_context::pat::Operand::Copy(to_len_local.into_place())
                 ]),
                 Some(res_local.into_place())
             );
@@ -906,7 +936,7 @@ fn test_cve_2020_35881_const() {
             // neglected the type-size-equivalence check
         } => quote! {
             #[allow(non_snake_case)]
-            let T1_ty_var = pattern.new_ty_var(None);
+            let T1_ty_var = mir_pat.new_ty_var(None);
             #[allow(non_snake_case)]
             let T1_ty = pcx.mk_var_ty(T1_ty_var);
             #[allow(non_snake_case)]
@@ -924,7 +954,7 @@ fn test_cve_2020_35881_const() {
             );
             #[allow(non_snake_case)]
             let DerefPtrT1_ty = pcx.mk_ref_ty(
-                ::rpl_mir::pat::RegionKind::ReAny,
+                ::rpl_context::pat::RegionKind::ReAny,
                 pcx.mk_raw_ptr_ty(
                     T1_ty,
                     ::rustc_middle::mir::Mutability::Not
@@ -944,36 +974,36 @@ fn test_cve_2020_35881_const() {
                 ),
                 ::rustc_middle::mir::Mutability::Not
             );
-            let ptr_to_data_local = pattern.mk_local(PtrT1_ty);
-            let ptr_to_data_stmt = pattern.mk_assign(ptr_to_data_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
-            let data_local = pattern.mk_local(DerefPtrT1_ty);
-            let data_stmt = pattern.mk_assign(
+            let ptr_to_data_local = mir_pat.mk_local(PtrT1_ty);
+            mir_pat.mk_assign(ptr_to_data_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            let data_local = mir_pat.mk_local(DerefPtrT1_ty);
+            mir_pat.mk_assign(
                 data_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Ref(
-                    ::rpl_mir::pat::RegionKind::ReAny,
+                ::rpl_context::pat::Rvalue::Ref(
+                    ::rpl_context::pat::RegionKind::ReAny,
                     ::rustc_middle::mir::BorrowKind::Shared,
                     ptr_to_data_local.into_place()
                 )
             );
-            let ptr_to_ptr_to_data_local = pattern.mk_local(PtrPtrT1_ty);
-            let ptr_to_ptr_to_data_stmt = pattern.mk_assign(
+            let ptr_to_ptr_to_data_local = mir_pat.mk_local(PtrPtrT1_ty);
+            mir_pat.mk_assign(
                 ptr_to_ptr_to_data_local.into_place(),
-                ::rpl_mir::pat::Rvalue::RawPtr(
+                ::rpl_context::pat::Rvalue::RawPtr(
                     ::rustc_middle::mir::Mutability::Not,
-                    ::rpl_mir::pat::Place::new(
+                    ::rpl_context::pat::Place::new(
                         data_local,
                         pcx.mk_slice(
-                            &[::rpl_mir::pat::PlaceElem::Deref,]
+                            &[::rpl_context::pat::PlaceElem::Deref,]
                         )
                     )
                 )
             );
-            let ptr_to_ptr_to_res_local = pattern.mk_local(PtrPtrT2_ty);
-            let ptr_to_ptr_to_res_stmt = pattern.mk_assign(
+            let ptr_to_ptr_to_res_local = mir_pat.mk_local(PtrPtrT2_ty);
+            mir_pat.mk_assign(
                 ptr_to_ptr_to_res_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Cast(
+                ::rpl_context::pat::Rvalue::Cast(
                     ::rustc_middle::mir::CastKind::Transmute,
-                    ::rpl_mir::pat::Operand::Move(
+                    ::rpl_context::pat::Operand::Move(
                         ptr_to_ptr_to_data_local.into_place()
                     ),
                     pcx.mk_raw_ptr_ty(
@@ -985,15 +1015,15 @@ fn test_cve_2020_35881_const() {
                     )
                 )
             );
-            let ptr_to_res_local = pattern.mk_local(PtrT2_ty);
-            let ptr_to_res_stmt = pattern.mk_assign(
+            let ptr_to_res_local = mir_pat.mk_local(PtrT2_ty);
+            mir_pat.mk_assign(
                 ptr_to_res_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Use(
-                    ::rpl_mir::pat::Operand::Copy(
-                        ::rpl_mir::pat::Place::new(
+                ::rpl_context::pat::Rvalue::Use(
+                    ::rpl_context::pat::Operand::Copy(
+                        ::rpl_context::pat::Place::new(
                             ptr_to_ptr_to_res_local,
                             pcx.mk_slice(
-                                &[::rpl_mir::pat::PlaceElem::Deref,]
+                                &[::rpl_context::pat::PlaceElem::Deref,]
                             )
                         )
                     )
@@ -1024,7 +1054,7 @@ fn test_cve_2020_35881_mut() {
             let ptr_to_res: PtrT2 = copy *ptr_to_ptr_to_res;
         } => quote! {
             #[allow(non_snake_case)]
-            let T1_ty_var = pattern.new_ty_var(None);
+            let T1_ty_var = mir_pat.new_ty_var(None);
             #[allow(non_snake_case)]
             let T1_ty = pcx.mk_var_ty(T1_ty_var);
             #[allow(non_snake_case)]
@@ -1042,7 +1072,7 @@ fn test_cve_2020_35881_mut() {
             );
             #[allow(non_snake_case)]
             let DerefPtrT1_ty = pcx.mk_ref_ty(
-                ::rpl_mir::pat::RegionKind::ReAny,
+                ::rpl_context::pat::RegionKind::ReAny,
                 pcx.mk_raw_ptr_ty(
                     T1_ty,
                     ::rustc_middle::mir::Mutability::Mut
@@ -1062,38 +1092,38 @@ fn test_cve_2020_35881_mut() {
                 ),
                 ::rustc_middle::mir::Mutability::Mut
             );
-            let ptr_to_data_local = pattern.mk_local(PtrT1_ty);
-            let ptr_to_data_stmt = pattern.mk_assign(ptr_to_data_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
-            let data_local = pattern.mk_local(DerefPtrT1_ty);
-            let data_stmt = pattern.mk_assign(
+            let ptr_to_data_local = mir_pat.mk_local(PtrT1_ty);
+            mir_pat.mk_assign(ptr_to_data_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            let data_local = mir_pat.mk_local(DerefPtrT1_ty);
+            mir_pat.mk_assign(
                 data_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Ref(
-                    ::rpl_mir::pat::RegionKind::ReAny,
+                ::rpl_context::pat::Rvalue::Ref(
+                    ::rpl_context::pat::RegionKind::ReAny,
                     ::rustc_middle::mir::BorrowKind::Mut {
                         kind: ::rustc_middle::mir::MutBorrowKind::Default
                     },
                     ptr_to_data_local.into_place()
                 )
             );
-            let ptr_to_ptr_to_data_local = pattern.mk_local(PtrPtrT1_ty);
-            let ptr_to_ptr_to_data_stmt = pattern.mk_assign(
+            let ptr_to_ptr_to_data_local = mir_pat.mk_local(PtrPtrT1_ty);
+            mir_pat.mk_assign(
                 ptr_to_ptr_to_data_local.into_place(),
-                ::rpl_mir::pat::Rvalue::RawPtr(
+                ::rpl_context::pat::Rvalue::RawPtr(
                     ::rustc_middle::mir::Mutability::Mut,
-                    ::rpl_mir::pat::Place::new(
+                    ::rpl_context::pat::Place::new(
                         data_local,
                         pcx.mk_slice(
-                            &[::rpl_mir::pat::PlaceElem::Deref,]
+                            &[::rpl_context::pat::PlaceElem::Deref,]
                         )
                     )
                 )
             );
-            let ptr_to_ptr_to_res_local = pattern.mk_local(PtrPtrT2_ty);
-            let ptr_to_ptr_to_res_stmt = pattern.mk_assign(
+            let ptr_to_ptr_to_res_local = mir_pat.mk_local(PtrPtrT2_ty);
+            mir_pat.mk_assign(
                 ptr_to_ptr_to_res_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Cast(
+                ::rpl_context::pat::Rvalue::Cast(
                     ::rustc_middle::mir::CastKind::Transmute,
-                    ::rpl_mir::pat::Operand::Move(
+                    ::rpl_context::pat::Operand::Move(
                         ptr_to_ptr_to_data_local.into_place()
                     ),
                     pcx.mk_raw_ptr_ty(
@@ -1105,15 +1135,15 @@ fn test_cve_2020_35881_mut() {
                     )
                 )
             );
-            let ptr_to_res_local = pattern.mk_local(PtrT2_ty);
-            let ptr_to_res_stmt = pattern.mk_assign(
+            let ptr_to_res_local = mir_pat.mk_local(PtrT2_ty);
+            mir_pat.mk_assign(
                 ptr_to_res_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Use(
-                    ::rpl_mir::pat::Operand::Copy(
-                        ::rpl_mir::pat::Place::new(
+                ::rpl_context::pat::Rvalue::Use(
+                    ::rpl_context::pat::Operand::Copy(
+                        ::rpl_context::pat::Place::new(
                             ptr_to_ptr_to_res_local,
                             pcx.mk_slice(
-                                &[::rpl_mir::pat::PlaceElem::Deref,]
+                                &[::rpl_context::pat::PlaceElem::Deref,]
                             )
                         )
                     )
@@ -1179,7 +1209,7 @@ fn test_cve_2021_29941_2() {
             _tmp = Vec::set_len(move ref_to_vec, copy len);
         } => quote! {
             #[allow(non_snake_case)]
-            let T_ty_var = pattern.new_ty_var(None);
+            let T_ty_var = mir_pat.new_ty_var(None);
             #[allow(non_snake_case)]
             let T_ty = pcx.mk_var_ty(T_ty_var);
             #[allow(non_snake_case)]
@@ -1194,7 +1224,7 @@ fn test_cve_2021_29941_2() {
             ));
             #[allow(non_snake_case)]
             let RefMutVecT_ty = pcx.mk_ref_ty(
-                ::rpl_mir::pat::RegionKind::ReAny,
+                ::rpl_context::pat::RegionKind::ReAny,
                 pcx.mk_path_ty(pcx.mk_path_with_args(
                     pcx.mk_item_path(&["std", "vec", "Vec",]),
                     &[T_ty.into()]
@@ -1207,7 +1237,7 @@ fn test_cve_2021_29941_2() {
             );
             #[allow(non_snake_case)]
             let RefMutSliceT_ty = pcx.mk_ref_ty(
-                ::rpl_mir::pat::RegionKind::ReAny,
+                ::rpl_context::pat::RegionKind::ReAny,
                 pcx.mk_slice_ty(T_ty),
                 ::rustc_middle::mir::Mutability::Mut
             );
@@ -1218,7 +1248,7 @@ fn test_cve_2021_29941_2() {
             ));
             #[allow(non_snake_case)]
             let RefMutEnumerateRangeT_ty = pcx.mk_ref_ty(
-                ::rpl_mir::pat::RegionKind::ReAny,
+                ::rpl_context::pat::RegionKind::ReAny,
                 pcx.mk_path_ty(pcx.mk_path_with_args(
                     pcx.mk_item_path(&["std", "iter", "Enumerate",]),
                     &[RangeT_ty.into()]
@@ -1230,219 +1260,219 @@ fn test_cve_2021_29941_2() {
                 pcx.mk_item_path(&["std", "option", "Option",]),
                 &[pcx.mk_tuple_ty(&[pcx.primitive_types.usize, T_ty]).into()]
             ));
-            let iter_local = pattern.mk_local(RangeT_ty);
-            let iter_stmt = pattern.mk_assign(iter_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
-            let len_local = pattern.mk_local(pcx.primitive_types.usize);
-            let len_stmt = pattern.mk_fn_call(
-                ::rpl_mir::pat::Operand::Constant(
-                    pattern.mk_zeroed(
+            let iter_local = mir_pat.mk_local(RangeT_ty);
+            mir_pat.mk_assign(iter_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            let len_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(
+                    mir_pat.mk_zeroed(
                         pcx.mk_path_with_args(pcx.mk_item_path(&["RangeT", "len",]), &[])
                     )
                 ),
-                pattern.mk_list([
-                    ::rpl_mir::pat::Operand::Move(iter_local.into_place())
+                mir_pat.mk_list([
+                    ::rpl_context::pat::Operand::Move(iter_local.into_place())
                 ]),
                 Some(len_local.into_place())
             );
-            let vec_local = pattern.mk_local(VecT_ty);
-            let vec_stmt = pattern.mk_fn_call(
-                ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+            let vec_local = mir_pat.mk_local(VecT_ty);
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                     pcx.mk_path_with_args(
                         pcx.mk_item_path(&["std", "vec", "Vec", "with_capacity",]),
                         &[]
                     )
                 )),
-                pattern.mk_list([
-                    ::rpl_mir::pat::Operand::Copy(len_local.into_place())
+                mir_pat.mk_list([
+                    ::rpl_context::pat::Operand::Copy(len_local.into_place())
                 ]),
                 Some(vec_local.into_place())
             );
-            let ref_to_vec_local = pattern.mk_local(RefMutVecT_ty);
-            let ref_to_vec_stmt = pattern.mk_assign(
+            let ref_to_vec_local = mir_pat.mk_local(RefMutVecT_ty);
+            mir_pat.mk_assign(
                 ref_to_vec_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Ref(
-                    ::rpl_mir::pat::RegionKind::ReAny,
+                ::rpl_context::pat::Rvalue::Ref(
+                    ::rpl_context::pat::RegionKind::ReAny,
                     ::rustc_middle::mir::BorrowKind::Mut{
                         kind : ::rustc_middle::mir::MutBorrowKind::Default
                     },
                     vec_local.into_place()
                 )
             );
-            let ptr_to_vec_local = pattern.mk_local(PtrMutT_ty);
-            let ptr_to_vec_stmt = pattern.mk_fn_call(
-                ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+            let ptr_to_vec_local = mir_pat.mk_local(PtrMutT_ty);
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                     pcx.mk_path_with_args(
                         pcx.mk_item_path(&["Vec", "as_mut_ptr",]),
                         &[]
                     )
                 )),
-                pattern.mk_list([
-                    :: rpl_mir::pat::Operand::Move(ref_to_vec_local.into_place())
+                mir_pat.mk_list([
+                    :: rpl_context::pat::Operand::Move(ref_to_vec_local.into_place())
                 ]),
                 Some(ptr_to_vec_local.into_place())
             );
-            let slice_local = pattern.mk_local(RefMutSliceT_ty);
-            let slice_stmt = pattern.mk_fn_call(
-                ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+            let slice_local = mir_pat.mk_local(RefMutSliceT_ty);
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                     pcx.mk_path_with_args(
                         pcx.mk_item_path(&["std", "slice", "from_raw_parts_mut",]),
                         &[]
                     )
                 )),
-                pattern.mk_list([
-                    :: rpl_mir::pat::Operand::Copy(ptr_to_vec_local.into_place()),
-                    ::rpl_mir::pat::Operand::Copy(len_local.into_place())
+                mir_pat.mk_list([
+                    :: rpl_context::pat::Operand::Copy(ptr_to_vec_local.into_place()),
+                    ::rpl_context::pat::Operand::Copy(len_local.into_place())
                 ]),
                 Some(slice_local.into_place())
             );
-            let enumerate_local = pattern.mk_local(EnumerateRangeT_ty);
-            let enumerate_stmt = pattern.mk_fn_call(
-                ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+            let enumerate_local = mir_pat.mk_local(EnumerateRangeT_ty);
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                     pcx.mk_path_with_args(
                         pcx.mk_item_path(&["RangeT", "enumerate" ,]),
                         &[]
                     )
                 )),
-                pattern.mk_list([
-                    ::rpl_mir::pat::Operand::Move(iter_local.into_place())
+                mir_pat.mk_list([
+                    ::rpl_context::pat::Operand::Move(iter_local.into_place())
                 ]),
                 Some(enumerate_local.into_place())
             );
-            let enumerate_local = pattern.mk_local(RefMutEnumerateRangeT_ty);
-            let enumerate_stmt = pattern.mk_assign(
+            let enumerate_local = mir_pat.mk_local(RefMutEnumerateRangeT_ty);
+            mir_pat.mk_assign(
                 enumerate_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Ref(
-                    ::rpl_mir::pat::RegionKind::ReAny,
+                ::rpl_context::pat::Rvalue::Ref(
+                    ::rpl_context::pat::RegionKind::ReAny,
                     ::rustc_middle::mir::BorrowKind::Mut{
                         kind : ::rustc_middle::mir::MutBorrowKind::Default
                     },
                     enumerate_local.into_place()
                 )
             );
-            let next_local = pattern.mk_local(OptionUsizeT_ty);
-            let cmp_local = pattern.mk_local(pcx.primitive_types.isize);
-            let first_local = pattern.mk_local(pcx.primitive_types.usize);
-            let second_t_local = pattern.mk_local(T_ty);
-            let second_usize_local = pattern.mk_local(pcx.primitive_types.usize);
-            let _tmp_local = pattern.mk_local(pcx.mk_tuple_ty(&[]));
-            pattern.mk_loop(
-                |pattern| {
-                    let next_stmt = pattern.mk_fn_call(
-                        ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+            let next_local = mir_pat.mk_local(OptionUsizeT_ty);
+            let cmp_local = mir_pat.mk_local(pcx.primitive_types.isize);
+            let first_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let second_t_local = mir_pat.mk_local(T_ty);
+            let second_usize_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let _tmp_local = mir_pat.mk_local(pcx.mk_tuple_ty(&[]));
+            mir_pat.mk_loop(
+                |mir_pat| {
+                    mir_pat.mk_fn_call(
+                        ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                             pcx.mk_path_with_args(
                                 pcx.mk_item_path(&["EnumerateRangeT", "next",]),
                                 &[]
                             )
                         )),
-                        pattern.mk_list([
-                            :: rpl_mir::pat::Operand::Move(enumerate_local.into_place())
+                        mir_pat.mk_list([
+                            :: rpl_context::pat::Operand::Move(enumerate_local.into_place())
                         ]),
                         Some(next_local.into_place())
                     );
-                    let cmp_stmt = pattern.mk_fn_call(
-                        ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+                    mir_pat.mk_fn_call(
+                        ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                             pcx.mk_path_with_args(
                                 pcx.mk_item_path(&["balabala", "discriminant",]),
                                 &[]
                             )
                         )),
-                        pattern.mk_list([
-                            ::rpl_mir::pat::Operand::Copy(next_local.into_place())
+                        mir_pat.mk_list([
+                            ::rpl_context::pat::Operand::Copy(next_local.into_place())
                         ]),
                         Some(cmp_local.into_place())
                     );
-                    pattern.mk_switch_int(
-                        ::rpl_mir::pat::Operand::Move(cmp_local.into_place()),
-                        |mut pattern| {
-                            pattern.mk_switch_target(
-                                true, |pattern| {
-                                    let first_stmt = pattern.mk_assign(
+                    mir_pat.mk_switch_int(
+                        ::rpl_context::pat::Operand::Move(cmp_local.into_place()),
+                        |mut mir_pat| {
+                            mir_pat.mk_switch_target(
+                                true, |mir_pat| {
+                                    mir_pat.mk_assign(
                                         first_local.into_place(),
-                                        ::rpl_mir::pat::Rvalue::Use(
-                                            ::rpl_mir::pat::Operand::Copy(
-                                                ::rpl_mir::pat::Place::new(
+                                        ::rpl_context::pat::Rvalue::Use(
+                                            ::rpl_context::pat::Operand::Copy(
+                                                ::rpl_context::pat::Place::new(
                                                     next_local,
                                                     pcx.mk_slice(&[
-                                                        ::rpl_mir::pat::PlaceElem::Downcast(
+                                                        ::rpl_context::pat::PlaceElem::Downcast(
                                                             ::rustc_span::Symbol::intern("Some")
                                                         ),
-                                                        ::rpl_mir::pat::PlaceElem::Field(
-                                                            ::rpl_mir::pat::Field::Unnamed(0u32.into())
+                                                        ::rpl_context::pat::PlaceElem::Field(
+                                                            ::rpl_context::pat::Field::Unnamed(0u32.into())
                                                         ),
                                                     ])
                                                 )
                                             )
                                         )
                                     );
-                                    let second_t_stmt = pattern.mk_assign(
+                                    mir_pat.mk_assign(
                                         second_t_local.into_place(),
-                                        ::rpl_mir::pat::Rvalue::Use(
-                                            ::rpl_mir::pat::Operand::Copy(
-                                                ::rpl_mir::pat::Place::new(
+                                        ::rpl_context::pat::Rvalue::Use(
+                                            ::rpl_context::pat::Operand::Copy(
+                                                ::rpl_context::pat::Place::new(
                                                     next_local,
                                                     pcx.mk_slice(&[
-                                                        ::rpl_mir::pat::PlaceElem::Downcast(
+                                                        ::rpl_context::pat::PlaceElem::Downcast(
                                                             ::rustc_span::Symbol::intern("Some")
                                                         ),
-                                                        ::rpl_mir::pat::PlaceElem::Field(
-                                                            ::rpl_mir::pat::Field::Unnamed(1u32.into())
+                                                        ::rpl_context::pat::PlaceElem::Field(
+                                                            ::rpl_context::pat::Field::Unnamed(1u32.into())
                                                         ),
                                                     ])
                                                 )
                                             )
                                         )
                                     );
-                                    let second_usize_stmt = pattern.mk_assign(
+                                    mir_pat.mk_assign(
                                         second_usize_local.into_place(),
-                                        ::rpl_mir::pat::Rvalue::Cast(
+                                        ::rpl_context::pat::Rvalue::Cast(
                                             ::rustc_middle::mir::CastKind::IntToInt,
-                                            ::rpl_mir::pat::Operand::Copy(
+                                            ::rpl_context::pat::Operand::Copy(
                                                 second_t_local.into_place()
                                             ),
                                             pcx.primitive_types.usize
                                         )
                                     );
-                                    let slice_stmt = pattern.mk_assign(
-                                        ::rpl_mir::pat::Place::new(
+                                    mir_pat.mk_assign(
+                                        ::rpl_context::pat::Place::new(
                                             slice_local,
                                             pcx.mk_slice(&[
-                                                ::rpl_mir::pat::PlaceElem::Deref,
-                                                ::rpl_mir::pat::PlaceElem::Index(second_usize_local),
+                                                ::rpl_context::pat::PlaceElem::Deref,
+                                                ::rpl_context::pat::PlaceElem::Index(second_usize_local),
                                             ])
                                         ),
-                                        ::rpl_mir::pat::Rvalue::Cast(
+                                        ::rpl_context::pat::Rvalue::Cast(
                                             ::rustc_middle::mir::CastKind::IntToInt,
-                                            ::rpl_mir::pat::Operand::Copy(first_local.into_place()),
+                                            ::rpl_context::pat::Operand::Copy(first_local.into_place()),
                                             T_ty
                                         )
                                     );
                                 }
                             );
-                            pattern.mk_otherwise(|pattern| { pattern.mk_break(); });
+                            mir_pat.mk_otherwise(|mir_pat| { mir_pat.mk_break(); });
                         }
                     );
                 }
             );
-            let ref_to_vec_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 ref_to_vec_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Ref(
-                    ::rpl_mir::pat::RegionKind::ReAny,
+                ::rpl_context::pat::Rvalue::Ref(
+                    ::rpl_context::pat::RegionKind::ReAny,
                     ::rustc_middle::mir::BorrowKind::Mut {
                         kind: ::rustc_middle::mir::MutBorrowKind::Default
                     },
                     vec_local.into_place()
                 )
             );
-            let _tmp_stmt = pattern.mk_fn_call(
-                ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                     pcx.mk_path_with_args(
                         pcx.mk_item_path(&["Vec", "set_len",]),
                         &[]
                     )
                 )),
-                pattern.mk_list([
-                    ::rpl_mir::pat::Operand::Move(ref_to_vec_local.into_place()),
-                    ::rpl_mir::pat::Operand::Copy(len_local.into_place())
+                mir_pat.mk_list([
+                    ::rpl_context::pat::Operand::Move(ref_to_vec_local.into_place()),
+                    ::rpl_context::pat::Operand::Copy(len_local.into_place())
                 ]),
                 Some(_tmp_local.into_place())
             );
@@ -1491,6 +1521,7 @@ fn test_cve_2018_21000_inlined() {
                 inner: move to_raw_vec_inner,
                 _marker: const core::marker::PhantomData::<$T>,
             };
+            #[export(from_raw_parts)]
             to_vec = alloc::vec::Vec::<$T, Global> {
                 buf: move to_raw_vec,
                 len: copy to_vec_cap,
@@ -1498,7 +1529,7 @@ fn test_cve_2018_21000_inlined() {
 
         } => quote! {
             #[allow(non_snake_case)]
-            let T_ty_var = pattern.new_ty_var(None);
+            let T_ty_var = mir_pat.new_ty_var(None);
             #[allow(non_snake_case)]
             let T_ty = pcx.mk_var_ty(T_ty_var);
             #[allow(non_snake_case)]
@@ -1506,192 +1537,192 @@ fn test_cve_2018_21000_inlined() {
                 pcx.mk_item_path(&["alloc", "alloc", "Global",]),
                 &[]
             ));
-            let from_vec_local = pattern.mk_local(pcx.mk_path_ty(
+            let from_vec_local = mir_pat.mk_local(pcx.mk_path_ty(
                 pcx.mk_path_with_args(
                     pcx.mk_item_path(&["alloc", "vec", "Vec",]),
                     &[pcx.primitive_types.u8.into(), Global_ty.into()]
                 )
             ));
-            let from_vec_stmt = pattern.mk_assign(from_vec_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
-            let to_vec_local = pattern.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
+            mir_pat.mk_assign(from_vec_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            let to_vec_local = mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["alloc", "vec", "Vec",]),
                 &[T_ty.into(), Global_ty.into()]
             )));
-            let to_vec_cap_local = pattern.mk_local(pcx.primitive_types.usize);
-            let from_vec_cap_local = pattern.mk_local(pcx.primitive_types.usize);
-            let tsize_local = pattern.mk_local(pcx.primitive_types.usize);
-            let to_vec_len_local = pattern.mk_local(pcx.primitive_types.usize);
-            let from_vec_len_local = pattern.mk_local(pcx.primitive_types.usize);
-            let from_vec_ptr_local = pattern.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
+            let to_vec_cap_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let from_vec_cap_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let tsize_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let to_vec_len_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let from_vec_len_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            let from_vec_ptr_local = mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["core", "ptr", "non_null", "NonNull",]),
                 &[pcx.primitive_types.u8.into()]
             )));
-            let to_raw_vec_local = pattern.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
+            let to_raw_vec_local = mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["alloc", "raw_vec", "RawVec",]),
                 &[T_ty.into(), Global_ty.into()]
             )));
-            let to_raw_vec_inner_local = pattern.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
+            let to_raw_vec_inner_local = mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["alloc", "raw_vec", "RawVecInner",]),
                 &[Global_ty.into()]
             )));
-            let to_vec_wrapped_len_local = pattern.mk_local(pcx.mk_path_ty(
+            let to_vec_wrapped_len_local = mir_pat.mk_local(pcx.mk_path_ty(
                 pcx.mk_path_with_args(pcx.mk_item_path(&["alloc", "raw_vec", "Cap",]), &[])
             ));
-            let from_vec_unique_ptr_local = pattern.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
+            let from_vec_unique_ptr_local = mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["core", "ptr", "unique", "Unique",]),
                 &[pcx.primitive_types.u8.into()]
             )));
-            let from_vec_ptr_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 from_vec_ptr_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
-                    ::rpl_mir::pat::Place::new(from_vec_local, pcx.mk_slice(&[
-                        ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("buf"))),
-                        ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("inner"))),
-                        ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("ptr"))),
-                        ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("pointer"))),
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(
+                    ::rpl_context::pat::Place::new(from_vec_local, pcx.mk_slice(&[
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("buf"))),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("inner"))),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("ptr"))),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("pointer"))),
                     ]))
                 ))
             );
-            let from_vec_cap_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 from_vec_cap_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
-                    ::rpl_mir::pat::Place::new(from_vec_local, pcx.mk_slice(&[
-                        ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("buf"))),
-                        ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("inner"))),
-                        ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("cap"))),
-                        ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Unnamed(0u32.into())),
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(
+                    ::rpl_context::pat::Place::new(from_vec_local, pcx.mk_slice(&[
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("buf"))),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("inner"))),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("cap"))),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Unnamed(0u32.into())),
                     ]))
                 ))
             );
-            let tsize_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 tsize_local.into_place(),
-                ::rpl_mir::pat::Rvalue::NullaryOp(::rustc_middle::mir::NullOp::SizeOf, T_ty)
+                ::rpl_context::pat::Rvalue::NullaryOp(::rustc_middle::mir::NullOp::SizeOf, T_ty)
             );
-            let to_vec_cap_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 to_vec_cap_local.into_place(),
-                ::rpl_mir::pat::Rvalue::BinaryOp(
+                ::rpl_context::pat::Rvalue::BinaryOp(
                     ::rustc_middle::mir::BinOp::Div, Box::new([
-                        ::rpl_mir::pat::Operand::Move(from_vec_cap_local.into_place()),
-                        ::rpl_mir::pat::Operand::Copy(tsize_local.into_place())
+                        ::rpl_context::pat::Operand::Move(from_vec_cap_local.into_place()),
+                        ::rpl_context::pat::Operand::Copy(tsize_local.into_place())
                     ])
                 )
             );
-            let from_vec_len_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 from_vec_len_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Use(::rpl_mir::pat::Operand::Copy(
-                    ::rpl_mir::pat::Place::new(from_vec_local, pcx.mk_slice(&[
-                        ::rpl_mir::pat::PlaceElem::Field(::rpl_mir::pat::Field::Named(::rustc_span::Symbol::intern("len"))),
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(
+                    ::rpl_context::pat::Place::new(from_vec_local, pcx.mk_slice(&[
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("len"))),
                     ]))
                 ))
             );
-            let to_vec_len_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 to_vec_len_local.into_place(),
-                ::rpl_mir::pat::Rvalue::BinaryOp(
+                ::rpl_context::pat::Rvalue::BinaryOp(
                     ::rustc_middle::mir::BinOp::Div,
                     Box::new([
-                        ::rpl_mir::pat::Operand::Move(from_vec_len_local.into_place()),
-                        ::rpl_mir::pat::Operand::Copy(tsize_local.into_place())
+                        ::rpl_context::pat::Operand::Move(from_vec_len_local.into_place()),
+                        ::rpl_context::pat::Operand::Copy(tsize_local.into_place())
                     ])
                 )
             );
-            let to_vec_wrapped_len_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 to_vec_wrapped_len_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Aggregate(
-                    ::rpl_mir::pat::AggKind::Adt(
+                ::rpl_context::pat::Rvalue::Aggregate(
+                    ::rpl_context::pat::AggKind::Adt(
                         pcx.mk_path_with_args(
                             pcx.mk_item_path(&["alloc", "raw_vec", "Cap",]),
                             &[]
                         ),
-                        ::rpl_mir::pat::AggAdtKind::Tuple
+                        ::rpl_context::pat::AggAdtKind::Tuple
                     ),
-                    pattern.mk_list([::rpl_mir::pat::Operand::Copy(to_vec_len_local.into_place())]),
+                    mir_pat.mk_list([::rpl_context::pat::Operand::Copy(to_vec_len_local.into_place())]),
                 )
             );
-            let from_vec_unique_ptr_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 from_vec_unique_ptr_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Aggregate(
-                    ::rpl_mir::pat::AggKind::Adt(
+                ::rpl_context::pat::Rvalue::Aggregate(
+                    ::rpl_context::pat::AggKind::Adt(
                         pcx.mk_path_with_args(
                             pcx.mk_item_path(&["core", "ptr", "unique", "Unique",]),
                             &[pcx.primitive_types.u8.into()]
                         ),
-                        pattern.mk_list([
+                        mir_pat.mk_list([
                             ::rustc_span::Symbol::intern("pointer"),
                             ::rustc_span::Symbol::intern("_marker"),
                         ])
                         .into()
                     ),
-                    pattern.mk_list([
-                        ::rpl_mir::pat::Operand::Copy(from_vec_ptr_local.into_place()),
-                        ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(pcx.mk_path_with_args(
+                    mir_pat.mk_list([
+                        ::rpl_context::pat::Operand::Copy(from_vec_ptr_local.into_place()),
+                        ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(pcx.mk_path_with_args(
                             pcx.mk_item_path(&["core", "marker", "PhantomData",]),
                             &[pcx.primitive_types.u8.into()]
                         ))),
                     ]),
                 )
             );
-            let to_raw_vec_inner_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 to_raw_vec_inner_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Aggregate(
-                    ::rpl_mir::pat::AggKind::Adt(
+                ::rpl_context::pat::Rvalue::Aggregate(
+                    ::rpl_context::pat::AggKind::Adt(
                         pcx.mk_path_with_args(
                             pcx.mk_item_path(&["alloc", "raw_vec", "RawVecInner",]),
                             &[Global_ty.into()]
                         ),
-                        pattern.mk_list([
+                        mir_pat.mk_list([
                             ::rustc_span::Symbol::intern("ptr"),
                             ::rustc_span::Symbol::intern("cap"),
                             ::rustc_span::Symbol::intern("alloc"),
                         ]).into()
                     ),
-                    pattern.mk_list([
-                        ::rpl_mir::pat::Operand::Move(from_vec_unique_ptr_local.into_place()),
-                        ::rpl_mir::pat::Operand::Copy(to_vec_wrapped_len_local.into_place()),
-                        ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(pcx.mk_path_with_args(
+                    mir_pat.mk_list([
+                        ::rpl_context::pat::Operand::Move(from_vec_unique_ptr_local.into_place()),
+                        ::rpl_context::pat::Operand::Copy(to_vec_wrapped_len_local.into_place()),
+                        ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(pcx.mk_path_with_args(
                             pcx.mk_item_path(&["alloc", "alloc", "Global",]),
                             &[]
                         ))),
                     ]),
                 )
             );
-            let to_raw_vec_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 to_raw_vec_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Aggregate(
-                    ::rpl_mir::pat::AggKind::Adt(
+                ::rpl_context::pat::Rvalue::Aggregate(
+                    ::rpl_context::pat::AggKind::Adt(
                         pcx.mk_path_with_args(
                             pcx.mk_item_path(&["alloc", "raw_vec", "RawVec",]),
                             &[T_ty.into(), Global_ty.into()]
                         ),
-                        pattern.mk_list([
+                        mir_pat.mk_list([
                             ::rustc_span::Symbol::intern("inner"),
                             ::rustc_span::Symbol::intern("_marker"),
                         ]).into()
                     ),
-                    pattern.mk_list([
-                        ::rpl_mir::pat::Operand::Move(to_raw_vec_inner_local.into_place()),
-                        ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(pcx.mk_path_with_args(
+                    mir_pat.mk_list([
+                        ::rpl_context::pat::Operand::Move(to_raw_vec_inner_local.into_place()),
+                        ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(pcx.mk_path_with_args(
                             pcx.mk_item_path(&["core", "marker", "PhantomData",]),
                             &[T_ty.into()]
                         ))),
                     ]),
                 )
             );
-            let to_vec_stmt = pattern.mk_assign(
+            from_raw_parts = mir_pat.mk_assign(
                 to_vec_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Aggregate(
-                    ::rpl_mir::pat::AggKind::Adt(
+                ::rpl_context::pat::Rvalue::Aggregate(
+                    ::rpl_context::pat::AggKind::Adt(
                         pcx.mk_path_with_args(
                             pcx.mk_item_path(&["alloc", "vec", "Vec",]),
                             &[T_ty.into(), Global_ty.into()]
                         ),
-                        pattern.mk_list([
+                        mir_pat.mk_list([
                             ::rustc_span::Symbol::intern("buf"),
                             ::rustc_span::Symbol::intern("len"),
                         ]).into()
                     ),
-                    pattern.mk_list([
-                        ::rpl_mir::pat::Operand::Move(to_raw_vec_local.into_place()),
-                        ::rpl_mir::pat::Operand::Copy(to_vec_cap_local.into_place()),
+                    mir_pat.mk_list([
+                        ::rpl_context::pat::Operand::Move(to_raw_vec_local.into_place()),
+                        ::rpl_context::pat::Operand::Copy(to_vec_cap_local.into_place()),
                     ]),
                 )
             );
@@ -1715,110 +1746,77 @@ fn test_cve_2019_15548() {
             let ret: $T = $crate::ll::instr(move dst);
         } => quote! {
             #[allow(non_snake_case)]
-            let T_ty_var = pattern.new_ty_var(None);
+            let T_ty_var = mir_pat.new_ty_var(None);
             #[allow(non_snake_case)]
             let T_ty = pcx.mk_var_ty(T_ty_var);
             #[allow(non_snake_case)]
-            let c_char_ty = pcx
-                .mk_path_ty(
-                    pcx.mk_path_with_args(pcx.mk_item_path(&["libc", "c_char", ]), &[])
-                );
-            let src_local = pattern
-                .mk_local(
-                    pcx
-                        .mk_ref_ty(
-                            ::rpl_mir::pat::RegionKind::ReAny,
-                            pcx
-                                .mk_path_ty(
-                                    pcx
-                                        .mk_path_with_args(
-                                            pcx.mk_item_path(&["alloc", "string", "String", ]),
-                                            &[]
-                                        )
-                                ),
-                            ::rustc_middle::mir::Mutability::Not
-                        )
-                );
-            let src_stmt = pattern
-                .mk_assign(src_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
-            let bytes_local = pattern
-                .mk_local(
-                    pcx
-                        .mk_ref_ty(
-                            ::rpl_mir::pat::RegionKind::ReAny,
-                            pcx.mk_slice_ty(pcx.primitive_types.u8),
-                            ::rustc_middle::mir::Mutability::Not
-                        )
-                );
-            let bytes_stmt = pattern
-                .mk_fn_call(
-                    ::rpl_mir::pat::Operand::Constant(
-                        pattern
-                            .mk_zeroed(
-                                pcx
-                                    .mk_path_with_args(
-                                        pcx
-                                            .mk_item_path(&["alloc", "string", "String", "as_bytes", ]),
-                                        &[]
-                                    )
-                            )
-                    ),
-                    pattern.mk_list([::rpl_mir::pat::Operand::Move(src_local.into_place())]),
-                    Some(bytes_local.into_place())
-                );
-            let ptr_local = pattern
-                .mk_local(
-                    pcx
-                        .mk_raw_ptr_ty(
-                            pcx.primitive_types.u8,
-                            ::rustc_middle::mir::Mutability::Not
-                        )
-                );
-            let ptr_stmt = pattern
-                .mk_fn_call(
-                    ::rpl_mir::pat::Operand::Constant(
-                        pattern
-                            .mk_zeroed(
-                                pcx
-                                    .mk_path_with_args(
-                                        pcx.mk_item_path(&["core", "slice", "as_ptr", ]),
-                                        &[]
-                                    )
-                            )
-                    ),
-                    pattern
-                        .mk_list([::rpl_mir::pat::Operand::Copy(bytes_local.into_place())]),
-                    Some(ptr_local.into_place())
-                );
-            let dst_local = pattern
-                .mk_local(
+            let c_char_ty = pcx.mk_path_ty(
+                pcx.mk_path_with_args(pcx.mk_item_path(&["libc", "c_char",]), &[])
+            );
+            let src_local = mir_pat.mk_local(
+                pcx.mk_ref_ty(
+                    ::rpl_context::pat::RegionKind::ReAny,
+                    pcx.mk_path_ty(pcx.mk_path_with_args(
+                        pcx.mk_item_path(&["alloc", "string", "String",]),
+                        &[]
+                    )),
+                    ::rustc_middle::mir::Mutability::Not
+                )
+            );
+            mir_pat.mk_assign(src_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            let bytes_local = mir_pat.mk_local(
+                pcx.mk_ref_ty(
+                    ::rpl_context::pat::RegionKind::ReAny,
+                    pcx.mk_slice_ty(pcx.primitive_types.u8),
+                    ::rustc_middle::mir::Mutability::Not
+                )
+            );
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(
+                    mir_pat.mk_zeroed(pcx.mk_path_with_args(
+                        pcx.mk_item_path(&["alloc", "string", "String", "as_bytes", ]),
+                        &[]
+                    ))
+                ),
+                mir_pat.mk_list([::rpl_context::pat::Operand::Move(src_local.into_place())]),
+                Some(bytes_local.into_place())
+            );
+            let ptr_local = mir_pat.mk_local(pcx.mk_raw_ptr_ty(
+                pcx.primitive_types.u8,
+                ::rustc_middle::mir::Mutability::Not
+            ));
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(
+                    mir_pat.mk_zeroed(pcx.mk_path_with_args(
+                        pcx.mk_item_path(&["core", "slice", "as_ptr", ]),
+                        &[]
+                    ))
+                ),
+                mir_pat.mk_list([::rpl_context::pat::Operand::Copy(bytes_local.into_place())]),
+                Some(ptr_local.into_place())
+            );
+            let dst_local = mir_pat.mk_local(
+                pcx.mk_raw_ptr_ty(c_char_ty, ::rustc_middle::mir::Mutability::Not)
+            );
+            mir_pat.mk_assign(
+                dst_local.into_place(),
+                ::rpl_context::pat::Rvalue::Cast(
+                    ::rustc_middle::mir::CastKind::Transmute,
+                    ::rpl_context::pat::Operand::Copy(ptr_local.into_place()),
                     pcx.mk_raw_ptr_ty(c_char_ty, ::rustc_middle::mir::Mutability::Not)
-                );
-            let dst_stmt = pattern
-                .mk_assign(
-                    dst_local.into_place(),
-                    ::rpl_mir::pat::Rvalue::Cast(
-                        ::rustc_middle::mir::CastKind::Transmute,
-                        ::rpl_mir::pat::Operand::Copy(ptr_local.into_place()),
-                        pcx.mk_raw_ptr_ty(c_char_ty, ::rustc_middle::mir::Mutability::Not)
-                    )
-                );
-            let ret_local = pattern.mk_local(T_ty);
-            let ret_stmt = pattern
-                .mk_fn_call(
-                    ::rpl_mir::pat::Operand::Constant(
-                        pattern
-                            .mk_zeroed(
-                                pcx
-                                    .mk_path_with_args(
-                                        pcx.mk_item_path(&["crate", "ll", "instr", ]),
-                                        &[]
-                                    )
-                            )
-                    ),
-                    pattern.mk_list([::rpl_mir::pat::Operand::Move(dst_local.into_place())]),
-                    Some(ret_local.into_place())
-                );
+                )
+            );
+            let ret_local = mir_pat.mk_local(T_ty);
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(
+                    mir_pat.mk_zeroed(pcx.mk_path_with_args(
+                        pcx.mk_item_path(&["crate", "ll", "instr", ]),
+                        &[]
+                    ))
+                ),
+                mir_pat.mk_list([::rpl_context::pat::Operand::Move(dst_local.into_place())]),
+                Some(ret_local.into_place())
+            );
         }
     )
 }
@@ -1837,20 +1835,20 @@ fn test_cve_2019_15548_2() {
                 pcx.mk_item_path(&["libc", "c_char",]),
                 &[]
             ));
-            let ptr_local = pattern.mk_local(
+            let ptr_local = mir_pat.mk_local(
                 pcx.mk_raw_ptr_ty(c_char_ty, ::rustc_middle::mir::Mutability::Not)
             );
-            let ptr_stmt = pattern.mk_assign(ptr_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
-            pattern.mk_fn_call(
-                ::rpl_mir::pat::Operand::Constant(
-                    pattern.mk_zeroed(
+            mir_pat.mk_assign(ptr_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(
+                    mir_pat.mk_zeroed(
                         pcx.mk_path_with_args(
                             pcx.mk_item_path(&["crate", "ll", "instr",]),
                             &[]
                         )
                     )
                 ),
-                pattern.mk_list([::rpl_mir::pat::Operand::Move(ptr_local.into_place())]),
+                mir_pat.mk_list([::rpl_context::pat::Operand::Move(ptr_local.into_place())]),
                 None
             );
         }
@@ -1868,18 +1866,18 @@ fn test_cve_2019_15548_2_i8() {
         } => quote! {
             #[allow(non_snake_case)]
             let c_char_ty = pcx.primitive_types.i8;
-            let ptr_local = pattern.mk_local(
+            let ptr_local = mir_pat.mk_local(
                 pcx.mk_raw_ptr_ty(c_char_ty, ::rustc_middle::mir::Mutability::Not)
             );
-            let ptr_stmt = pattern.mk_assign(ptr_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
-            pattern.mk_fn_call(
-                ::rpl_mir::pat::Operand::Constant(pattern.mk_zeroed(
+            mir_pat.mk_assign(ptr_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
                     pcx.mk_path_with_args(
                         pcx.mk_item_path(&["crate", "ll", "instr", ]),
                         &[]
                     ))
                 ),
-                pattern.mk_list([::rpl_mir::pat::Operand::Move(ptr_local.into_place())]),
+                mir_pat.mk_list([::rpl_context::pat::Operand::Move(ptr_local.into_place())]),
                 None
             );
         }
@@ -1893,25 +1891,134 @@ fn test_cve_2021_27376() {
             let src: *const std::net::SocketAddrV4 = _;
             let dst: *const libc::sockaddr = move src as *const libc::sockaddr (PtrToPtr);
         } => quote! {
-            let src_local = pattern.mk_local(pcx.mk_raw_ptr_ty(
+            let src_local = mir_pat.mk_local(pcx.mk_raw_ptr_ty(
                 pcx.mk_path_ty(pcx.mk_path_with_args(pcx.mk_item_path(&["std", "net", "SocketAddrV4", ]), &[])),
                 ::rustc_middle::mir::Mutability::Not
             ));
-            let src_stmt = pattern.mk_assign(src_local.into_place(), ::rpl_mir::pat::Rvalue::Any);
-            let dst_local = pattern.mk_local(pcx.mk_raw_ptr_ty(
+            mir_pat.mk_assign(src_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            let dst_local = mir_pat.mk_local(pcx.mk_raw_ptr_ty(
                 pcx.mk_path_ty(pcx.mk_path_with_args(pcx.mk_item_path(&["libc", "sockaddr", ]), &[])),
                 ::rustc_middle::mir::Mutability::Not
             ));
-            let dst_stmt = pattern.mk_assign(
+            mir_pat.mk_assign(
                 dst_local.into_place(),
-                ::rpl_mir::pat::Rvalue::Cast(
+                ::rpl_context::pat::Rvalue::Cast(
                     ::rustc_middle::mir::CastKind::PtrToPtr,
-                    ::rpl_mir::pat::Operand::Move(src_local.into_place()),
+                    ::rpl_context::pat::Operand::Move(src_local.into_place()),
                     pcx.mk_raw_ptr_ty(
                         pcx.mk_path_ty(pcx.mk_path_with_args(pcx.mk_item_path(&["libc", "sockaddr", ]), &[])),
                         ::rustc_middle::mir::Mutability::Not
                     )
                 )
+            );
+        }
+    );
+}
+
+#[test]
+fn test_cve_2020_35892_3() {
+    test_case!(
+        pat! {
+            struct $SlabT {
+                mem: *mut $T,
+                len: usize,
+            }
+        } => quote! {
+            #[allow(non_snake_case)]
+            let SlabT = pcx.new_struct(::rustc_span::Symbol::intern("SlabT"));
+            SlabT.add_field(::rustc_span::Symbol::intern("mem"), pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
+            SlabT.add_field(::rustc_span::Symbol::intern("len"), pcx.primitive_types.usize);
+        }
+    );
+    mir_test_case!(
+        pat! {
+            meta!($T:ty, $SlabT:ty = |_tcx, _paramse_env, ty| ty.is_adt());
+            let self: &mut $SlabT;
+            #[export(len)]
+            let len: usize = copy (*self).len;
+            let len_isize: isize = move len as isize (IntToInt);
+            let base: *mut $T = copy (*self).mem;
+            #[export(ptr)]
+            let ptr_mut: *mut $T = Offset(copy base, copy len_isize);
+            let ptr: *const $T = copy ptr_mut as *const $T (PtrToPtr);
+            #[export(read)]
+            let elem: $T = copy (*ptr);
+        } => quote! {
+            #[allow(non_snake_case)]
+            let T_ty_var = mir_pat.new_ty_var(None);
+            #[allow(non_snake_case)]
+            let T_ty = pcx.mk_var_ty(T_ty_var);
+            #[allow(non_snake_case)]
+            let SlabT_ty_var = mir_pat.new_ty_var(Some(|_tcx, _paramse_env, ty| ty.is_adt()));
+            #[allow(non_snake_case)]
+            let SlabT_ty = pcx.mk_var_ty(SlabT_ty_var);
+            let self_local = mir_pat.mk_self(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReAny,
+                SlabT_ty,
+                ::rustc_middle::mir::Mutability::Mut
+            ));
+            let len_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            len = mir_pat.mk_assign(
+                len_local.into_place(),
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(::rpl_context::pat::Place::new(
+                    self_local,
+                    pcx.mk_slice(&[
+                        ::rpl_context::pat::PlaceElem::Deref,
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(
+                            ::rustc_span::Symbol::intern("len")
+                        )),
+                    ])
+                )))
+            );
+            let len_isize_local = mir_pat.mk_local(pcx.primitive_types.isize);
+            mir_pat.mk_assign(
+                len_isize_local.into_place(),
+                ::rpl_context::pat::Rvalue::Cast(
+                    ::rustc_middle::mir::CastKind::IntToInt,
+                    ::rpl_context::pat::Operand::Move(len_local.into_place()),
+                    pcx.primitive_types.isize
+                )
+            );
+            let base_local = mir_pat.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
+            mir_pat.mk_assign(
+                base_local.into_place(),
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(::rpl_context::pat::Place::new(
+                    self_local,
+                    pcx.mk_slice(&[
+                        ::rpl_context::pat::PlaceElem::Deref,
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(
+                            ::rustc_span::Symbol::intern("mem")
+                        )),
+                    ])
+                )))
+            );
+            let ptr_mut_local = mir_pat.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
+            ptr = mir_pat.mk_assign(
+                ptr_mut_local.into_place(),
+                ::rpl_context::pat::Rvalue::BinaryOp(
+                    ::rustc_middle::mir::BinOp::Offset,
+                    Box::new([
+                        ::rpl_context::pat::Operand::Copy(base_local.into_place()),
+                        ::rpl_context::pat::Operand::Copy(len_isize_local.into_place())
+                    ])
+                )
+            );
+            let ptr_local = mir_pat.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Not));
+            mir_pat.mk_assign(
+                ptr_local.into_place(),
+                ::rpl_context::pat::Rvalue::Cast(
+                    ::rustc_middle::mir::CastKind::PtrToPtr,
+                    ::rpl_context::pat::Operand::Copy(ptr_mut_local.into_place()),
+                    pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Not)
+                )
+            );
+            let elem_local = mir_pat.mk_local(T_ty);
+            read = mir_pat.mk_assign(
+                elem_local.into_place(),
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(::rpl_context::pat::Place::new(
+                    ptr_local,
+                    pcx.mk_slice(&[::rpl_context::pat::PlaceElem::Deref,])
+                )))
             );
         }
     );

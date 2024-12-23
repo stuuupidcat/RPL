@@ -48,6 +48,7 @@ impl<'pcx> PrimitiveTypes<'pcx> {
 }
 
 #[derive(Clone, Copy)]
+#[rustc_pass_by_value]
 pub struct PatCtxt<'pcx> {
     pcx: &'pcx PatternCtxt<'pcx>,
 }
@@ -61,16 +62,16 @@ impl<'pcx> Deref for PatCtxt<'pcx> {
 }
 
 pub struct PatternCtxt<'pcx> {
-    arena: &'pcx WorkerLocal<DroplessArena>,
+    arena: &'pcx WorkerLocal<crate::Arena<'pcx>>,
     pub primitive_types: PrimitiveTypes<'pcx>,
 }
 
-impl<'pcx> PatternCtxt<'pcx> {
+impl PatternCtxt<'_> {
     pub fn entered<T>(f: impl FnOnce(PatCtxt<'_>) -> T) -> T {
-        let arena = &WorkerLocal::default();
+        let arena = &WorkerLocal::<crate::Arena<'_>>::default();
         let pcx = &PatternCtxt {
             arena,
-            primitive_types: PrimitiveTypes::new(arena),
+            primitive_types: PrimitiveTypes::new(&arena.dropless),
         };
         f(PatCtxt { pcx })
     }
@@ -79,32 +80,35 @@ impl<'pcx> PatternCtxt<'pcx> {
         Registry::new(NonZero::new(1).unwrap()).register();
         rustc_span::create_session_if_not_set_then(rustc_span::edition::LATEST_STABLE_EDITION, |_| Self::entered(f))
     }
+}
+
+impl<'pcx> PatCtxt<'pcx> {
     /// Maps strings to their interned representation
-    pub fn mk_symbols(&self, syms: &[&str]) -> &'pcx [Symbol] {
+    pub fn mk_symbols(self, syms: &[&str]) -> &'pcx [Symbol] {
         self.arena.alloc_from_iter(syms.iter().copied().map(Symbol::intern))
     }
-    pub fn mk_slice<T: Copy>(&self, slice: &[T]) -> &'pcx [T] {
+    pub fn mk_slice<T: Copy>(self, slice: &[T]) -> &'pcx [T] {
         if slice.is_empty() {
             return &[];
         }
         self.arena.alloc_slice(slice)
     }
-    fn mk_generic_args(&self, generics: &[pat::GenericArgKind<'pcx>]) -> pat::GenericArgsRef<'pcx> {
+    fn mk_generic_args(self, generics: &[pat::GenericArgKind<'pcx>]) -> pat::GenericArgsRef<'pcx> {
         pat::GenericArgsRef(self.mk_slice(generics))
     }
-    pub fn mk_type_relative(&self, ty: Ty<'pcx>, path: &str) -> pat::Path<'pcx> {
+    pub fn mk_type_relative(self, ty: Ty<'pcx>, path: &str) -> pat::Path<'pcx> {
         pat::Path::TypeRelative(ty, Symbol::intern(path))
     }
-    pub fn mk_lang_item(&self, item: &str) -> pat::Path<'pcx> {
+    pub fn mk_lang_item(self, item: &str) -> pat::Path<'pcx> {
         hir::LangItem::from_name(Symbol::intern(item))
             .unwrap_or_else(|| panic!("unknown language item \"{item}\""))
             .into()
     }
-    pub fn mk_item_path(&self, path: &[&str]) -> pat::ItemPath<'pcx> {
+    pub fn mk_item_path(self, path: &[&str]) -> pat::ItemPath<'pcx> {
         pat::ItemPath(self.mk_symbols(path))
     }
     pub fn mk_path_with_args(
-        &self,
+        self,
         path: impl Into<pat::Path<'pcx>>,
         generics: &[pat::GenericArgKind<'pcx>],
     ) -> pat::PathWithArgs<'pcx> {
@@ -112,34 +116,46 @@ impl<'pcx> PatternCtxt<'pcx> {
         let args = self.mk_generic_args(generics);
         pat::PathWithArgs { path, args }
     }
-    pub fn mk_path_ty(&self, path_with_args: pat::PathWithArgs<'pcx>) -> Ty<'pcx> {
+    pub fn mk_path_ty(self, path_with_args: pat::PathWithArgs<'pcx>) -> Ty<'pcx> {
         self.mk_ty(TyKind::Path(path_with_args))
     }
-    pub fn mk_adt_ty(&self, path_with_args: pat::PathWithArgs<'pcx>) -> Ty<'pcx> {
+    pub fn mk_adt_ty(self, path_with_args: pat::PathWithArgs<'pcx>) -> Ty<'pcx> {
         self.mk_path_ty(path_with_args)
     }
-    pub fn mk_array_ty(&self, ty: Ty<'pcx>, len: pat::Const<'pcx>) -> Ty<'pcx> {
+    pub fn mk_array_ty(self, ty: Ty<'pcx>, len: pat::Const<'pcx>) -> Ty<'pcx> {
         self.mk_ty(TyKind::Array(ty, len))
     }
-    pub fn mk_slice_ty(&self, ty: Ty<'pcx>) -> Ty<'pcx> {
+    pub fn mk_slice_ty(self, ty: Ty<'pcx>) -> Ty<'pcx> {
         self.mk_ty(TyKind::Slice(ty))
     }
-    pub fn mk_tuple_ty(&self, ty: &[Ty<'pcx>]) -> Ty<'pcx> {
+    pub fn mk_tuple_ty(self, ty: &[Ty<'pcx>]) -> Ty<'pcx> {
         self.mk_ty(TyKind::Tuple(self.mk_slice(ty)))
     }
-    pub fn mk_ref_ty(&self, region: pat::RegionKind, ty: Ty<'pcx>, mutability: mir::Mutability) -> Ty<'pcx> {
+    pub fn mk_ref_ty(self, region: pat::RegionKind, ty: Ty<'pcx>, mutability: mir::Mutability) -> Ty<'pcx> {
         self.mk_ty(TyKind::Ref(region, ty, mutability))
     }
-    pub fn mk_raw_ptr_ty(&self, ty: Ty<'pcx>, mutability: mir::Mutability) -> Ty<'pcx> {
+    pub fn mk_raw_ptr_ty(self, ty: Ty<'pcx>, mutability: mir::Mutability) -> Ty<'pcx> {
         self.mk_ty(TyKind::RawPtr(ty, mutability))
     }
-    pub fn mk_fn(&self, path_with_args: pat::PathWithArgs<'pcx>) -> Ty<'pcx> {
+    pub fn mk_fn(self, path_with_args: pat::PathWithArgs<'pcx>) -> Ty<'pcx> {
         self.mk_path_ty(path_with_args)
     }
-    pub fn mk_var_ty(&self, ty_var: pat::TyVar) -> Ty<'pcx> {
+    pub fn mk_var_ty(self, ty_var: pat::TyVar) -> Ty<'pcx> {
         self.mk_ty(TyKind::TyVar(ty_var))
     }
-    pub(crate) fn mk_ty(&self, kind: TyKind<'pcx>) -> Ty<'pcx> {
+    pub fn mk_any_ty(self) -> Ty<'pcx> {
+        self.mk_ty(TyKind::Any)
+    }
+    pub(crate) fn mk_ty(self, kind: TyKind<'pcx>) -> Ty<'pcx> {
         Ty(self.arena.alloc(kind))
+    }
+}
+
+impl<'pcx> PatCtxt<'pcx> {
+    pub fn new_pattern(self) -> &'pcx mut pat::Pattern<'pcx> {
+        self.arena.alloc(pat::Pattern::new(self))
+    }
+    pub fn mk_mir_pattern(self, pattern: pat::MirPattern<'pcx>) -> &'pcx pat::MirPattern<'pcx> {
+        self.arena.alloc(pattern)
     }
 }
