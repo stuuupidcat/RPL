@@ -56,6 +56,7 @@ pub enum TyKind<'pcx> {
     Bool,
     Str,
     Char,
+    Any,
 }
 
 impl From<PrimTy> for TyKind<'_> {

@@ -1,4 +1,4 @@
-use crate::symbol_table::{AdtDef, CheckError, FnDef, ImplDef};
+use crate::symbol_table::{CheckError, EnumDef, ExportKind, FnDef, ImplDef, VariantDef};
 use crate::SymbolTable;
 use quote::ToTokens;
 use rpl_pat_syntax::*;
@@ -18,17 +18,16 @@ struct CheckCtxt<'pat> {
 }
 
 struct CheckFnCtxt<'a, 'pat> {
-    #[expect(dead_code)]
-    attrs: &'pat [syn::Attribute],
     impl_def: Option<&'a mut ImplDef<'pat>>,
     fn_def: &'a mut FnDef<'pat>,
 }
 
-struct CheckAdtCtxt<'a, 'pat> {
-    #[expect(dead_code)]
-    attrs: &'pat [syn::Attribute],
-    #[expect(dead_code)]
-    adt_def: &'a mut AdtDef<'pat>,
+struct CheckVariantCtxt<'a, 'pat> {
+    variant_def: &'a mut VariantDef<'pat>,
+}
+
+struct CheckEnumCtxt<'a, 'pat> {
+    enum_def: &'a mut EnumDef<'pat>,
 }
 
 impl<'pat> CheckCtxt<'pat> {
@@ -39,32 +38,36 @@ impl<'pat> CheckCtxt<'pat> {
         Ok(self.symbols)
     }
     fn check_item(&mut self, item: &'pat Item) -> syn::Result<()> {
+        if let Some(Export { inner, .. }) = &item.export {
+            self.symbols
+                .meta
+                .add_export(&inner.ident, inner.kind.as_ref().map_or(ExportKind::Item, Into::into))?;
+        }
         match &item.kind {
-            ItemKind::Fn(fn_pat) => self.check_fn(&item.attrs, fn_pat),
-            ItemKind::Struct(struct_pat) => self.check_struct(&item.attrs, struct_pat),
-            ItemKind::Enum(enum_pat) => self.check_enum(&item.attrs, enum_pat),
+            ItemKind::Fn(fn_pat) => self.check_fn(fn_pat),
+            ItemKind::Struct(struct_pat) => self.check_struct(struct_pat),
+            ItemKind::Enum(enum_pat) => self.check_enum(enum_pat),
             ItemKind::Impl(_impl_pat) => todo!(), // self.check_impl(impl_pat),
         }
     }
-    fn check_fn(&mut self, attrs: &'pat [syn::Attribute], fn_pat: &'pat FnPat) -> syn::Result<()> {
+    fn check_fn(&mut self, fn_pat: &'pat FnPat) -> syn::Result<()> {
         CheckFnCtxt {
-            attrs,
             impl_def: None,
             fn_def: self.symbols.add_fn(&fn_pat.sig.ident, None)?,
         }
         .check_fn(fn_pat)
     }
-    fn check_struct(&mut self, attrs: &'pat [syn::Attribute], struct_pat: &'pat Struct) -> syn::Result<()> {
-        let adt_def = self.symbols.add_struct(&struct_pat.ident)?;
-        let _adt_def = CheckAdtCtxt { attrs, adt_def };
-        // adt_def.check_struct(struct_pat);
-        todo!()
+    fn check_struct(&mut self, struct_pat: &'pat Struct) -> syn::Result<()> {
+        let variant_def = self.symbols.add_struct(&struct_pat.ident)?;
+        let mut variant_def = CheckVariantCtxt { variant_def };
+        variant_def.check_struct(struct_pat)?;
+        Ok(())
     }
-    fn check_enum(&mut self, attrs: &'pat [syn::Attribute], enum_pat: &'pat Enum) -> syn::Result<()> {
-        let adt_def = self.symbols.add_enum(&enum_pat.ident)?;
-        let _adt_def = CheckAdtCtxt { attrs, adt_def };
-        // adt_def.check_enum(enum_pat);
-        todo!()
+    fn check_enum(&mut self, enum_pat: &'pat Enum) -> syn::Result<()> {
+        let enum_def = self.symbols.add_enum(&enum_pat.ident)?;
+        let mut enum_def = CheckEnumCtxt { enum_def };
+        enum_def.check_enum(enum_pat)?;
+        Ok(())
     }
 }
 
@@ -115,27 +118,47 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
     }
 }
 
-// impl<'pat> CheckAdtCtxt<'_, 'pat> {
-//     fn check_struct(&mut self, struct_pat: &Struct) -> syn::Result<()> {
-//         self.check_variant(&struct_pat.variant)?;
-//         Ok(())
-//     }
-//     fn check_enum(&mut self, struct_pat: &Struct) -> syn::Result<()> {
-//         self.check_variant(&struct_pat.variant)?;
-//         Ok(())
-//     }
-//     fn check_variant(&mut self, variant: &Variant) -> syn::Result<()> {
-//         for field in &variant.fields {
-//             self.check_field(field)?;
-//         }
-//         Ok(())
-//     }
-//     fn check_field(&mut self, field: &Field) -> syn::Result<()> {
-//         self.check_ident(&field.ident)?;
-//         self.check_type(&field.ty)?;
-//         Ok(())
-//     }
-// }
+impl<'pat> CheckVariantCtxt<'_, 'pat> {
+    fn check_struct(&mut self, struct_pat: &'pat Struct) -> syn::Result<()> {
+        self.check_fields(struct_pat.fields.iter())?;
+        Ok(())
+    }
+    fn check_variant(&mut self, variant: &'pat Variant) -> syn::Result<()> {
+        self.check_fields(variant.fields.iter())?;
+        Ok(())
+    }
+    fn check_fields(&mut self, fields: impl Iterator<Item = &'pat Field>) -> syn::Result<()> {
+        for field in fields {
+            self.check_field(field)?;
+        }
+        Ok(())
+    }
+    fn check_field(&mut self, field: &'pat Field) -> syn::Result<()> {
+        self.variant_def.add_field(&field.ident, &field.ty)?;
+        self.check_ident(&field.ident)?;
+        self.check_type(&field.ty)?;
+        Ok(())
+    }
+    fn check_ident(&mut self, _ident: &Ident) -> syn::Result<()> {
+        // TODO
+        Ok(())
+    }
+    fn check_type(&mut self, _ty: &Type) -> syn::Result<()> {
+        // TODO
+        Ok(())
+    }
+}
+
+impl<'pat> CheckEnumCtxt<'_, 'pat> {
+    fn check_enum(&mut self, enum_pat: &'pat Enum) -> syn::Result<()> {
+        for variant in &enum_pat.variants {
+            let variant_def = self.enum_def.add_variant(&variant.ident)?;
+            let mut cx = CheckVariantCtxt { variant_def };
+            cx.check_variant(variant)?;
+        }
+        Ok(())
+    }
+}
 
 // impl<'pat> CheckImplCtxt<'_, 'pat> {
 //     fn check_impl(&mut self, impl_pat: &Impl) -> syn::Result<()> {
@@ -182,6 +205,11 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
         meta.meta.content.iter().try_for_each(|item| self.check_meta_item(item))
     }
     fn check_meta_item(&mut self, meta_item: &'pat MetaItem) -> syn::Result<()> {
+        if let Some(Export { inner, .. }) = &meta_item.export {
+            self.fn_def
+                .meta
+                .add_export(&inner.ident, inner.kind.as_ref().map_or(ExportKind::Meta, Into::into))?;
+        }
         match &meta_item.kind {
             MetaKind::Ty(ty_var) => self.fn_def.meta.add_ty_var(&meta_item.ident, ty_var)?,
         }
@@ -192,7 +220,19 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
         match decl {
             Declaration::TypeDecl(TypeDecl { ty, ident, .. }) => self.fn_def.meta.add_type(ident, ty),
             Declaration::UsePath(UsePath { path, .. }) => self.fn_def.meta.add_path(path),
-            Declaration::LocalDecl(LocalDecl { local, ty, init, .. }) => {
+            Declaration::LocalDecl(LocalDecl {
+                local,
+                ty,
+                init,
+                export,
+                ..
+            }) => {
+                if let Some(Export { inner, .. }) = export {
+                    self.fn_def.meta.add_export(
+                        &inner.ident,
+                        inner.kind.as_ref().map_or(ExportKind::Statement, Into::into),
+                    )?;
+                }
                 self.fn_def.add_place_local(local, ty)?;
                 if let Some(PunctAnd {
                     value: rvalue_or_call, ..
@@ -205,18 +245,16 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
         }
     }
 
-    fn check_stmt<End: ToTokens + Parse>(&mut self, stmt: &Statement<End>) -> syn::Result<()> {
+    fn check_stmt(&mut self, stmt: &'pat Statement) -> syn::Result<()> {
         // self.check_attrs(&stmt.attrs)?;
-        for attr in &stmt.attrs {
-            if attr.path().is_ident("export") {
-                self.fn_def.meta.add_export(attr.parse_args::<syntax::Export>()?)?;
-            }
+        if let Some(Export { inner, .. }) = &stmt.export {
+            self.fn_def.meta.add_export(&inner.ident, ExportKind::Statement)?;
         }
         self.check_stmt_kind(&stmt.kind)
     }
 
-    fn check_stmt_kind<End: ToTokens + Parse>(&mut self, stmt: &StatementKind<End>) -> syn::Result<()> {
-        match &stmt {
+    fn check_stmt_kind<End: ToTokens + Parse>(&mut self, stmt: &'pat StatementKind<End>) -> syn::Result<()> {
+        match stmt {
             StatementKind::Assign(
                 Assign {
                     place, rvalue_or_call, ..
@@ -498,21 +536,29 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
         Ok(())
     }
 
-    fn check_loop(&mut self, _label: Option<&syn::Label>, block: &Block) -> syn::Result<()> {
+    fn check_loop(&mut self, _label: Option<&syn::Label>, block: &'pat Block) -> syn::Result<()> {
         self.check_block(block)
     }
 
-    fn check_block(&mut self, block: &Block) -> syn::Result<()> {
+    fn check_block(&mut self, block: &'pat Block) -> syn::Result<()> {
         block.statements.iter().try_for_each(|stmt| self.check_stmt(stmt))
     }
 
-    fn check_switch_int(&mut self, switch_int: &SwitchInt) -> syn::Result<()> {
+    fn check_switch_int(&mut self, switch_int: &'pat SwitchInt) -> syn::Result<()> {
         self.check_operand(&switch_int.operand)?;
         let mut has_otherwise = false;
         for SwitchTarget {
-            ref value, ref body, ..
+            ref value,
+            ref body,
+            ref export,
+            ..
         } in &switch_int.targets
         {
+            if let Some(export) = export {
+                self.fn_def
+                    .meta
+                    .add_export(&export.inner.ident, ExportKind::SwitchTarget)?;
+            }
             if let SwitchValue::Underscore(_) = value {
                 if has_otherwise {
                     return Err(syn::Error::new_spanned(value, CheckError::MultipleOtherwiseInSwitchInt));
@@ -525,7 +571,7 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
         Ok(())
     }
 
-    fn check_switch_body(&mut self, body: &SwitchBody) -> syn::Result<()> {
+    fn check_switch_body(&mut self, body: &'pat SwitchBody) -> syn::Result<()> {
         match body {
             SwitchBody::Block(block) => self.check_block(block),
             SwitchBody::Statement(stmt, _) => self.check_stmt_kind(stmt),

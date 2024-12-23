@@ -56,7 +56,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
             if let pattern_cast = pattern_cast(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern_cast.pattern).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.mir_pat).check()
                 && let Some(cast_from) = matches[pattern_cast.cast_from]
                 && let cast_from = cast_from.span_no_inline(body)
                 && let Some(cast_to) = matches[pattern_cast.cast_to]
@@ -71,7 +71,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     mutability: ty::Mutability::Not.into(),
                 });
             } else if let pattern_cast_mut = pattern_cast_mut(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, &pattern_cast_mut.pattern).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast_mut.mir_pat).check()
                 && let Some(cast_from) = matches[pattern_cast_mut.cast_from]
                 && let cast_from = cast_from.span_no_inline(body)
                 && let Some(cast_to) = matches[pattern_cast_mut.cast_to]
@@ -92,7 +92,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 struct PatternCast<'pcx> {
-    pattern: MirPattern<'pcx>,
+    mir_pat: &'pcx MirPattern<'pcx>,
     ty_var: pat::TyVarIdx,
     cast_from: pat::Location,
     cast_to: pat::Location,
@@ -100,12 +100,14 @@ struct PatternCast<'pcx> {
 
 #[rpl_macros::pattern_def]
 fn pattern_cast(pcx: PatCtxt<'_>) -> PatternCast<'_> {
-    rpl! {
+    let ty_var;
+    let cast_from;
+    let cast_to;
+    let pattern = rpl! {
         fn $pattern (..) -> _ = mir! {
-            // #[export(ty_var: TyVarIdx)]
-            meta!($T:ty = is_all_safe_trait);
+            meta!( #[export(ty_var)] $T:ty = is_all_safe_trait);
 
-            // #[export(cast_from: Location)]
+            #[export(cast_from)]
             let from_slice: &[$T] = _;
             let from_raw: *const [$T] = &raw const *from_slice;
             let from_len: usize = PtrMetadata(copy from_slice);
@@ -114,24 +116,30 @@ fn pattern_cast(pcx: PatCtxt<'_>) -> PatternCast<'_> {
             let to_ptr: *const u8 = move to_ptr_t as *const u8 (PtrToPtr);
             let to_len: usize = Mul(move from_len, move ty_size);
             let to_raw: *const [u8] = *const [u8] from (copy to_ptr, copy to_len);
-            // #[export(cast_to: Location)]
+            #[export(cast_to)]
             let to_slice: &[u8] = &*to_raw;
         }
-    }
+    };
+    let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
 
     PatternCast {
-        pattern,
-        ty_var: T_ty_var.idx,
-        cast_from: from_slice_stmt,
-        cast_to: to_slice_stmt,
+        mir_pat,
+        ty_var: ty_var.idx,
+        cast_from,
+        cast_to,
     }
 }
 
 #[rpl_macros::pattern_def]
 fn pattern_cast_mut(pcx: PatCtxt<'_>) -> PatternCast<'_> {
-    rpl! {
+    let ty_var;
+    let cast_from;
+    let cast_to;
+    let pattern = rpl! {
         fn $pattern (..) -> _ = mir! {
-            meta!($T:ty = is_all_safe_trait);
+            meta!( #[export(ty_var)] $T:ty = is_all_safe_trait);
+
+            #[export(cast_from)]
             let from_slice_mut: &mut [$T] = _;
             let from_slice_ref: &[$T] = &*from_slice_mut;
             let from_raw_mut: *mut [$T] = &raw mut *from_slice_mut;
@@ -141,15 +149,17 @@ fn pattern_cast_mut(pcx: PatCtxt<'_>) -> PatternCast<'_> {
             let to_ptr_mut: *mut u8 = move to_ptr_mut_t as *mut u8 (PtrToPtr);
             let to_len_mut: usize = Mul(move from_len_mut, move ty_size_mut);
             let to_raw_mut: *mut [u8] = *mut [u8] from (copy to_ptr_mut, copy to_len_mut);
+            #[export(cast_to)]
             let to_slice_mut: &mut [u8] = &mut *to_raw_mut;
         }
     };
+    let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
 
     PatternCast {
-        pattern,
-        ty_var: T_ty_var.idx,
-        cast_from: from_slice_mut_stmt,
-        cast_to: to_slice_mut_stmt,
+        mir_pat,
+        ty_var: ty_var.idx,
+        cast_from,
+        cast_to,
     }
 }
 

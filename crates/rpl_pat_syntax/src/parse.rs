@@ -705,6 +705,19 @@ impl<P: syn::parse::Parse + quote::ToTokens + token::Token, T: syn::parse::Parse
     }
 }
 
+impl<P: syn::parse::Parse + quote::ToTokens + token::Token, I: syn::parse::Parse + quote::ToTokens> Attribute<P, I> {
+    pub fn parse_opt(input: ParseStream<'_>) -> Result<Option<Self>> {
+        if let Some((punct, cursor)) = input.cursor().punct()
+            && punct.as_char() == '#'
+            && let Some((cursor, ..)) = cursor.group(proc_macro2::Delimiter::Bracket)
+            && P::peek(cursor)
+        {
+            return input.parse().map(Some);
+        }
+        Ok(None)
+    }
+}
+
 impl SelfParam {
     pub fn peek(input: ParseStream<'_>) -> bool {
         input.peek(Token![self])

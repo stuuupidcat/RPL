@@ -15,8 +15,10 @@ extern crate rustc_middle;
 extern crate rustc_span;
 extern crate rustc_target;
 
+mod arena;
 mod context;
 pub mod cvt_prim_ty;
 pub mod pat;
 
+pub(crate) use arena::Arena;
 pub use context::{PatCtxt, PatternCtxt, PrimitiveTypes};

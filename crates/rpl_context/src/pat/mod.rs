@@ -22,27 +22,44 @@ pub struct MetaVars<'pcx> {
 pub struct Pattern<'pcx> {
     pub pcx: PatCtxt<'pcx>,
     pub meta: MetaVars<'pcx>,
-    #[expect(dead_code)]
     adts: FxHashMap<Symbol, AdtDef<'pcx>>,
-    #[expect(dead_code)]
-    fns: FxHashMap<Symbol, FnDef<'pcx>>,
-    #[expect(dead_code)]
-    unnamed_fns: Vec<FnDef<'pcx>>,
+    pub fns: FnsDef<'pcx>,
     #[expect(dead_code)]
     impls: Vec<ImplDef<'pcx>>,
 }
 
 impl<'pcx> MetaVars<'pcx> {
-    pub fn mk_ty_var(&mut self, pred: Option<TyPred>) -> TyVar {
+    pub fn new_ty_var(&mut self, pred: Option<TyPred>) -> TyVar {
         let idx = self.ty_vars.next_index();
         let ty_var = TyVar { idx, pred };
         self.ty_vars.push(ty_var);
         ty_var
     }
-    pub fn mk_const_var(&mut self, ty: Ty<'pcx>) -> ConstVar<'pcx> {
+    pub fn new_const_var(&mut self, ty: Ty<'pcx>) -> ConstVar<'pcx> {
         let idx = self.const_vars.next_index();
         let const_var = ConstVar { idx, ty };
         self.const_vars.push(const_var);
         const_var
+    }
+}
+
+impl<'pcx> Pattern<'pcx> {
+    pub(crate) fn new(pcx: PatCtxt<'pcx>) -> Self {
+        Self {
+            pcx,
+            meta: MetaVars::default(),
+            adts: Default::default(),
+            fns: Default::default(),
+            impls: Default::default(),
+        }
+    }
+    pub fn new_struct(&mut self, name: Symbol) -> &mut VariantDef<'pcx> {
+        self.adts
+            .entry(name)
+            .or_insert_with(AdtDef::new_struct)
+            .non_enum_variant_mut()
+    }
+    pub fn new_enum(&mut self, name: Symbol) -> &mut AdtDef<'pcx> {
+        self.adts.entry(name).or_insert_with(AdtDef::new_enum)
     }
 }

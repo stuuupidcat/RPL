@@ -12,6 +12,7 @@ use quote::quote;
 use rpl_context::{PatCtxt, PatternCtxt};
 use rpl_mir::graph::{pat_control_flow_graph, pat_data_dep_graph};
 use rpl_mir::pat::{Local, MirPattern};
+use rustc_span::Symbol;
 use std::fmt::Write;
 
 fn format_stmt_local((stmt, local): (usize, Local)) -> impl std::fmt::Debug {
@@ -28,13 +29,13 @@ fn format_stmt_local((stmt, local): (usize, Local)) -> impl std::fmt::Debug {
 macro_rules! test_case {
     (fn $name:ident() {$($input:tt)*} => { $($deps:tt)* }) => {
         #[rpl_macros::pattern_def]
-        fn $name(pcx: PatCtxt<'_>) -> MirPattern<'_> {
-            rpl! {
+        fn $name(pcx: PatCtxt<'_>) -> &MirPattern<'_> {
+            let pattern = rpl! {
                 fn $pattern (..) -> _ = mir! {
                     $($input)*
                 }
-            }
-            pattern
+            };
+            pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap()
         }
         #[test]
         fn ${concat(test_, $name)}() {

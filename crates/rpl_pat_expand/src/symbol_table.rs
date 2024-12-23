@@ -1,40 +1,45 @@
-use derive_more::From;
+use derive_more::{Display, From};
 use proc_macro2::Span;
 use rustc_hash::FxHashMap;
 use syn::Ident;
 use syn_derive::ToTokens;
 use syntax::{Path, PlaceLocal, SelfParam, TyVar, Type};
 
+#[derive(Debug, Display)]
+pub(crate) enum SymbolKind {
+    #[display("struct")]
+    Struct,
+    #[display("variant")]
+    Variant,
+    #[display("enum")]
+    Enum,
+    #[display("field")]
+    Field,
+    #[display("local varialble")]
+    Local,
+    #[display("parameter")]
+    Param,
+    #[display("function")]
+    Fn,
+}
+
 #[derive(thiserror::Error, Debug)]
 #[allow(clippy::enum_variant_names)]
 pub(crate) enum CheckError<'a> {
+    #[error("{0} `{1}` is already declared")]
+    SymbolAlreadyDeclared(SymbolKind, &'a Ident),
+    #[error("{0} `{1}` is not declared")]
+    SymbolNotDeclared(SymbolKind, &'a Ident),
     #[error("type or path `${0}` is already declared")]
     TypeVarAlreadyDeclared(&'a Ident),
     #[error("type variable `${0}` is not declared")]
     TypeVarNotDeclared(&'a Ident),
-    #[error("{0} `{1}` is already declared")]
-    AdtAlreadyDeclared(&'static str, &'a Ident),
-    #[error("struct or enum `{0}` is not declared")]
-    #[expect(dead_code)]
-    AdtNotDeclared(&'a Ident),
     #[error("export named by `{0}` is already declared")]
     ExportAlreadyDeclared(&'a Ident),
     #[error("type or path named by `{0}` is already declared")]
     TypeOrPathAlreadyDeclared(&'a Ident),
     #[error("type or path named by `{0}` is not declared")]
     TypeOrPathNotDeclared(&'a Ident),
-    #[error("local variable `{0}` is not declared")]
-    LocalNotDeclared(&'a Ident),
-    #[error("parameter `{0}` is not declared")]
-    ParamNotDeclared(&'a Ident),
-    #[error("parameter `{0}` is already declared")]
-    #[expect(dead_code)]
-    ParamAlreadyDeclared(&'a Ident),
-    #[error("function `{0}` is already declared")]
-    FnAlreadyDeclared(&'a Ident),
-    #[error("function `{0}` is not declared")]
-    #[expect(dead_code)]
-    FnNotDeclared(&'a Ident),
     #[error("missing `$` in before function identifier `{0}`")]
     FnIdentMissingDollar(&'a Ident),
     #[error("method `{0}::{1}` is already declared")]
@@ -45,7 +50,7 @@ pub(crate) enum CheckError<'a> {
     #[error("`self` is not declared")]
     SelfNotDeclared,
     #[error("`self` is already declared")]
-    SelflreadyDeclared,
+    SelfAlreadyDeclared,
     #[error("using `self` value outside of an `impl` item")]
     #[expect(dead_code)]
     SelfValueOutsideImpl,
@@ -67,64 +72,91 @@ pub(crate) enum TypeOrPath<'a> {
     Path(&'a Path),
 }
 
+#[derive(Clone, Copy)]
+pub(crate) enum ExportKind {
+    Meta,
+    Item,
+    Statement,
+    SwitchTarget,
+}
+
+impl From<syntax::ExportKind> for ExportKind {
+    fn from(kind: syntax::ExportKind) -> Self {
+        match kind {
+            syntax::ExportKind::Statement(_) => ExportKind::Statement,
+        }
+    }
+}
+
+impl<P: syn::parse::Parse + quote::ToTokens> From<&syntax::PunctAnd<P, syntax::ExportKind>> for ExportKind {
+    fn from(kind: &syntax::PunctAnd<P, syntax::ExportKind>) -> Self {
+        kind.value.into()
+    }
+}
+
 #[derive(Default)]
 pub(crate) struct MetaTable<'a> {
     ty_vars: FxHashMap<&'a Ident, &'a TyVar>,
     types: FxHashMap<&'a Ident, TypeOrPath<'a>>,
-    exports: FxHashMap<Ident, syntax::ExportKind>,
+    exports: FxHashMap<&'a Ident, ExportKind>,
 }
 
 #[derive(Default)]
 pub(crate) struct SymbolTable<'a> {
-    #[expect(dead_code)]
     pub(super) meta: MetaTable<'a>,
-    adts: FxHashMap<&'a Ident, AdtDef<'a>>,
+    structs: FxHashMap<&'a Ident, VariantDef<'a>>,
+    enums: FxHashMap<&'a Ident, EnumDef<'a>>,
     fns: FxHashMap<&'a Ident, FnDef<'a>>,
     unnamed_fns: Vec<FnDef<'a>>,
     impls: Vec<ImplDef<'a>>,
 }
 
-pub(crate) struct AdtDef<'a> {
+pub(crate) struct EnumDef<'a> {
     ident: &'a Ident,
-    kind: AdtKind<'a>,
+    variants: FxHashMap<&'a Ident, VariantDef<'a>>,
 }
 
-impl<'a> AdtDef<'a> {
-    fn new(ident: &'a Ident, kind: AdtKind<'a>) -> Self {
-        Self { ident, kind }
+impl<'a> EnumDef<'a> {
+    fn new(ident: &'a Ident) -> Self {
+        Self {
+            ident,
+            variants: FxHashMap::default(),
+        }
+    }
+    pub fn add_variant(&mut self, ident: &'a Ident) -> syn::Result<&mut VariantDef<'a>> {
+        self.variants
+            .try_insert(ident, VariantDef::new(ident))
+            .map_err(|entry| {
+                let variant = entry.entry.get();
+                syn::Error::new(
+                    variant.ident.span(),
+                    CheckError::SymbolAlreadyDeclared(SymbolKind::Variant, variant.ident),
+                )
+            })
     }
 }
 
 pub(crate) struct VariantDef<'a> {
-    #[expect(unused)]
     ident: &'a Ident,
-    #[expect(unused)]
     fields: FxHashMap<&'a Ident, &'a Type>,
 }
 
 impl<'a> VariantDef<'a> {
-    #[expect(unused)]
     fn new(ident: &'a Ident) -> Self {
         Self {
             ident,
             fields: FxHashMap::default(),
         }
     }
-}
-
-pub(crate) enum AdtKind<'a> {
-    #[expect(unused)]
-    Enum(FxHashMap<&'a Ident, VariantDef<'a>>),
-    #[expect(unused)]
-    Struct(FxHashMap<&'a Ident, &'a Type>),
-}
-
-impl AdtKind<'_> {
-    fn descr(&self) -> &'static str {
-        match self {
-            AdtKind::Enum(_) => "enum",
-            AdtKind::Struct(_) => "struct",
-        }
+    pub fn add_field(&mut self, ident: &'a Ident, ty: &'a Type) -> syn::Result<()> {
+        self.fields.try_insert(ident, ty).map_err(|entry| {
+            let field = entry.entry.key();
+            syn::Error::new(
+                field.span(),
+                CheckError::SymbolAlreadyDeclared(SymbolKind::Field, field),
+            )
+        })?;
+        Ok(())
     }
 }
 
@@ -210,8 +242,8 @@ impl<'a> MetaTable<'a> {
         let ident = path.ident().expect("invalid path without an identifier at the end");
         self.add_type_impl(ident, path.into())
     }
-    pub fn add_export(&mut self, export: syntax::Export) -> syn::Result<()> {
-        self.exports.try_insert(export.ident, export.kind).map_err(|entry| {
+    pub fn add_export(&mut self, export: &'a Ident, kind: ExportKind) -> syn::Result<()> {
+        self.exports.try_insert(export, kind).map_err(|entry| {
             let ident = entry.entry.key();
             syn::Error::new(ident.span(), CheckError::ExportAlreadyDeclared(ident))
         })?;
@@ -220,20 +252,23 @@ impl<'a> MetaTable<'a> {
 }
 
 impl<'a> SymbolTable<'a> {
-    fn add_adt(&mut self, ident: &'a Ident, kind: AdtKind<'a>) -> syn::Result<&mut AdtDef<'a>> {
-        self.adts.try_insert(ident, AdtDef::new(ident, kind)).map_err(|entry| {
+    pub fn add_enum(&mut self, ident: &'a Ident) -> syn::Result<&mut EnumDef<'a>> {
+        self.enums.try_insert(ident, EnumDef::new(ident)).map_err(|entry| {
             let adt = entry.entry.get();
             syn::Error::new(
                 adt.ident.span(),
-                CheckError::AdtAlreadyDeclared(adt.kind.descr(), ident),
+                CheckError::SymbolAlreadyDeclared(SymbolKind::Enum, ident),
             )
         })
     }
-    pub fn add_struct(&mut self, ident: &'a Ident) -> syn::Result<&mut AdtDef<'a>> {
-        self.add_adt(ident, AdtKind::Struct(FxHashMap::default()))
-    }
-    pub fn add_enum(&mut self, ident: &'a Ident) -> syn::Result<&mut AdtDef<'a>> {
-        self.add_adt(ident, AdtKind::Enum(FxHashMap::default()))
+    pub fn add_struct(&mut self, ident: &'a Ident) -> syn::Result<&mut VariantDef<'a>> {
+        self.structs.try_insert(ident, VariantDef::new(ident)).map_err(|entry| {
+            let adt = entry.entry.get();
+            syn::Error::new(
+                adt.ident.span(),
+                CheckError::SymbolAlreadyDeclared(SymbolKind::Struct, ident),
+            )
+        })
     }
     pub fn add_fn(&mut self, ident: &'a syntax::IdentPat, self_ty: Option<&'a Type>) -> syn::Result<&mut FnDef<'a>> {
         use syntax::IdentPat::{Ident, Pat, Underscore};
@@ -245,7 +280,12 @@ impl<'a> SymbolTable<'a> {
             Pat(_, ident) => self
                 .fns
                 .try_insert(ident, FnDef::new(ident.span(), self_ty))
-                .map_err(|entry| syn::Error::new(entry.entry.get().span, CheckError::FnAlreadyDeclared(ident))),
+                .map_err(|entry| {
+                    syn::Error::new(
+                        entry.entry.get().span,
+                        CheckError::SymbolAlreadyDeclared(SymbolKind::Fn, ident),
+                    )
+                }),
 
             Ident(ident) => Err(syn::Error::new(ident.span(), CheckError::FnIdentMissingDollar(ident))),
         }
@@ -272,15 +312,21 @@ impl<'a> ImplDef<'a> {
 impl<'a> FnDef<'a> {
     pub fn add_self_param(&mut self, self_param: &'a SelfParam) -> syn::Result<()> {
         if self.self_param.is_some() {
-            return Err(syn::Error::new(self_param.tk_self.span, CheckError::SelflreadyDeclared));
+            return Err(syn::Error::new(
+                self_param.tk_self.span,
+                CheckError::SelfAlreadyDeclared,
+            ));
         }
         self.self_param = Some(self_param);
         Ok(())
     }
     pub fn add_param(&mut self, ident: &'a Ident, ty: &'a Type) -> syn::Result<()> {
-        self.params
-            .try_insert(ident, ty)
-            .map_err(|entry| syn::Error::new(entry.entry.key().span(), CheckError::ParamNotDeclared(ident)))?;
+        self.params.try_insert(ident, ty).map_err(|entry| {
+            syn::Error::new(
+                entry.entry.key().span(),
+                CheckError::SymbolNotDeclared(SymbolKind::Param, ident),
+            )
+        })?;
         Ok(())
     }
     pub fn add_local(&mut self, ident: &'a Ident, ty: &'a Type) -> syn::Result<()> {
@@ -305,7 +351,7 @@ impl<'a> FnDef<'a> {
     }
     pub fn get_local(&self, ident: &Ident) -> syn::Result<&'a Type> {
         self.get_local_impl(ident)
-            .ok_or_else(|| syn::Error::new(ident.span(), CheckError::LocalNotDeclared(ident)))
+            .ok_or_else(|| syn::Error::new(ident.span(), CheckError::SymbolNotDeclared(SymbolKind::Local, ident)))
     }
     pub fn get_place_local(&self, local: &PlaceLocal) -> syn::Result<&'a Type> {
         match local {
