@@ -18,3 +18,4 @@
 .*sw*
 
 mir_dump
+*.rlib
