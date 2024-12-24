@@ -1,0 +1,9 @@
+digraph ControlFlowGraph {
+    bb0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb0</td></tr><tr><td align="left" balign="left">_?0 = _<br/></td></tr><tr><td align="left">_?1 = alloc::vec::Vec::with_capacity(_) -&gt; ?bb1</td></tr></table>>];
+    bb1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb1</td></tr><tr><td align="left" balign="left">_?2 = &amp;_?1<br/></td></tr><tr><td align="left">_?3 = alloc::vec::Vec::as_ptr(move _?2) -&gt; ?bb2</td></tr></table>>];
+    bb2 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb2</td></tr><tr><td align="left">_?4 = std::slice::from_raw_parts:: &lt; '_,?T0 &gt;(move _?3, copy _?0) -&gt; ?bb3</td></tr></table>>];
+    bb3 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1">?bb3</td></tr><tr><td align="left">end</td></tr></table>>];
+    bb0 -> bb1 [label="return"];
+    bb1 -> bb2 [label="return"];
+    bb2 -> bb3 [label="return"];
+}
