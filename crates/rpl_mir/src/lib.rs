@@ -642,8 +642,9 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             (pat::Operand::Constant(konst_pat), mir::Operand::Constant(box konst)) => {
                 self.match_const_operand(konst_pat, konst.const_)
             },
+            (pat::Operand::Any, mir::Operand::Copy(_) | mir::Operand::Move(_) | mir::Operand::Constant(_)) => true,
             (
-                pat::Operand::Any | pat::Operand::Copy(_) | pat::Operand::Move(_) | pat::Operand::Constant(_),
+                pat::Operand::Copy(_) | pat::Operand::Move(_) | pat::Operand::Constant(_),
                 mir::Operand::Copy(_) | mir::Operand::Move(_) | mir::Operand::Constant(_),
             ) => return false,
         };
