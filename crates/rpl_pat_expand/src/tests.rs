@@ -4,31 +4,37 @@ use quote::quote;
 
 #[track_caller]
 fn mir_test_case(input: TokenStream, output: TokenStream) {
-    let pattern = syn::parse2(quote! {
-        fn $pattern (..) -> _ = mir! { #input }
-    })
-    .unwrap();
+    let pattern = syn::parse2(input).unwrap();
     let expanded = crate::expand_pattern(&pattern, None).unwrap_or_else(syn::Error::into_compile_error);
     assert_eq!(
         expanded.to_string().replace(";", ";\n"),
-        quote! {{
-            let pattern = pcx.new_pattern();
-            let fn_pat = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("pattern"), pcx.mk_any_ty());
-            let mut mir_pat = ::rpl_context::pat::MirPattern::builder();
-            #output
-            let mir_pat = mir_pat.build();
-            let mir_pat = pcx.mk_mir_pattern(mir_pat);
-            fn_pat.set_body(::rpl_context::pat::FnBody::Mir(mir_pat));
-            &*pattern
-        }}
-        .to_string()
-        .replace(";", ";\n")
+        output.to_string().replace(";", ";\n")
     );
 }
 
 macro_rules! mir_test_case {
-    (pat!{ $( $tt:tt )* } => $($output:tt)*) => {
-        mir_test_case(quote!($($tt)*), $($output)*)
+    ( #[meta($($meta:tt)*)] pat!{ $( $tt:tt )* } => {
+        meta! {$($meta_output:tt)*}
+        $($output:tt)*
+    } $(,)? ) => {
+        mir_test_case(
+            quote! {
+                #[meta($($meta)*)]
+                fn $pattern (..) -> _ = mir! {
+                    $($tt)*
+                }
+            }, quote!{{
+                let pattern = pcx.new_pattern();
+                let fn_pat = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("pattern"), pcx.mk_any_ty());
+                $($meta_output)*
+                let mut mir_pat = ::rpl_context::pat::MirPattern::builder();
+                $($output)*
+                let mir_pat = mir_pat.build();
+                let mir_pat = pcx.mk_mir_pattern(mir_pat);
+                fn_pat.set_body(::rpl_context::pat::FnBody::Mir(mir_pat));
+                &*pattern
+            }}
+        )
     };
 }
 
@@ -57,21 +63,24 @@ macro_rules! test_case {
 #[test]
 fn test_ty_var() {
     mir_test_case!(
-        pat!{ meta!($T:ty); } =>
-        quote! {
-            #[allow(non_snake_case)]
-            let T_ty_var = mir_pat.new_ty_var(None);
-            #[allow(non_snake_case)]
-            let T_ty = pcx.mk_var_ty(T_ty_var);
-        },
+        #[meta($T:ty)]
+        pat! {
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T_ty = pcx.mk_var_ty(T_ty_var);
+            }
+        }
     );
 }
 
 #[test]
 fn test_cve_2020_25016() {
     mir_test_case!(
+        #[meta( #[export(ty_var)] $T:ty = is_all_safe_trait)]
         pat! {
-            meta!( #[export(ty_var)] $T:ty = is_all_safe_trait);
             type SliceT = [$T];
             type RefSliceT = &SliceT;
             type PtrSliceT = *const SliceT;
@@ -90,12 +99,14 @@ fn test_cve_2020_25016() {
             let to_raw_slice: PtrSliceU8 = *const SliceU8 from (copy to_ptr, copy to_len);
             #[export(cast_to)]
             let to_slice: RefSliceU8 = &*to_raw_slice;
-        } => quote! {
-            #[allow(non_snake_case)]
-            let T_ty_var = mir_pat.new_ty_var(Some(is_all_safe_trait));
-            #[allow(non_snake_case)]
-            let T_ty = pcx.mk_var_ty(T_ty_var);
-            ty_var = T_ty_var;
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T_ty_var = fn_pat.meta.new_ty_var(Some(is_all_safe_trait));
+                #[allow(non_snake_case)]
+                let T_ty = pcx.mk_var_ty(T_ty_var);
+                ty_var = T_ty_var;
+            }
             #[allow(non_snake_case)]
             let SliceT_ty = pcx.mk_slice_ty(T_ty);
             #[allow(non_snake_case)]
@@ -186,16 +197,15 @@ fn test_cve_2020_25016() {
                     )
                 )
             );
-        },
+        }
     );
 }
 
 #[test]
 fn test_cve_2020_35892_revised() {
     mir_test_case!(
+        #[meta($T:ty, $SlabT:ty)]
         pat! {
-            meta!($T:ty, $SlabT:ty);
-
             let self: &mut $SlabT;
             let len: usize;
             let x1: usize;
@@ -246,16 +256,18 @@ fn test_cve_2020_35892_revised() {
                     }
                 }
             }
-        } => quote! {
-            #[allow(non_snake_case)]
-            let T_ty_var = mir_pat.new_ty_var(None);
-            #[allow(non_snake_case)]
-            let T_ty = pcx.mk_var_ty(T_ty_var);
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T_ty = pcx.mk_var_ty(T_ty_var);
 
-            #[allow(non_snake_case)]
-            let SlabT_ty_var = mir_pat.new_ty_var(None);
-            #[allow(non_snake_case)]
-            let SlabT_ty = pcx.mk_var_ty(SlabT_ty_var);
+                #[allow(non_snake_case)]
+                let SlabT_ty_var = fn_pat.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let SlabT_ty = pcx.mk_var_ty(SlabT_ty_var);
+            }
 
             let self_local = mir_pat.mk_self(pcx.mk_ref_ty(
                 ::rpl_context::pat::RegionKind::ReAny,
@@ -311,7 +323,7 @@ fn test_cve_2020_35892_revised() {
                     self_local,
                     pcx.mk_slice(&[
                         ::rpl_context::pat::PlaceElem::Deref,
-                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Named(
                             ::rustc_span::Symbol::intern("len")
                         )),
                     ])
@@ -360,7 +372,7 @@ fn test_cve_2020_35892_revised() {
                         ::rpl_context::pat::Place::new(iter_mut_local, pcx.mk_slice(&[
                             ::rpl_context::pat::PlaceElem::Deref,
                             ::rpl_context::pat::PlaceElem::Field(
-                                ::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("start"))
+                                ::rpl_context::pat::FieldAcc::Named(::rustc_span::Symbol::intern("start"))
                             ),
                         ]))
                     )
@@ -384,7 +396,7 @@ fn test_cve_2020_35892_revised() {
                             pcx.mk_slice(&[
                                 ::rpl_context::pat::PlaceElem::Deref,
                                 ::rpl_context::pat::PlaceElem::Field(
-                                    ::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("end"))
+                                    ::rpl_context::pat::FieldAcc::Named(::rustc_span::Symbol::intern("end"))
                                 ),
                             ])
                         )
@@ -431,7 +443,7 @@ fn test_cve_2020_35892_revised() {
                                     pcx.mk_slice(&[
                                         ::rpl_context::pat::PlaceElem::Deref,
                                         ::rpl_context::pat::PlaceElem::Field(
-                                            ::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("start"))
+                                            ::rpl_context::pat::FieldAcc::Named(::rustc_span::Symbol::intern("start"))
                                         ),
                                     ])
                                 )
@@ -456,7 +468,7 @@ fn test_cve_2020_35892_revised() {
                                 pcx.mk_slice(&[
                                     ::rpl_context::pat::PlaceElem::Deref,
                                     ::rpl_context::pat::PlaceElem::Field(
-                                        ::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("start"))
+                                        ::rpl_context::pat::FieldAcc::Named(::rustc_span::Symbol::intern("start"))
                                     ),
                                 ])
                             ),
@@ -494,7 +506,7 @@ fn test_cve_2020_35892_revised() {
                                                 ::rustc_span::Symbol::intern("Some")
                                             ),
                                             ::rpl_context::pat::PlaceElem::Field(
-                                                ::rpl_context::pat::Field::Unnamed(0u32.into())
+                                                ::rpl_context::pat::FieldAcc::Unnamed(0u32.into())
                                             ),
                                         ])
                                     )
@@ -507,7 +519,7 @@ fn test_cve_2020_35892_revised() {
                                         self_local,
                                         pcx.mk_slice(&[
                                             ::rpl_context::pat::PlaceElem::Deref,
-                                            ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(
+                                            ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Named(
                                                 ::rustc_span::Symbol::intern("mem")
                                             )),
                                         ])
@@ -555,9 +567,8 @@ fn test_cve_2020_35892_revised() {
 #[test]
 fn test_cve_2020_35892() {
     mir_test_case!(
+        #[meta($T:ty, $SlabT:ty)]
         pat! {
-            meta!($T:ty, $SlabT:ty);
-
             let self: &mut $SlabT;
             let len: usize; // _2
             let mut x0: usize; // _17
@@ -591,16 +602,17 @@ fn test_cve_2020_35892() {
                     }
                 }
             }
-        } => quote! {
-            #[allow(non_snake_case)]
-            let T_ty_var = mir_pat.new_ty_var(None);
-            #[allow(non_snake_case)]
-            let T_ty = pcx.mk_var_ty(T_ty_var);
-
-            #[allow(non_snake_case)]
-            let SlabT_ty_var = mir_pat.new_ty_var(None);
-            #[allow(non_snake_case)]
-            let SlabT_ty = pcx.mk_var_ty(SlabT_ty_var);
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T_ty = pcx.mk_var_ty(T_ty_var);
+                #[allow(non_snake_case)]
+                let SlabT_ty_var = fn_pat.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let SlabT_ty = pcx.mk_var_ty(SlabT_ty_var);
+            }
 
             let self_local = mir_pat.mk_self(pcx.mk_ref_ty(
                 ::rpl_context::pat::RegionKind::ReAny, SlabT_ty, ::rustc_middle::mir::Mutability::Mut
@@ -627,7 +639,7 @@ fn test_cve_2020_35892() {
                     self_local,
                     pcx.mk_slice(&[
                         ::rpl_context::pat::PlaceElem::Deref,
-                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Named(
                             ::rustc_span::Symbol::intern("len")
                         )),
                     ])
@@ -707,7 +719,7 @@ fn test_cve_2020_35892() {
                                                 ::rustc_span::Symbol::intern("Some")
                                             ),
                                             ::rpl_context::pat::PlaceElem::Field(
-                                                ::rpl_context::pat::Field::Unnamed(0u32.into())
+                                                ::rpl_context::pat::FieldAcc::Unnamed(0u32.into())
                                             ),
                                         ])
                                     )
@@ -720,7 +732,7 @@ fn test_cve_2020_35892() {
                                         self_local,
                                         pcx.mk_slice(&[
                                             ::rpl_context::pat::PlaceElem::Deref,
-                                            ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(
+                                            ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Named(
                                                 ::rustc_span::Symbol::intern("mem")
                                             )),
                                         ])
@@ -761,16 +773,15 @@ fn test_cve_2020_35892() {
                     }
                 );
             });
-        },
+        }
     );
 }
 
 #[test]
 fn test_cve_2018_21000() {
     mir_test_case!(
+        #[meta($T1:ty, $T2:ty, $T3:ty)]
         pat! {
-            meta!($T1:ty, $T2:ty, $T3:ty);
-
             type VecT1 = std::vec::Vec<$T1>;
             type VecT2 = std::vec::Vec<$T2>;
             type VecT3 = std::vec::Vec<$T3>;
@@ -787,19 +798,21 @@ fn test_cve_2018_21000() {
             let to_vec_ptr: PtrT3 = copy from_vec_ptr as PtrT3 (PtrToPtr);
             let _tmp: () = std::mem::forget(move from_vec);
             let res: VecT3 = Vec::from_raw_parts(copy to_vec_ptr, copy to_cap, copy to_len);
-        } => quote! {
-            #[allow(non_snake_case)]
-            let T1_ty_var = mir_pat.new_ty_var(None);
-            #[allow(non_snake_case)]
-            let T1_ty = pcx.mk_var_ty(T1_ty_var);
-            #[allow(non_snake_case)]
-            let T2_ty_var = mir_pat.new_ty_var(None);
-            #[allow(non_snake_case)]
-            let T2_ty = pcx.mk_var_ty(T2_ty_var);
-            #[allow(non_snake_case)]
-            let T3_ty_var = mir_pat.new_ty_var(None);
-            #[allow(non_snake_case)]
-            let T3_ty = pcx.mk_var_ty(T3_ty_var);
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T1_ty_var = fn_pat.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T1_ty = pcx.mk_var_ty(T1_ty_var);
+                #[allow(non_snake_case)]
+                let T2_ty_var = fn_pat.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T2_ty = pcx.mk_var_ty(T2_ty_var);
+                #[allow(non_snake_case)]
+                let T3_ty_var = fn_pat.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T3_ty = pcx.mk_var_ty(T3_ty_var);
+            }
             #[allow(non_snake_case)]
             let VecT1_ty = pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["std", "vec", "Vec",]),
@@ -917,11 +930,8 @@ fn test_cve_2018_21000() {
 #[test]
 fn test_cve_2020_35881_const() {
     mir_test_case!(
+        #[meta($T1:ty)]
         pat! {
-            meta!{
-                $T1:ty,
-            };
-
             type PtrT1 = *const $T1;
             type PtrPtrT1 = *const *const $T1;
             type DerefPtrT1 = &*const $T1;
@@ -934,11 +944,14 @@ fn test_cve_2020_35881_const() {
             let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *const *const () (Transmute);
             let ptr_to_res: PtrT2 = copy* ptr_to_ptr_to_res;
             // neglected the type-size-equivalence check
-        } => quote! {
-            #[allow(non_snake_case)]
-            let T1_ty_var = mir_pat.new_ty_var(None);
-            #[allow(non_snake_case)]
-            let T1_ty = pcx.mk_var_ty(T1_ty_var);
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T1_ty_var = fn_pat.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T1_ty = pcx.mk_var_ty(T1_ty_var);
+            }
+
             #[allow(non_snake_case)]
             let PtrT1_ty = pcx.mk_raw_ptr_ty(
                 T1_ty,
@@ -1036,11 +1049,8 @@ fn test_cve_2020_35881_const() {
 #[test]
 fn test_cve_2020_35881_mut() {
     mir_test_case!(
+        #[meta($T1:ty)]
         pat! {
-            meta!{
-                $T1:ty,
-            };
-
             type PtrT1 = *mut $T1;
             type PtrPtrT1 = *mut *mut $T1;
             type DerefPtrT1 = &mut *mut $T1;
@@ -1052,11 +1062,13 @@ fn test_cve_2020_35881_mut() {
             let ptr_to_ptr_to_data: PtrPtrT1 = &raw mut (*data);
             let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *mut *mut () (Transmute);
             let ptr_to_res: PtrT2 = copy *ptr_to_ptr_to_res;
-        } => quote! {
-            #[allow(non_snake_case)]
-            let T1_ty_var = mir_pat.new_ty_var(None);
-            #[allow(non_snake_case)]
-            let T1_ty = pcx.mk_var_ty(T1_ty_var);
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T1_ty_var = fn_pat.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T1_ty = pcx.mk_var_ty(T1_ty_var);
+            }
             #[allow(non_snake_case)]
             let PtrT1_ty = pcx.mk_raw_ptr_ty(
                 T1_ty,
@@ -1156,9 +1168,8 @@ fn test_cve_2020_35881_mut() {
 #[test]
 fn test_cve_2021_29941_2() {
     mir_test_case!(
+        #[meta($T:ty)]
         pat! {
-            meta! { $T:ty }
-
             // type ExactSizeIterT = impl std::iter::ExactSizeIterator<Item = $T>;
             // let's use a std::ops::Range<$T> instead temporarily
             type RangeT = std::ops::Range<$T>;
@@ -1207,11 +1218,14 @@ fn test_cve_2021_29941_2() {
             // There cannnot be two mutable references to `vec` in the same scope
             ref_to_vec = &mut vec;
             _tmp = Vec::set_len(move ref_to_vec, copy len);
-        } => quote! {
-            #[allow(non_snake_case)]
-            let T_ty_var = mir_pat.new_ty_var(None);
-            #[allow(non_snake_case)]
-            let T_ty = pcx.mk_var_ty(T_ty_var);
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T_ty = pcx.mk_var_ty(T_ty_var);
+            }
+
             #[allow(non_snake_case)]
             let RangeT_ty = pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["std", "ops", "Range",]),
@@ -1397,7 +1411,7 @@ fn test_cve_2021_29941_2() {
                                                             ::rustc_span::Symbol::intern("Some")
                                                         ),
                                                         ::rpl_context::pat::PlaceElem::Field(
-                                                            ::rpl_context::pat::Field::Unnamed(0u32.into())
+                                                            ::rpl_context::pat::FieldAcc::Unnamed(0u32.into())
                                                         ),
                                                     ])
                                                 )
@@ -1415,7 +1429,7 @@ fn test_cve_2021_29941_2() {
                                                             ::rustc_span::Symbol::intern("Some")
                                                         ),
                                                         ::rpl_context::pat::PlaceElem::Field(
-                                                            ::rpl_context::pat::Field::Unnamed(1u32.into())
+                                                            ::rpl_context::pat::FieldAcc::Unnamed(1u32.into())
                                                         ),
                                                     ])
                                                 )
@@ -1483,9 +1497,8 @@ fn test_cve_2021_29941_2() {
 #[test]
 fn test_cve_2018_21000_inlined() {
     mir_test_case!(
+        #[meta($T:ty)]
         pat! {
-            meta!{$T:ty}
-
             type Global = alloc::alloc::Global;
 
             let from_vec: alloc::vec::Vec<u8, Global> = _;
@@ -1526,12 +1539,13 @@ fn test_cve_2018_21000_inlined() {
                 buf: move to_raw_vec,
                 len: copy to_vec_cap,
             };
-
-        } => quote! {
-            #[allow(non_snake_case)]
-            let T_ty_var = mir_pat.new_ty_var(None);
-            #[allow(non_snake_case)]
-            let T_ty = pcx.mk_var_ty(T_ty_var);
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T_ty = pcx.mk_var_ty(T_ty_var);
+            }
             #[allow(non_snake_case)]
             let Global_ty = pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["alloc", "alloc", "Global",]),
@@ -1576,10 +1590,10 @@ fn test_cve_2018_21000_inlined() {
                 from_vec_ptr_local.into_place(),
                 ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(
                     ::rpl_context::pat::Place::new(from_vec_local, pcx.mk_slice(&[
-                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("buf"))),
-                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("inner"))),
-                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("ptr"))),
-                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("pointer"))),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Named(::rustc_span::Symbol::intern("buf"))),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Named(::rustc_span::Symbol::intern("inner"))),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Named(::rustc_span::Symbol::intern("ptr"))),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Named(::rustc_span::Symbol::intern("pointer"))),
                     ]))
                 ))
             );
@@ -1587,10 +1601,10 @@ fn test_cve_2018_21000_inlined() {
                 from_vec_cap_local.into_place(),
                 ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(
                     ::rpl_context::pat::Place::new(from_vec_local, pcx.mk_slice(&[
-                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("buf"))),
-                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("inner"))),
-                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("cap"))),
-                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Unnamed(0u32.into())),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Named(::rustc_span::Symbol::intern("buf"))),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Named(::rustc_span::Symbol::intern("inner"))),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Named(::rustc_span::Symbol::intern("cap"))),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Unnamed(0u32.into())),
                     ]))
                 ))
             );
@@ -1611,7 +1625,7 @@ fn test_cve_2018_21000_inlined() {
                 from_vec_len_local.into_place(),
                 ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(
                     ::rpl_context::pat::Place::new(from_vec_local, pcx.mk_slice(&[
-                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(::rustc_span::Symbol::intern("len"))),
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Named(::rustc_span::Symbol::intern("len"))),
                     ]))
                 ))
             );
@@ -1733,9 +1747,8 @@ fn test_cve_2018_21000_inlined() {
 #[test]
 fn test_cve_2019_15548() {
     mir_test_case!(
+        #[meta($T:ty)]
         pat! {
-            meta!($T:ty);
-
             type c_char = libc::c_char;
             // type c_char = i8;
 
@@ -1744,11 +1757,13 @@ fn test_cve_2019_15548() {
             let ptr: *const u8 = core::slice::as_ptr(copy bytes);
             let dst: *const c_char = copy ptr as *const c_char (Transmute);
             let ret: $T = $crate::ll::instr(move dst);
-        } => quote! {
-            #[allow(non_snake_case)]
-            let T_ty_var = mir_pat.new_ty_var(None);
-            #[allow(non_snake_case)]
-            let T_ty = pcx.mk_var_ty(T_ty_var);
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T_ty = pcx.mk_var_ty(T_ty_var);
+            }
             #[allow(non_snake_case)]
             let c_char_ty = pcx.mk_path_ty(
                 pcx.mk_path_with_args(pcx.mk_item_path(&["libc", "c_char",]), &[])
@@ -1824,12 +1839,14 @@ fn test_cve_2019_15548() {
 #[test]
 fn test_cve_2019_15548_2() {
     mir_test_case!(
+        #[meta()]
         pat! {
             type c_char = libc::c_char;
 
             let ptr: *const c_char = _;
             _ = $crate::ll::instr(move ptr);
-        } => quote! {
+        } => {
+            meta! {}
             #[allow(non_snake_case)]
             let c_char_ty = pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["libc", "c_char",]),
@@ -1858,12 +1875,14 @@ fn test_cve_2019_15548_2() {
 #[test]
 fn test_cve_2019_15548_2_i8() {
     mir_test_case!(
+        #[meta()]
         pat! {
             type c_char = i8;
 
             let ptr: *const c_char = _;
             _ = $crate::ll::instr(move ptr);
-        } => quote! {
+        } => {
+            meta! {}
             #[allow(non_snake_case)]
             let c_char_ty = pcx.primitive_types.i8;
             let ptr_local = mir_pat.mk_local(
@@ -1887,10 +1906,12 @@ fn test_cve_2019_15548_2_i8() {
 #[test]
 fn test_cve_2021_27376() {
     mir_test_case!(
+        #[meta()]
         pat! {
             let src: *const std::net::SocketAddrV4 = _;
             let dst: *const libc::sockaddr = move src as *const libc::sockaddr (PtrToPtr);
-        } => quote! {
+        } => {
+            meta! {}
             let src_local = mir_pat.mk_local(pcx.mk_raw_ptr_ty(
                 pcx.mk_path_ty(pcx.mk_path_with_args(pcx.mk_item_path(&["std", "net", "SocketAddrV4", ]), &[])),
                 ::rustc_middle::mir::Mutability::Not
@@ -1919,20 +1940,27 @@ fn test_cve_2021_27376() {
 fn test_cve_2020_35892_3() {
     test_case!(
         pat! {
+            #[meta($T:ty)]
             struct $SlabT {
                 mem: *mut $T,
                 len: usize,
             }
         } => quote! {
             #[allow(non_snake_case)]
-            let SlabT = pcx.new_struct(::rustc_span::Symbol::intern("SlabT"));
-            SlabT.add_field(::rustc_span::Symbol::intern("mem"), pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
-            SlabT.add_field(::rustc_span::Symbol::intern("len"), pcx.primitive_types.usize);
+            let SlabT_adt = pcx.new_struct(::rustc_span::Symbol::intern("SlabT"));
+
+            #[allow(non_snake_case)]
+            let T_ty_var = SlabT_adt.meta.new_ty_var(None);
+            #[allow(non_snake_case)]
+            let T_ty = pcx.mk_var_ty(T_ty_var);
+
+            SlabT_adt.add_field(::rustc_span::Symbol::intern("mem"), pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
+            SlabT_adt.add_field(::rustc_span::Symbol::intern("len"), pcx.primitive_types.usize);
         }
     );
     mir_test_case!(
+        #[meta($T:ty, $SlabT:ty = |_tcx, _paramse_env, ty| ty.is_adt())]
         pat! {
-            meta!($T:ty, $SlabT:ty = |_tcx, _paramse_env, ty| ty.is_adt());
             let self: &mut $SlabT;
             #[export(len)]
             let len: usize = copy (*self).len;
@@ -1943,15 +1971,18 @@ fn test_cve_2020_35892_3() {
             let ptr: *const $T = copy ptr_mut as *const $T (PtrToPtr);
             #[export(read)]
             let elem: $T = copy (*ptr);
-        } => quote! {
-            #[allow(non_snake_case)]
-            let T_ty_var = mir_pat.new_ty_var(None);
-            #[allow(non_snake_case)]
-            let T_ty = pcx.mk_var_ty(T_ty_var);
-            #[allow(non_snake_case)]
-            let SlabT_ty_var = mir_pat.new_ty_var(Some(|_tcx, _paramse_env, ty| ty.is_adt()));
-            #[allow(non_snake_case)]
-            let SlabT_ty = pcx.mk_var_ty(SlabT_ty_var);
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T_ty = pcx.mk_var_ty(T_ty_var);
+
+                #[allow(non_snake_case)]
+                let SlabT_ty_var = fn_pat.meta.new_ty_var(Some(|_tcx, _paramse_env, ty| ty.is_adt()));
+                #[allow(non_snake_case)]
+                let SlabT_ty = pcx.mk_var_ty(SlabT_ty_var);
+            }
             let self_local = mir_pat.mk_self(pcx.mk_ref_ty(
                 ::rpl_context::pat::RegionKind::ReAny,
                 SlabT_ty,
@@ -1964,7 +1995,7 @@ fn test_cve_2020_35892_3() {
                     self_local,
                     pcx.mk_slice(&[
                         ::rpl_context::pat::PlaceElem::Deref,
-                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Named(
                             ::rustc_span::Symbol::intern("len")
                         )),
                     ])
@@ -1986,7 +2017,7 @@ fn test_cve_2020_35892_3() {
                     self_local,
                     pcx.mk_slice(&[
                         ::rpl_context::pat::PlaceElem::Deref,
-                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::Field::Named(
+                        ::rpl_context::pat::PlaceElem::Field(::rpl_context::pat::FieldAcc::Named(
                             ::rustc_span::Symbol::intern("mem")
                         )),
                     ])

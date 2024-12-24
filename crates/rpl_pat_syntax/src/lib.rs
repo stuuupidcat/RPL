@@ -1062,15 +1062,10 @@ pub struct MetaItem {
     pub kind: MetaKind,
 }
 
-#[derive(ToTokens)]
-pub struct Meta {
-    pub meta: Macro<kw::meta, Punctuated<MetaItem, Token![,]>, parse::PunctuatedParseTerminated>,
-    tk_semi: Option<Token![;]>,
-}
+pub type Meta = Attribute<kw::meta, Punctuated<MetaItem, Token![,]>, parse::PunctuatedParseTerminated>;
 
 #[derive(Parse, ToTokens)]
 pub struct Mir {
-    pub metas: Many<Meta>,
     pub declarations: Many<Declaration>,
     pub statements: Many<Statement>,
 }
@@ -1082,25 +1077,32 @@ pub enum ExportKind {
 }
 
 #[derive(Parse, ToTokens)]
-pub struct Attribute<P: syn::parse::Parse + quote::ToTokens, I: syn::parse::Parse + quote::ToTokens> {
+pub struct Attribute<
+    P: syn::parse::Parse + quote::ToTokens,
+    I: quote::ToTokens,
+    Parse: parse::ParseFn<I> = parse::ParseParse,
+> {
     tk_pound: Token![#],
     #[syn(bracketed)]
     bracket: token::Bracket,
     #[syn(in = bracket)]
     path: P,
     #[syn(in = bracket)]
+    #[syn(parenthesized)]
+    paren: token::Paren,
+    #[syn(in = paren)]
+    #[parse(Parse::parse)]
     pub inner: I,
+    #[parse(|_| Ok(PhantomData))]
+    #[to_tokens(|_, _| {})]
+    _parse: PhantomData<Parse>,
 }
 
-pub type Export = Attribute<kw::export, ExportInner>;
+pub type Export = Attribute<kw::export, ExportItem>;
 
 #[derive(Parse, ToTokens)]
-pub struct ExportInner {
-    #[syn(parenthesized)]
-    paran: token::Paren,
-    #[syn(in = paran)]
+pub struct ExportItem {
     pub ident: Ident,
-    #[syn(in = paran)]
     #[parse(PunctAnd::parse_opt)]
     pub kind: Option<PunctAnd<Token![:], ExportKind>>,
 }
@@ -1284,8 +1286,8 @@ pub enum ImplItemKind {
 
 #[derive(Parse, ToTokens)]
 pub struct ImplItem {
-    #[parse(Export::parse_opt)]
-    pub export: Option<Export>,
+    #[parse(Meta::parse_opt)]
+    pub meta: Option<Meta>,
     pub kind: ImplItemKind,
 }
 
@@ -1314,8 +1316,8 @@ pub enum ItemKind {
 
 #[derive(Parse, ToTokens)]
 pub struct Item {
-    #[parse(Export::parse_opt)]
-    pub export: Option<Export>,
+    #[parse(Meta::parse_opt)]
+    pub meta: Option<Meta>,
     pub kind: ItemKind,
 }
 

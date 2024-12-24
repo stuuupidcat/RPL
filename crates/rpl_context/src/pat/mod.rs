@@ -15,17 +15,16 @@ pub use ty::*;
 
 #[derive(Default)]
 pub struct MetaVars<'pcx> {
-    ty_vars: IndexVec<TyVarIdx, TyVar>,
-    const_vars: IndexVec<ConstVarIdx, ConstVar<'pcx>>,
+    pub ty_vars: IndexVec<TyVarIdx, TyVar>,
+    pub const_vars: IndexVec<ConstVarIdx, ConstVar<'pcx>>,
 }
 
 pub struct Pattern<'pcx> {
     pub pcx: PatCtxt<'pcx>,
-    pub meta: MetaVars<'pcx>,
-    adts: FxHashMap<Symbol, AdtDef<'pcx>>,
-    pub fns: FnsDef<'pcx>,
+    adts: FxHashMap<Symbol, Adt<'pcx>>,
+    pub fns: Fns<'pcx>,
     #[expect(dead_code)]
-    impls: Vec<ImplDef<'pcx>>,
+    impls: Vec<Impl<'pcx>>,
 }
 
 impl<'pcx> MetaVars<'pcx> {
@@ -47,19 +46,18 @@ impl<'pcx> Pattern<'pcx> {
     pub(crate) fn new(pcx: PatCtxt<'pcx>) -> Self {
         Self {
             pcx,
-            meta: MetaVars::default(),
             adts: Default::default(),
             fns: Default::default(),
             impls: Default::default(),
         }
     }
-    pub fn new_struct(&mut self, name: Symbol) -> &mut VariantDef<'pcx> {
+    pub fn new_struct(&mut self, name: Symbol) -> &mut Variant<'pcx> {
         self.adts
             .entry(name)
-            .or_insert_with(AdtDef::new_struct)
+            .or_insert_with(Adt::new_struct)
             .non_enum_variant_mut()
     }
-    pub fn new_enum(&mut self, name: Symbol) -> &mut AdtDef<'pcx> {
-        self.adts.entry(name).or_insert_with(AdtDef::new_enum)
+    pub fn new_enum(&mut self, name: Symbol) -> &mut Adt<'pcx> {
+        self.adts.entry(name).or_insert_with(Adt::new_enum)
     }
 }

@@ -28,16 +28,20 @@ fn write_to_file(file: &str, content: &[u8]) -> std::io::Result<()> {
 }
 
 macro_rules! test_case {
-    ( $(#[$meta:meta])* fn $name:ident() { $($input:tt)* }) => {
+    ( $(#[$meta:meta])* fn $name:ident() {
+        meta!($($rpl_meta:tt)*);
+        $($input:tt)*
+    }) => {
         #[rpl_macros::pattern_def]
         #[allow(unused_variables)]
         fn $name(pcx: PatCtxt<'_>) -> &MirPattern<'_> {
             let pattern = rpl! {
+                #[meta($($rpl_meta)*)]
                 fn $pattern (..) -> _ = mir! {
                     $($input)*
                 }
             };
-            pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap()
+            pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap().expect_mir_body()
         }
         #[test]
         $(#[$meta])*
@@ -177,6 +181,8 @@ test_case! {
 
 test_case! {
     fn cve_2021_27376() {
+        meta!();
+
         let src: *const std::net::SocketAddrV4 = _;
         let dst: *const libc::sockaddr = move src as *const libc::sockaddr (PtrToPtr);
     }
@@ -258,6 +264,8 @@ test_case! {
 
 test_case! {
     fn control_flow() {
+        meta!();
+
         let a: &mut i32 = _;
         let f: bool = _;
         switchInt(copy f) {

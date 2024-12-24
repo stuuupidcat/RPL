@@ -183,10 +183,10 @@ fn test_assign() {
 
 #[test]
 fn test_meta() {
-    pass!(Meta!(meta!($T:ty);));
-    pass!(Meta!(meta![$T:ty, $U:ty]; ));
-    pass!(Meta!(meta! { $T:ty, $U:ty, }));
-    pass!(Meta!(meta!($T:ty = is_all_safe_trait); ));
+    pass!(Meta!(#[meta($T:ty)]));
+    pass!(Meta!(#[meta($T:ty, $U:ty)]));
+    pass!(Meta!(#[meta( #[export(ty_var)] $T:ty, )]));
+    pass!(Meta!(#[meta($T:ty = is_all_safe_trait)]));
 }
 
 #[test]
@@ -297,7 +297,6 @@ fn test_statement() {
 fn test_mir_pattern() {
     pass!(Mir!());
     pass!(Mir! {
-        meta!($T:ty);
         type SliceT = [$T];
         type RefSliceT = &SliceT;
         type PtrSliceT = *const SliceT;
@@ -359,186 +358,183 @@ fn test_mir_pattern() {
 
 #[test]
 fn test_parse_cve_2018_21000() {
-    pass!(Mir! {
-        meta!{
-            $T1:ty,
-            $T2:ty,
-            $T3:ty,
+    pass!(Item! {
+        #[meta($T1:ty, $T2:ty, $T3:ty)]
+        fn _ (..) -> _ = mir! {
+            type VecT1 = std::vec::Vec<$T1>;
+            type VecT2 = std::vec::Vec<$T2>;
+            type VecT3 = std::vec::Vec<$T3>;
+            type PtrT1 = *mut $T1;
+            type PtrT3 = *mut $T3;
+
+            let from_vec: VecT1 = _;
+            let size: usize = SizeOf($T2);
+            let from_cap: usize = Vec::capacity(move from_vec);
+            let to_cap: usize = Mul(copy from_cap, copy size);
+            let from_len: usize = Len(from_vec);
+            let to_len: usize = Mul(copy from_len, copy size);
+            let from_vec_ptr: PtrT1 = Vec::as_mut_ptr(move from_vec);
+            let to_vec_ptr: PtrT3 = copy from_vec_ptr as PtrT3 (PtrToPtr);
+            // tuple: not implemented yet
+            // let tmp: () = std::mem::forget(move from_vec);
+            let res: VecT3 = Vec::from_raw_parts(copy to_vec_ptr, copy to_cap, copy to_len);
         }
-
-        type VecT1 = std::vec::Vec<$T1>;
-        type VecT2 = std::vec::Vec<$T2>;
-        type VecT3 = std::vec::Vec<$T3>;
-        type PtrT1 = *mut $T1;
-        type PtrT3 = *mut $T3;
-
-        let from_vec: VecT1 = _;
-        let size: usize = SizeOf($T2);
-        let from_cap: usize = Vec::capacity(move from_vec);
-        let to_cap: usize = Mul(copy from_cap, copy size);
-        let from_len: usize = Len(from_vec);
-        let to_len: usize = Mul(copy from_len, copy size);
-        let from_vec_ptr: PtrT1 = Vec::as_mut_ptr(move from_vec);
-        let to_vec_ptr: PtrT3 = copy from_vec_ptr as PtrT3 (PtrToPtr);
-        // tuple: not implemented yet
-        // let tmp: () = std::mem::forget(move from_vec);
-        let res: VecT3 = Vec::from_raw_parts(copy to_vec_ptr, copy to_cap, copy to_len);
     });
 }
 
 #[test]
 fn test_parse_cve_2020_35881_const() {
-    pass!(Mir! {
-        meta!{
+    pass!(Item! {
+        #[meta(
             $T1:ty,
             // $T2:ty, $T2 should be (), i.e. an empty tuple
-        };
+        )]
+        fn _ (..) -> _ = mir! {
+            type PtrT1 = *const $T1;
+            type PtrPtrT1 = *const *const $T1;
+            type DerefPtrT1 = &*const $T1;
+            type PtrT2 = *const ();
+            type PtrPtrT2 = *const *const ();
 
-        type PtrT1 = *const $T1;
-        type PtrPtrT1 = *const *const $T1;
-        type DerefPtrT1 = &*const $T1;
-        type PtrT2 = *const ();
-        type PtrPtrT2 = *const *const ();
-
-        let ptr_to_data: PtrT1 = _;
-        let data: DerefPtrT1 = &ptr_to_data;
-        let ptr_to_ptr_to_data: PtrPtrT1 = &raw const (*data);
-        let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *const *const () (Transmute);
-        let ptr_to_res: PtrT2 = copy* ptr_to_ptr_to_res;
+            let ptr_to_data: PtrT1 = _;
+            let data: DerefPtrT1 = &ptr_to_data;
+            let ptr_to_ptr_to_data: PtrPtrT1 = &raw const (*data);
+            let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *const *const () (Transmute);
+            let ptr_to_res: PtrT2 = copy* ptr_to_ptr_to_res;
+        }
     });
 }
 
 #[test]
 fn test_parse_cve_2020_35881_mut() {
-    pass!(Mir! {
-        meta!{
-            $T1:ty,
-        };
+    pass!(Item! {
+        #[meta($T1:ty)]
+        fn _ (..) -> _ = mir! {
+            type PtrT1 = *mut $T1;
+            type PtrPtrT1 = *mut *mut $T1;
+            type DerefPtrT1 = &mut *mut $T1;
+            type PtrT2 = *mut ();
+            type PtrPtrT2 = *mut *mut ();
 
-        type PtrT1 = *mut $T1;
-        type PtrPtrT1 = *mut *mut $T1;
-        type DerefPtrT1 = &mut *mut $T1;
-        type PtrT2 = *mut ();
-        type PtrPtrT2 = *mut *mut ();
-
-        let ptr_to_data: PtrT1 = _;
-        let data: DerefPtrT1 = &mut ptr_to_data;
-        let ptr_to_ptr_to_data: PtrPtrT1 = &raw mut (*data);
-        let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *mut *mut () (Transmute);
-        let ptr_to_res: PtrT2 = copy *ptr_to_ptr_to_res;
+            let ptr_to_data: PtrT1 = _;
+            let data: DerefPtrT1 = &mut ptr_to_data;
+            let ptr_to_ptr_to_data: PtrPtrT1 = &raw mut (*data);
+            let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *mut *mut () (Transmute);
+            let ptr_to_res: PtrT2 = copy *ptr_to_ptr_to_res;
+        }
     });
 }
 
 #[test]
 fn test_parse_cve_2021_29941_2() {
-    pass!(Mir! {
-        meta! {
-            $T:ty,
-        }
+    pass!(Item! {
+        #[meta($T:ty)]
+        fn _ (..) -> _ = mir! {
+            // type ExactSizeIterT = impl std::iter::ExactSizeIterator<Item = $T>;
+            // let's use a std::ops::Range<$T> instead temporarily
+            type RangeT = std::ops::Range<$T>;
+            type VecT = std::vec::Vec<$T>;
+            type RefMutVecT = &mut std::vec::Vec<$T>;
+            type PtrMutT = *mut $T;
+            type RefMutSliceT = &mut [$T];
+            type EnumerateRangeT = std::iter::Enumerate<RangeT>;
+            type RefMutEnumerateRangeT = &mut std::iter::Enumerate<RangeT>;
+            type OptionUsizeT = Option<(usize, $T)>;
 
-        // type ExactSizeIterT = impl std::iter::ExactSizeIterator<Item = $T>;
-        // let's use a std::ops::Range<$T> instead temporarily
-        type RangeT = std::ops::Range<$T>;
-        type VecT = std::vec::Vec<$T>;
-        type RefMutVecT = &mut std::vec::Vec<$T>;
-        type PtrMutT = *mut $T;
-        type RefMutSliceT = &mut [$T];
-        type EnumerateRangeT = std::iter::Enumerate<RangeT>;
-        type RefMutEnumerateRangeT = &mut std::iter::Enumerate<RangeT>;
-        type OptionUsizeT = Option<(usize, $T)>;
-
-        let iter: range = _;
-        // let len: usize = <RangeT as std::iter::ExactSizeIterator>::len(move iter);
-        let len: usize = RangeT::len(move iter);
-        let mut vec: Vec<T> = std::vec::Vec::with_capacity(copy len);
-        let mut ref_to_vec: RefMutVecT = &mut vec;
-        let mut ptr_to_vec: PtrMutT = Vec::as_mut_ptr(move ref_to_vec);
-        let mut slice: RefMutSliceT = std::slice::from_raw_parts_mut(copy ptr_to_vec, copy len);
-        // let mut enumerate: EnumerateRangeT = <RangeT as std::iter::Iterator>::enumerate(move iter);
-        let mut enumerate: EnumerateRangeT = RangeT::enumerate(move iter);
-        let mut enumerate: RefMutEnumerateRangeT = &mut enumerate;
-        let next: OptionUsizeT;
-        let cmp: isize;
-        let first: usize;
-        let second_t: $T;
-        let second_usize: usize;
-        let _tmp: ();
-        loop {
-            // next = <EnumerateRangeT as std::iter::Iterator>::next(move enumerate);
-            next = EnumerateRangeT::next(move enumerate);
-            // in `cmp = discriminant(copy next);`
-            // which discriminant should be used?
-            cmp = balabala::discriminant(copy next);
-            switchInt(move cmp) {
-                // true or 1 here?
-                true => {
-                    first = copy (next as Some).0;
-                    second_t = copy (next as Some).1;
-                    second_usize = copy second_t as usize (IntToInt);
-                    (*slice)[second_usize] = copy first as $T (IntToInt);
+            let iter: range = _;
+            // let len: usize = <RangeT as std::iter::ExactSizeIterator>::len(move iter);
+            let len: usize = RangeT::len(move iter);
+            let mut vec: Vec<T> = std::vec::Vec::with_capacity(copy len);
+            let mut ref_to_vec: RefMutVecT = &mut vec;
+            let mut ptr_to_vec: PtrMutT = Vec::as_mut_ptr(move ref_to_vec);
+            let mut slice: RefMutSliceT = std::slice::from_raw_parts_mut(copy ptr_to_vec, copy len);
+            // let mut enumerate: EnumerateRangeT = <RangeT as std::iter::Iterator>::enumerate(move iter);
+            let mut enumerate: EnumerateRangeT = RangeT::enumerate(move iter);
+            let mut enumerate: RefMutEnumerateRangeT = &mut enumerate;
+            let next: OptionUsizeT;
+            let cmp: isize;
+            let first: usize;
+            let second_t: $T;
+            let second_usize: usize;
+            let _tmp: ();
+            loop {
+                // next = <EnumerateRangeT as std::iter::Iterator>::next(move enumerate);
+                next = EnumerateRangeT::next(move enumerate);
+                // in `cmp = discriminant(copy next);`
+                // which discriminant should be used?
+                cmp = balabala::discriminant(copy next);
+                switchInt(move cmp) {
+                    // true or 1 here?
+                    true => {
+                        first = copy (next as Some).0;
+                        second_t = copy (next as Some).1;
+                        second_usize = copy second_t as usize (IntToInt);
+                        (*slice)[second_usize] = copy first as $T (IntToInt);
+                    }
+                    _ => break,
                 }
-                _ => break,
             }
+            // variable shadowing?
+            // There cannnot be two mutable references to `vec` in the same scope
+            ref_to_vec = &mut vec;
+            _tmp = Vec::set_len(move ref_to_vec, copy len);
         }
-        // variable shadowing?
-        // There cannnot be two mutable references to `vec` in the same scope
-        ref_to_vec = &mut vec;
-        _tmp = Vec::set_len(move ref_to_vec, copy len);
     });
 }
 
 #[test]
 fn test_cve_2020_35892_revised() {
-    pass!(Mir! {
-        meta!($T:ty, $SlabT:ty);
+    pass!(Item! {
+        #[meta($T:ty, $SlabT:ty)]
+        fn _ (..) -> _ = mir! {
+            let self: &mut $SlabT;
+            let len: usize;
+            let x1: usize;
+            let x2: usize;
+            let opt: #[lang = "Option"]<usize>;
+            let discr: isize;
+            let x: usize;
+            let start_ref: &usize;
+            let end_ref: &usize;
+            let start: usize;
+            let end: usize;
+            let range: core::ops::range::Range<usize>;
+            let mut iter: core::ops::range::Range<usize>;
+            let mut iter_mut: &mut core::ops::range::Range<usize>;
+            let mut base: *mut $T;
+            let offset: isize;
+            let elem_ptr: *mut $T;
+            let cmp: bool;
 
-        let self: &mut $SlabT;
-        let len: usize;
-        let x1: usize;
-        let x2: usize;
-        let opt: #[lang = "Option"]<usize>;
-        let discr: isize;
-        let x: usize;
-        let start_ref: &usize;
-        let end_ref: &usize;
-        let start: usize;
-        let end: usize;
-        let range: core::ops::range::Range<usize>;
-        let mut iter: core::ops::range::Range<usize>;
-        let mut iter_mut: &mut core::ops::range::Range<usize>;
-        let mut base: *mut $T;
-        let offset: isize;
-        let elem_ptr: *mut $T;
-        let cmp: bool;
-
-        len = copy (*self).len;
-        range = core::ops::range::Range { start: const 0_usize, end: move len };
-        iter = move range;
-        loop {
-            iter_mut = &mut iter;
-            start_ref = &(*iter_mut).start;
-            start = copy *start_ref;
-            end_ref = &(*iter_mut).end;
-            end = copy *end;
-            cmp = Lt(move start, copy end);
-            switchInt(move cmp) {
-                false => opt = #[lang = "None"],
-                _ => {
-                    x1 = copy (*iter_mut).start;
-                    x2 = core::iter::range::Step::forward_unchecked(copy x1, const 1_usize);
-                    (*iter_mut).start = copy x2;
-                    opt = #[lang = "Some"](copy x1);
+            len = copy (*self).len;
+            range = core::ops::range::Range { start: const 0_usize, end: move len };
+            iter = move range;
+            loop {
+                iter_mut = &mut iter;
+                start_ref = &(*iter_mut).start;
+                start = copy *start_ref;
+                end_ref = &(*iter_mut).end;
+                end = copy *end;
+                cmp = Lt(move start, copy end);
+                switchInt(move cmp) {
+                    false => opt = #[lang = "None"],
+                    _ => {
+                        x1 = copy (*iter_mut).start;
+                        x2 = core::iter::range::Step::forward_unchecked(copy x1, const 1_usize);
+                        (*iter_mut).start = copy x2;
+                        opt = #[lang = "Some"](copy x1);
+                    }
                 }
-            }
-            discr = discriminant(opt);
-            switchInt(move discr) {
-                0_isize => break,
-                1_isize => {
-                    x = copy (opt as Some).0;
-                    base = copy (*self).mem;
-                    offset = copy x as isize (IntToInt);
-                    elem_ptr = Offset(copy base, copy offset);
-                    _ = core::ptr::drop_in_place(copy elem_ptr);
+                discr = discriminant(opt);
+                switchInt(move discr) {
+                    0_isize => break,
+                    1_isize => {
+                        x = copy (opt as Some).0;
+                        base = copy (*self).mem;
+                        offset = copy x as isize (IntToInt);
+                        elem_ptr = Offset(copy base, copy offset);
+                        _ = core::ptr::drop_in_place(copy elem_ptr);
+                    }
                 }
             }
         }

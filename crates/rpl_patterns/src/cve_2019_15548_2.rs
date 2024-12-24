@@ -1,7 +1,6 @@
 use std::ops::Not;
 
 use rpl_context::PatCtxt;
-use rpl_mir::pat::MirPattern;
 use rpl_mir::{pat, CheckMirCtxt};
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
@@ -58,7 +57,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
             if let pattern_ptr = pattern_pass_a_pointer_to_c(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_ptr.mir_pat).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_ptr.fn_pat).check()
                 && let Some(ptr) = matches[pattern_ptr.ptr]
                 && let ptr = ptr.span_no_inline(body)
             {
@@ -76,7 +75,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 struct PatternPointer<'pcx> {
-    mir_pat: &'pcx MirPattern<'pcx>,
+    fn_pat: &'pcx pat::Fn<'pcx>,
     ptr: pat::Location,
 }
 
@@ -93,10 +92,10 @@ fn pattern_pass_a_pointer_to_c(pcx: PatCtxt<'_>) -> PatternPointer<'_> {
             _ = $crate::ll::instr(move ptr);
         }
     };
-    let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
     PatternPointer {
-        mir_pat,
+        fn_pat,
         ptr,
         // ty_var: c_char_ty,
     }

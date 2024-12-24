@@ -634,17 +634,6 @@ impl Control {
     }
 }
 
-impl Parse for Meta {
-    fn parse(input: ParseStream<'_>) -> Result<Self> {
-        let meta: Macro<_, _, _> = input.parse()?;
-        let tk_semi = match meta.delim {
-            syn::MacroDelimiter::Paren(_) | syn::MacroDelimiter::Bracket(_) => Some(input.parse()?),
-            syn::MacroDelimiter::Brace(_) => input.parse()?,
-        };
-        Ok(Meta { meta, tk_semi })
-    }
-}
-
 #[macro_export]
 macro_rules! macro_delimiter {
     ($content:ident in $input:expr) => {{
@@ -703,7 +692,9 @@ impl<P: syn::parse::Parse + quote::ToTokens + token::Token, T: syn::parse::Parse
     }
 }
 
-impl<P: syn::parse::Parse + quote::ToTokens + token::Token, I: syn::parse::Parse + quote::ToTokens> Attribute<P, I> {
+impl<P: syn::parse::Parse + quote::ToTokens + token::Token, I: quote::ToTokens, Parse: ParseFn<I>>
+    Attribute<P, I, Parse>
+{
     pub fn parse_opt(input: ParseStream<'_>) -> Result<Option<Self>> {
         if let Some((punct, cursor)) = input.cursor().punct()
             && punct.as_char() == '#'

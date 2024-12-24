@@ -12,15 +12,23 @@ use rpl_mir::pat::MirPattern;
 use rustc_span::Symbol;
 
 macro_rules! test_case {
-    (fn $name:ident() {$($input:tt)*} => {$($expected:tt)*} $(,)?) => {
+    (fn $name:ident() {
+        meta!($($rpl_meta:tt)*);
+        $($input:tt)*
+    } => {$($expected:tt)*} $(,)?) => {
         #[rpl_macros::pattern_def]
         fn $name(pcx: PatCtxt<'_>) -> &MirPattern<'_> {
             let pattern = rpl! {
+                #[meta($($rpl_meta)*)]
                 fn $pattern (..) -> _ = mir! {
                     $($input)*
                 }
             };
-            pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap()
+            pattern
+                .fns
+                .get_fn_pat(Symbol::intern("pattern"))
+                .unwrap()
+                .expect_mir_body()
         }
         #[test]
         fn ${concat(test_, $name)}() {
@@ -66,7 +74,6 @@ test_case! {
         let to_slice: &[u8] = &*to_raw;
         let to_slice_mut: &mut [u8] = &mut *to_raw_mut;
     } => {
-        meta!(?T0:ty);
         let _?0: &[?T0];
         let _?1: &mut [?T0];
         let _?2: *const [?T0];
@@ -137,7 +144,6 @@ test_case! {
             }
         }
     } => {
-        meta!(?T0:ty, ?T1:ty);
         let _?0: &mut ?T1;
         let _?1: usize;
         let _?2: usize;
@@ -200,7 +206,6 @@ test_case! {
         let _tmp: () = std::mem::forget(move from_vec);
         let res: VecT3 = Vec::from_raw_parts(copy to_vec_ptr, copy to_cap, copy to_len);
     } => {
-        meta!(?T0:ty, ?T1:ty, ?T2:ty);
         let _?0: std::vec::Vec<?T0>;
         let _?1: usize;
         let _?2: usize;
@@ -235,7 +240,7 @@ test_case! {
 
 test_case! {
     fn cve_2018_21000_inlined() {
-        meta!{$T:ty}
+        meta!($T:ty);
 
         let to_vec: alloc::vec::Vec<$T, alloc::alloc::Global>;
         let from_vec: alloc::vec::Vec<u8, alloc::alloc::Global> = _;
@@ -275,7 +280,6 @@ test_case! {
             len: copy to_vec_cap,
         };
     } => {
-        meta!(?T0: ty);
         let _?0: alloc::vec::Vec<?T0, alloc::alloc::Global>;
         let _?1: alloc::vec::Vec<u8, alloc::alloc::Global>;
         let _?2: usize;
@@ -322,9 +326,7 @@ test_case! {
 
 test_case! {
     fn cve_2020_35881_const() {
-        meta!{
-            $T1:ty,
-        };
+        meta!($T1:ty);
 
         type PtrT1 = *const $T1;
         type PtrPtrT1 = *const *const $T1;
@@ -339,7 +341,6 @@ test_case! {
         let ptr_to_res: PtrT2 = copy* ptr_to_ptr_to_res;
         // neglected the type-size-equivalence check
     } => {
-        meta!(?T0:ty);
         let _?0: *const ?T0;
         let _?1: &*const ?T0;
         let _?2: *const *const ?T0;
@@ -358,9 +359,7 @@ test_case! {
 
 test_case! {
     fn cve_2020_35881_mut() {
-        meta!{
-            $T1:ty,
-        };
+        meta!($T1:ty);
 
         type PtrT1 = *mut $T1;
         type PtrPtrT1 = *mut *mut $T1;
@@ -374,7 +373,6 @@ test_case! {
         let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *mut *mut () (Transmute);
         let ptr_to_res: PtrT2 = copy *ptr_to_ptr_to_res;
     } => {
-        meta!(?T0:ty);
         let _?0: *mut ?T0;
         let _?1: &mut *mut ?T0; // the blank space here cannot pass the test
         let _?2: *mut *mut ?T0;
@@ -444,8 +442,6 @@ test_case! {
         ref_to_vec = &mut vec;
         _tmp = Vec::set_len(move ref_to_vec, copy len);
     } => {
-        meta!(?T0:ty);
-
         let _?0: std::ops::Range<?T0>;
         let _?1: usize;
         let _?2: std::vec::Vec<?T0>;
