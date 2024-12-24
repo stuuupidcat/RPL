@@ -1,7 +1,6 @@
 use std::ops::Not;
 
 use rpl_context::PatCtxt;
-use rpl_mir::pat::MirPattern;
 use rpl_mir::{pat, CheckMirCtxt};
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
@@ -58,7 +57,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
             if let pattern_cast = pattern_rust_str_as_c_str(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.mir_pat).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.fn_pat).check()
                 && let Some(cast_from) = matches[pattern_cast.cast_from]
                 && let cast_from = cast_from.span_no_inline(body)
                 && let Some(cast_to) = matches[pattern_cast.cast_to]
@@ -78,7 +77,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 struct PatternCast<'pcx> {
-    mir_pat: &'pcx MirPattern<'pcx>,
+    fn_pat: &'pcx pat::Fn<'pcx>,
     cast_from: pat::Location,
     cast_to: pat::Location,
 }
@@ -90,8 +89,8 @@ fn pattern_rust_str_as_c_str(pcx: PatCtxt<'_>) -> PatternCast<'_> {
     let cast_from;
     let cast_to;
     let pattern = rpl! {
+        #[meta($T:ty)]
         fn $pattern (..) -> _ = mir! {
-            meta!($T:ty);
 
             type c_char = libc::c_char;
 
@@ -104,10 +103,10 @@ fn pattern_rust_str_as_c_str(pcx: PatCtxt<'_>) -> PatternCast<'_> {
             let ret: $T = $crate::ll::instr(move dst);
         }
     };
-    let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
     PatternCast {
-        mir_pat,
+        fn_pat,
         cast_from,
         cast_to,
     }

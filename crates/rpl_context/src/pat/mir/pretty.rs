@@ -216,7 +216,7 @@ impl fmt::Debug for ConstOperand<'_> {
     }
 }
 
-impl fmt::Debug for Field {
+impl fmt::Debug for FieldAcc {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Named(sym) => write!(f, "{sym}"),
@@ -229,15 +229,6 @@ impl fmt::Debug for MirPattern<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let new_line = if f.alternate() { "\n" } else { " " };
         let indent = if f.alternate() { "    " } else { "" };
-        let mut meta = f.debug_tuple("meta!");
-        for ty_var in &self.ty_vars {
-            meta.field_with(|f| write!(f, "{ty_var:?}:ty"));
-        }
-        for const_var in &self.const_vars {
-            meta.field_with(|f| write!(f, "{const_var:?}"));
-        }
-        meta.finish()?;
-        write!(f, ";{new_line}")?;
         for (local, ty) in self.locals.iter_enumerated() {
             write!(f, "let {local:?}: {ty:?} ;{new_line}")?;
         }

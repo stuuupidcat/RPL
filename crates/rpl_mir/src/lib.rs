@@ -66,6 +66,7 @@ pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     pcx: PatCtxt<'pcx>,
     param_env: ty::ParamEnv<'tcx>,
     body: &'a mir::Body<'tcx>,
+    fn_pat: &'a pat::Fn<'pcx>,
     mir_pat: &'a pat::MirPattern<'pcx>,
     pat_cfg: PatControlFlowGraph,
     pat_ddg: PatDataDepGraph,
@@ -78,12 +79,8 @@ pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
 }
 
 impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
-    pub fn new(
-        tcx: TyCtxt<'tcx>,
-        pcx: PatCtxt<'pcx>,
-        body: &'a mir::Body<'tcx>,
-        mir_pat: &'a pat::MirPattern<'pcx>,
-    ) -> Self {
+    pub fn new(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>, body: &'a mir::Body<'tcx>, fn_pat: &'a pat::Fn<'pcx>) -> Self {
+        let mir_pat = fn_pat.expect_mir_body();
         // let pat_pdg = crate::graph::pat_program_dep_graph(&patterns, tcx.pointer_size().bytes_usize());
         // let mir_pdg = crate::graph::mir_program_dep_graph(body);
         let pat_cfg = crate::graph::pat_control_flow_graph(mir_pat, tcx.pointer_size().bytes());
@@ -95,6 +92,7 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
             pcx,
             param_env: tcx.param_env_reveal_all_normalized(body.source.def_id()),
             body,
+            fn_pat,
             mir_pat,
             pat_cfg,
             pat_ddg,
@@ -106,7 +104,7 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
                 RefCell::new(HybridBitSet::new_empty(body.local_decls.len())),
                 mir_pat.locals.len(),
             ),
-            ty_vars: IndexVec::from_elem(RefCell::new(Vec::new()), &mir_pat.ty_vars),
+            ty_vars: IndexVec::from_elem(RefCell::new(Vec::new()), &fn_pat.meta.ty_vars),
         }
     }
     pub fn check(&self) -> Option<Matches<'tcx>> {
@@ -275,7 +273,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
     }
     fn match_place_ref(&self, pat: pat::Place<'pcx>, place: mir::PlaceRef<'tcx>) -> bool {
         use mir::ProjectionElem::*;
-        use pat::Field::{Named, Unnamed};
+        use pat::FieldAcc::{Named, Unnamed};
         let place_proj_and_ty = place.projection.iter().scan(
             PlaceTy::from_ty(self.body.local_decls[place.local].ty),
             |place_ty, &proj| {

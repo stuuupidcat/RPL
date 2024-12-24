@@ -200,7 +200,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                     num_blocks,
                 ),
                 locals: IndexVec::from_fn_n(|_| LocalMatches::new(num_locals), num_locals),
-                ty_vars: IndexVec::from_fn_n(|_| TyVarMatches::new(), cx.mir_pat.ty_vars.len()),
+                ty_vars: IndexVec::from_fn_n(|_| TyVarMatches::new(), cx.fn_pat.meta.ty_vars.len()),
             },
             // succeeded: Cell::new(false),
         }

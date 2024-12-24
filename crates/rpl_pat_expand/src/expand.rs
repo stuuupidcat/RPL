@@ -81,6 +81,11 @@ macro_rules! decl_pat_id {
                     }
                 }
             )*
+            fn as_ident(self) -> &'pat Ident {
+                match self {
+                    $( $ident::$variant(ident) => ident, )*
+                }
+            }
         }
 
         impl<'pat> ExpandPatCtxt<'pat> {
@@ -116,6 +121,7 @@ decl_pat_id! {
 struct ExpandPatCtxt<'pat> {
     pcx: &'pat Ident,
     pat: PatId<'pat>,
+    meta: Option<&'pat Meta>,
     parent: Option<&'pat ExpandPatCtxt<'pat>>,
     symbols: &'pat SymbolTable<'pat>,
 }
@@ -154,6 +160,12 @@ trait ExpandIdent: Sized {
     // }
     fn as_ty(&self) -> Ident {
         self.with_suffix("_ty")
+    }
+    fn as_adt(&self) -> Ident {
+        self.with_suffix("_adt")
+    }
+    fn as_fn(&self) -> Ident {
+        self.with_suffix("_fn")
     }
     fn as_ty_var(&self) -> Ident {
         self.with_suffix("_ty_var")
@@ -198,6 +210,7 @@ impl<'pat> ExpandCtxt<'pat> {
         ExpandPatCtxt {
             pcx: self.pcx,
             pat,
+            meta: None,
             parent: None,
             symbols: self.symbols,
         }
@@ -228,6 +241,16 @@ impl<'pat> ExpandPatCtxt<'pat> {
         ExpandPatCtxt {
             pcx: self.pcx,
             pat,
+            meta: self.meta,
+            parent: Some(self),
+            symbols: self.symbols,
+        }
+    }
+    fn with_opt_meta(&'pat self, meta: Option<&'pat Meta>) -> Self {
+        ExpandPatCtxt {
+            pcx: self.pcx,
+            pat: self.pat,
+            meta,
             parent: Some(self),
             symbols: self.symbols,
         }
@@ -361,7 +384,8 @@ impl ToTokens for Expand<'_, &Pattern> {
 
 impl ToTokens for ExpandPat<'_, &Item> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.ecx.expand(&self.value.kind).to_tokens(tokens);
+        let Item { meta, kind } = self.value;
+        self.ecx.with_opt_meta(meta.as_ref()).expand(kind).to_tokens(tokens);
     }
 }
 
@@ -378,20 +402,23 @@ impl ToTokens for ExpandPat<'_, &ItemKind> {
 
 impl ToTokens for ExpandPat<'_, &FnPat> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandPatCtxt { pcx, .. } = self.ecx;
+        let ExpandPatCtxt { pcx, meta, .. } = self.ecx;
         let FnPat { sig, body } = self.value;
         let fn_pat = match sig.ident.as_ident() {
-            Some(ident) => ident,
-            None => &format_ident!("fn_pat"),
+            Some(ident) => ident.as_fn(),
+            None => format_ident!("fn_pat"),
         };
-        let sig = self.ecx.with_pat(PatId::Fn(fn_pat)).expand(sig);
+        let ecx_fn_pat = self.ecx.with_pat(PatId::Fn(&fn_pat));
+        ecx_fn_pat.expand(sig).to_tokens(tokens);
         match body {
             FnBody::Empty(_semi) => {},
             FnBody::Mir(mir_body) => {
                 let mir_pat = format_ident!("mir_pat");
                 let mir_body = self.ecx.with_pat(PatId::Mir(&mir_pat)).expand(&mir_body.mir);
+                if let Some(meta) = meta {
+                    ecx_fn_pat.expand(meta).to_tokens(tokens);
+                }
                 quote_each_token!(tokens
-                    #sig
                     #mir_body
                     let #mir_pat = #pcx.mk_mir_pattern(#mir_pat);
                     #fn_pat.set_body(::rpl_context::pat::FnBody::Mir(#mir_pat));
@@ -470,44 +497,50 @@ impl ToTokens for ExpandPat<'_, &FnRet> {
 
 impl ToTokens for ExpandPat<'_, &Struct> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandPatCtxt { pcx, .. } = self.ecx;
+        let ExpandPatCtxt { pcx, meta, .. } = self.ecx;
         let Struct { ident, fields, .. } = &self.value;
         let ident_sym = self.ecx.expand(ident.to_symbol());
-        let fields = fields
-            .iter()
-            .map(|field| self.ecx.with_pat(PatId::Variant(ident)).expand(field));
+        let ident = ident.as_adt();
         quote_each_token!(tokens
             #[allow(non_snake_case)]
             let #ident = #pcx.new_struct(#ident_sym);
-            #(#fields)*
         );
+        let ecx_with_ident = self.ecx.with_pat(PatId::Variant(&ident));
+        if let Some(meta) = meta {
+            ecx_with_ident.expand(meta).to_tokens(tokens);
+        }
+        for field in fields.iter() {
+            ecx_with_ident.expand(field).to_tokens(tokens);
+        }
     }
 }
 
 impl ToTokens for ExpandPat<'_, &Field> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
         let ExpandPatCtxt { pat, .. } = self.ecx;
-        let pat = pat.expect_variant();
+        let variant_pat = pat.expect_variant();
         let Field { ident, ty, .. } = self.value;
         let ident = self.ecx.expand(ident.to_symbol());
         let ty = self.ecx.expand(ty);
-        quote_each_token!(tokens #pat.add_field(#ident, #ty););
+        quote_each_token!(tokens #variant_pat.add_field(#ident, #ty););
     }
 }
 
 impl ToTokens for ExpandPat<'_, &Enum> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandPatCtxt { pcx, .. } = self.ecx;
+        let ExpandPatCtxt { pcx, meta, .. } = self.ecx;
         let Enum { ident, variants, .. } = self.value;
         let ident_sym = self.ecx.expand(ident.to_symbol());
-        let variants = variants
-            .iter()
-            .map(|variant| self.ecx.with_pat(PatId::Enum(ident)).expand(variant));
         quote_each_token!(tokens
             #[allow(non_snake_case)]
             let #ident = #pcx.new_enum(#ident_sym);
-            #(#variants)*
         );
+        if let Some(meta) = meta {
+            self.ecx.expand(meta).to_tokens(tokens);
+        }
+        for variant in variants.iter() {
+            self.ecx.with_pat(PatId::Enum(ident)).expand(variant).to_tokens(tokens);
+        }
     }
 }
 
@@ -533,16 +566,14 @@ impl ToTokens for ExpandPat<'_, &Mir> {
         let ExpandPatCtxt { pat, .. } = self.ecx;
         let mir_pat = pat.expect_mir();
         let Mir {
-            metas,
             declarations,
             statements,
         } = &self.value;
-        let metas = metas.iter().map(|meta| self.ecx.expand(meta));
         let declarations = declarations.iter().map(|declaration| self.ecx.expand(declaration));
         let statements = statements.iter().map(|statement| self.ecx.expand(statement));
         quote_each_token!(tokens
             let mut #mir_pat = ::rpl_context::pat::MirPattern::builder();
-            #(#metas)* #(#declarations)* #(#statements)*
+            #(#declarations)* #(#statements)*
             let #mir_pat = #mir_pat.build();
         );
     }
@@ -551,7 +582,7 @@ impl ToTokens for ExpandPat<'_, &Mir> {
 impl ToTokens for ExpandPat<'_, &MetaItem> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
         let ExpandPatCtxt { pcx, pat, .. } = self.ecx;
-        let mir_pat = pat.expect_mir();
+        let pat = pat.as_ident();
         let MetaItem {
             export, ident, kind, ..
         } = &self.value;
@@ -565,7 +596,7 @@ impl ToTokens for ExpandPat<'_, &MetaItem> {
                 };
                 quote_each_token!(tokens
                     #[allow(non_snake_case)]
-                    let #ty_var_ident = #mir_pat.new_ty_var(#ty_pred);
+                    let #ty_var_ident = #pat.meta.new_ty_var(#ty_pred);
                     #[allow(non_snake_case)]
                     let #ty_ident = #pcx.mk_var_ty(#ty_var_ident);
                 );
@@ -580,8 +611,8 @@ impl ToTokens for ExpandPat<'_, &MetaItem> {
 
 impl ToTokens for ExpandPat<'_, &Meta> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
-        let Meta { meta, .. } = self.value;
-        for meta_item in meta.content.iter() {
+        let Meta { inner, .. } = self.value;
+        for meta_item in inner.iter() {
             self.ecx.expand(meta_item).to_tokens(tokens);
         }
     }
@@ -601,7 +632,7 @@ impl ToTokens for ExpandPat<'_, &Statement> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
         let Statement { export, kind, .. } = &self.value;
         if let Some(Export {
-            inner: ExportInner { ident, .. },
+            inner: ExportItem { ident, .. },
             ..
         }) = export
         {
@@ -1205,7 +1236,7 @@ impl ToTokens for Expand<'_, Projections<'_>> {
 
 impl ToTokens for Expand<'_, &syn::Member> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        quote_each_token!(tokens ::rpl_context::pat::Field::);
+        quote_each_token!(tokens ::rpl_context::pat::FieldAcc::);
         match self.value {
             syn::Member::Named(name) => {
                 let name = self.ecx.expand(name.to_symbol());

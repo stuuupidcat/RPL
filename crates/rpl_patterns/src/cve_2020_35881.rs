@@ -1,7 +1,6 @@
 #[allow(non_snake_case)]
 pub mod const_const_Transmute_ver {
     use rpl_context::PatCtxt;
-    use rpl_mir::pat::MirPattern;
     use rustc_hir as hir;
     use rustc_hir::def_id::LocalDefId;
     use rustc_hir::intravisit::{self, Visitor};
@@ -51,7 +50,7 @@ pub mod const_const_Transmute_ver {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.mir_pat).check()
+                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
                     && let Some(ptr_transmute) = matches[pattern.ptr_transmute]
                     && let span1 = ptr_transmute.span_no_inline(body)
                     && let Some(data_ptr_get) = matches[pattern.data_ptr_get]
@@ -69,7 +68,7 @@ pub mod const_const_Transmute_ver {
     }
 
     struct WrongAssumptionOfFatPointerLayout<'pcx> {
-        mir_pat: &'pcx MirPattern<'pcx>,
+        fn_pat: &'pcx pat::Fn<'pcx>,
         ptr_transmute: pat::Location,
         data_ptr_get: pat::Location,
     }
@@ -79,8 +78,8 @@ pub mod const_const_Transmute_ver {
         let ptr_transmute;
         let data_ptr_get;
         let pattern = rpl! {
+            #[meta($T:ty)]
             fn $pattern(..) -> _ = mir! {
-                meta!{$T:ty}
 
                 let ptr: *const $T = _;
                 // _4 = &_1;
@@ -95,10 +94,10 @@ pub mod const_const_Transmute_ver {
                 let data_ptr: *const () = _;
             }
         };
-        let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
+        let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
         WrongAssumptionOfFatPointerLayout {
-            mir_pat,
+            fn_pat,
             ptr_transmute,
             data_ptr_get,
         }
@@ -108,7 +107,6 @@ pub mod const_const_Transmute_ver {
 #[allow(non_snake_case)]
 pub mod mut_mut_Transmute_ver {
     use rpl_context::PatCtxt;
-    use rpl_mir::pat::MirPattern;
     use rustc_hir as hir;
     use rustc_hir::def_id::LocalDefId;
     use rustc_hir::intravisit::{self, Visitor};
@@ -158,7 +156,7 @@ pub mod mut_mut_Transmute_ver {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.mir_pat).check()
+                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
                     && let Some(ptr_transmute) = matches[pattern.ptr_transmute]
                     && let span1 = ptr_transmute.span_no_inline(body)
                     && let Some(data_ptr_get) = matches[pattern.data_ptr_get]
@@ -176,7 +174,7 @@ pub mod mut_mut_Transmute_ver {
     }
 
     struct WrongAssumptionOfFatPointerLayout<'pcx> {
-        mir_pat: &'pcx MirPattern<'pcx>,
+        fn_pat: &'pcx pat::Fn<'pcx>,
         ptr_transmute: pat::Location,
         data_ptr_get: pat::Location,
     }
@@ -186,8 +184,8 @@ pub mod mut_mut_Transmute_ver {
         let ptr_transmute;
         let data_ptr_get;
         let pattern = rpl! {
+            #[meta($T:ty)]
             fn $pattern (..) -> _ = mir! {
-                meta!{$T:ty}
 
                 let ptr: *mut $T = _;
                 // _4 = &mut _1;
@@ -203,10 +201,10 @@ pub mod mut_mut_Transmute_ver {
 
             }
         };
-        let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
+        let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
         WrongAssumptionOfFatPointerLayout {
-            mir_pat,
+            fn_pat,
             ptr_transmute,
             data_ptr_get,
         }
@@ -216,7 +214,6 @@ pub mod mut_mut_Transmute_ver {
 #[allow(non_snake_case)]
 pub mod mut_const_PtrToPtr_ver {
     use rpl_context::PatCtxt;
-    use rpl_mir::pat::MirPattern;
     use rustc_hir as hir;
     use rustc_hir::def_id::LocalDefId;
     use rustc_hir::intravisit::{self, Visitor};
@@ -266,7 +263,7 @@ pub mod mut_const_PtrToPtr_ver {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.mir_pat).check()
+                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
                     && let Some(ptr_transmute) = matches[pattern.ptr_transmute]
                     && let span1 = ptr_transmute.span_no_inline(body)
                     && let Some(data_ptr_get) = matches[pattern.data_ptr_get]
@@ -284,7 +281,7 @@ pub mod mut_const_PtrToPtr_ver {
     }
 
     struct WrongAssumptionOfFatPointerLayout<'pcx> {
-        mir_pat: &'pcx MirPattern<'pcx>,
+        fn_pat: &'pcx pat::Fn<'pcx>,
         ptr_transmute: pat::Location,
         data_ptr_get: pat::Location,
     }
@@ -293,9 +290,9 @@ pub mod mut_const_PtrToPtr_ver {
     fn pattern_wrong_assumption_of_fat_pointer_layout(pcx: PatCtxt<'_>) -> WrongAssumptionOfFatPointerLayout<'_> {
         let ptr_transmute;
         let data_ptr_get;
-        let mir_pat = rpl! {
+        let pattern = rpl! {
+            #[meta($T:ty)]
             fn $pattern (..) -> _ = mir! {
-                meta!{$T:ty}
 
                 let ptr: *const $T = _;
                 let ref_to_ptr: &mut *const $T = &mut ptr;
@@ -307,10 +304,10 @@ pub mod mut_const_PtrToPtr_ver {
                 let data_ptr: *mut () = _;
             }
         };
-        let mir_pat = mir_pat.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
+        let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
         WrongAssumptionOfFatPointerLayout {
-            mir_pat,
+            fn_pat,
             ptr_transmute,
             data_ptr_get,
         }

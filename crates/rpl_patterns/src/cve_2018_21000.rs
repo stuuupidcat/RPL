@@ -1,6 +1,5 @@
 pub mod u8_to_t {
     use rpl_context::PatCtxt;
-    use rpl_mir::pat::MirPattern;
     use rustc_hir as hir;
     use rustc_hir::def_id::LocalDefId;
     use rustc_hir::intravisit::{self, Visitor};
@@ -50,7 +49,7 @@ pub mod u8_to_t {
                 #[allow(irrefutable_let_patterns)]
                 if let pattern_misordered_params = pattern_misordered_params(self.pcx)
                     && let Some(matches) =
-                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_misordered_params.mir_pat).check()
+                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_misordered_params.fn_pat).check()
                     && let Some(from_raw_parts) = matches[pattern_misordered_params.from_raw_parts]
                     && let span = from_raw_parts.span_no_inline(body)
                 {
@@ -62,7 +61,7 @@ pub mod u8_to_t {
     }
 
     struct PatternMisorderedParams<'pcx> {
-        mir_pat: &'pcx MirPattern<'pcx>,
+        fn_pat: &'pcx pat::Fn<'pcx>,
         from_raw_parts: pat::Location,
     }
 
@@ -70,8 +69,8 @@ pub mod u8_to_t {
     fn pattern_misordered_params(pcx: PatCtxt<'_>) -> PatternMisorderedParams<'_> {
         let from_raw_parts;
         let pattern = rpl! {
+            #[meta($T:ty)]
             fn $pattern(..) -> _ = mir! {
-                meta!{$T:ty}
 
                 type VecU8 = alloc::vec::Vec::<u8>;
                 type VecT = alloc::vec::Vec::<$T>;
@@ -166,18 +165,14 @@ pub mod u8_to_t {
 
             }
         };
-        let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
+        let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-        PatternMisorderedParams {
-            mir_pat,
-            from_raw_parts,
-        }
+        PatternMisorderedParams { fn_pat, from_raw_parts }
     }
 }
 
 pub mod t_to_u8 {
     use rpl_context::PatCtxt;
-    use rpl_mir::pat::MirPattern;
     use rustc_hir as hir;
     use rustc_hir::def_id::LocalDefId;
     use rustc_hir::intravisit::{self, Visitor};
@@ -227,7 +222,7 @@ pub mod t_to_u8 {
                 #[allow(irrefutable_let_patterns)]
                 if let pattern_misordered_params = pattern_misordered_params(self.pcx)
                     && let Some(matches) =
-                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_misordered_params.mir_pat).check()
+                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_misordered_params.fn_pat).check()
                     && let Some(from_raw_parts) = matches[pattern_misordered_params.from_raw_parts]
                     && let span = from_raw_parts.span_no_inline(body)
                 {
@@ -239,7 +234,7 @@ pub mod t_to_u8 {
     }
 
     struct PatternMisorderedParams<'pcx> {
-        mir_pat: &'pcx MirPattern<'pcx>,
+        fn_pat: &'pcx pat::Fn<'pcx>,
         from_raw_parts: pat::Location,
     }
 
@@ -247,9 +242,8 @@ pub mod t_to_u8 {
     fn pattern_misordered_params(pcx: PatCtxt<'_>) -> PatternMisorderedParams<'_> {
         let from_raw_parts;
         let pattern = rpl! {
+            #[meta($T:ty)]
             fn $pattern(..) -> _ = mir! {
-                meta!{$T:ty}
-
                 type VecU8 = alloc::vec::Vec::<u8>;
                 type VecT = alloc::vec::Vec::<$T>;
                 type NonNullU8 = core::ptr::non_null::NonNull::<u8>;
@@ -338,11 +332,8 @@ pub mod t_to_u8 {
                 };
             }
         };
-        let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
+        let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-        PatternMisorderedParams {
-            mir_pat,
-            from_raw_parts,
-        }
+        PatternMisorderedParams { fn_pat, from_raw_parts }
     }
 }

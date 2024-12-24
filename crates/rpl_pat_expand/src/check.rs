@@ -1,4 +1,4 @@
-use crate::symbol_table::{CheckError, EnumDef, ExportKind, FnDef, ImplDef, VariantDef};
+use crate::symbol_table::{CheckError, Enum, ExportKind, FnInner, ImplInner, MetaTable, Variant};
 use crate::SymbolTable;
 use quote::ToTokens;
 use rpl_pat_syntax::*;
@@ -18,16 +18,21 @@ struct CheckCtxt<'pat> {
 }
 
 struct CheckFnCtxt<'a, 'pat> {
-    impl_def: Option<&'a mut ImplDef<'pat>>,
-    fn_def: &'a mut FnDef<'pat>,
+    meta: Option<&'pat Meta>,
+    meta_table: &'a mut MetaTable<'pat>,
+    impl_def: Option<&'a mut ImplInner<'pat>>,
+    fn_def: &'a mut FnInner<'pat>,
 }
 
 struct CheckVariantCtxt<'a, 'pat> {
-    variant_def: &'a mut VariantDef<'pat>,
+    meta: Option<&'pat Meta>,
+    meta_table: &'a mut MetaTable<'pat>,
+    variant: &'a mut Variant<'pat>,
 }
 
 struct CheckEnumCtxt<'a, 'pat> {
-    enum_def: &'a mut EnumDef<'pat>,
+    meta: Option<&'pat Meta>,
+    enum_def: &'a mut Enum<'pat>,
 }
 
 impl<'pat> CheckCtxt<'pat> {
@@ -38,34 +43,39 @@ impl<'pat> CheckCtxt<'pat> {
         Ok(self.symbols)
     }
     fn check_item(&mut self, item: &'pat Item) -> syn::Result<()> {
-        if let Some(Export { inner, .. }) = &item.export {
-            self.symbols
-                .meta
-                .add_export(&inner.ident, inner.kind.as_ref().map_or(ExportKind::Item, Into::into))?;
-        }
+        let meta = item.meta.as_ref();
         match &item.kind {
-            ItemKind::Fn(fn_pat) => self.check_fn(fn_pat),
-            ItemKind::Struct(struct_pat) => self.check_struct(struct_pat),
-            ItemKind::Enum(enum_pat) => self.check_enum(enum_pat),
+            ItemKind::Fn(fn_pat) => self.check_fn(meta, fn_pat),
+            ItemKind::Struct(struct_pat) => self.check_struct(meta, struct_pat),
+            ItemKind::Enum(enum_pat) => self.check_enum(meta, enum_pat),
             ItemKind::Impl(_impl_pat) => todo!(), // self.check_impl(impl_pat),
         }
     }
-    fn check_fn(&mut self, fn_pat: &'pat FnPat) -> syn::Result<()> {
+    fn check_fn(&mut self, meta: Option<&'pat Meta>, fn_pat: &'pat FnPat) -> syn::Result<()> {
+        let fn_def = self.symbols.add_fn(&fn_pat.sig.ident, None)?;
+        let meta_table = &mut fn_def.meta;
+        let fn_def = &mut fn_def.inner;
         CheckFnCtxt {
+            meta,
             impl_def: None,
-            fn_def: self.symbols.add_fn(&fn_pat.sig.ident, None)?,
+            meta_table,
+            fn_def,
         }
         .check_fn(fn_pat)
     }
-    fn check_struct(&mut self, struct_pat: &'pat Struct) -> syn::Result<()> {
-        let variant_def = self.symbols.add_struct(&struct_pat.ident)?;
-        let mut variant_def = CheckVariantCtxt { variant_def };
+    fn check_struct(&mut self, meta: Option<&'pat Meta>, struct_pat: &'pat Struct) -> syn::Result<()> {
+        let struct_def = self.symbols.add_struct(&struct_pat.ident)?;
+        let mut variant_def = CheckVariantCtxt {
+            meta,
+            variant: &mut struct_def.inner,
+            meta_table: &mut struct_def.meta,
+        };
         variant_def.check_struct(struct_pat)?;
         Ok(())
     }
-    fn check_enum(&mut self, enum_pat: &'pat Enum) -> syn::Result<()> {
+    fn check_enum(&mut self, meta: Option<&'pat Meta>, enum_pat: &'pat syntax::Enum) -> syn::Result<()> {
         let enum_def = self.symbols.add_enum(&enum_pat.ident)?;
-        let mut enum_def = CheckEnumCtxt { enum_def };
+        let mut enum_def = CheckEnumCtxt { meta, enum_def };
         enum_def.check_enum(enum_pat)?;
         Ok(())
     }
@@ -73,6 +83,9 @@ impl<'pat> CheckCtxt<'pat> {
 
 impl<'pat> CheckFnCtxt<'_, 'pat> {
     fn check_fn(mut self, fn_pat: &'pat FnPat) -> syn::Result<()> {
+        if let Some(meta) = self.meta {
+            self.check_meta(meta)?;
+        }
         self.check_fn_sig(&fn_pat.sig)?;
         self.check_fn_body(&fn_pat.body)?;
         Ok(())
@@ -120,10 +133,13 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
 
 impl<'pat> CheckVariantCtxt<'_, 'pat> {
     fn check_struct(&mut self, struct_pat: &'pat Struct) -> syn::Result<()> {
+        if let Some(meta) = self.meta {
+            self.check_meta(meta)?;
+        }
         self.check_fields(struct_pat.fields.iter())?;
         Ok(())
     }
-    fn check_variant(&mut self, variant: &'pat Variant) -> syn::Result<()> {
+    fn check_variant(&mut self, variant: &'pat syntax::Variant) -> syn::Result<()> {
         self.check_fields(variant.fields.iter())?;
         Ok(())
     }
@@ -134,7 +150,7 @@ impl<'pat> CheckVariantCtxt<'_, 'pat> {
         Ok(())
     }
     fn check_field(&mut self, field: &'pat Field) -> syn::Result<()> {
-        self.variant_def.add_field(&field.ident, &field.ty)?;
+        self.variant.add_field(&field.ident, &field.ty)?;
         self.check_ident(&field.ident)?;
         self.check_type(&field.ty)?;
         Ok(())
@@ -150,10 +166,14 @@ impl<'pat> CheckVariantCtxt<'_, 'pat> {
 }
 
 impl<'pat> CheckEnumCtxt<'_, 'pat> {
-    fn check_enum(&mut self, enum_pat: &'pat Enum) -> syn::Result<()> {
+    fn check_enum(&mut self, enum_pat: &'pat syntax::Enum) -> syn::Result<()> {
         for variant in &enum_pat.variants {
-            let variant_def = self.enum_def.add_variant(&variant.ident)?;
-            let mut cx = CheckVariantCtxt { variant_def };
+            let variant_def = self.enum_def.inner.add_variant(&variant.ident)?;
+            let mut cx = CheckVariantCtxt {
+                meta: self.meta,
+                meta_table: &mut self.enum_def.meta,
+                variant: variant_def,
+            };
             cx.check_variant(variant)?;
         }
         Ok(())
@@ -188,11 +208,37 @@ impl<'pat> CheckEnumCtxt<'_, 'pat> {
 //     }
 // }
 
+trait CheckMeta<'pat> {
+    fn meta_table(&mut self) -> &mut MetaTable<'pat>;
+    fn check_meta(&mut self, meta: &'pat Meta) -> syn::Result<()> {
+        meta.inner.iter().try_for_each(|item| self.check_meta_item(item))
+    }
+    fn check_meta_item(&mut self, meta_item: &'pat MetaItem) -> syn::Result<()> {
+        let meta_table = self.meta_table();
+        if let Some(Export { inner, .. }) = &meta_item.export {
+            meta_table.add_export(&inner.ident, inner.kind.as_ref().map_or(ExportKind::Meta, Into::into))?;
+        }
+        match &meta_item.kind {
+            MetaKind::Ty(ty_var) => meta_table.add_ty_var(&meta_item.ident, ty_var)?,
+        }
+        Ok(())
+    }
+}
+
+impl<'pat> CheckMeta<'pat> for CheckFnCtxt<'_, 'pat> {
+    fn meta_table(&mut self) -> &mut MetaTable<'pat> {
+        self.meta_table
+    }
+}
+
+impl<'pat> CheckMeta<'pat> for CheckVariantCtxt<'_, 'pat> {
+    fn meta_table(&mut self) -> &mut MetaTable<'pat> {
+        self.meta_table
+    }
+}
+
 impl<'pat> CheckFnCtxt<'_, 'pat> {
     fn check_mir(&mut self, mir: &'pat Mir) -> syn::Result<()> {
-        for meta in &mir.metas {
-            self.check_meta(meta)?;
-        }
         for decl in &mir.declarations {
             self.check_decl(decl)?;
         }
@@ -201,25 +247,11 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
         }
         Ok(())
     }
-    fn check_meta(&mut self, meta: &'pat Meta) -> syn::Result<()> {
-        meta.meta.content.iter().try_for_each(|item| self.check_meta_item(item))
-    }
-    fn check_meta_item(&mut self, meta_item: &'pat MetaItem) -> syn::Result<()> {
-        if let Some(Export { inner, .. }) = &meta_item.export {
-            self.fn_def
-                .meta
-                .add_export(&inner.ident, inner.kind.as_ref().map_or(ExportKind::Meta, Into::into))?;
-        }
-        match &meta_item.kind {
-            MetaKind::Ty(ty_var) => self.fn_def.meta.add_ty_var(&meta_item.ident, ty_var)?,
-        }
-        Ok(())
-    }
 
     fn check_decl(&mut self, decl: &'pat Declaration) -> syn::Result<()> {
         match decl {
-            Declaration::TypeDecl(TypeDecl { ty, ident, .. }) => self.fn_def.meta.add_type(ident, ty),
-            Declaration::UsePath(UsePath { path, .. }) => self.fn_def.meta.add_path(path),
+            Declaration::TypeDecl(TypeDecl { ty, ident, .. }) => self.fn_def.add_type(ident, ty),
+            Declaration::UsePath(UsePath { path, .. }) => self.fn_def.add_path(path),
             Declaration::LocalDecl(LocalDecl {
                 local,
                 ty,
@@ -228,7 +260,7 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
                 ..
             }) => {
                 if let Some(Export { inner, .. }) = export {
-                    self.fn_def.meta.add_export(
+                    self.meta_table.add_export(
                         &inner.ident,
                         inner.kind.as_ref().map_or(ExportKind::Statement, Into::into),
                     )?;
@@ -248,7 +280,7 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
     fn check_stmt(&mut self, stmt: &'pat Statement) -> syn::Result<()> {
         // self.check_attrs(&stmt.attrs)?;
         if let Some(Export { inner, .. }) = &stmt.export {
-            self.fn_def.meta.add_export(&inner.ident, ExportKind::Statement)?;
+            self.meta_table.add_export(&inner.ident, ExportKind::Statement)?;
         }
         self.check_stmt_kind(&stmt.kind)
     }
@@ -471,7 +503,7 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
             Type::Path(path) => self.check_type_path(path),
             Type::Tuple(TypeTuple { tys, .. }) => tys.iter().try_for_each(|ty| self.check_type(ty)),
             Type::TyVar(TypeVar { ident, .. }) => {
-                _ = self.fn_def.meta.get_ty_var(ident)?;
+                _ = self.meta_table.get_ty_var(ident)?;
                 Ok(())
             },
             Type::LangItem(lang_item) => self.check_lang_item_with_args(lang_item),
@@ -501,7 +533,7 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
     fn check_path(&self, path: &Path) -> syn::Result<()> {
         if let Some(ident) = path.as_ident() {
             if !crate::is_primitive(ident) {
-                _ = self.fn_def.meta.get_type(ident)?;
+                _ = self.fn_def.get_type(ident)?;
             }
         } else {
             for segment in &path.segments {
@@ -555,8 +587,7 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
         } in &switch_int.targets
         {
             if let Some(export) = export {
-                self.fn_def
-                    .meta
+                self.meta_table
                     .add_export(&export.inner.ident, ExportKind::SwitchTarget)?;
             }
             if let SwitchValue::Underscore(_) = value {

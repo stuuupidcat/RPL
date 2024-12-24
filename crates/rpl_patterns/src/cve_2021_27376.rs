@@ -1,5 +1,4 @@
 use rpl_context::PatCtxt;
-use rpl_mir::pat::MirPattern;
 use rpl_mir::{pat, CheckMirCtxt};
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
@@ -51,7 +50,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
             if let pattern_cast = pattern_cast_socket_addr_v6(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.mir_pat).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.fn_pat).check()
                 && let Some(cast_from) = matches[pattern_cast.cast_from]
                 && let cast_from = cast_from.span_no_inline(body)
                 && let Some(cast_to) = matches[pattern_cast.cast_to]
@@ -69,7 +68,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             }
             #[allow(irrefutable_let_patterns)]
             if let pattern_cast = pattern_cast_socket_addr_v4(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.mir_pat).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.fn_pat).check()
                 && let Some(cast_from) = matches[pattern_cast.cast_from]
                 && let cast_from = cast_from.span_no_inline(body)
                 && let Some(cast_to) = matches[pattern_cast.cast_to]
@@ -91,7 +90,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 struct PatternCast<'pcx> {
-    mir_pat: &'pcx MirPattern<'pcx>,
+    fn_pat: &'pcx pat::Fn<'pcx>,
     cast_from: pat::Location,
     cast_to: pat::Location,
     type_from: &'static str,
@@ -110,10 +109,10 @@ fn pattern_cast_socket_addr_v6(pcx: PatCtxt<'_>) -> PatternCast<'_> {
             let dst: *const libc::sockaddr = move src as *const libc::sockaddr (PtrToPtr);
         }
     };
-    let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
     PatternCast {
-        mir_pat,
+        fn_pat,
         cast_from,
         cast_to,
         type_from: "std::net::SocketAddrV6",
@@ -133,10 +132,10 @@ fn pattern_cast_socket_addr_v4(pcx: PatCtxt<'_>) -> PatternCast<'_> {
             let dst: *const libc::sockaddr = move src as *const libc::sockaddr (PtrToPtr);
         }
     };
-    let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
     PatternCast {
-        mir_pat,
+        fn_pat,
         cast_from,
         cast_to,
         type_from: "std::net::SocketAddrV4",

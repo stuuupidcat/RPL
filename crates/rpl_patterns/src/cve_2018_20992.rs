@@ -1,6 +1,5 @@
 pub mod extend {
     use rpl_context::PatCtxt;
-    use rpl_mir::pat::MirPattern;
     use rustc_hir as hir;
     use rustc_hir::def_id::LocalDefId;
     use rustc_hir::intravisit::{self, Visitor};
@@ -50,7 +49,7 @@ pub mod extend {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern = pattern_vec_set_len_to_extend(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.mir_pat).check()
+                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
                     && let Some(set_len_use) = matches[pattern.set_len_use]
                     && let span1 = set_len_use.span_no_inline(body)
                 {
@@ -63,7 +62,7 @@ pub mod extend {
     }
 
     struct VecSetLenToExtend<'pcx> {
-        mir_pat: &'pcx MirPattern<'pcx>,
+        fn_pat: &'pcx pat::Fn<'pcx>,
         set_len_use: pat::Location,
     }
 
@@ -71,8 +70,8 @@ pub mod extend {
     fn pattern_vec_set_len_to_extend(pcx: PatCtxt<'_>) -> VecSetLenToExtend<'_> {
         let set_len_use;
         let pattern = rpl! {
+            #[meta($T:ty)]
             fn $pattern(..) -> _ = mir! {
-                meta!{$T:ty}
 
                 type VecT = alloc::vec::Vec::<$T>;
                 type VecTRef = &alloc::vec::Vec::<$T>;
@@ -130,15 +129,14 @@ pub mod extend {
             }
         }; */
 
-        let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
+        let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-        VecSetLenToExtend { mir_pat, set_len_use }
+        VecSetLenToExtend { fn_pat, set_len_use }
     }
 }
 
 pub mod truncate {
     use rpl_context::PatCtxt;
-    use rpl_mir::pat::MirPattern;
     use rustc_hir as hir;
     use rustc_hir::def_id::LocalDefId;
     use rustc_hir::intravisit::{self, Visitor};
@@ -188,7 +186,7 @@ pub mod truncate {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern = pattern_vec_set_len_to_extend(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.mir_pat).check()
+                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
                     && let Some(set_len_use) = matches[pattern.set_len_use]
                     && let span1 = set_len_use.span_no_inline(body)
                 {
@@ -201,7 +199,7 @@ pub mod truncate {
     }
 
     struct VecSetLenToTruncate<'pcx> {
-        mir_pat: &'pcx MirPattern<'pcx>,
+        fn_pat: &'pcx pat::Fn<'pcx>,
         set_len_use: pat::Location,
     }
 
@@ -209,8 +207,8 @@ pub mod truncate {
     fn pattern_vec_set_len_to_extend(pcx: PatCtxt<'_>) -> VecSetLenToTruncate<'_> {
         let set_len_use;
         let pattern = rpl! {
+            #[meta($T:ty)]
             fn $pattern(..) -> _ = mir! {
-                meta!{$T:ty}
 
                 type VecT = alloc::vec::Vec::<$T>;
                 type VecTRef = &alloc::vec::Vec::<$T>;
@@ -239,8 +237,8 @@ pub mod truncate {
             }
         };
 
-        let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
+        let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-        VecSetLenToTruncate { mir_pat, set_len_use }
+        VecSetLenToTruncate { fn_pat, set_len_use }
     }
 }

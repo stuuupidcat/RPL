@@ -1,6 +1,5 @@
 use rpl_context::PatCtxt;
-use rpl_mir::pat::{self, MirPattern};
-use rpl_mir::{CheckMirCtxt, Matches};
+use rpl_mir::{pat, CheckMirCtxt, Matches};
 use rustc_errors::MultiSpan;
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
@@ -58,8 +57,9 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
 
             #[allow(irrefutable_let_patterns)]
-            if let mir_pat = pattern_loop(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, mir_pat).check()
+            if let fn_pat = pattern_loop(self.pcx)
+                && let mir_pat = fn_pat.expect_mir_body()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, fn_pat).check()
             {
                 let matches = self.loop_matches.insert(matches);
                 let mut multi_span = MultiSpan::from_span(span);
@@ -86,8 +86,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 #[allow(rustc::diagnostic_outside_of_impl)]
                 self.tcx.dcx().span_note(multi_span, "MIR pattern matched");
             } else if let pattern_offset_by_len = pattern_offset_by_len(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_offset_by_len.mir_pat).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_offset_by_len.fn_pat).check()
                 && let Some(read) = matches[pattern_offset_by_len.read]
                 && let read = read.span_no_inline(body)
                 && let Some(ptr) = matches[pattern_offset_by_len.ptr]
@@ -116,11 +115,10 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 #[rpl_macros::pattern_def]
-fn pattern_loop(pcx: PatCtxt<'_>) -> &MirPattern<'_> {
+fn pattern_loop(pcx: PatCtxt<'_>) -> &pat::Fn<'_> {
     let pattern = rpl! {
+        #[meta($T:ty, $SlabT:ty = |_tcx, _paramse_env, ty| ty.is_adt())]
         fn $pattern (..) -> _ = mir! {
-            meta!($T:ty, $SlabT:ty = |_tcx, _paramse_env, ty| ty.is_adt());
-
             let self: &mut $SlabT;
             let len: usize;
             let x1: usize;
@@ -173,11 +171,11 @@ fn pattern_loop(pcx: PatCtxt<'_>) -> &MirPattern<'_> {
             }
         }
     };
-    pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap()
+    pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap()
 }
 
 struct PatternOffsetByLen<'pcx> {
-    mir_pat: &'pcx MirPattern<'pcx>,
+    fn_pat: &'pcx pat::Fn<'pcx>,
     len: pat::Location,
     ptr: pat::Location,
     read: pat::Location,
@@ -189,8 +187,8 @@ fn pattern_offset_by_len(pcx: PatCtxt<'_>) -> PatternOffsetByLen<'_> {
     let ptr;
     let read;
     let pattern = rpl! {
+        #[meta($T:ty, $SlabT:ty = |_tcx, _paramse_env, ty| ty.is_adt())]
         fn $pattern(..) -> _ = mir! {
-            meta!($T:ty, $SlabT:ty = |_tcx, _paramse_env, ty| ty.is_adt());
             let self: &mut $SlabT;
             #[export(len)]
             let len: usize = copy (*self).len;
@@ -203,12 +201,7 @@ fn pattern_offset_by_len(pcx: PatCtxt<'_>) -> PatternOffsetByLen<'_> {
             let elem: $T = copy (*ptr);
         }
     };
-    let mir_pat = pattern.fns.get_fn_pat_mir_body(Symbol::intern("pattern")).unwrap();
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-    PatternOffsetByLen {
-        mir_pat,
-        len,
-        ptr,
-        read,
-    }
+    PatternOffsetByLen { fn_pat, len, ptr, read }
 }

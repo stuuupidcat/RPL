@@ -36,8 +36,6 @@ impl From<(BasicBlock, usize)> for Location {
 }
 
 pub struct MirPattern<'pcx> {
-    pub ty_vars: IndexVec<TyVarIdx, TyVar>,
-    pub(crate) const_vars: IndexVec<ConstVarIdx, ConstVar<'pcx>>,
     pub self_idx: Option<Local>,
     pub locals: IndexVec<Local, Ty<'pcx>>,
     pub basic_blocks: IndexVec<BasicBlock, BasicBlockData<'pcx>>,
@@ -97,7 +95,7 @@ impl<'pcx> BasicBlockData<'pcx> {
 #[derive(Debug, Clone, Copy)]
 pub enum PlaceElem<'pcx> {
     Deref,
-    Field(Field),
+    Field(FieldAcc),
     Index(Local),
     ConstantIndex {
         offset: u64,
@@ -253,32 +251,32 @@ pub enum AggKind<'pcx> {
 }
 
 #[derive(Clone, Copy)]
-pub enum Field {
+pub enum FieldAcc {
     Named(Symbol),
     Unnamed(FieldIdx),
 }
 
-impl From<&str> for Field {
+impl From<&str> for FieldAcc {
     fn from(name: &str) -> Self {
         Symbol::intern(name).into()
     }
 }
 
-impl From<Symbol> for Field {
+impl From<Symbol> for FieldAcc {
     fn from(name: Symbol) -> Self {
-        Field::Named(name)
+        FieldAcc::Named(name)
     }
 }
 
-impl From<u32> for Field {
+impl From<u32> for FieldAcc {
     fn from(field: u32) -> Self {
         FieldIdx::from_u32(field).into()
     }
 }
 
-impl From<FieldIdx> for Field {
+impl From<FieldIdx> for FieldAcc {
     fn from(field: FieldIdx) -> Self {
-        Field::Unnamed(field)
+        FieldAcc::Unnamed(field)
     }
 }
 
@@ -303,8 +301,6 @@ impl<'pcx> MirPatternBuilder<'pcx> {
     fn new() -> Self {
         let mut pattern = MirPattern {
             locals: IndexVec::new(),
-            ty_vars: IndexVec::new(),
-            const_vars: IndexVec::new(),
             self_idx: None,
             basic_blocks: IndexVec::new(),
         };
@@ -321,12 +317,6 @@ impl<'pcx> MirPatternBuilder<'pcx> {
         self.pattern
     }
 
-    pub fn new_ty_var(&mut self, pred: Option<TyPred>) -> TyVar {
-        self.pattern.mk_ty_var(pred)
-    }
-    pub fn mk_const_var(&mut self, ty: Ty<'pcx>) -> ConstVar<'pcx> {
-        self.pattern.mk_const_var(ty)
-    }
     pub fn mk_local(&mut self, ty: Ty<'pcx>) -> Local {
         self.pattern.locals.push(ty)
     }
@@ -492,18 +482,6 @@ impl MirPattern<'_> {
 }
 
 impl<'pcx> MirPattern<'pcx> {
-    pub fn mk_ty_var(&mut self, pred: Option<TyPred>) -> TyVar {
-        let idx = self.ty_vars.next_index();
-        let ty_var = TyVar { idx, pred };
-        self.ty_vars.push(ty_var);
-        ty_var
-    }
-    pub fn mk_const_var(&mut self, ty: Ty<'pcx>) -> ConstVar<'pcx> {
-        let idx = self.const_vars.next_index();
-        let const_var = ConstVar { idx, ty };
-        self.const_vars.push(const_var);
-        const_var
-    }
     pub fn mk_zeroed(&self, path_with_args: PathWithArgs<'pcx>) -> ConstOperand<'pcx> {
         ConstOperand::ZeroSized(path_with_args)
     }
