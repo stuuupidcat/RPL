@@ -9,7 +9,7 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::{Span, Symbol};
 
-use crate::lints::RUST_STRING_POINTER_AS_C_STRING_POINTER;
+use crate::lints::{LENGTHLESS_BUFFER_PASSED_TO_EXTERN_FUNCTION, RUST_STRING_POINTER_AS_C_STRING_POINTER};
 
 #[instrument(level = "info", skip(tcx, pcx))]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
@@ -71,6 +71,20 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     crate::errors::RustStrAsCStr { cast_from, cast_to },
                 );
             }
+            #[allow(irrefutable_let_patterns)]
+            if let pattern_ptr = pattern_pass_a_pointer_to_c(self.pcx)
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern_ptr.pattern).check()
+                && let Some(ptr) = matches[pattern_ptr.ptr]
+                && let ptr = ptr.span_no_inline(body)
+            {
+                debug!(?ptr);
+                self.tcx.emit_node_span_lint(
+                    LENGTHLESS_BUFFER_PASSED_TO_EXTERN_FUNCTION,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    ptr,
+                    crate::errors::LengthlessBufferPassedToExternFunction { ptr },
+                );
+            }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
     }
@@ -109,5 +123,29 @@ fn pattern_rust_str_as_c_str(pcx: PatCtxt<'_>) -> PatternCast<'_> {
         fn_pat,
         cast_from,
         cast_to,
+    }
+}
+
+struct PatternPointer<'pcx> {
+    pattern: MirPattern<'pcx>,
+    ptr: pat::Location,
+}
+
+// FIXME: this should work for functions other than `crate::ll::instr`.
+#[rpl_macros::pattern_def]
+fn pattern_pass_a_pointer_to_c(pcx: PatCtxt<'_>) -> PatternPointer<'_> {
+    rpl! {
+        fn $pattern (..) -> _ = mir! {
+            type c_char = libc::c_char;
+
+            let ptr: *const c_char = _;
+            _ = $crate::ll::instr(move ptr);
+        }
+    }
+
+    PatternPointer {
+        pattern,
+        ptr: ptr_stmt,
+        // ty_var: c_char_ty,
     }
 }
