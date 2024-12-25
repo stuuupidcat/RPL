@@ -832,8 +832,8 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             (pat::TyKind::Path(path_with_args), _) => {
                 //FIXME: generics args are ignored.
                 match path_with_args.path {
-                    pat::Path::Item(path) => ty_res(self.pattern.pcx, self.tcx, path.0, path_with_args.args.0),
-                    pat::Path::LangItem(item) => lang_item_res(self.pattern.pcx, self.tcx, item),
+                    pat::Path::Item(path) => ty_res(self.pcx, self.tcx, path.0, path_with_args.args.0),
+                    pat::Path::LangItem(item) => lang_item_res(self.pcx, self.tcx, item),
                     pat::Path::TypeRelative(_, _) => todo!(),
                 }
                 .map(|ty_pat| self.match_ty(ty_pat, ty))
