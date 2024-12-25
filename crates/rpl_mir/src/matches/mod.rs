@@ -274,7 +274,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                 HybridBitSet::new_empty(self.cx.locals.len()),
             );
         }
-        for (candidates, matches) in core::iter::zip(&self.cx.ty_vars, &mut self.matches.ty_vars) {
+        for (candidates, matches) in core::iter::zip(&self.cx.ty.ty_vars, &mut self.matches.ty_vars) {
             matches.candidates = std::mem::take(&mut *candidates.borrow_mut());
         }
     }
@@ -557,8 +557,8 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     }
     #[instrument(level = "debug", skip(self), ret)]
     fn match_local_ty(&self, ty_pat: pat::Ty<'pcx>, ty: Ty<'tcx>) -> bool {
-        self.cx.match_ty(ty_pat, ty)
-            && self.cx.ty_vars.iter_enumerated().all(|(ty_var, tys)| {
+        self.cx.ty.match_ty(ty_pat, ty)
+            && self.cx.ty.ty_vars.iter_enumerated().all(|(ty_var, tys)| {
                 let ty = match &core::mem::take(&mut *tys.borrow_mut())[..] {
                     [] => return true,
                     &[ty] => ty,

@@ -1,4 +1,5 @@
 use rpl_context::PatCtxt;
+use rpl_match::MatchAdtCtxt;
 use rpl_mir::{pat, CheckMirCtxt, Matches};
 use rustc_errors::MultiSpan;
 use rustc_hir::def_id::LocalDefId;
@@ -39,6 +40,19 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
         match item.kind {
             hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn(..) => {},
+            hir::ItemKind::Struct(..) => {
+                #[allow(irrefutable_let_patterns)]
+                if let adt_pat = pattern_slab_t(self.pcx)
+                    && let Some(adt_match) = MatchAdtCtxt::new(self.tcx, self.pcx, &adt_pat.meta)
+                        .match_adt(adt_pat, self.tcx.adt_def(item.owner_id.def_id))
+                {
+                    #[expect(rustc::untranslatable_diagnostic)]
+                    #[expect(rustc::diagnostic_outside_of_impl)]
+                    self.tcx
+                        .dcx()
+                        .span_note(self.tcx.def_span(adt_match.adt.did()), "Adt pattern matched");
+                }
+            },
             _ => return,
         }
         intravisit::walk_item(self, item);
@@ -82,8 +96,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                             format!("{:?} <=> {:?}", mir_pat[bb].debug_stmt_at(index), stmt.debug_with(body)),
                         );
                     });
-                #[allow(rustc::untranslatable_diagnostic)]
-                #[allow(rustc::diagnostic_outside_of_impl)]
+                #[expect(rustc::untranslatable_diagnostic)]
+                #[expect(rustc::diagnostic_outside_of_impl)]
                 self.tcx.dcx().span_note(multi_span, "MIR pattern matched");
             } else if let pattern_offset_by_len = pattern_offset_by_len(self.pcx)
                 && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_offset_by_len.fn_pat).check()
@@ -112,6 +126,18 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
     }
+}
+
+#[rpl_macros::pattern_def]
+fn pattern_slab_t(pcx: PatCtxt<'_>) -> &pat::Adt<'_> {
+    let pattern = rpl! {
+        #[meta($T:ty)]
+        struct $SlabT {
+            mem: *mut $T,
+            len: usize,
+        }
+    };
+    pattern.get_adt(Symbol::intern("SlabT")).unwrap()
 }
 
 #[rpl_macros::pattern_def]

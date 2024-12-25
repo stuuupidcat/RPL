@@ -34,37 +34,31 @@ extern crate tracing;
 pub mod graph;
 
 mod matches;
-mod resolve;
 
 use std::cell::RefCell;
 use std::iter::zip;
 
 use crate::graph::{MirControlFlowGraph, MirDataDepGraph, PatControlFlowGraph, PatDataDepGraph};
-use resolve::{ty_res, PatItemKind};
 use rpl_context::PatCtxt;
+use rpl_match::MatchTyCtxt;
 use rpl_mir_graph::TerminatorEdges;
 use rustc_abi::VariantIdx;
 use rustc_hash::FxHashMap;
-use rustc_hir::def::{CtorKind, Res};
-use rustc_hir::def_id::{DefId, LOCAL_CRATE};
-use rustc_hir::definitions::DefPathData;
+use rustc_hir::def::CtorKind;
+use rustc_hir::def_id::DefId;
 use rustc_index::bit_set::HybridBitSet;
 use rustc_index::{IndexSlice, IndexVec};
 use rustc_middle::mir::interpret::PointerArithmetic;
 use rustc_middle::mir::tcx::PlaceTy;
-use rustc_middle::ty::{GenericArgsRef, Ty, TyCtxt};
+use rustc_middle::ty::{GenericArgsRef, TyCtxt};
 use rustc_middle::{mir, ty};
-use rustc_span::symbol::kw;
-use rustc_span::Symbol;
 use rustc_target::abi::FieldIdx;
 
 pub use matches::{Matches, StatementMatch};
 pub use rpl_context::pat;
 
 pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
-    tcx: TyCtxt<'tcx>,
-    pcx: PatCtxt<'pcx>,
-    param_env: ty::ParamEnv<'tcx>,
+    ty: MatchTyCtxt<'pcx, 'tcx>,
     body: &'a mir::Body<'tcx>,
     fn_pat: &'a pat::Fn<'pcx>,
     mir_pat: &'a pat::MirPattern<'pcx>,
@@ -75,11 +69,12 @@ pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     // pat_pdg: PatProgramDepGraph,
     // mir_pdg: MirProgramDepGraph,
     locals: IndexVec<pat::Local, RefCell<HybridBitSet<mir::Local>>>,
-    ty_vars: IndexVec<pat::TyVarIdx, RefCell<Vec<Ty<'tcx>>>>,
 }
 
 impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
     pub fn new(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>, body: &'a mir::Body<'tcx>, fn_pat: &'a pat::Fn<'pcx>) -> Self {
+        let param_env = tcx.param_env_reveal_all_normalized(body.source.def_id());
+        let ty = MatchTyCtxt::new(tcx, pcx, param_env, &fn_pat.meta);
         let mir_pat = fn_pat.expect_mir_body();
         // let pat_pdg = crate::graph::pat_program_dep_graph(&patterns, tcx.pointer_size().bytes_usize());
         // let mir_pdg = crate::graph::mir_program_dep_graph(body);
@@ -88,9 +83,7 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
         let mir_cfg = crate::graph::mir_control_flow_graph(body);
         let mir_ddg = crate::graph::mir_data_dep_graph(body, &mir_cfg);
         Self {
-            tcx,
-            pcx,
-            param_env: tcx.param_env_reveal_all_normalized(body.source.def_id()),
+            ty,
             body,
             fn_pat,
             mir_pat,
@@ -104,7 +97,6 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
                 RefCell::new(HybridBitSet::new_empty(body.local_decls.len())),
                 mir_pat.locals.len(),
             ),
-            ty_vars: IndexVec::from_elem(RefCell::new(Vec::new()), &fn_pat.meta.ty_vars),
         }
     }
     pub fn check(&self) -> Option<Matches<'tcx>> {
@@ -261,7 +253,9 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         if locals.contains(local) {
             return true;
         }
-        let matched = self.match_ty(self.mir_pat.locals[pat], self.body.local_decls[local].ty);
+        let matched = self
+            .ty
+            .match_ty(self.mir_pat.locals[pat], self.body.local_decls[local].ty);
         debug!(?pat, ?local, matched, "match_local");
         if matched {
             locals.insert(local);
@@ -279,7 +273,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             |place_ty, &proj| {
                 Some((
                     proj,
-                    std::mem::replace(place_ty, place_ty.projection_ty(self.tcx, proj)),
+                    std::mem::replace(place_ty, place_ty.projection_ty(self.ty.tcx, proj)),
                 ))
             },
         );
@@ -326,7 +320,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                         adt.is_enum() && adt.variant(idx).name == sym
                     },
                     (_, pat::PlaceElem::OpaqueCast(ty_pat), OpaqueCast(ty))
-                    | (_, pat::PlaceElem::Subtype(ty_pat), Subtype(ty)) => self.match_ty(ty_pat, ty),
+                    | (_, pat::PlaceElem::Subtype(ty_pat), Subtype(ty)) => self.ty.match_ty(ty_pat, ty),
                     _ => false,
                 }
             })
@@ -504,7 +498,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             (pat::Rvalue::Any, _) => true,
             (pat::Rvalue::Use(operand_pat), mir::Rvalue::Use(operand)) => self.match_operand(operand_pat, operand),
             (&pat::Rvalue::Repeat(ref operand_pat, konst_pat), &mir::Rvalue::Repeat(ref operand, konst)) => {
-                self.match_operand(operand_pat, operand) && self.match_const(konst_pat, konst)
+                self.match_operand(operand_pat, operand) && self.ty.match_const(konst_pat, konst)
             },
             (
                 &pat::Rvalue::Ref(region_pat, borrow_kind_pat, place_pat),
@@ -520,7 +514,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                     | (rustc_middle::mir::BorrowKind::Fake(_), rustc_middle::mir::BorrowKind::Fake(_)) => true,
                     _ => false,
                 };
-                self.match_region(region_pat, region) && is_borrow_kind_equal && self.match_place(place_pat, place)
+                self.ty.match_region(region_pat, region) && is_borrow_kind_equal && self.match_place(place_pat, place)
             },
             (&pat::Rvalue::RawPtr(mutability_pat, place_pat), &mir::Rvalue::RawPtr(mutability, place)) => {
                 mutability_pat == mutability && self.match_place(place_pat, place)
@@ -533,12 +527,12 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             (
                 &pat::Rvalue::Cast(cast_kind_pat, ref operand_pat, ty_pat),
                 &mir::Rvalue::Cast(cast_kind, ref operand, ty),
-            ) => cast_kind_pat == cast_kind && self.match_operand(operand_pat, operand) && self.match_ty(ty_pat, ty),
+            ) => cast_kind_pat == cast_kind && self.match_operand(operand_pat, operand) && self.ty.match_ty(ty_pat, ty),
             (pat::Rvalue::BinaryOp(op_pat, box [lhs_pat, rhs_pat]), mir::Rvalue::BinaryOp(op, box (lhs, rhs))) => {
                 op_pat == op && self.match_operand(lhs_pat, lhs) && self.match_operand(rhs_pat, rhs)
             },
             (&pat::Rvalue::NullaryOp(op_pat, ty_pat), &mir::Rvalue::NullaryOp(op, ty)) => {
-                op_pat == op && self.match_ty(ty_pat, ty)
+                op_pat == op && self.ty.match_ty(ty_pat, ty)
             },
             (pat::Rvalue::UnaryOp(op_pat, operand_pat), mir::Rvalue::UnaryOp(op, operand)) => {
                 op_pat == op && self.match_operand(operand_pat, operand)
@@ -547,7 +541,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                 self.match_aggregate(agg_kind_pat, operands_pat, agg_kind, operands)
             },
             (&pat::Rvalue::ShallowInitBox(ref operand_pat, ty_pat), &mir::Rvalue::ShallowInitBox(ref operand, ty)) => {
-                self.match_operand(operand_pat, operand) && self.match_ty(ty_pat, ty)
+                self.match_operand(operand_pat, operand) && self.ty.match_ty(ty_pat, ty)
             },
             _ => return false,
         };
@@ -593,14 +587,14 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         operands: &IndexSlice<FieldIdx, mir::Operand<'tcx>>,
         gargs: GenericArgsRef<'tcx>,
     ) -> bool {
-        let adt = self.tcx.adt_def(def_id);
+        let adt = self.ty.tcx.adt_def(def_id);
         let variant = adt.variant(variant_idx);
         let path = path_with_args.path;
         let gargs_pat = path_with_args.args;
         let variant_matched = match path {
             pat::Path::Item(path) => {
-                self.match_item_path_by_def_path(path, def_id)
-                    || match self.match_item_path(path, def_id) {
+                self.ty.match_item_path_by_def_path(path, def_id)
+                    || match self.ty.match_item_path(path, def_id) {
                         Some([]) => {
                             variant_idx.as_u32() == 0
                                 && matches!(adt.adt_kind(), ty::AdtKind::Struct | ty::AdtKind::Union)
@@ -610,7 +604,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                     }
             },
             pat::Path::TypeRelative(_ty, _symbol) => false,
-            pat::Path::LangItem(lang_item) => self.tcx.is_lang_item(variant.def_id, lang_item),
+            pat::Path::LangItem(lang_item) => self.ty.tcx.is_lang_item(variant.def_id, lang_item),
         };
         let fields_matched = match (adt_kind, field_idx, variant.ctor) {
             (pat::AggAdtKind::Unit, None, Some((CtorKind::Const, _)))
@@ -636,8 +630,8 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             },
             _ => false,
         };
-        let generics = self.tcx.generics_of(def_id);
-        let gargs_matched = self.match_generic_args(gargs_pat, gargs, generics);
+        let generics = self.ty.tcx.generics_of(def_id);
+        let gargs_matched = self.ty.match_generic_args(gargs_pat, gargs, generics);
         let matched = variant_matched && fields_matched && gargs_matched;
         debug!(
             ?path,
@@ -674,7 +668,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                 gargs,
             ),
             (&pat::AggKind::RawPtr(ty_pat, mutability_pat), &mir::AggregateKind::RawPtr(ty, mutability)) => {
-                self.match_ty(ty_pat, ty)
+                self.ty.match_ty(ty_pat, ty)
                     && mutability_pat == mutability
                     && self.match_operands(operands_pat, &operands.raw)
             },
@@ -696,212 +690,11 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                 .all(|(operand_pat, operand)| self.match_operand(operand_pat, operand))
     }
 
-    #[expect(dead_code)]
-    fn path_to_ty(&self, path_with_args: pat::PathWithArgs<'pcx>) -> Option<pat::Ty<'pcx>> {
-        if !path_with_args.args.is_empty() {
-            info!(?path_with_args, "generics not supported yet")
-        }
-        match path_with_args.path {
-            pat::Path::Item(path) => ty_res(self.pcx, self.tcx, path.0, &[]),
-            pat::Path::TypeRelative(..) => None,
-            pat::Path::LangItem(..) => None,
-        }
-    }
-
-    fn match_ty(&self, ty_pat: pat::Ty<'pcx>, ty: ty::Ty<'tcx>) -> bool {
-        let ty_pat_kind = *ty_pat.kind();
-        let ty_kind = *ty.kind();
-        let matched = match (ty_pat_kind, ty_kind) {
-            (pat::TyKind::TyVar(ty_var), _)
-                if ty_var.pred.is_none_or(|ty_pred| ty_pred(self.tcx, self.param_env, ty)) =>
-            {
-                self.ty_vars[ty_var.idx].borrow_mut().push(ty);
-                true
-            },
-            (pat::TyKind::Array(ty_pat, konst_pat), ty::Array(ty, konst)) => {
-                self.match_ty(ty_pat, ty) && self.match_const(konst_pat, konst)
-            },
-            (pat::TyKind::Slice(ty_pat), ty::Slice(ty)) => self.match_ty(ty_pat, ty),
-            (pat::TyKind::Tuple(tys_pat), ty::Tuple(tys)) => {
-                tys_pat.len() == tys.len() && zip(tys_pat, tys).all(|(&ty_pat, ty)| self.match_ty(ty_pat, ty))
-            },
-            (pat::TyKind::Ref(region_pat, pat_ty, pat_mutblty), ty::Ref(region, ty, mutblty)) => {
-                self.match_region(region_pat, region) && pat_mutblty == mutblty && self.match_ty(pat_ty, ty)
-            },
-            (pat::TyKind::RawPtr(ty_pat, mutability_pat), ty::RawPtr(ty, mutblty)) => {
-                mutability_pat == mutblty && self.match_ty(ty_pat, ty)
-            },
-            (pat::TyKind::Uint(ty_pat), ty::Uint(ty)) => ty_pat == ty,
-            (pat::TyKind::Int(ty_pat), ty::Int(ty)) => ty_pat == ty,
-            (pat::TyKind::Float(ty_pat), ty::Float(ty)) => ty_pat == ty,
-            (pat::TyKind::Path(path_with_args), ty::Adt(adt, args)) => {
-                self.match_path_with_args(path_with_args, adt.did(), args, PatItemKind::Type)
-            },
-            (pat::TyKind::Path(path_with_args), ty::FnDef(def_id, args)) => {
-                self.match_path_with_args(path_with_args, def_id, args, PatItemKind::Type)
-            },
-            (pat::TyKind::Path(path_with_args), _) => {
-                //FIXME: generics args are ignored.
-                match path_with_args.path {
-                    pat::Path::Item(path) => ty_res(self.pcx, self.tcx, path.0, &[])
-                        .map(|ty_pat| self.match_ty(ty_pat, ty))
-                        .unwrap_or(false),
-                    _ => false, //FIXME
-                }
-            },
-            // (pat::TyKind::Alias(alias_kind_pat, path, args), ty::Alias(alias_kind, alias)) => {
-            //     alias_kind_pat == alias_kind
-            //         && self.match_path(path, alias.def_id)
-            //         && self.match_generic_args(args, alias.args)
-            // },
-            (pat::TyKind::Bool, ty::Bool) => true,
-            _ => false,
-        };
-        debug!(?ty_pat, ?ty, matched, "match_ty");
-        matched
-    }
-
-    /// Match type path
-    #[instrument(level = "trace", skip(self), ret)]
-    fn match_path_with_args(
-        &self,
-        path_with_args: pat::PathWithArgs<'pcx>,
-        def_id: DefId,
-        args: ty::GenericArgsRef<'tcx>,
-        kind: PatItemKind,
-    ) -> bool {
-        let generics = self.tcx.generics_of(def_id);
-        self.match_path(path_with_args.path, def_id) && self.match_generic_args(path_with_args.args, args, generics)
-    }
-
-    #[instrument(level = "trace", skip(self), ret)]
-    fn match_path(&self, path: pat::Path<'pcx>, def_id: DefId) -> bool {
-        let matched = match path {
-            // pat::Path::Item(path) => matches!(self.match_item_path(path, def_id), Some([])),
-            pat::Path::Item(path) => self.match_item_path_by_def_path(path, def_id),
-            pat::Path::TypeRelative(ty, name) => {
-                self.tcx.item_name(def_id) == name
-                    && self
-                        .tcx
-                        .opt_parent(def_id)
-                        .is_some_and(|did| self.match_ty(ty, self.tcx.type_of(did).instantiate_identity()))
-            },
-            pat::Path::LangItem(lang_item) => self.tcx.is_lang_item(def_id, lang_item),
-        };
-        debug!(?path, ?def_id, matched, "match_path");
-        matched
-    }
-
-    /// Resolve definition path from `path`.
-    // FIXME: when searching in the same crate, if with the same kind, an item path should always be resolved to the
-    // same item, so this can be cached for performance.
-    #[instrument(level = "trace", skip(self), ret)]
-    fn match_item_path_by_def_path(&self, path: pat::ItemPath<'pcx>, def_id: DefId) -> bool {
-        let kind = if let Some(kind) = PatItemKind::infer_from_def_kind(self.tcx.def_kind(def_id)) {
-            kind
-        } else {
-            return false;
-        };
-        let res = resolve::def_path_res(self.tcx, path.0, kind);
-        trace!(?res);
-        let mut res = res.into_iter().filter_map(|res| match res {
-            Res::Def(_, id) => Some(id),
-            _ => None,
-        });
-        let pat_id = if let Some(id) = res.next() { id } else { return false };
-        // FIXME: there should be at most one item matching specific item kind
-        assert!(res.next().is_none());
-
-        trace!(?pat_id, ?def_id);
-
-        pat_id == def_id
-    }
-
-    fn match_item_path(&self, path: pat::ItemPath<'pcx>, def_id: DefId) -> Option<&[Symbol]> {
-        let &[krate, ref in_crate @ ..] = path.0 else {
-            // an empty `ItemPath`
-            return None;
-        };
-        let def_path = self.tcx.def_path(def_id);
-        let matched = match def_path.krate {
-            LOCAL_CRATE => krate == kw::Crate,
-            _ => self.tcx.crate_name(def_path.krate) == krate,
-        };
-        let mut pat_iter = in_crate.iter();
-        use DefPathData::{Impl, TypeNs, ValueNs};
-        let mut iter = def_path
-            .data
-            .iter()
-            .filter(|data| matches!(data.data, Impl | TypeNs(_) | ValueNs(_)));
-        let matched = matched
-            && std::iter::zip(pat_iter.by_ref(), iter.by_ref())
-                .all(|(&path, data)| data.data.get_opt_name().is_some_and(|name| name == path));
-        // Check that `iter` (from `def_path`) is not longer than `pat_iter` (from `path`)
-        let matched = matched && iter.next().is_none();
-        debug!(?path, ?def_id, matched, "match_item_path");
-        matched.then_some(pat_iter.as_slice())
-    }
-
-    fn match_generic_args(
-        &self,
-        args_pat: pat::GenericArgsRef<'pcx>,
-        args: ty::GenericArgsRef<'tcx>,
-        generics: &'tcx ty::Generics,
-    ) -> bool {
-        // Is it necessary to call this function?
-        let args_all = generics.own_args(args);
-        let args_no_default = generics.own_args_no_defaults(self.tcx, args);
-        if args_pat.len() < args_no_default.len() || args_pat.len() > args_all.len() {
-            false
-        } else {
-            // FIXME:
-            // directly zip args_all[..args_pat.len()]?
-            args_pat
-                .iter()
-                .zip(
-                    args_no_default
-                        .iter()
-                        .chain(args_all[args_no_default.len()..args_pat.len()].iter()),
-                )
-                .all(|(pat, arg)| self.match_generic_arg(*pat, *arg))
-        }
-    }
-
-    fn match_generic_arg(&self, arg_pat: pat::GenericArgKind<'pcx>, arg: ty::GenericArg<'tcx>) -> bool {
-        match (arg_pat, arg.unpack()) {
-            (pat::GenericArgKind::Lifetime(region_pat), ty::GenericArgKind::Lifetime(region)) => {
-                self.match_region(region_pat, region)
-            },
-            (pat::GenericArgKind::Type(ty_pat), ty::GenericArgKind::Type(ty)) => self.match_ty(ty_pat, ty),
-            (pat::GenericArgKind::Const(konst_pat), ty::GenericArgKind::Const(konst)) => {
-                self.match_const(konst_pat, konst)
-            },
-            _ => false,
-        }
-    }
-
-    fn match_const(&self, konst_pat: pat::Const<'pcx>, konst: ty::Const<'tcx>) -> bool {
-        match (konst_pat, konst.kind()) {
-            (pat::Const::ConstVar(const_var), _) => self.match_const_var(const_var, konst),
-            (pat::Const::Value(_value_pat), ty::Value(_ty, ty::ValTree::Leaf(_value))) => todo!(),
-            _ => false,
-        }
-    }
-    fn match_const_var(&self, const_var: pat::ConstVar<'pcx>, konst: ty::Const<'tcx>) -> bool {
-        if let ty::ConstKind::Value(ty, _) = konst.kind()
-            && self.match_ty(const_var.ty, ty)
-        {
-            // self.const_vars[const_var].borrow_mut().push(konst);
-            return true;
-        }
-        false
-    }
-
     #[instrument(level = "trace", skip(self), ret)]
     fn match_const_operand(&self, pat: &pat::ConstOperand<'pcx>, konst: mir::Const<'tcx>) -> bool {
         let matched = match (pat, konst) {
             (&pat::ConstOperand::ConstVar(const_var), mir::Const::Ty(_, konst)) => {
-                self.match_const_var(const_var, konst)
+                self.ty.match_const_var(const_var, konst)
             },
             (&pat::ConstOperand::ScalarInt(value_pat), mir::Const::Val(mir::ConstValue::Scalar(value), ty)) => {
                 (match (value_pat.ty, *ty.kind()) {
@@ -911,7 +704,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                     (pat::IntTy::Bool, ty::Bool) => true,
                     _ => return false,
                 }) && value.to_scalar_int().discard_err().is_some_and(|value| {
-                    value_pat.normalize(self.tcx.pointer_size().bytes()) == value.to_bits_unchecked()
+                    value_pat.normalize(self.ty.tcx.pointer_size().bytes()) == value.to_bits_unchecked()
                 })
             },
             (&pat::ConstOperand::ZeroSized(path_with_args), mir::Const::Val(mir::ConstValue::ZeroSized, ty)) => {
@@ -922,17 +715,11 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                 };
                 // self.match_path_with_args(path_with_args, def_id, args)
                 // FIXME: match the arguments
-                self.match_path(path_with_args.path, def_id)
+                self.ty.match_path(path_with_args.path, def_id)
             },
             _ => false,
         };
         debug!(?pat, ?konst, matched, "match_const_operand");
         matched
-    }
-    fn match_region(&self, pat: pat::RegionKind, region: ty::Region<'tcx>) -> bool {
-        matches!(
-            (pat, region.kind()),
-            (pat::RegionKind::ReStatic, ty::RegionKind::ReStatic) | (pat::RegionKind::ReAny, _)
-        )
     }
 }

@@ -1,22 +1,15 @@
 [package]
-name = "rpl_patterns"
+name = "rpl_match"
 version.workspace = true
+edition.workspace = true
 description.workspace = true
-repository.workspace = true
+publish.workspace = true
 license.workspace = true
 keywords.workspace = true
-edition.workspace = true
+repository.workspace = true
 
 [dependencies]
-rpl_macros.workspace = true
-rpl_match.workspace = true
-rpl_mir.workspace = true
 rpl_context.workspace = true
-
-[dev-dependencies]
-libc.workspace = true
-
-[features]
 
 [package.metadata.rust-analyzer]
 # This crate uses #[feature(rustc_private)]

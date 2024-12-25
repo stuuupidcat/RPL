@@ -958,6 +958,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "rpl_match"
+version = "0.1.0"
+dependencies = [
+ "rpl_context",
+]
+
+[[package]]
 name = "rpl_mir"
 version = "0.1.0"
 dependencies = [
@@ -966,6 +973,7 @@ dependencies = [
  "quote",
  "rpl_context",
  "rpl_macros",
+ "rpl_match",
  "rpl_mir_graph",
  "syn",
 ]
@@ -1015,6 +1023,7 @@ dependencies = [
  "libc",
  "rpl_context",
  "rpl_macros",
+ "rpl_match",
  "rpl_mir",
 ]
 

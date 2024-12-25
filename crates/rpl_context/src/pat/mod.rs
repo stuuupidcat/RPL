@@ -51,13 +51,14 @@ impl<'pcx> Pattern<'pcx> {
             impls: Default::default(),
         }
     }
-    pub fn new_struct(&mut self, name: Symbol) -> &mut Variant<'pcx> {
-        self.adts
-            .entry(name)
-            .or_insert_with(Adt::new_struct)
-            .non_enum_variant_mut()
+    pub fn new_struct(&mut self, name: Symbol) -> &mut Adt<'pcx> {
+        self.adts.entry(name).or_insert_with(Adt::new_struct)
+        // .non_enum_variant_mut()
     }
     pub fn new_enum(&mut self, name: Symbol) -> &mut Adt<'pcx> {
         self.adts.entry(name).or_insert_with(Adt::new_enum)
+    }
+    pub fn get_adt(&self, name: Symbol) -> Option<&Adt<'pcx>> {
+        self.adts.get(&name)
     }
 }

@@ -497,18 +497,23 @@ impl ToTokens for ExpandPat<'_, &FnRet> {
 
 impl ToTokens for ExpandPat<'_, &Struct> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandPatCtxt { pcx, meta, .. } = self.ecx;
+        let ExpandPatCtxt { pat, meta, .. } = self.ecx;
+        let pattern = pat.expect_pattern();
         let Struct { ident, fields, .. } = &self.value;
         let ident_sym = self.ecx.expand(ident.to_symbol());
         let ident = ident.as_adt();
         quote_each_token!(tokens
             #[allow(non_snake_case)]
-            let #ident = #pcx.new_struct(#ident_sym);
+            let #ident = #pattern.new_struct(#ident_sym);
         );
         let ecx_with_ident = self.ecx.with_pat(PatId::Variant(&ident));
         if let Some(meta) = meta {
             ecx_with_ident.expand(meta).to_tokens(tokens);
         }
+        quote_each_token!(tokens
+            #[allow(non_snake_case)]
+            let #ident = #ident.non_enum_variant_mut();
+        );
         for field in fields.iter() {
             ecx_with_ident.expand(field).to_tokens(tokens);
         }
@@ -528,12 +533,13 @@ impl ToTokens for ExpandPat<'_, &Field> {
 
 impl ToTokens for ExpandPat<'_, &Enum> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandPatCtxt { pcx, meta, .. } = self.ecx;
+        let ExpandPatCtxt { pat, meta, .. } = self.ecx;
+        let pattern = pat.expect_pattern();
         let Enum { ident, variants, .. } = self.value;
         let ident_sym = self.ecx.expand(ident.to_symbol());
         quote_each_token!(tokens
             #[allow(non_snake_case)]
-            let #ident = #pcx.new_enum(#ident_sym);
+            let #ident = #pattern.new_enum(#ident_sym);
         );
         if let Some(meta) = meta {
             self.ecx.expand(meta).to_tokens(tokens);
