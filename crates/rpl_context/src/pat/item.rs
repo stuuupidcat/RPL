@@ -6,7 +6,7 @@ use super::{MetaVars, MirPattern, Path, Ty};
 
 pub struct Adt<'pcx> {
     pub meta: MetaVars<'pcx>,
-    kind: AdtKind<'pcx>,
+    pub kind: AdtKind<'pcx>,
 }
 
 pub enum AdtKind<'pcx> {
@@ -16,12 +16,11 @@ pub enum AdtKind<'pcx> {
 
 #[derive(Default)]
 pub struct Variant<'pcx> {
-    fields: FxHashMap<Symbol, Field<'pcx>>,
+    pub fields: FxHashMap<Symbol, Field<'pcx>>,
 }
 
 pub struct Field<'pcx> {
-    #[expect(dead_code)]
-    ty: Ty<'pcx>,
+    pub ty: Ty<'pcx>,
 }
 
 pub struct Impl<'pcx> {
@@ -80,7 +79,7 @@ impl<'pcx> Adt<'pcx> {
             kind: AdtKind::Enum(Default::default()),
         }
     }
-    pub(crate) fn non_enum_variant_mut(&mut self) -> &mut Variant<'pcx> {
+    pub fn non_enum_variant_mut(&mut self) -> &mut Variant<'pcx> {
         match &mut self.kind {
             AdtKind::Struct(variant) => variant,
             AdtKind::Enum(_) => panic!("cannot mutate non-enum variant of enum"),

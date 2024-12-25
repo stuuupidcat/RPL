@@ -19,6 +19,7 @@ rpl_driver = { path = "./crates/rpl_driver" }
 rpl_graphviz = { path = "./crates/rpl_graphviz" }
 rpl_interface = { path = "./crates/rpl_interface" }
 rpl_macros = { path = "./crates/rpl_macros" }
+rpl_match = { path = "./crates/rpl_match" }
 rpl_mir = { path = "./crates/rpl_mir" }
 rpl_mir_graph = { path = "./crates/rpl_mir_graph" }
 rpl_pat_expand = { path = "./crates/rpl_pat_expand" }

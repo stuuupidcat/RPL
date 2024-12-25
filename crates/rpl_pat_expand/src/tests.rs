@@ -1947,12 +1947,15 @@ fn test_cve_2020_35892_3() {
             }
         } => quote! {
             #[allow(non_snake_case)]
-            let SlabT_adt = pcx.new_struct(::rustc_span::Symbol::intern("SlabT"));
+            let SlabT_adt = pattern.new_struct(::rustc_span::Symbol::intern("SlabT"));
 
             #[allow(non_snake_case)]
             let T_ty_var = SlabT_adt.meta.new_ty_var(None);
             #[allow(non_snake_case)]
             let T_ty = pcx.mk_var_ty(T_ty_var);
+
+            #[allow(non_snake_case)]
+            let SlabT_adt = SlabT_adt.non_enum_variant_mut();
 
             SlabT_adt.add_field(::rustc_span::Symbol::intern("mem"), pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Mut));
             SlabT_adt.add_field(::rustc_span::Symbol::intern("len"), pcx.primitive_types.usize);
