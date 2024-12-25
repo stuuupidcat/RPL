@@ -150,7 +150,7 @@ pub fn ty_res<'tcx, 'pcx>(
     res.first().copied()
 }
 
-pub fn lang_item_res<'tcx, 'pcx>(pcx: PatCtxt<'pcx>, tcx: TyCtxt<'tcx>, item: LangItem) -> Option<pat::Ty<'pcx>> {
+pub fn lang_item_res<'pcx>(pcx: PatCtxt<'pcx>, tcx: TyCtxt<'_>, item: LangItem) -> Option<pat::Ty<'pcx>> {
     tcx.lang_items()
         .get(item)
         .map(|def_id| pat::Ty::from_def(pcx, def_id, pat::GenericArgsRef(&[])))

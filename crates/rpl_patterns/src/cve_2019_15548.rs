@@ -73,7 +73,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             }
             #[allow(irrefutable_let_patterns)]
             if let pattern_ptr = pattern_pass_a_pointer_to_c(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern_ptr.pattern).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_ptr.fn_pat).check()
                 && let Some(ptr) = matches[pattern_ptr.ptr]
                 && let ptr = ptr.span_no_inline(body)
             {
@@ -127,25 +127,28 @@ fn pattern_rust_str_as_c_str(pcx: PatCtxt<'_>) -> PatternCast<'_> {
 }
 
 struct PatternPointer<'pcx> {
-    pattern: MirPattern<'pcx>,
+    fn_pat: &'pcx pat::Fn<'pcx>,
     ptr: pat::Location,
 }
 
 // FIXME: this should work for functions other than `crate::ll::instr`.
 #[rpl_macros::pattern_def]
 fn pattern_pass_a_pointer_to_c(pcx: PatCtxt<'_>) -> PatternPointer<'_> {
-    rpl! {
+    let ptr;
+    let pattern = rpl! {
         fn $pattern (..) -> _ = mir! {
             type c_char = libc::c_char;
 
+            #[export(ptr)]
             let ptr: *const c_char = _;
             _ = $crate::ll::instr(move ptr);
         }
-    }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
     PatternPointer {
-        pattern,
-        ptr: ptr_stmt,
+        fn_pat,
+        ptr,
         // ty_var: c_char_ty,
     }
 }

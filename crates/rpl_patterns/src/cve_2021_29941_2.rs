@@ -1,12 +1,11 @@
 use rpl_context::PatCtxt;
-use rpl_mir::pat::MirPattern;
 use rpl_mir::{pat, CheckMirCtxt};
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
-use rustc_span::Span;
+use rustc_span::{Span, Symbol};
 
 #[instrument(level = "info", skip(tcx, pcx))]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
@@ -51,7 +50,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
             if let pattern = pattern_trust_len(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern.pattern).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
                 && let Some(len) = matches[pattern.len]
                 && let len = len.span_no_inline(body)
                 && let Some(set_len) = matches[pattern.set_len]
@@ -64,7 +63,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             }
             #[allow(irrefutable_let_patterns)]
             if let pattern = pattern_uninitialized_slice(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern.pattern).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
                 && let Some(len) = matches[pattern.len]
                 && let len = len.span_no_inline(body)
                 && let Some(ptr) = matches[pattern.ptr]
@@ -85,7 +84,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             }
             #[allow(irrefutable_let_patterns)]
             if let pattern = pattern_uninitialized_slice_mut(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, body, &pattern.pattern).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
                 && let Some(len) = matches[pattern.len]
                 && let len = len.span_no_inline(body)
                 && let Some(ptr) = matches[pattern.ptr]
@@ -110,43 +109,36 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 struct PatternTrustLen<'pcx> {
-    pattern: MirPattern<'pcx>,
+    fn_pat: &'pcx pat::Fn<'pcx>,
     len: pat::Location,
     set_len: pat::Location,
-    // vec: pat::LocalIdx,
-    // vec: pat::Location,
 }
 
 #[rpl_macros::pattern_def]
 fn pattern_trust_len(pcx: PatCtxt<'_>) -> PatternTrustLen<'_> {
-    rpl! {
+    let len;
+    let set_len;
+    let pattern = rpl! {
+        #[meta($T:ty, $I:ty)]
         fn $pattern (..) -> _ = mir! {
-            meta!{
-                $T:ty,
-                $I:ty,
-            }
-
             // let len: usize = <$I as std::iter::ExactSizeIterator>::len(iter);
             let iter: $I = _;
+            #[export(len)]
             let len: usize = std::iter::ExactSizeIterator::len(move iter);
             // let len: usize = std::iter::ExactSizeIterator::len(_);
             // let len: usize = _;
             let vec: &mut alloc::vec::Vec<$T> = _;
+            #[export(set_len)]
             let set_len: () = alloc::vec::Vec::set_len(move vec, copy len);
         }
-    }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-    PatternTrustLen {
-        pattern,
-        len: len_stmt,
-        set_len: set_len_stmt,
-        // vec: vec_local,
-        // vec: vec_stmt,
-    }
+    PatternTrustLen { fn_pat, len, set_len }
 }
 
 struct PatternFromRawParts<'pcx> {
-    pattern: MirPattern<'pcx>,
+    fn_pat: &'pcx pat::Fn<'pcx>,
     ptr: pat::Location,
     len: pat::Location,
     vec: pat::Location,
@@ -155,52 +147,62 @@ struct PatternFromRawParts<'pcx> {
 
 #[rpl_macros::pattern_def]
 fn pattern_uninitialized_slice(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
-    rpl! {
+    let ptr;
+    let len;
+    let vec;
+    let slice;
+    let pattern = rpl! {
+        #[meta($T:ty)]
         fn $pattern (..) -> _ = mir! {
-            meta!{
-                $T:ty,
-            }
-
+            #[export(len)]
             let len: usize = _;
+            #[export(vec)]
             let vec: alloc::vec::Vec<$T> = alloc::vec::Vec::with_capacity(_);
             let vec_ref: &alloc::vec::Vec<$T> = &vec;
+            #[export(ptr)]
             let ptr: *const $T = alloc::vec::Vec::as_ptr(move vec_ref);
+            #[export(slice)]
             let slice: &[$T] = std::slice::from_raw_parts::<'_, $T>(move ptr, copy len);
         }
-    }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
     PatternFromRawParts {
-        pattern,
-        ptr: ptr_stmt,
-        len: len_stmt,
-        vec: vec_stmt,
-        slice: slice_stmt,
+        fn_pat,
+        ptr,
+        len,
+        vec,
+        slice,
     }
 }
 
 #[rpl_macros::pattern_def]
 fn pattern_uninitialized_slice_mut(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
-    rpl! {
+    let ptr;
+    let len;
+    let vec;
+    let slice;
+    let pattern = rpl! {
+        #[meta($T:ty)]
         fn $pattern (..) -> _ = mir! {
-            meta!{
-                $T:ty,
-            }
-
+            #[export(len)]
             let len: usize = _;
+            #[export(vec)]
             let vec: alloc::vec::Vec<$T> = alloc::vec::Vec::with_capacity(_);
             let vec_ref: &mut alloc::vec::Vec<$T> = &mut vec;
+            #[export(ptr)]
             let ptr: *mut $T = alloc::vec::Vec::as_mut_ptr(move vec_ref);
+            #[export(slice)]
             let slice: &mut [$T] = std::slice::from_raw_parts_mut::<'_, $T>(move ptr, copy len);
         }
-    }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
     PatternFromRawParts {
-        pattern,
-        ptr: ptr_stmt,
-        // ptr: vec_stmt,
-        len: len_stmt,
-        vec: vec_stmt,
-        slice: slice_stmt,
-        // slice: vec_stmt,
+        fn_pat,
+        ptr,
+        len,
+        vec,
+        slice,
     }
 }

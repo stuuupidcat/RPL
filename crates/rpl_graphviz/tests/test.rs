@@ -245,10 +245,10 @@ test_case! {
 
 test_case! {
     fn cve_2021_29941() {
-        meta!{
+        meta!(
             $T:ty,
             $I:ty,
-        }
+        );
 
         let iter: $I = _;
         let len: usize = std::iter::ExactSizeIterator::len(move iter);
@@ -259,9 +259,9 @@ test_case! {
 
 test_case! {
     fn cve_2021_29941_uninitialized_slice() {
-        meta!{
+        meta!(
             $T:ty,
-        }
+        );
 
         let len: usize = _;
         let vec: alloc::vec::Vec<$T> = alloc::vec::Vec::with_capacity(_);
