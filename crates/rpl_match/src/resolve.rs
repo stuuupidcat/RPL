@@ -4,9 +4,9 @@
 use rpl_context::{pat, PatCtxt};
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::def_id::{CrateNum, LocalDefId, LOCAL_CRATE};
-use rustc_hir::{ImplItemRef, ItemKind, Node, OwnerId, PrimTy, TraitItemRef};
+use rustc_hir::{ImplItemRef, ItemKind, LangItem, Node, OwnerId, PrimTy, TraitItemRef};
 use rustc_middle::ty::fast_reject::SimplifiedType;
-use rustc_middle::ty::{FloatTy, GenericArg, IntTy, Mutability, TyCtxt, UintTy};
+use rustc_middle::ty::{FloatTy, IntTy, Mutability, TyCtxt, UintTy};
 use rustc_span::def_id::DefId;
 use rustc_span::symbol::Ident;
 use rustc_span::Symbol;
@@ -119,25 +119,20 @@ impl PatItemKind {
     }
 }
 
+#[instrument(level = "info", skip(pcx, tcx), ret)]
 pub fn ty_res<'tcx, 'pcx>(
     pcx: PatCtxt<'pcx>,
     tcx: TyCtxt<'tcx>,
     path: &[Symbol],
-    args: &[GenericArg<'tcx>],
+    args: &[pat::GenericArgKind<'pcx>],
 ) -> Option<pat::Ty<'pcx>> {
     let res = def_path_res(tcx, path, PatItemKind::Type);
     let res: Vec<_> = res
         .into_iter()
         .filter_map(|res| match res {
-            Res::Def(_, def_id) => pat::Ty::from_ty_lossy(pcx, tcx.type_of(def_id).skip_binder()),
+            Res::Def(_, def_id) => pat::Ty::from_ty_lossy(pcx, tcx.type_of(def_id).instantiate_identity()),
             // Res::Def(_, def_id) => pat::Ty::from_ty_lossy(pcx, tcx.type_of(def_id).instantiate(tcx, args)),
-            Res::PrimTy(prim_ty) => {
-                if args.is_empty() {
-                    Some(pat::Ty::from_prim_ty(pcx, prim_ty))
-                } else {
-                    None
-                }
-            },
+            Res::PrimTy(prim_ty) => args.is_empty().then(|| pat::Ty::from_prim_ty(pcx, prim_ty)),
             Res::SelfTyParam { .. }
             | Res::SelfTyAlias { .. }
             | Res::SelfCtor(..)
@@ -153,6 +148,12 @@ pub fn ty_res<'tcx, 'pcx>(
         info!(?res, "ambiguous type path");
     }
     res.first().copied()
+}
+
+pub fn lang_item_res<'tcx, 'pcx>(pcx: PatCtxt<'pcx>, tcx: TyCtxt<'tcx>, item: LangItem) -> Option<pat::Ty<'pcx>> {
+    tcx.lang_items()
+        .get(item)
+        .map(|def_id| pat::Ty::from_def(pcx, def_id, pat::GenericArgsRef(&[])))
 }
 
 /// Resolves a def path like `std::vec::Vec`.
