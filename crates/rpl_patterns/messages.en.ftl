@@ -35,3 +35,14 @@ rpl_patterns_vec_set_len_to_extend = Use `Vec::set_len` to extend the length of 
 
 rpl_patterns_vec_set_len_to_truncate = Use `Vec::set_len` to truncate the length of a `Vec`
     .help = Consider using `Vec::truncate` instead
+
+rpl_patterns_trust_exact_size_iterator = it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
+    .len_label = `std::iter::ExactSizeIterator::len` used here
+    .help = incorrect implementation of `std::iter::ExactSizeIterator::len` must not cause safety issues
+
+rpl_patterns_slice_from_raw_parts_uninitialized = it violates the precondition of `{$fn_name}` to create a slice from uninitialized data
+    .slice_label = slice created here
+    .vec_label   = `std::vec::Vec` created but not initialized
+    .len_label   = slice created with this length
+    .ptr_label   = slice created with this pointer
+    .help        = See https://doc.rust-lang.org/std/slice/fn.{$fn_name}.html

@@ -1,0 +1,13 @@
+error: it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
+  --> tests/ui/cve_2021_29941_2/cve_2021_29941_2_trust_len.rs:14:9
+   |
+LL |     let len = bla.len();
+   |               --------- `std::iter::ExactSizeIterator::len` used here
+...
+LL |         vec.set_len(len);
+   |         ^^^^^^^^^^^^^^^^
+   |
+   = help: incorrect implementation of `std::iter::ExactSizeIterator::len` must not cause safety issues
+
+error: aborting due to 1 previous error
+

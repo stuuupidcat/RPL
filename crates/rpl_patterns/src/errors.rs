@@ -97,13 +97,39 @@ pub struct LengthlessBufferPassedToExternFunction {
 #[diag(rpl_patterns_wrong_assumption_of_layout_compatibility)]
 #[help]
 pub struct WrongAssumptionOfLayoutCompatibility {
-    #[label(rpl_patterns_label)]
-    #[note]
-    pub cast_from: Span,
     #[primary_span]
     pub cast_to: Span,
-    pub type_from: &'static str,
+    #[note]
+    pub cast_from: Span,
     pub type_to: &'static str,
+    pub type_from: &'static str,
+}
+
+// for cve_2021_27376
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_trust_exact_size_iterator)]
+#[help]
+pub struct TrustExactSizeIterator {
+    #[primary_span]
+    pub set_len: Span,
+    #[label(rpl_patterns_len_label)]
+    pub len: Span,
+}
+
+// for cve_2021_27376
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_slice_from_raw_parts_uninitialized)]
+#[help]
+pub struct SliceFromRawPartsUninitialized {
+    #[primary_span]
+    pub slice: Span,
+    #[label(rpl_patterns_len_label)]
+    pub len: Span,
+    #[label(rpl_patterns_ptr_label)]
+    pub ptr: Span,
+    #[label(rpl_patterns_vec_label)]
+    pub vec: Span,
+    pub fn_name: &'static str,
 }
 
 // for cve_2018_20992
