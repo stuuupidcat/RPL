@@ -39,6 +39,7 @@ use std::cell::RefCell;
 use std::iter::zip;
 
 use crate::graph::{MirControlFlowGraph, MirDataDepGraph, PatControlFlowGraph, PatDataDepGraph};
+use resolve::{lang_item_res, ty_res, PatItemKind};
 use rpl_context::PatCtxt;
 use rpl_match::MatchTyCtxt;
 use rpl_mir_graph::TerminatorEdges;
@@ -814,19 +815,29 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             (pat::TyKind::Int(ty_pat), ty::Int(ty)) => ty_pat == ty,
             (pat::TyKind::Float(ty_pat), ty::Float(ty)) => ty_pat == ty,
             (pat::TyKind::Path(path_with_args), ty::Adt(adt, args)) => {
-                self.match_path_with_args(path_with_args, adt.did(), args, PatItemKind::Type)
+                self.match_path_with_args(path_with_args, adt.did(), args)
             },
             (pat::TyKind::Path(path_with_args), ty::FnDef(def_id, args)) => {
-                self.match_path_with_args(path_with_args, def_id, args, PatItemKind::Type)
+                self.match_path_with_args(path_with_args, def_id, args)
             },
+            // (pat::TyKind::Def(def_id_pat, args_pat), ty::Adt(def, args)) => {
+            //     let def_id = def.did();
+            //     let generics = self.tcx.generics_of(def_id);
+            //     def_id_pat == def_id && self.match_generic_args(args_pat, args, generics)
+            // },
+            // (pat::TyKind::Def(def_id_pat, args_pat), ty::FnDef(def_id, args)) => {
+            //     let generics = self.tcx.generics_of(def_id);
+            //     def_id_pat == def_id && self.match_generic_args(args_pat, args, generics)
+            // },
             (pat::TyKind::Path(path_with_args), _) => {
                 //FIXME: generics args are ignored.
                 match path_with_args.path {
-                    pat::Path::Item(path) => ty_res(self.pcx, self.tcx, path.0, &[])
-                        .map(|ty_pat| self.match_ty(ty_pat, ty))
-                        .unwrap_or(false),
-                    _ => false, //FIXME
+                    pat::Path::Item(path) => ty_res(self.pattern.pcx, self.tcx, path.0, path_with_args.args.0),
+                    pat::Path::LangItem(item) => lang_item_res(self.pattern.pcx, self.tcx, item),
+                    pat::Path::TypeRelative(_, _) => todo!(),
                 }
+                .map(|ty_pat| self.match_ty(ty_pat, ty))
+                .unwrap_or(false)
             },
             // (pat::TyKind::Alias(alias_kind_pat, path, args), ty::Alias(alias_kind, alias)) => {
             //     alias_kind_pat == alias_kind
@@ -847,7 +858,6 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         path_with_args: pat::PathWithArgs<'pcx>,
         def_id: DefId,
         args: ty::GenericArgsRef<'tcx>,
-        kind: PatItemKind,
     ) -> bool {
         let generics = self.tcx.generics_of(def_id);
         self.match_path(path_with_args.path, def_id) && self.match_generic_args(path_with_args.args, args, generics)
@@ -883,13 +893,18 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         };
         let res = resolve::def_path_res(self.tcx, path.0, kind);
         trace!(?res);
-        let mut res = res.into_iter().filter_map(|res| match res {
-            Res::Def(_, id) => Some(id),
-            _ => None,
-        });
-        let pat_id = if let Some(id) = res.next() { id } else { return false };
+        let res: Vec<_> = res
+            .into_iter()
+            .filter_map(|res| match res {
+                Res::Def(_, id) => Some(id),
+                _ => None,
+            })
+            .collect();
+        let pat_id = if let Some(id) = res.first() { *id } else { return false };
         // FIXME: there should be at most one item matching specific item kind
-        assert!(res.next().is_none());
+        if res.len() > 1 {
+            info!(?path, ?res, "found ambiguous def item when resolving")
+        }
 
         trace!(?pat_id, ?def_id);
 
