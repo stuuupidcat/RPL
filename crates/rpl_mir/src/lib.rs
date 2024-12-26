@@ -321,7 +321,25 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                     },
                     (_, pat::PlaceElem::OpaqueCast(ty_pat), OpaqueCast(ty))
                     | (_, pat::PlaceElem::Subtype(ty_pat), Subtype(ty)) => self.ty.match_ty(ty_pat, ty),
-                    _ => false,
+                    (
+                        _,
+                        pat::PlaceElem::Deref
+                        | pat::PlaceElem::Field(_)
+                        | pat::PlaceElem::Index(_)
+                        | pat::PlaceElem::ConstantIndex { .. }
+                        | pat::PlaceElem::Subslice { .. }
+                        | pat::PlaceElem::Downcast(..)
+                        | pat::PlaceElem::OpaqueCast(..)
+                        | pat::PlaceElem::Subtype(..),
+                        Deref
+                        | Field(..)
+                        | Index(_)
+                        | ConstantIndex { .. }
+                        | Subslice { .. }
+                        | Downcast(..)
+                        | OpaqueCast(_)
+                        | Subtype(_),
+                    ) => false,
                 }
             })
     }
@@ -362,7 +380,22 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                 &pat::StatementKind::Assign(place_pat, ref rvalue_pat),
                 &mir::StatementKind::Assign(box (place, ref rvalue)),
             ) => self.match_rvalue(rvalue_pat, rvalue) && self.match_place(place_pat, place),
-            _ => false,
+            (
+                pat::StatementKind::Assign(..),
+                // mir::StatementKind::Assign(..)
+                mir::StatementKind::FakeRead(..)
+                | mir::StatementKind::SetDiscriminant { .. }
+                | mir::StatementKind::Deinit(_)
+                | mir::StatementKind::StorageLive(_)
+                | mir::StatementKind::StorageDead(_)
+                | mir::StatementKind::Retag(..)
+                | mir::StatementKind::PlaceMention(..)
+                | mir::StatementKind::AscribeUserType(..)
+                | mir::StatementKind::Coverage(..)
+                | mir::StatementKind::Intrinsic(..)
+                | mir::StatementKind::ConstEvalCounter
+                | mir::StatementKind::Nop,
+            ) => false,
         };
         if matched {
             info!("candidate matched: {loc_pat:?} {pat:?} <-> {loc:?} {statement:?}");
@@ -444,7 +477,29 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                 pat::TerminatorKind::SwitchInt { operand, targets: _ },
                 mir::TerminatorKind::SwitchInt { discr, targets: _ },
             ) => self.match_operand(operand, discr) && self.match_switch_targets(loc_pat.block, loc.block),
-            _ => false,
+            (
+                pat::TerminatorKind::SwitchInt { .. }
+                | pat::TerminatorKind::Goto(_)
+                | pat::TerminatorKind::Call { .. }
+                | pat::TerminatorKind::Drop { .. }
+                | pat::TerminatorKind::Return,
+                // | pat::TerminatorKind::PatEnd,
+                mir::TerminatorKind::Goto { .. }
+                | mir::TerminatorKind::SwitchInt { .. }
+                | mir::TerminatorKind::UnwindResume
+                | mir::TerminatorKind::UnwindTerminate(_)
+                | mir::TerminatorKind::Return
+                | mir::TerminatorKind::Unreachable
+                | mir::TerminatorKind::Drop { .. }
+                | mir::TerminatorKind::Call { .. }
+                | mir::TerminatorKind::TailCall { .. }
+                | mir::TerminatorKind::Assert { .. }
+                | mir::TerminatorKind::Yield { .. }
+                | mir::TerminatorKind::CoroutineDrop
+                | mir::TerminatorKind::FalseEdge { .. }
+                | mir::TerminatorKind::FalseUnwind { .. }
+                | mir::TerminatorKind::InlineAsm { .. },
+            ) => false,
         };
         if matched {
             info!(
@@ -543,7 +598,36 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             (&pat::Rvalue::ShallowInitBox(ref operand_pat, ty_pat), &mir::Rvalue::ShallowInitBox(ref operand, ty)) => {
                 self.match_operand(operand_pat, operand) && self.ty.match_ty(ty_pat, ty)
             },
-            _ => return false,
+            (
+                // pat::Rvalue::Any
+                pat::Rvalue::Use(_)
+                | pat::Rvalue::Repeat(..)
+                | pat::Rvalue::Ref(..)
+                | pat::Rvalue::RawPtr(..)
+                | pat::Rvalue::Len(_)
+                | pat::Rvalue::Cast(..)
+                | pat::Rvalue::BinaryOp(..)
+                | pat::Rvalue::NullaryOp(..)
+                | pat::Rvalue::UnaryOp(..)
+                | pat::Rvalue::Discriminant(_)
+                | pat::Rvalue::Aggregate(..)
+                | pat::Rvalue::ShallowInitBox(..)
+                | pat::Rvalue::CopyForDeref(_),
+                mir::Rvalue::Use(_)
+                | mir::Rvalue::Repeat(..)
+                | mir::Rvalue::Ref(..)
+                | mir::Rvalue::ThreadLocalRef(_)
+                | mir::Rvalue::RawPtr(..)
+                | mir::Rvalue::Len(_)
+                | mir::Rvalue::Cast(..)
+                | mir::Rvalue::BinaryOp(..)
+                | mir::Rvalue::NullaryOp(..)
+                | mir::Rvalue::UnaryOp(..)
+                | mir::Rvalue::Discriminant(_)
+                | mir::Rvalue::Aggregate(..)
+                | mir::Rvalue::ShallowInitBox(..)
+                | mir::Rvalue::CopyForDeref(_),
+            ) => return false,
         };
         debug!(?pat, ?rvalue, matched, "match_rvalue");
         matched
@@ -558,7 +642,10 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             (pat::Operand::Constant(konst_pat), mir::Operand::Constant(box konst)) => {
                 self.match_const_operand(konst_pat, konst.const_)
             },
-            _ => return false,
+            (
+                pat::Operand::Any | pat::Operand::Copy(_) | pat::Operand::Move(_) | pat::Operand::Constant(_),
+                mir::Operand::Copy(_) | mir::Operand::Move(_) | mir::Operand::Constant(_),
+            ) => return false,
         };
         debug!(?pat, ?operand, matched, "match_operand");
         matched
@@ -628,7 +715,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                             .is_some_and(|&idx| self.match_operand(&operands_pat[idx], operand))
                     })
             },
-            _ => false,
+            (pat::AggAdtKind::Unit | pat::AggAdtKind::Tuple | pat::AggAdtKind::Struct(_), ..) => false,
         };
         let generics = self.ty.tcx.generics_of(def_id);
         let gargs_matched = self.ty.match_generic_args(gargs_pat, gargs, generics);
@@ -672,7 +759,16 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                     && mutability_pat == mutability
                     && self.match_operands(operands_pat, &operands.raw)
             },
-            _ => false,
+            (
+                pat::AggKind::Array | pat::AggKind::Tuple | pat::AggKind::Adt(..) | pat::AggKind::RawPtr(..),
+                mir::AggregateKind::Array(_)
+                | mir::AggregateKind::Tuple
+                | mir::AggregateKind::Adt(..)
+                | mir::AggregateKind::Closure(..)
+                | mir::AggregateKind::Coroutine(..)
+                | mir::AggregateKind::CoroutineClosure(..)
+                | mir::AggregateKind::RawPtr(..),
+            ) => false,
         };
         debug!(
             ?agg_kind_pat,
@@ -717,7 +813,10 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                 // FIXME: match the arguments
                 self.ty.match_path(path_with_args.path, def_id)
             },
-            _ => false,
+            (
+                pat::ConstOperand::ConstVar(_) | pat::ConstOperand::ScalarInt(_) | pat::ConstOperand::ZeroSized(_),
+                mir::Const::Ty(..) | mir::Const::Unevaluated(..) | mir::Const::Val(..),
+            ) => false,
         };
         debug!(?pat, ?konst, matched, "match_const_operand");
         matched
