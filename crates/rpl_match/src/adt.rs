@@ -35,7 +35,10 @@ impl<'pcx, 'tcx> MatchAdtCtxt<'pcx, 'tcx> {
                     })
                     .collect::<Option<_>>()?,
             ),
-            _ => return None,
+            (
+                pat::AdtKind::Struct(_) | pat::AdtKind::Enum(_),
+                ty::AdtKind::Struct | ty::AdtKind::Enum | ty::AdtKind::Union,
+            ) => return None,
         };
         Some(AdtMatch { adt, kind })
     }

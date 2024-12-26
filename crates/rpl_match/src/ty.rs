@@ -80,7 +80,51 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
             //         && self.match_generic_args(args, alias.args)
             // },
             (pat::TyKind::Bool, ty::Bool) => true,
-            _ => false,
+            (
+                pat::TyKind::TyVar(_)
+                | pat::TyKind::AdtVar(_)
+                | pat::TyKind::Array(..)
+                | pat::TyKind::Slice(_)
+                | pat::TyKind::Tuple(_)
+                | pat::TyKind::Ref(..)
+                | pat::TyKind::RawPtr(..)
+                | pat::TyKind::Uint(_)
+                | pat::TyKind::Int(_)
+                | pat::TyKind::Float(_)
+                // | pat::TyKind::Path(_)
+                | pat::TyKind::Bool
+                | pat::TyKind::Str
+                | pat::TyKind::Char
+                | pat::TyKind::Any,
+                ty::Bool
+                | ty::Char
+                | ty::Int(_)
+                | ty::Uint(_)
+                | ty::Float(_)
+                | ty::Adt(..)
+                | ty::Foreign(..)
+                | ty::Str
+                | ty::Array(..)
+                | ty::Pat(..)
+                | ty::Slice(_)
+                | ty::RawPtr(..)
+                | ty::Ref(..)
+                | ty::FnDef(..)
+                | ty::FnPtr(..)
+                | ty::Dynamic(..)
+                | ty::Closure(..)
+                | ty::CoroutineClosure(..)
+                | ty::Coroutine(..)
+                | ty::CoroutineWitness(..)
+                | ty::Never
+                | ty::Tuple(_)
+                | ty::Alias(..)
+                | ty::Param(_)
+                | ty::Bound(..)
+                | ty::Placeholder(_)
+                | ty::Infer(_)
+                | ty::Error(_)
+            ) => false,
         };
         debug!(?ty_pat, ?ty, matched, "match_ty");
         matched
@@ -90,7 +134,18 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
         match (konst_pat, konst.kind()) {
             (pat::Const::ConstVar(const_var), _) => self.match_const_var(const_var, konst),
             (pat::Const::Value(_value_pat), ty::Value(_ty, ty::ValTree::Leaf(_value))) => todo!(),
-            _ => false,
+            (
+                // pat::Const::ConstVar(_)
+                pat::Const::Value(_),
+                ty::ConstKind::Param(_)
+                | ty::ConstKind::Infer(_)
+                | ty::ConstKind::Bound(..)
+                | ty::ConstKind::Placeholder(_)
+                | ty::ConstKind::Unevaluated(_)
+                | ty::ConstKind::Value(..)
+                | ty::ConstKind::Error(_)
+                | ty::ConstKind::Expr(_),
+            ) => false,
         }
     }
 
@@ -226,7 +281,10 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
             (pat::GenericArgKind::Const(konst_pat), ty::GenericArgKind::Const(konst)) => {
                 self.match_const(konst_pat, konst)
             },
-            _ => false,
+            (
+                pat::GenericArgKind::Lifetime(_) | pat::GenericArgKind::Type(_) | pat::GenericArgKind::Const(_),
+                ty::GenericArgKind::Lifetime(_) | ty::GenericArgKind::Type(_) | ty::GenericArgKind::Const(_),
+            ) => false,
         }
     }
 }
