@@ -39,7 +39,6 @@ use std::cell::RefCell;
 use std::iter::zip;
 
 use crate::graph::{MirControlFlowGraph, MirDataDepGraph, PatControlFlowGraph, PatDataDepGraph};
-use resolve::{lang_item_res, ty_res, PatItemKind};
 use rpl_context::PatCtxt;
 use rpl_match::MatchTyCtxt;
 use rpl_mir_graph::TerminatorEdges;
@@ -811,7 +810,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                     ty::Adt(adt, args) => (adt.did(), args),
                     _ => return false,
                 };
-                self.match_path_with_args(path_with_args, def_id, args)
+                self.ty.match_path_with_args(path_with_args, def_id, args)
             },
             (
                 pat::ConstOperand::ConstVar(_) | pat::ConstOperand::ScalarInt(_) | pat::ConstOperand::ZeroSized(_),

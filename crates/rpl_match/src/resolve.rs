@@ -124,13 +124,13 @@ pub fn ty_res<'tcx, 'pcx>(
     pcx: PatCtxt<'pcx>,
     tcx: TyCtxt<'tcx>,
     path: &[Symbol],
-    args: &[pat::GenericArgKind<'pcx>],
+    args: pat::GenericArgsRef<'pcx>,
 ) -> Option<pat::Ty<'pcx>> {
     let res = def_path_res(tcx, path, PatItemKind::Type);
     let res: Vec<_> = res
         .into_iter()
         .filter_map(|res| match res {
-            Res::Def(_, def_id) => pat::Ty::from_ty_lossy(pcx, tcx.type_of(def_id).instantiate_identity()),
+            Res::Def(_, def_id) => pat::Ty::from_ty_lossy(pcx, tcx.type_of(def_id).instantiate_identity(), args),
             // Res::Def(_, def_id) => pat::Ty::from_ty_lossy(pcx, tcx.type_of(def_id).instantiate(tcx, args)),
             Res::PrimTy(prim_ty) => args.is_empty().then(|| pat::Ty::from_prim_ty(pcx, prim_ty)),
             Res::SelfTyParam { .. }

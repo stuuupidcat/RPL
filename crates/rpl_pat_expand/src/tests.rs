@@ -1759,7 +1759,7 @@ fn test_cve_2019_15548() {
         } => {
             meta!{
                 #[allow(non_snake_case)]
-                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                let T_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let T_ty = pcx.mk_var_ty(T_ty_var);
             }
