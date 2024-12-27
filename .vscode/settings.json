@@ -4,6 +4,11 @@
         "./Cargo.toml",
     ],
     "rust-analyzer.procMacro.enable": true,
+    "rust-analyzer.procMacro.ignored": {
+        "tracing_attributes": [
+            "instrument"
+        ]
+    },
     "lldb.showDisassembly": "auto",
     "lldb.dereferencePointers": true,
     "lldb.consoleMode": "commands",
