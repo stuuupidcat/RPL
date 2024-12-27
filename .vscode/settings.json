@@ -4,4 +4,7 @@
         "./Cargo.toml",
     ],
     "rust-analyzer.procMacro.enable": true,
+    "lldb.showDisassembly": "auto",
+    "lldb.dereferencePointers": true,
+    "lldb.consoleMode": "commands",
 }
