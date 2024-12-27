@@ -39,7 +39,6 @@ use std::cell::RefCell;
 use std::iter::zip;
 
 use crate::graph::{MirControlFlowGraph, MirDataDepGraph, PatControlFlowGraph, PatDataDepGraph};
-use resolve::{lang_item_res, ty_res, PatItemKind};
 use rpl_context::PatCtxt;
 use rpl_match::MatchTyCtxt;
 use rpl_mir_graph::TerminatorEdges;
