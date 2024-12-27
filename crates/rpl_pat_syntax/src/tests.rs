@@ -357,6 +357,13 @@ fn test_mir_pattern() {
 }
 
 #[test]
+fn test_fn_pattern() {
+    pass!(FnPat! {
+        fn $pattern(i32, *const std::ffi::CStr) -> i32;
+    });
+}
+
+#[test]
 fn test_parse_cve_2018_21000() {
     pass!(Item! {
         #[meta($T1:ty, $T2:ty, $T3:ty)]

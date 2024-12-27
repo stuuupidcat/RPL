@@ -7,19 +7,19 @@ use rustc_span::Symbol;
 
 use crate::MatchTyCtxt;
 
-pub struct MatchAdtCtxt<'pcx, 'tcx> {
-    tcx: TyCtxt<'tcx>,
-    pcx: PatCtxt<'pcx>,
-    meta: &'pcx pat::MetaVars<'pcx>,
+pub struct MatchAdtCtxt<'a, 'pcx, 'tcx> {
+    ty: MatchTyCtxt<'pcx, 'tcx>,
+    adt_pat: &'a pat::Adt<'pcx>,
 }
 
-impl<'pcx, 'tcx> MatchAdtCtxt<'pcx, 'tcx> {
-    pub fn new(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>, meta: &'pcx pat::MetaVars<'pcx>) -> Self {
-        Self { tcx, pcx, meta }
+impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
+    pub fn new(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>, adt_pat: &'a pat::Adt<'pcx>) -> Self {
+        let ty = MatchTyCtxt::new(tcx, pcx, ty::ParamEnv::reveal_all(), &adt_pat.meta);
+        Self { ty, adt_pat }
     }
 
-    pub fn match_adt(&self, adt_pat: &pat::Adt<'pcx>, adt: ty::AdtDef<'tcx>) -> Option<AdtMatch<'tcx>> {
-        let kind = match (&adt_pat.kind, adt.adt_kind()) {
+    pub fn match_adt(&self, adt: ty::AdtDef<'tcx>) -> Option<AdtMatch<'tcx>> {
+        let kind = match (&self.adt_pat.kind, adt.adt_kind()) {
             (pat::AdtKind::Struct(variant_pat), ty::AdtKind::Struct) => {
                 AdtMatchKind::Struct(self.match_fields(&variant_pat.fields, &adt.non_enum_variant().fields)?)
             },
@@ -80,8 +80,8 @@ impl<'pcx, 'tcx> MatchAdtCtxt<'pcx, 'tcx> {
         field_idx: FieldIdx,
     ) -> Option<FieldMatch<'tcx>> {
         let pat_ty = field_pat.ty;
-        let ty = self.tcx.type_of(field.did).instantiate_identity();
-        MatchTyCtxt::new(self.tcx, self.pcx, ty::ParamEnv::reveal_all(), self.meta)
+        let ty = self.ty.tcx.type_of(field.did).instantiate_identity();
+        self.ty
             .match_ty(pat_ty, ty)
             .then_some(FieldMatch { field_idx, field, ty })
     }

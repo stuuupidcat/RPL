@@ -12,8 +12,10 @@ extern crate rustc_span;
 extern crate tracing;
 
 mod adt;
+mod fns;
 pub(crate) mod resolve;
 mod ty;
 
 pub use adt::{AdtMatch, FieldMatch, MatchAdtCtxt, VariantMatch};
+pub use fns::MatchFnCtxt;
 pub use ty::MatchTyCtxt;

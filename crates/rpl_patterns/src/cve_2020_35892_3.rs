@@ -43,8 +43,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             hir::ItemKind::Struct(..) => {
                 #[allow(irrefutable_let_patterns)]
                 if let adt_pat = pattern_slab_t(self.pcx)
-                    && let Some(adt_match) = MatchAdtCtxt::new(self.tcx, self.pcx, &adt_pat.meta)
-                        .match_adt(adt_pat, self.tcx.adt_def(item.owner_id.def_id))
+                    && let Some(adt_match) =
+                        MatchAdtCtxt::new(self.tcx, self.pcx, adt_pat).match_adt(self.tcx.adt_def(item.owner_id.def_id))
                 {
                     #[expect(rustc::untranslatable_diagnostic)]
                     #[expect(rustc::diagnostic_outside_of_impl)]

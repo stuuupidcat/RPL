@@ -25,13 +25,13 @@ macro_rules! mir_test_case {
                 }
             }, quote!{{
                 let pattern = pcx.new_pattern();
-                let fn_pat = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("pattern"), pcx.mk_any_ty());
+                let pattern_fn = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("pattern"), pcx.mk_any_ty());
                 $($meta_output)*
                 let mut mir_pat = ::rpl_context::pat::MirPattern::builder();
                 $($output)*
                 let mir_pat = mir_pat.build();
                 let mir_pat = pcx.mk_mir_pattern(mir_pat);
-                fn_pat.set_body(::rpl_context::pat::FnBody::Mir(mir_pat));
+                pattern_fn.set_body(::rpl_context::pat::FnBody::Mir(mir_pat));
                 &*pattern
             }}
         )
@@ -68,7 +68,7 @@ fn test_ty_var() {
         } => {
             meta! {
                 #[allow(non_snake_case)]
-                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                let T_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let T_ty = pcx.mk_var_ty(T_ty_var);
             }
@@ -102,7 +102,7 @@ fn test_cve_2020_25016() {
         } => {
             meta! {
                 #[allow(non_snake_case)]
-                let T_ty_var = fn_pat.meta.new_ty_var(Some(is_all_safe_trait));
+                let T_ty_var = pattern_fn.meta.new_ty_var(Some(is_all_safe_trait));
                 #[allow(non_snake_case)]
                 let T_ty = pcx.mk_var_ty(T_ty_var);
                 ty_var = T_ty_var;
@@ -259,12 +259,12 @@ fn test_cve_2020_35892_revised() {
         } => {
             meta! {
                 #[allow(non_snake_case)]
-                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                let T_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let T_ty = pcx.mk_var_ty(T_ty_var);
 
                 #[allow(non_snake_case)]
-                let SlabT_ty_var = fn_pat.meta.new_ty_var(None);
+                let SlabT_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let SlabT_ty = pcx.mk_var_ty(SlabT_ty_var);
             }
@@ -605,11 +605,11 @@ fn test_cve_2020_35892() {
         } => {
             meta! {
                 #[allow(non_snake_case)]
-                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                let T_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let T_ty = pcx.mk_var_ty(T_ty_var);
                 #[allow(non_snake_case)]
-                let SlabT_ty_var = fn_pat.meta.new_ty_var(None);
+                let SlabT_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let SlabT_ty = pcx.mk_var_ty(SlabT_ty_var);
             }
@@ -801,15 +801,15 @@ fn test_cve_2018_21000() {
         } => {
             meta! {
                 #[allow(non_snake_case)]
-                let T1_ty_var = fn_pat.meta.new_ty_var(None);
+                let T1_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let T1_ty = pcx.mk_var_ty(T1_ty_var);
                 #[allow(non_snake_case)]
-                let T2_ty_var = fn_pat.meta.new_ty_var(None);
+                let T2_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let T2_ty = pcx.mk_var_ty(T2_ty_var);
                 #[allow(non_snake_case)]
-                let T3_ty_var = fn_pat.meta.new_ty_var(None);
+                let T3_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let T3_ty = pcx.mk_var_ty(T3_ty_var);
             }
@@ -947,7 +947,7 @@ fn test_cve_2020_35881_const() {
         } => {
             meta! {
                 #[allow(non_snake_case)]
-                let T1_ty_var = fn_pat.meta.new_ty_var(None);
+                let T1_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let T1_ty = pcx.mk_var_ty(T1_ty_var);
             }
@@ -1065,7 +1065,7 @@ fn test_cve_2020_35881_mut() {
         } => {
             meta! {
                 #[allow(non_snake_case)]
-                let T1_ty_var = fn_pat.meta.new_ty_var(None);
+                let T1_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let T1_ty = pcx.mk_var_ty(T1_ty_var);
             }
@@ -1221,7 +1221,7 @@ fn test_cve_2021_29941_2() {
         } => {
             meta! {
                 #[allow(non_snake_case)]
-                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                let T_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let T_ty = pcx.mk_var_ty(T_ty_var);
             }
@@ -1542,7 +1542,7 @@ fn test_cve_2018_21000_inlined() {
         } => {
             meta! {
                 #[allow(non_snake_case)]
-                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                let T_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let T_ty = pcx.mk_var_ty(T_ty_var);
             }
@@ -1760,7 +1760,7 @@ fn test_cve_2019_15548() {
         } => {
             meta! {
                 #[allow(non_snake_case)]
-                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                let T_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let T_ty = pcx.mk_var_ty(T_ty_var);
             }
@@ -1937,6 +1937,34 @@ fn test_cve_2021_27376() {
 }
 
 #[test]
+fn test_cve_2020_35873() {
+    test_case! {
+        pat! {
+            fn $pattern(i32, *const std::ffi::CStr) -> i32;
+        } => quote! {
+            let pattern_fn = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("pattern"), pcx.primitive_types.i32);
+
+            pattern_fn.params.add_param(
+                ::rustc_span::symbol::kw::Empty,
+                ::rustc_middle::mir::Mutability::Not,
+                pcx.primitive_types.i32
+            );
+            pattern_fn.params.add_param(
+                ::rustc_span::symbol::kw::Empty,
+                ::rustc_middle::mir::Mutability::Not,
+                pcx.mk_raw_ptr_ty(
+                    pcx.mk_path_ty(pcx.mk_path_with_args(
+                        pcx.mk_item_path(&["std", "ffi", "CStr",]),
+                        &[]
+                    )),
+                    ::rustc_middle::mir::Mutability::Not
+                )
+            );
+        }
+    }
+}
+
+#[test]
 fn test_cve_2020_35892_3() {
     test_case!(
         pat! {
@@ -1977,12 +2005,12 @@ fn test_cve_2020_35892_3() {
         } => {
             meta! {
                 #[allow(non_snake_case)]
-                let T_ty_var = fn_pat.meta.new_ty_var(None);
+                let T_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let T_ty = pcx.mk_var_ty(T_ty_var);
 
                 #[allow(non_snake_case)]
-                let SlabT_ty_var = fn_pat.meta.new_ty_var(Some(|_tcx, _paramse_env, ty| ty.is_adt()));
+                let SlabT_ty_var = pattern_fn.meta.new_ty_var(Some(|_tcx, _paramse_env, ty| ty.is_adt()));
                 #[allow(non_snake_case)]
                 let SlabT_ty = pcx.mk_var_ty(SlabT_ty_var);
             }

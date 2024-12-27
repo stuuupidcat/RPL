@@ -173,9 +173,6 @@ trait ExpandIdent: Sized {
     fn as_local(&self) -> Ident {
         self.with_suffix("_local")
     }
-    fn as_stmt(&self) -> Ident {
-        self.with_suffix("_stmt")
-    }
 }
 
 impl ExpandIdent for &'static str {
@@ -464,17 +461,19 @@ impl ToTokens for ExpandPat<'_, &FnParam> {
             },
             FnParamKind::Param(NormalParam { ident: None, ty }) => {
                 let ty = self.ecx.expand(ty);
-                quote_each_token!(tokens #fn_pat.add_param(::rustc_span::symbol::kw::Empty, #ty););
+                let mutability = self.ecx.expand(Mutability::Not);
+                quote_each_token!(tokens #fn_pat.params.add_param(::rustc_span::symbol::kw::Empty, #mutability, #ty););
             },
-            FnParamKind::Param(NormalParam {
+            &FnParamKind::Param(NormalParam {
                 ident: Some(ParamPat {
-                    mutability: _, ident, ..
+                    mutability, ref ident, ..
                 }),
-                ty,
+                ref ty,
             }) => {
                 let ident = self.ecx.expand(ident.to_symbol());
                 let ty = self.ecx.expand(ty);
-                quote_each_token!(tokens #fn_pat.add_param(#ident, #ty););
+                let mutability = self.ecx.expand(mutability);
+                quote_each_token!(tokens #fn_pat.params.add_param(#ident, #mutability, #ty););
             },
         }
     }
@@ -807,6 +806,7 @@ impl ToTokens for ExpandPat<'_, &syntax::Assign> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         self.ecx
             .expand(Assign {
+                // We have handled the export in its parent statement
                 export: None,
                 place: &self.value.place,
                 rvalue_or_call: &self.value.rvalue_or_call,
@@ -851,8 +851,8 @@ impl ToTokens for ExpandPat<'_, &Drop> {
         let ExpandPatCtxt { pat, .. } = self.ecx;
         let mir_pat = pat.expect_mir();
         let Drop { ref place, .. } = self.value;
-        let stmt = place.local().as_stmt();
-        quote_each_token!(tokens let #stmt = #mir_pat.mk_drop(#place); );
+        let place = place.local().as_local();
+        quote_each_token!(tokens #mir_pat.mk_drop(#place); );
     }
 }
 
