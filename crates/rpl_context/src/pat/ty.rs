@@ -83,7 +83,7 @@ impl<'pcx> TyKind<'pcx> {
     //FIXME: add a new `TyKind` for resolved types, just like `rustc_middle::ty::TyKind`
     //FIXME: this may breaks uniqueness of `Ty`
     pub fn from_ty_lossy(pcx: PatCtxt<'pcx>, ty: ty::Ty<'_>, args: GenericArgsRef<'pcx>) -> Option<Self> {
-        fn require_empty<'pcx>(args: GenericArgsRef<'pcx>) -> Option<GenericArgsRef<'pcx>> {
+        fn require_empty(args: GenericArgsRef<'_>) -> Option<GenericArgsRef<'_>> {
             if args.is_empty() {
                 Some(args)
             } else {
