@@ -1120,7 +1120,7 @@ pub enum IdentPat {
 impl IdentPat {
     pub fn as_ident(&self) -> Option<&Ident> {
         match self {
-            IdentPat::Ident(ident) => Some(ident),
+            IdentPat::Ident(ident) | IdentPat::Pat(_, ident) => Some(ident),
             _ => None,
         }
     }
@@ -1136,7 +1136,7 @@ pub struct ParamPat {
 
 #[derive(Parse, ToTokens)]
 pub struct NormalParam {
-    #[parse(|input| input.peek(Ident).then(|| input.parse()).transpose())]
+    #[parse(ParamPat::parse_opt)]
     pub ident: Option<ParamPat>,
     pub ty: Type,
 }

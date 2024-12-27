@@ -1,5 +1,6 @@
 use rustc_data_structures::fx::FxHashMap;
 use rustc_middle::mir;
+use rustc_span::symbol::kw;
 use rustc_span::Symbol;
 
 use super::{MetaVars, MirPattern, Path, Ty};
@@ -41,6 +42,7 @@ pub struct Fns<'pcx> {
 }
 
 pub struct Fn<'pcx> {
+    pub name: Symbol,
     pub meta: MetaVars<'pcx>,
     pub params: Params<'pcx>,
     pub ret: Ty<'pcx>,
@@ -50,7 +52,14 @@ pub struct Fn<'pcx> {
 #[derive(Default)]
 pub struct Params<'pcx> {
     params: Vec<Param<'pcx>>,
-    non_exhaustive: bool,
+    pub non_exhaustive: bool,
+}
+
+impl<'pcx> std::ops::Deref for Params<'pcx> {
+    type Target = [Param<'pcx>];
+    fn deref(&self) -> &Self::Target {
+        &self.params
+    }
 }
 
 pub struct Param<'pcx> {
@@ -110,20 +119,21 @@ impl<'pcx> Fns<'pcx> {
         self.fn_pats.get(&name)
     }
     pub fn new_fn(&mut self, name: Symbol, ret: Ty<'pcx>) -> &mut Fn<'pcx> {
-        self.fns.entry(name).or_insert_with(|| Fn::new(ret))
+        self.fns.entry(name).or_insert_with(|| Fn::new(name, ret))
     }
     pub fn new_fn_pat(&mut self, name: Symbol, ret: Ty<'pcx>) -> &mut Fn<'pcx> {
-        self.fn_pats.entry(name).or_insert_with(|| Fn::new(ret))
+        self.fn_pats.entry(name).or_insert_with(|| Fn::new(name, ret))
     }
     pub fn new_unnamed(&mut self, ret: Ty<'pcx>) -> &mut Fn<'pcx> {
-        self.unnamed_fns.push(Fn::new(ret));
+        self.unnamed_fns.push(Fn::new(kw::Underscore, ret));
         self.unnamed_fns.last_mut().unwrap()
     }
 }
 
 impl<'pcx> Fn<'pcx> {
-    pub(crate) fn new(ret: Ty<'pcx>) -> Self {
+    pub(crate) fn new(name: Symbol, ret: Ty<'pcx>) -> Self {
         Self {
+            name,
             meta: MetaVars::default(),
             params: Params::default(),
             ret,

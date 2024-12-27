@@ -1,26 +1,41 @@
+use rpl_match::MatchFnCtxt;
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_middle::hir::nested_filter::All;
-use rustc_middle::ty::{Ty, TyCtxt};
-use rustc_middle::{mir, ty};
-use rustc_span::symbol::kw;
+use rustc_middle::ty::TyCtxt;
 use rustc_span::{sym, Span, Symbol};
 
-use rpl_mir::{pat, CheckMirCtxt};
+use rpl_context::{pat, PatCtxt};
+use rpl_mir::CheckMirCtxt;
 
-#[instrument(level = "info", skip(tcx))]
-pub fn check_item(tcx: TyCtxt<'_>, item_id: hir::ItemId) {
+#[instrument(level = "info", skip(tcx, pcx))]
+pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
-    let mut check_ctxt = CheckFnCtxt { tcx };
+    // let def_id = item_id.owner_id.def_id;
+    let mut check_ctxt = CheckFnCtxt { tcx, pcx };
     check_ctxt.visit_item(item);
 }
 
-struct CheckFnCtxt<'tcx> {
+struct CheckFnCtxt<'pcx, 'tcx> {
     tcx: TyCtxt<'tcx>,
+    pcx: PatCtxt<'pcx>,
 }
 
-impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
+impl CheckFnCtxt<'_, '_> {
+    fn check_ffi_fn(&self, def_id: LocalDefId, span: Span) {
+        #[allow(irrefutable_let_patterns)]
+        if let fn_pat = ffi_pattern(self.pcx)
+            && MatchFnCtxt::new(self.tcx, self.pcx, fn_pat).match_fn(def_id)
+        {
+            #[expect(rustc::untranslatable_diagnostic)]
+            #[expect(rustc::diagnostic_outside_of_impl)]
+            self.tcx.dcx().span_note(span, "fn pattern matched");
+        }
+    }
+}
+
+impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     type NestedFilter = All;
     fn nested_visit_map(&mut self) -> Self::Map {
         self.tcx.hir()
@@ -30,27 +45,35 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
         intravisit::walk_item(self, item);
     }
 
+    fn visit_mod(&mut self, _m: &'tcx hir::Mod<'tcx>, _span: Span, _id: hir::HirId) -> Self::Result {}
+
+    fn visit_foreign_item(&mut self, item: &'tcx hir::ForeignItem) -> Self::Result {
+        if let hir::ForeignItemKind::Fn(..) = item.kind {
+            self.check_ffi_fn(item.owner_id.def_id, item.span);
+        }
+        intravisit::walk_foreign_item(self, item);
+    }
+
     fn visit_fn(
         &mut self,
         kind: intravisit::FnKind<'tcx>,
         decl: &'tcx hir::FnDecl<'tcx>,
         body_id: hir::BodyId,
-        _span: Span,
+        span: Span,
         def_id: LocalDefId,
     ) -> Self::Result {
+        self.check_ffi_fn(def_id, span);
         if self.tcx.is_mir_available(def_id)
             && let Some(cstring_did) = self.tcx.get_diagnostic_item(sym::cstring_type)
         {
             let body = self.tcx.optimized_mir(def_id);
-            let mut mcx = CheckMirCtxt::new(self.tcx, body);
-            let pattern = pattern(self.tcx, &mut mcx.patterns);
-            mcx.check();
-            let match_span = |pat| mcx.patterns.first_matched_span(body, pat);
-            let ptr_usage = match_span(pattern.ptr_usage);
-            let cstring_drop = match_span(pattern.cstring_drop);
-            debug!(?ptr_usage, ?cstring_drop);
-            if let Some(use_span) = ptr_usage
-                && let Some(drop_span) = cstring_drop
+            #[allow(irrefutable_let_patterns)]
+            if let pattern = pattern(self.pcx)
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
+                && let Some(cstring_drop) = matches[pattern.cstring_drop]
+                && let drop_span = cstring_drop.span_no_inline(body)
+                && let Some(ptr_usage) = matches[pattern.ptr_usage]
+                && let use_span = ptr_usage.span_no_inline(body)
             {
                 self.tcx.dcx().emit_err(crate::errors::UseAfterDrop {
                     use_span,
@@ -63,189 +86,54 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'tcx> {
     }
 }
 
-struct Pattern {
-    cstring_drop: pat::PatternIdx,
-    ptr_usage: pat::PatternIdx,
+struct Pattern<'pcx> {
+    fn_pat: &'pcx pat::Fn<'pcx>,
+    cstring_drop: pat::Location,
+    ptr_usage: pat::Location,
 }
 
-/*
-#[rpl_macros::mir_pattern]
-fn pattern<'tcx>(tcx: TyCtxt<'tcx>, patterns: &mut pat::Patterns<'tcx>) -> Pattern {
-    mir! {
-        use core::ffi::c_str::CString;
-        use core::ffi::c_str::Cstr;
-        use core::ptr::non_null::NonNull;
-        use $crate::ffi::sqlite3session_attach;
+#[rpl_macros::pattern_def]
+fn ffi_pattern(pcx: PatCtxt<'_>) -> &pat::Fn<'_> {
+    let pattern = rpl! {
+        fn $pattern(i32, *const std::ffi::c_char) -> i32;
+    };
+    pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap()
+}
 
-        let cstring: CString = any!();
-        let non_null: NonNull<[u8]> = (((cstring.inner).0).pointer);
-        let uslice_ptr: *const [u8] = non_null.pointer;
-        let cstr: *const CStr = uslice_ptr as *const CStr (PtrToPtr);
-        let islice: *const [i8] = &raw const ((*cstr).inner);
-        let iptr: *const i8 = move islice as *const i8 (PtrToPtr);
-        drop(cstring);
-        let s: i32 = any!();
-        let ret: i32 = sqlite3session_attach(move s, move iptr);
-    }
+#[rpl_macros::pattern_def]
+fn pattern(pcx: PatCtxt<'_>) -> Pattern<'_> {
+    let cstring_drop;
+    let ptr_usage;
+    let pattern = rpl! {
+        fn $pattern(..) -> _ = mir! {
+            type CString = alloc::ffi::c_str::CString;
+            type CStr = core::ffi::c_str::CStr;
+            type NonNullU8 = core::ptr::non_null::NonNull<[u8]>;
+
+            let cstring: CString = _;
+            let cstring_ref: &CString = &cstring;
+            let non_null: NonNullU8 = copy ((((*cstring_ref).inner).0).pointer);
+            let uslice_ptr: *const [u8] = copy non_null.pointer;
+            let cstr_ptr: *const CStr = copy uslice_ptr as *const CStr (PtrToPtr);
+            let cstr: &CStr = &(*cstr_ptr);
+            let islice: *const [i8] = &raw const ((*cstr).inner);
+            let iptr: *const i8 = move islice as *const i8 (PtrToPtr);
+            let iptr_arg: *const i8;
+            let s: i32;
+            #[export(cstring_drop)]
+            drop(cstring);
+
+            s = _;
+            iptr_arg = copy iptr;
+            #[export(ptr_usage)]
+            _ = $crate::ffi::sqlite3session_attach(move s, move iptr_arg);
+        }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
+
     Pattern {
+        fn_pat,
         cstring_drop,
         ptr_usage,
     }
-}
-*/
-
-// /*
-/// patterns:
-/// ```ignore
-/// let cstring   : CString       = ...                                      ;
-/// let non_null  : NonNull<[u8]> = (((cstring.inner).0).pointer)            ;
-/// let uslice_ptr: *const [u8]   = (non_null.pointer)                       ;
-/// let cstr      : *const CStr   = uslice_ptr as *const CStr (PtrToPtr)     ;
-/// /*
-/// let uslice    : &[u8]         = &(*uslice_ptr)                           ;
-/// let cstr      : &CStr         = from_bytes___rt_impl(move uslice)        ;
-/// */
-/// let islice    : *const [i8]   = &raw const ((*cstr).inner)               ;
-/// let iptr      : *const i8     = move islice as *const i8 (PtrToPtr)      ;
-/// drop(cstring)                                                            ;
-/// let s         : i32           = ...                                      ;
-/// let ret       : i32           = sqlite3session_attach(move s, move iptr) ;
-/// ```
-fn pattern<'tcx>(tcx: TyCtxt<'tcx>, patterns: &mut pat::Patterns<'tcx>) -> Pattern {
-    let cstr_ty = patterns.mk_adt_ty(tcx, (tcx, &[sym::core, sym::ffi, sym::c_str, sym::CStr]), &[]);
-    let cstring_ty = patterns.mk_adt_ty(
-        tcx,
-        (tcx, &[sym::alloc, sym::ffi, sym::c_str, Symbol::intern("CString")]),
-        &[],
-    );
-
-    let u8_ty = patterns.primitive_types.u8;
-    let u8_slice_ty = patterns.mk_slice_ty(tcx, u8_ty);
-    // let u8_slice_ref_ty = patterns.mk_ref_ty(
-    //     tcx, pat::RegionKind::ReErased, u8_slice_ty, ty::Mutability::Not,
-    // );
-    let u8_slice_ptr_ty = patterns.mk_raw_ptr_ty(tcx, u8_slice_ty, mir::Mutability::Not);
-    let non_null_u8_slice_ty = patterns.mk_adt_ty(
-        tcx,
-        (tcx, &[sym::core, sym::ptr, Symbol::intern("non_null"), sym::NonNull]),
-        (tcx, &[u8_slice_ty.into()]),
-    );
-
-    let i32_ty = patterns.primitive_types.i32;
-    let i8_ty = patterns.primitive_types.i8;
-    let i8_ptr_ty = patterns.mk_raw_ptr_ty(tcx, i8_ty, mir::Mutability::Not);
-    let i8_slice_ty = patterns.mk_slice_ty(tcx, i8_ty);
-    let i8_slice_ptr_ty = patterns.mk_raw_ptr_ty(tcx, i8_slice_ty, mir::Mutability::Not);
-
-    // let cstr_ref_ty = patterns.mk_ref_ty(
-    //     tcx, pat::RegionKind::ReErased, cstr_ty, mir::Mutability::Not,
-    // );
-    let cstr_ptr_ty = patterns.mk_raw_ptr_ty(tcx, cstr_ty, mir::Mutability::Not);
-
-    let cstring_local = patterns.mk_local(cstring_ty);
-    let non_null_local = patterns.mk_local(non_null_u8_slice_ty);
-    let uslice_ptr_local = patterns.mk_local(u8_slice_ptr_ty);
-    // let uslice_local = patterns.mk_local(u8_slice_ref_ty).into_place();
-    // let cstr_local = patterns.mk_local(cstr_ref_ty);
-    let cstr_local = patterns.mk_local(cstr_ptr_ty);
-    let islice_local = patterns.mk_local(i8_slice_ptr_ty).into_place();
-    let iptr_local = patterns.mk_local(i8_ptr_ty).into_place();
-    let i32_local = patterns.mk_local(i32_ty);
-    let ret_local = patterns.mk_local(i32_ty).into_place();
-
-    patterns.mk_init(cstring_local);
-
-    let non_null_field_place = patterns.mk_place(
-        cstring_local,
-        (
-            tcx,
-            &[
-                pat::PlaceElem::Field("inner".into()),
-                pat::PlaceElem::Field(0.into()),
-                pat::PlaceElem::Field(sym::pointer.into()),
-            ],
-        ),
-    );
-    patterns.mk_assign(
-        non_null_local.into_place(),
-        pat::Rvalue::Use(pat::Copy(non_null_field_place)),
-    );
-    let uslice_field_place = patterns.mk_place(non_null_local, (tcx, &[pat::PlaceElem::Field(sym::pointer.into())]));
-    patterns.mk_assign(
-        uslice_ptr_local.into_place(),
-        pat::Rvalue::Use(pat::Copy(uslice_field_place)),
-    );
-    // let uslice_ptr_deref_place = patterns.mk_place(uslice_ptr_local, (tcx,
-    // &[pat::PlaceElem::Deref])); patterns.mk_assign(
-    //     uslice_local,
-    //     pat::Rvalue::Ref(
-    //         pat::RegionKind::ReErased,
-    //         mir::BorrowKind::Shared,
-    //         uslice_ptr_deref_place,
-    //     ),
-    // );
-
-    // let fn_ty = patterns.mk_fn(tcx, (cstr_ty, "from_bytes_with_nul_unchecked"), &[]);
-    // patterns.mk_fn_call(
-    //     tcx,
-    //     (fn_ty, "rt_impl"),
-    //     &[],
-    //     pat::List::ordered([pat::Move(uslice_local)]),
-    //     cstr_local.into_place(),
-    // );
-    patterns.mk_assign(
-        cstr_local.into_place(),
-        pat::Rvalue::Cast(
-            mir::CastKind::PtrToPtr,
-            pat::Copy(uslice_ptr_local.into_place()),
-            cstr_ptr_ty,
-        ),
-    );
-    let cstr_deref_place = patterns.mk_place(
-        cstr_local,
-        (tcx, &[pat::PlaceElem::Deref, pat::PlaceElem::Field("inner".into())]),
-    );
-    patterns.mk_assign(
-        islice_local,
-        pat::Rvalue::AddressOf(mir::Mutability::Not, cstr_deref_place),
-    );
-    patterns.mk_assign(
-        iptr_local,
-        pat::Rvalue::Cast(mir::CastKind::PtrToPtr, pat::Move(islice_local), i8_ptr_ty),
-    );
-    let cstring_drop = patterns.mk_drop(cstring_local.into_place());
-    patterns.mk_init(i32_local);
-    let ptr_usage = patterns.mk_fn_call(
-        tcx,
-        (tcx, &[kw::Crate, sym::ffi, Symbol::intern("sqlite3session_attach")]),
-        &[],
-        pat::List::ordered([pat::Move(i32_local.into_place()), pat::Move(iptr_local)]),
-        ret_local,
-    );
-    patterns.add_dependency(ptr_usage, cstring_drop);
-
-    Pattern {
-        cstring_drop,
-        ptr_usage,
-    }
-}
-// */
-
-#[instrument(level = "debug", skip(tcx), ret)]
-fn is_all_safe_trait<'tcx>(tcx: TyCtxt<'tcx>, predicates: ty::GenericPredicates<'tcx>, self_ty: Ty<'tcx>) -> bool {
-    const EXCLUDED_DIAG_ITEMS: &[Symbol] = &[sym::Send, sym::Sync];
-    predicates
-        .predicates
-        .iter()
-        .inspect(|(clause, span)| debug!("clause at {span:?}: {clause:?}"))
-        .filter_map(|(clause, _span)| clause.as_trait_clause())
-        .filter(|clause| clause.self_ty().no_bound_vars().expect("Unhandled bound vars") == self_ty)
-        .map(|clause| clause.def_id())
-        .filter(|&def_id| {
-            tcx.get_diagnostic_name(def_id)
-                .is_none_or(|name| !EXCLUDED_DIAG_ITEMS.contains(&name))
-        })
-        .map(|def_id| tcx.trait_def(def_id))
-        .inspect(|trait_def| debug!(?trait_def))
-        .all(|trait_def| matches!(trait_def.safety, hir::Safety::Safe))
 }

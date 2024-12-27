@@ -715,6 +715,16 @@ impl SelfParam {
     }
 }
 
+impl ParamPat {
+    pub fn parse_opt(input: ParseStream<'_>) -> Result<Option<Self>> {
+        let forked = input.fork();
+        _ = forked.parse::<Mutability>();
+        (forked.peek(Token![$]) && forked.peek2(Ident) && forked.peek3(Token![:]))
+            .then(|| input.parse())
+            .transpose()
+    }
+}
+
 #[derive(Default, Clone, Copy)]
 pub struct ParseParse;
 

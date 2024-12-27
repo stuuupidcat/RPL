@@ -1,5 +1,3 @@
-//@ ignore-on-host
-
 struct Session<'a> {
     s: i32,
     _f: &'a (),
@@ -37,5 +35,6 @@ impl Session<'_> {
 mod ffi {
     extern "C" {
         pub fn sqlite3session_attach(s: i32, table: *const std::ffi::c_char) -> i32;
+        //~^ NOTE: fn pattern matched
     }
 }

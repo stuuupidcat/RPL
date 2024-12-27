@@ -1,4 +1,5 @@
 use rustc_middle::mir;
+use rustc_span::symbol::kw;
 
 use super::*;
 use std::fmt;
@@ -167,5 +168,59 @@ impl fmt::Debug for ConstVar<'_> {
 impl fmt::Display for ConstVar<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Debug::fmt(&self.idx, f)
+    }
+}
+
+impl fmt::Debug for Fn<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let name = match self.name {
+            kw::Underscore => "_".to_string(),
+            name => format!("${name}"),
+        };
+        let body = match self.body {
+            None => ";".to_string(),
+            Some(body) => format!("{body:?}"),
+        };
+        write!(
+            f,
+            "fn {name}{params:?} -> {ret:?}{body}",
+            params = self.params,
+            ret = self.ret,
+        )
+    }
+}
+
+impl fmt::Debug for Params<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut debug_tuple = f.debug_tuple("");
+        for param in self.iter() {
+            debug_tuple.field(param);
+        }
+        if self.non_exhaustive {
+            debug_tuple.finish_non_exhaustive()
+        } else {
+            debug_tuple.finish()
+        }
+    }
+}
+
+impl fmt::Debug for Param<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.ident {
+            kw::Empty => {},
+            _ => write!(f, "{}{:?}: ", self.mutability.prefix_str(), self.ident)?,
+        }
+        write!(f, "{:?}", self.ty)
+    }
+}
+
+impl fmt::Debug for FnBody<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Mir(mir_body) => {
+                f.write_str(" = mir!")?;
+                f.debug_set().entry(mir_body).finish()
+            },
+        }
     }
 }

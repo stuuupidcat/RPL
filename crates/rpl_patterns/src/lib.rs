@@ -25,11 +25,12 @@ mod cve_2018_21000;
 mod cve_2019_15548;
 mod cve_2019_15548_2;
 mod cve_2020_25016;
+mod cve_2020_35873;
 mod cve_2020_35881;
 mod cve_2020_35892_3;
 mod cve_2021_27376;
+
 pub(crate) mod errors;
-// mod cve_2020_35873;
 mod lints;
 
 rustc_fluent_macro::fluent_messages! { "../messages.en.ftl" }
@@ -42,6 +43,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     cve_2019_15548::check_item,
     cve_2019_15548_2::check_item,
     cve_2020_25016::check_item,
+    cve_2020_35873::check_item,
     cve_2020_35892_3::check_item,
     cve_2020_35881::const_const_Transmute_ver::check_item,
     cve_2020_35881::mut_mut_Transmute_ver::check_item,
