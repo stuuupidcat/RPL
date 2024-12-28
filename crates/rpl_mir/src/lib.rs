@@ -642,8 +642,9 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             (pat::Operand::Constant(konst_pat), mir::Operand::Constant(box konst)) => {
                 self.match_const_operand(konst_pat, konst.const_)
             },
+            (pat::Operand::Any, mir::Operand::Copy(_) | mir::Operand::Move(_) | mir::Operand::Constant(_)) => true,
             (
-                pat::Operand::Any | pat::Operand::Copy(_) | pat::Operand::Move(_) | pat::Operand::Constant(_),
+                pat::Operand::Copy(_) | pat::Operand::Move(_) | pat::Operand::Constant(_),
                 mir::Operand::Copy(_) | mir::Operand::Move(_) | mir::Operand::Constant(_),
             ) => return false,
         };
@@ -804,14 +805,12 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                 })
             },
             (&pat::ConstOperand::ZeroSized(path_with_args), mir::Const::Val(mir::ConstValue::ZeroSized, ty)) => {
-                let (def_id, _args) = match *ty.kind() {
+                let (def_id, args) = match *ty.kind() {
                     ty::FnDef(def_id, args) => (def_id, args),
                     ty::Adt(adt, args) => (adt.did(), args),
                     _ => return false,
                 };
-                // self.match_path_with_args(path_with_args, def_id, args)
-                // FIXME: match the arguments
-                self.ty.match_path(path_with_args.path, def_id)
+                self.ty.match_path_with_args(path_with_args, def_id, args)
             },
             (
                 pat::ConstOperand::ConstVar(_) | pat::ConstOperand::ScalarInt(_) | pat::ConstOperand::ZeroSized(_),

@@ -1,4 +1,5 @@
 use rustc_data_structures::packed::Pu128;
+use rustc_hir::def_id::DefId;
 use rustc_hir::{LangItem, PrimTy};
 use rustc_middle::mir;
 use rustc_middle::ty::{self, TyCtxt};
@@ -26,11 +27,15 @@ impl<'pcx> Ty<'pcx> {
     pub fn kind(self) -> &'pcx TyKind<'pcx> {
         self.0
     }
-    pub fn from_ty_lossy(pcx: PatCtxt<'pcx>, ty: ty::Ty<'_>) -> Option<Self> {
-        Some(pcx.mk_ty(TyKind::from_ty_lossy(pcx, ty)?))
+    //FIXME: this may breaks uniqueness of `Ty`
+    pub fn from_ty_lossy(pcx: PatCtxt<'pcx>, ty: ty::Ty<'_>, args: GenericArgsRef<'pcx>) -> Option<Self> {
+        Some(pcx.mk_ty(TyKind::from_ty_lossy(pcx, ty, args)?))
     }
     pub fn from_prim_ty(pcx: PatCtxt<'pcx>, ty: PrimTy) -> Self {
         pcx.mk_ty(TyKind::from(ty))
+    }
+    pub fn from_def(pcx: PatCtxt<'pcx>, def_id: DefId, args: GenericArgsRef<'pcx>) -> Self {
+        pcx.mk_ty(TyKind::Def(def_id, args))
     }
 }
 
@@ -50,6 +55,7 @@ pub enum TyKind<'pcx> {
     Ref(RegionKind, Ty<'pcx>, mir::Mutability),
     RawPtr(Ty<'pcx>, mir::Mutability),
     Path(PathWithArgs<'pcx>),
+    Def(DefId, GenericArgsRef<'pcx>),
     Uint(ty::UintTy),
     Int(ty::IntTy),
     Float(ty::FloatTy),
@@ -76,20 +82,30 @@ impl<'pcx> TyKind<'pcx> {
     //FIXME: this is incomplete
     //FIXME: add a new `TyKind` for resolved types, just like `rustc_middle::ty::TyKind`
     //FIXME: this may breaks uniqueness of `Ty`
-    pub fn from_ty_lossy(pcx: PatCtxt<'pcx>, ty: ty::Ty<'_>) -> Option<Self> {
+    pub fn from_ty_lossy(pcx: PatCtxt<'pcx>, ty: ty::Ty<'_>, args: GenericArgsRef<'pcx>) -> Option<Self> {
+        fn require_empty(args: GenericArgsRef<'_>) -> Option<GenericArgsRef<'_>> {
+            if args.is_empty() {
+                Some(args)
+            } else {
+                None
+            }
+        }
         Some(match ty.kind() {
             ty::TyKind::Bool => Self::Bool,
             ty::TyKind::Char => Self::Char,
             ty::TyKind::Int(int_ty) => Self::Int(*int_ty),
             ty::TyKind::Uint(uint_ty) => Self::Uint(*uint_ty),
             ty::TyKind::Float(float_ty) => Self::Float(*float_ty),
-            ty::TyKind::Adt(_, _) => None?,  //FIXME
-            ty::TyKind::Foreign(_) => None?, //FIXME
+            ty::TyKind::Adt(def, _) => Self::Def(def.did(), args),
+            ty::TyKind::Foreign(def_id) => Self::Def(*def_id, args),
             ty::TyKind::Str => Self::Str,
             ty::TyKind::Array(_, _) => None?, //FIXME
             ty::TyKind::Pat(_, _) => None?,   //FIXME
-            ty::TyKind::Slice(ty) => Self::Slice(pcx.mk_ty(Self::from_ty_lossy(pcx, *ty)?)),
-            ty::TyKind::RawPtr(ty, mutability) => Self::RawPtr(pcx.mk_ty(Self::from_ty_lossy(pcx, *ty)?), *mutability),
+            ty::TyKind::Slice(ty) => Self::Slice(pcx.mk_ty(Self::from_ty_lossy(pcx, *ty, require_empty(args)?)?)),
+            ty::TyKind::RawPtr(ty, mutability) => Self::RawPtr(
+                pcx.mk_ty(Self::from_ty_lossy(pcx, *ty, require_empty(args)?)?),
+                *mutability,
+            ),
             ty::TyKind::Ref(_, _, _) => None?,           //FIXME
             ty::TyKind::FnDef(_, _) => None?,            //FIXME
             ty::TyKind::FnPtr(_, _) => None?,            //FIXME

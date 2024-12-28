@@ -244,6 +244,34 @@ test_case! {
 }
 
 test_case! {
+    fn cve_2021_29941() {
+        meta!(
+            $T:ty,
+            $I:ty,
+        );
+
+        let iter: $I = _;
+        let len: usize = std::iter::ExactSizeIterator::len(move iter);
+        let vec: &mut alloc::vec::Vec<$T> = _;
+        _ = alloc::vec::Vec::set_len(move vec, copy len);
+    }
+}
+
+test_case! {
+    fn cve_2021_29941_uninitialized_slice() {
+        meta!(
+            $T:ty,
+        );
+
+        let len: usize = _;
+        let vec: alloc::vec::Vec<$T> = alloc::vec::Vec::with_capacity(_);
+        let vec_ref: &alloc::vec::Vec<$T> = &vec;
+        let ptr: *const $T = alloc::vec::Vec::as_ptr(move vec_ref);
+        let slice: &[$T] = std::slice::from_raw_parts::<'_, $T>(move ptr, copy len);
+    }
+}
+
+test_case! {
     fn unsafe_cell_alias() {
         meta!($T:ty);
 

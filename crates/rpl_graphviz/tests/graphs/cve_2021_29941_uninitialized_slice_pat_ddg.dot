@@ -1,0 +1,42 @@
+digraph DataDependencyGraph {
+compound = true;
+subgraph cluster_bb0 {
+    bb0IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb0[IN]</td></tr></table>>];
+    bb0OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb0[OUT]</td></tr></table>>];
+    bb0stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?0 = _</td></tr></table>>];
+    bb0stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?1 = alloc::vec::Vec::with_capacity(_) -&gt; ?bb1</td></tr></table>>];
+    bb0stmt0 -> bb0OUT [label="_?0"];
+    bb0stmt1 -> bb0OUT [label="_?1"];
+    bb0IN -> bb0OUT [label="_?2,_?3,_?4"];
+}
+subgraph cluster_bb1 {
+    bb1IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb1[IN]</td></tr></table>>];
+    bb1OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb1[OUT]</td></tr></table>>];
+    bb1stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?2 = &amp;_?1</td></tr></table>>];
+    bb1stmt1 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?3 = alloc::vec::Vec::as_ptr(move _?2) -&gt; ?bb2</td></tr></table>>];
+    bb1IN -> bb1stmt0 [label="_?1"];
+    bb1stmt1 -> bb1OUT [label="_?3"];
+    bb1IN -> bb1OUT [label="_?0,_?1,_?4"];
+    bb1stmt0 -> bb1stmt1 [label="_?2"];
+}
+subgraph cluster_bb2 {
+    bb2IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb2[IN]</td></tr></table>>];
+    bb2OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb2[OUT]</td></tr></table>>];
+    bb2stmt0 [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">_?4 = std::slice::from_raw_parts:: &lt; '_,?T0 &gt;(move _?3, copy _?0) -&gt; ?bb3</td></tr></table>>];
+    bb2IN -> bb2stmt0 [label="_?0"];
+    bb2IN -> bb2stmt0 [label="_?3"];
+    bb2stmt0 -> bb2OUT [label="_?4"];
+    bb2IN -> bb2OUT [label="_?0,_?1,_?2"];
+}
+subgraph cluster_bb3 {
+    bb3IN [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb3[IN]</td></tr></table>>];
+    bb3OUT [shape="none", label=<<table border="0" cellborder="1" cellspacing="0"><tr><td  align="center" colspan="1"></td></tr><tr><td align="left">?bb3[OUT]</td></tr></table>>];
+    bb3IN -> bb3OUT [label="*"];
+}
+    bb0OUT -> bb1IN [label="return"];
+    bb1OUT -> bb2IN [label="return"];
+    bb2OUT -> bb3IN [label="return"];
+    bb0stmt1 -> bb1stmt0 [label="_?1"];
+    bb0stmt0 -> bb2stmt0 [label="_?0"];
+    bb1stmt1 -> bb2stmt0 [label="_?3"];
+}

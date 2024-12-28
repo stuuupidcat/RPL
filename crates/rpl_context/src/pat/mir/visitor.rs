@@ -267,6 +267,11 @@ impl<'pcx> PatternSuperVisitable<'pcx> for Ty<'pcx> {
                 vis.visit_path(path);
                 vis.visit_generic_args(args);
             },
+            &TyKind::Def(_, args) => {
+                //FIXME: impl PatternVisitable for def_id if needed.
+                // vis.visit_def(def_id);
+                vis.visit_generic_args(args);
+            },
             TyKind::Uint(_)
             | TyKind::Int(_)
             | TyKind::Float(_)

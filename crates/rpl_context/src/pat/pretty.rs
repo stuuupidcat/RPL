@@ -76,6 +76,7 @@ impl fmt::Debug for TyKind<'_> {
             Self::Ref(region, ty, mir::Mutability::Mut) => write!(f, "&{region}mut {ty:?}"),
             Self::RawPtr(ty, mutability) => write!(f, "*{} {ty:?}", mutability.ptr_str()),
             Self::Path(path_with_args) => path_with_args.fmt_as_ty(f),
+            Self::Def(def_id, args) => write!(f, "{def_id:?}{args:?}"),
             Self::Uint(uint) => uint.fmt(f),
             Self::Int(int) => int.fmt(f),
             Self::Float(float) => float.fmt(f),

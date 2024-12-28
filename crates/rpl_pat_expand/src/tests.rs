@@ -1750,6 +1750,76 @@ fn test_cve_2019_15548() {
         #[meta($T:ty)]
         pat! {
             type c_char = libc::c_char;
+
+            let src: &alloc::string::String = _;
+            let bytes: &[u8] = alloc::string::String::as_bytes(move src);
+            let ptr: *const u8 = core::slice::as_ptr(copy bytes);
+            let dst: *const c_char = copy ptr as *const c_char (Transmute);
+            let ret: $T = $crate::ll::instr(move dst);
+        } => {
+            meta!{
+                #[allow(non_snake_case)]
+                let T_ty_var = pattern_fn.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T_ty = pcx.mk_var_ty(T_ty_var);
+            }
+            #[allow(non_snake_case)]
+            let c_char_ty = pcx.mk_path_ty(pcx.mk_path_with_args(pcx.mk_item_path(&["libc", "c_char", ]), &[]));
+            let src_local = mir_pat.mk_local(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReAny,
+                pcx.mk_path_ty(pcx.mk_path_with_args(pcx.mk_item_path(&["alloc", "string", "String", ]), &[])),
+                ::rustc_middle::mir::Mutability::Not
+            ));
+            mir_pat.mk_assign(src_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            let bytes_local = mir_pat.mk_local(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReAny,
+                pcx.mk_slice_ty(pcx.primitive_types.u8),
+                ::rustc_middle::mir::Mutability::Not
+            ));
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(
+                    mir_pat.mk_zeroed(pcx.mk_path_with_args(pcx.mk_item_path(&["alloc", "string", "String", "as_bytes", ]), &[]))
+                ),
+                mir_pat.mk_list([::rpl_context::pat::Operand::Move(src_local.into_place())]),
+                Some(bytes_local.into_place())
+            );
+            let ptr_local = mir_pat.mk_local(
+                pcx.mk_raw_ptr_ty(pcx.primitive_types.u8, ::rustc_middle::mir::Mutability::Not)
+            );
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(
+                    mir_pat.mk_zeroed(pcx.mk_path_with_args(pcx.mk_item_path(&["core", "slice", "as_ptr", ]), &[]))
+                ),
+                mir_pat.mk_list([::rpl_context::pat::Operand::Copy(bytes_local.into_place())]),
+                Some(ptr_local.into_place())
+            );
+            let dst_local = mir_pat.mk_local(pcx.mk_raw_ptr_ty(c_char_ty, ::rustc_middle::mir::Mutability::Not));
+            mir_pat.mk_assign(
+                dst_local.into_place(),
+                ::rpl_context::pat::Rvalue::Cast(
+                    ::rustc_middle::mir::CastKind::Transmute,
+                    ::rpl_context::pat::Operand::Copy(ptr_local.into_place()),
+                    pcx.mk_raw_ptr_ty(c_char_ty, ::rustc_middle::mir::Mutability::Not)
+                )
+            );
+            let ret_local = mir_pat.mk_local(T_ty);
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(
+                    mir_pat.mk_zeroed(pcx.mk_path_with_args(pcx.mk_item_path(&["crate", "ll", "instr", ]), &[]))
+                ),
+                mir_pat.mk_list([::rpl_context::pat::Operand::Move(dst_local.into_place())]),
+                Some(ret_local.into_place())
+            );
+        }
+    );
+}
+
+#[test]
+fn test_cve_2019_15548_2() {
+    mir_test_case!(
+        #[meta($T:ty)]
+        pat! {
+            type c_char = libc::c_char;
             // type c_char = i8;
 
             let src: &alloc::string::String = _;
@@ -1837,7 +1907,7 @@ fn test_cve_2019_15548() {
 }
 
 #[test]
-fn test_cve_2019_15548_2() {
+fn test_cve_2019_15548_2_i8() {
     mir_test_case!(
         #[meta()]
         pat! {
@@ -1872,36 +1942,36 @@ fn test_cve_2019_15548_2() {
     )
 }
 
-#[test]
-fn test_cve_2019_15548_2_i8() {
-    mir_test_case!(
-        #[meta()]
-        pat! {
-            type c_char = i8;
+// #[test]
+// fn test_cve_2019_15548_2_i8() {
+//     mir_test_case!(
+//         #[meta()]
+//         pat! {
+//             type c_char = i8;
 
-            let ptr: *const c_char = _;
-            _ = $crate::ll::instr(move ptr);
-        } => {
-            meta! {}
-            #[allow(non_snake_case)]
-            let c_char_ty = pcx.primitive_types.i8;
-            let ptr_local = mir_pat.mk_local(
-                pcx.mk_raw_ptr_ty(c_char_ty, ::rustc_middle::mir::Mutability::Not)
-            );
-            mir_pat.mk_assign(ptr_local.into_place(), ::rpl_context::pat::Rvalue::Any);
-            mir_pat.mk_fn_call(
-                ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
-                    pcx.mk_path_with_args(
-                        pcx.mk_item_path(&["crate", "ll", "instr", ]),
-                        &[]
-                    ))
-                ),
-                mir_pat.mk_list([::rpl_context::pat::Operand::Move(ptr_local.into_place())]),
-                None
-            );
-        }
-    )
-}
+//             let ptr: *const c_char = _;
+//             _ = $crate::ll::instr(move ptr);
+//         } => {
+//             meta! {}
+//             #[allow(non_snake_case)]
+//             let c_char_ty = pcx.primitive_types.i8;
+//             let ptr_local = mir_pat.mk_local(
+//                 pcx.mk_raw_ptr_ty(c_char_ty, ::rustc_middle::mir::Mutability::Not)
+//             );
+//             mir_pat.mk_assign(ptr_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+//             mir_pat.mk_fn_call(
+//                 ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(
+//                     pcx.mk_path_with_args(
+//                         pcx.mk_item_path(&["crate", "ll", "instr", ]),
+//                         &[]
+//                     ))
+//                 ),
+//                 mir_pat.mk_list([::rpl_context::pat::Operand::Move(ptr_local.into_place())]),
+//                 None
+//             );
+//         }
+//     )
+// }
 
 #[test]
 fn test_cve_2021_27376() {
