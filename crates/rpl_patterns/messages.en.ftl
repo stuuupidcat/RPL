@@ -30,7 +30,7 @@ rpl_patterns_wrong_assumption_of_layout_compatibility = wrong assumption of layo
     .note  = casted from this
     .help  = it's not guaranteed by Rust standard library. See https://github.com/rust-lang/rust/pull/78802
 
-rpl_patterns_vec_set_len_to_extend = Use `Vec::set_len` to extend the length of a `Vec`, including uninitialized elements
+rpl_patterns_vec_set_len_to_extend = Use `Vec::set_len` to extend the length of a `Vec`, potentially including uninitialized elements
     .note = make sure all elements are initialized before using them
 
 rpl_patterns_vec_set_len_to_truncate = Use `Vec::set_len` to truncate the length of a `Vec`
