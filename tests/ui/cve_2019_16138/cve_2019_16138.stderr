@@ -1,0 +1,13 @@
+error: it violates the precondition of `std::vec::Vec::set_len` without initializing its content
+  --> tests/ui/cve_2019_16138/cve_2019_16138.rs:8:9
+   |
+LL |     let mut ret: Vec<(u8, u8, u8)> = Vec::with_capacity(pixel_count);
+   |                                      ------------------------------- `std::vec::Vec` created here
+LL |     unsafe {
+LL |         ret.set_len(pixel_count);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: before calling `set_len` to extend its length, make sure all elements are initialized, such as using `spare_capacity_mut` or `as_mut_ptr`
+
+error: aborting due to 1 previous error
+

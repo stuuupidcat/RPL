@@ -152,3 +152,14 @@ pub struct VecSetLenToTruncate {
     #[help]
     pub span: Span,
 }
+
+// for cve_2019_16138
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_set_len_uninitialized)]
+#[help]
+pub struct SetLenUninitialized {
+    #[primary_span]
+    pub set_len: Span,
+    #[label(rpl_patterns_vec_label)]
+    pub vec: Span,
+}
