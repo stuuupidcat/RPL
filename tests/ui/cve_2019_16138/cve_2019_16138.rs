@@ -9,3 +9,7 @@ fn foo() {
         //~^ERROR: it violates the precondition of `std::vec::Vec::set_len` without initializing its content
     }
 }
+
+fn main() {
+    foo()
+}

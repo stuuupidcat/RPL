@@ -86,6 +86,7 @@ parking_lot = "0.12"
 tracing.workspace = true
 log = "0.4"
 libc.workspace = true
+scoped_threadpool = "0.1"
 
 [package.metadata.rust-analyzer]
 # This package uses #[feature(rustc_private)]

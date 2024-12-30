@@ -22,6 +22,7 @@ extern crate itertools;
 extern crate parking_lot;
 extern crate quote;
 extern crate syn;
+extern crate scoped_threadpool;
 // extern crate tokio;
 
 mod test_utils;
@@ -40,6 +41,7 @@ static TEST_DEPENDENCIES: &[&str] = &[
     "log",
     "tracing",
     "libc",
+    "scoped_threadpool",
     // "tokio",
 ];
 
