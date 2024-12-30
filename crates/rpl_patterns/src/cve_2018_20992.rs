@@ -81,17 +81,17 @@ pub mod extend {
 
 
                 let vec: VecT;   // _1;
-                let vec_ref: VecTRef; // _5;
+                // let vec_ref: VecTRef; // _5;
                 let new_len: usize; // _2;
-                let old_len: usize; // _4; ..unused
+                // let old_len: usize; // _4; ..unused
                 let vec_mut_ref: VecTMutRef; // _10;
 
-                vec = _;
                 new_len = _;
+                vec = _;
                 // _5 = &_1;
-                vec_ref = &vec;
+                // vec_ref = &vec;
                 // _4 = copy ((*_5).1: usize);
-                old_len = copy ((*vec_ref).len);
+                // old_len = copy ((*vec_ref).len);
                 // _10 = &mut _1;
                 vec_mut_ref = &mut vec;
                 // ((*10).1: usize) = _2;
