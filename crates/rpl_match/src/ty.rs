@@ -67,7 +67,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
             // },
             (pat::TyKind::Def(def_id_pat, args_pat), ty::Adt(adt, args)) => {
                 let def_id = adt.did();
-                info!(?def_id_pat, ?def_id, ?args_pat, ?args, "match_ty def");
+                // trace!(?def_id_pat, ?def_id, ?args_pat, ?args, "match_ty def");
                 self.match_generic_args(args_pat, args, self.tcx.generics_of(def_id)) && def_id_pat == def_id
             },
             (pat::TyKind::Def(def_id_pat, args_pat), ty::FnDef(def_id, args)) => {
