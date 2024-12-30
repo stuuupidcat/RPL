@@ -1,4 +1,7 @@
+//@compile-flags: -Z inline-mir=false
 extern crate scoped_threadpool;
+
+pub use hdr::decoder::HDRDecoder;
 
 mod color {
     /// An enumeration over supported color types and their bit depths
@@ -24,26 +27,6 @@ mod color {
 
         /// Pixel is BGR with an alpha channel
         BGRA(u8),
-    }
-
-    /// Returns the number of bits contained in a pixel of `ColorType` ```c```
-    pub fn bits_per_pixel(c: ColorType) -> usize {
-        match c {
-            ColorType::Gray(n) => n as usize,
-            ColorType::GrayA(n) => 2 * n as usize,
-            ColorType::RGB(n) | ColorType::Palette(n) | ColorType::BGR(n) => 3 * n as usize,
-            ColorType::RGBA(n) | ColorType::BGRA(n) => 4 * n as usize,
-        }
-    }
-
-    /// Returns the number of color channels that make up this pixel
-    pub fn num_components(c: ColorType) -> usize {
-        match c {
-            ColorType::Gray(_) => 1,
-            ColorType::GrayA(_) => 2,
-            ColorType::RGB(_) | ColorType::Palette(_) | ColorType::BGR(_) => 3,
-            ColorType::RGBA(_) | ColorType::BGRA(_) => 4,
-        }
     }
 }
 
@@ -146,61 +129,17 @@ mod image {
 
     /// Result of an image decoding/encoding process
     pub type ImageResult<T> = Result<T, ImageError>;
-
-    /// An enumeration of supported image formats.
-    /// Not all formats support both encoding and decoding.
-    #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-    pub enum ImageFormat {
-        /// An Image in PNG Format
-        PNG,
-
-        /// An Image in JPEG Format
-        JPEG,
-
-        /// An Image in GIF Format
-        GIF,
-
-        /// An Image in WEBP Format
-        WEBP,
-
-        /// An Image in general PNM Format
-        PNM,
-
-        /// An Image in TIFF Format
-        TIFF,
-
-        /// An Image in TGA Format
-        TGA,
-
-        /// An Image in BMP Format
-        BMP,
-
-        /// An Image in ICO Format
-        ICO,
-
-        /// An Image in Radiance HDR Format
-        HDR,
-    }
 }
 
 mod hdr {
-    mod decoder {
+    pub(super) mod decoder {
         use scoped_threadpool::Pool;
         #[cfg(test)]
         use std::borrow::Cow;
-        use std::error::Error;
-        use std::io::{self, BufRead, Cursor, Read, Seek};
+        use std::io::{self, BufRead};
         use std::iter::Iterator;
-        use std::marker::PhantomData;
-        use std::mem;
-        use std::path::Path;
 
-        use crate::color::ColorType;
-        use crate::image::{self, ImageError, ImageResult};
-
-        /// Radiance HDR file signature
-        pub const SIGNATURE: &[u8] = b"#?RADIANCE";
-        const SIGNATURE_LENGTH: usize = 10;
+        use crate::image::{ImageError, ImageResult};
 
         /// An Radiance HDR decoder
         #[derive(Debug)]
@@ -221,94 +160,7 @@ mod hdr {
             pub e: u8,
         }
 
-        /// Creates ```RGBE8Pixel``` from components
-        pub fn rgbe8(r: u8, g: u8, b: u8, e: u8) -> RGBE8Pixel {
-            RGBE8Pixel { c: [r, g, b], e }
-        }
-
         impl<R: BufRead> HDRDecoder<R> {
-            /// Reads Radiance HDR image header from stream ```r```
-            /// if the header is valid, creates HDRDecoder
-            /// strict mode is enabled
-            pub fn new(reader: R) -> ImageResult<HDRDecoder<R>> {
-                HDRDecoder::with_strictness(reader, true)
-            }
-
-            /// Reads Radiance HDR image header from stream ```reader```,
-            /// if the header is valid, creates ```HDRDecoder```.
-            ///
-            /// strict enables strict mode
-            ///
-            /// Warning! Reading wrong file in non-strict mode
-            ///   could consume file size worth of memory in the process.
-            pub fn with_strictness(mut reader: R, strict: bool) -> ImageResult<HDRDecoder<R>> {
-                let mut attributes = HDRMetadata::new();
-
-                {
-                    // scope to make borrowck happy
-                    let r = &mut reader;
-                    if strict {
-                        let mut signature = [0; SIGNATURE_LENGTH];
-                        r.read_exact(&mut signature)?;
-                        if signature != SIGNATURE {
-                            return Err(ImageError::FormatError(
-                                "Radiance HDR signature not found".to_string(),
-                            ));
-                        } // no else
-                          // skip signature line ending
-                        read_line_u8(r)?;
-                    } else {
-                        // Old Radiance HDR files (*.pic) don't use signature
-                        // Let them be parsed in non-strict mode
-                    }
-                    // read header data until empty line
-                    loop {
-                        match read_line_u8(r)? {
-                            None => {
-                                // EOF before end of header
-                                return Err(ImageError::FormatError("EOF in header".into()));
-                            }
-                            Some(line) => {
-                                if line.is_empty() {
-                                    // end of header
-                                    break;
-                                } else if line[0] == b'#' {
-                                    // line[0] will not panic, line.len() == 0 is false here
-                                    // skip comments
-                                    continue;
-                                } // no else
-                                  // process attribute line
-                                let line = String::from_utf8_lossy(&line[..]);
-                                attributes.update_header_info(&line, strict)?;
-                            } // <= Some(line)
-                        } // match read_line_u8()
-                    } // loop
-                } // scope to end borrow of reader
-                  // parse dimensions
-                let (width, height) = match read_line_u8(&mut reader)? {
-                    None => {
-                        // EOF instead of image dimensions
-                        return Err(ImageError::FormatError("EOF in dimensions line".into()));
-                    }
-                    Some(dimensions) => {
-                        let dimensions = String::from_utf8_lossy(&dimensions[..]);
-                        parse_dimensions_line(&dimensions, strict)?
-                    }
-                };
-
-                Ok(HDRDecoder {
-                    r: reader,
-
-                    width,
-                    height,
-                    meta: HDRMetadata {
-                        width,
-                        height,
-                        ..attributes
-                    },
-                })
-            } // end with_strictness
-
             /// Returns file metadata. Refer to ```HDRMetadata``` for details.
             pub fn metadata(&self) -> HDRMetadata {
                 self.meta.clone()
@@ -651,268 +503,6 @@ mod hdr {
             /// Lines in the form "key=value" are represented as ("key", "value").
             /// All other lines are ("", "line")
             pub custom_attributes: Vec<(String, String)>,
-        }
-
-        impl HDRMetadata {
-            fn new() -> HDRMetadata {
-                HDRMetadata {
-                    width: 0,
-                    height: 0,
-                    orientation: ((1, 0), (0, 1)),
-                    exposure: None,
-                    color_correction: None,
-                    pixel_aspect_ratio: None,
-                    custom_attributes: vec![],
-                }
-            }
-
-            // Updates header info, in strict mode returns error for malformed lines (no '=' separator)
-            // unknown attributes are skipped
-            fn update_header_info(&mut self, line: &str, strict: bool) -> ImageResult<()> {
-                // split line at first '='
-                // old Radiance HDR files (*.pic) feature tabs in key, so                vvv trim
-                let maybe_key_value =
-                    split_at_first(line, "=").map(|(key, value)| (key.trim(), value));
-                // save all header lines in custom_attributes
-                match maybe_key_value {
-                    Some((key, val)) => self
-                        .custom_attributes
-                        .push((key.to_owned(), val.to_owned())),
-                    None => self.custom_attributes.push(("".into(), line.to_owned())),
-                }
-                // parse known attributes
-                match maybe_key_value {
-                    Some(("FORMAT", val)) => {
-                        if val.trim() != "32-bit_rle_rgbe" {
-                            // XYZE isn't supported yet
-                            return Err(ImageError::UnsupportedError(limit_string_len(val, 20)));
-                        }
-                    }
-                    Some(("EXPOSURE", val)) => {
-                        match val.trim().parse::<f32>() {
-                            Ok(v) => {
-                                self.exposure = Some(self.exposure.unwrap_or(1.0) * v);
-                                // all encountered exposure values should be multiplied
-                            }
-                            Err(parse_error) => {
-                                if strict {
-                                    return Err(ImageError::FormatError(format!(
-                                        "Cannot parse EXPOSURE value: {}",
-                                        parse_error.description()
-                                    )));
-                                } // no else, skip this line in non-strict mode
-                            }
-                        };
-                    }
-                    Some(("PIXASPECT", val)) => {
-                        match val.trim().parse::<f32>() {
-                            Ok(v) => {
-                                self.pixel_aspect_ratio =
-                                    Some(self.pixel_aspect_ratio.unwrap_or(1.0) * v);
-                                // all encountered exposure values should be multiplied
-                            }
-                            Err(parse_error) => {
-                                if strict {
-                                    return Err(ImageError::FormatError(format!(
-                                        "Cannot parse PIXASPECT value: {}",
-                                        parse_error.description()
-                                    )));
-                                } // no else, skip this line in non-strict mode
-                            }
-                        };
-                    }
-                    Some(("COLORCORR", val)) => {
-                        let mut rgbcorr = [1.0, 1.0, 1.0];
-                        match parse_space_separated_f32(val, &mut rgbcorr, "COLORCORR") {
-                            Ok(extra_numbers) => {
-                                if strict && extra_numbers {
-                                    return Err(ImageError::FormatError(
-                                        "Extra numbers in COLORCORR".into(),
-                                    ));
-                                } // no else, just ignore extra numbers
-                                let (rc, gc, bc) = self.color_correction.unwrap_or((1.0, 1.0, 1.0));
-                                self.color_correction =
-                                    Some((rc * rgbcorr[0], gc * rgbcorr[1], bc * rgbcorr[2]));
-                            }
-                            Err(err) => {
-                                if strict {
-                                    return Err(err);
-                                } // no else, skip malformed line in non-strict mode
-                            }
-                        }
-                    }
-                    None => {
-                        // old Radiance HDR files (*.pic) contain commands in a header
-                        // just skip them
-                    }
-                    _ => {
-                        // skip unknown attribute
-                    }
-                } // match attributes
-                Ok(())
-            }
-        }
-
-        fn parse_space_separated_f32(
-            line: &str,
-            vals: &mut [f32],
-            name: &str,
-        ) -> ImageResult<bool> {
-            let mut nums = line.split_whitespace();
-            for val in vals.iter_mut() {
-                if let Some(num) = nums.next() {
-                    match num.parse::<f32>() {
-                        Ok(v) => *val = v,
-                        Err(err) => {
-                            return Err(ImageError::FormatError(format!(
-                                "f32 parse error in {}: {}",
-                                name,
-                                err.description()
-                            )));
-                        }
-                    }
-                } else {
-                    // not enough numbers in line
-                    return Err(ImageError::FormatError(format!(
-                        "Not enough numbers in {}",
-                        name
-                    )));
-                }
-            }
-            Ok(nums.next().is_some())
-        }
-
-        // Parses dimension line "-Y height +X width"
-        // returns (width, height) or error
-        fn parse_dimensions_line(line: &str, strict: bool) -> ImageResult<(u32, u32)> {
-            let mut dim_parts = line.split_whitespace();
-            let err = "Malformed dimensions line";
-            let c1_tag = dim_parts
-                .next()
-                .ok_or_else(|| ImageError::FormatError(err.into()))?;
-            let c1_str = dim_parts
-                .next()
-                .ok_or_else(|| ImageError::FormatError(err.into()))?;
-            let c2_tag = dim_parts
-                .next()
-                .ok_or_else(|| ImageError::FormatError(err.into()))?;
-            let c2_str = dim_parts
-                .next()
-                .ok_or_else(|| ImageError::FormatError(err.into()))?;
-            if strict && dim_parts.next().is_some() {
-                // extra data in dimensions line
-                return Err(ImageError::FormatError(err.into()));
-            } // no else
-              // dimensions line is in the form "-Y 10 +X 20"
-              // There are 8 possible orientations: +Y +X, +X -Y and so on
-            match (c1_tag, c2_tag) {
-                ("-Y", "+X") => {
-                    // Common orientation (left-right, top-down)
-                    // c1_str is height, c2_str is width
-                    let height = c1_str.parse::<u32>().into_image_error(err)?;
-                    let width = c2_str.parse::<u32>().into_image_error(err)?;
-                    Ok((width, height))
-                }
-                _ => Err(ImageError::FormatError(format!(
-                    "Unsupported orientation {} {}",
-                    limit_string_len(c1_tag, 4),
-                    limit_string_len(c2_tag, 4)
-                ))),
-            } // final expression. Returns value
-        }
-
-        trait IntoImageError<T> {
-            fn into_image_error(self, description: &str) -> ImageResult<T>;
-        }
-
-        impl<T> IntoImageError<T> for ::std::result::Result<T, ::std::num::ParseFloatError> {
-            fn into_image_error(self, description: &str) -> ImageResult<T> {
-                self.map_err(|err| {
-                    ImageError::FormatError(format!("{} {}", description, err.description()))
-                })
-            }
-        }
-
-        impl<T> IntoImageError<T> for ::std::result::Result<T, ::std::num::ParseIntError> {
-            fn into_image_error(self, description: &str) -> ImageResult<T> {
-                self.map_err(|err| {
-                    ImageError::FormatError(format!("{} {}", description, err.description()))
-                })
-            }
-        }
-
-        // Returns string with no more than len+3 characters
-        fn limit_string_len(s: &str, len: usize) -> String {
-            let s_char_len = s.chars().count();
-            if s_char_len > len {
-                s.chars().take(len).chain("...".chars()).collect()
-            } else {
-                s.into()
-            }
-        }
-
-        // Splits string into (before separator, after separator) tuple
-        // or None if separator isn't found
-        fn split_at_first<'a>(s: &'a str, separator: &str) -> Option<(&'a str, &'a str)> {
-            match s.find(separator) {
-                None | Some(0) => None,
-                Some(p) if p >= s.len() - separator.len() => None,
-                Some(p) => Some((&s[..p], &s[(p + separator.len())..])),
-            }
-        }
-
-        #[test]
-        fn split_at_first_test() {
-            assert_eq!(split_at_first(&Cow::Owned("".into()), "="), None);
-            assert_eq!(split_at_first(&Cow::Owned("=".into()), "="), None);
-            assert_eq!(split_at_first(&Cow::Owned("= ".into()), "="), None);
-            assert_eq!(
-                split_at_first(&Cow::Owned(" = ".into()), "="),
-                Some((" ", " "))
-            );
-            assert_eq!(
-                split_at_first(&Cow::Owned("EXPOSURE= ".into()), "="),
-                Some(("EXPOSURE", " "))
-            );
-            assert_eq!(
-                split_at_first(&Cow::Owned("EXPOSURE= =".into()), "="),
-                Some(("EXPOSURE", " ="))
-            );
-            assert_eq!(
-                split_at_first(&Cow::Owned("EXPOSURE== =".into()), "=="),
-                Some(("EXPOSURE", " ="))
-            );
-            assert_eq!(split_at_first(&Cow::Owned("EXPOSURE".into()), ""), None);
-        }
-
-        // Reads input until b"\n" or EOF
-        // Returns vector of read bytes NOT including end of line characters
-        //   or return None to indicate end of file
-        fn read_line_u8<R: BufRead>(r: &mut R) -> ::std::io::Result<Option<Vec<u8>>> {
-            let mut ret = Vec::with_capacity(16);
-            match r.read_until(b'\n', &mut ret) {
-                Ok(0) => Ok(None),
-                Ok(_) => {
-                    if let Some(&b'\n') = ret[..].last() {
-                        let _ = ret.pop();
-                    }
-                    Ok(Some(ret))
-                }
-                Err(err) => Err(err),
-            }
-        }
-
-        #[test]
-        fn read_line_u8_test() {
-            let buf: Vec<_> = (&b"One\nTwo\nThree\nFour\n\n\n"[..]).into();
-            let input = &mut ::std::io::Cursor::new(buf);
-            assert_eq!(&read_line_u8(input).unwrap().unwrap()[..], &b"One"[..]);
-            assert_eq!(&read_line_u8(input).unwrap().unwrap()[..], &b"Two"[..]);
-            assert_eq!(&read_line_u8(input).unwrap().unwrap()[..], &b"Three"[..]);
-            assert_eq!(&read_line_u8(input).unwrap().unwrap()[..], &b"Four"[..]);
-            assert_eq!(&read_line_u8(input).unwrap().unwrap()[..], &b""[..]);
-            assert_eq!(&read_line_u8(input).unwrap().unwrap()[..], &b""[..]);
-            assert_eq!(read_line_u8(input).unwrap(), None);
         }
     }
 }
