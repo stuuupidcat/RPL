@@ -21,8 +21,8 @@ extern crate itertools;
 // extern crate libc;
 extern crate parking_lot;
 extern crate quote;
-extern crate syn;
 extern crate scoped_threadpool;
+extern crate syn;
 // extern crate tokio;
 
 mod test_utils;
