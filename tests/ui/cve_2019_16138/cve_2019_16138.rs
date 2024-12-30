@@ -6,7 +6,7 @@ fn foo() {
     let mut ret: Vec<(u8, u8, u8)> = Vec::with_capacity(pixel_count);
     unsafe {
         ret.set_len(pixel_count);
-        //~^ERROR: it violates the precondition of `std::vec::Vec::set_len` without initializing its content
+        //~^ERROR: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
     }
 }
 

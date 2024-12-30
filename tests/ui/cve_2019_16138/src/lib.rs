@@ -199,6 +199,7 @@ mod hdr {
                 unsafe {
                     // RGBE8Pixel doesn't implement Drop, so it's Ok to drop half-initialized ret
                     ret.set_len(pixel_count);
+                    //~^ERROR: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
                 } // ret contains uninitialized data, so now it's my responsibility to return fully initialized ret
 
                 {
@@ -210,6 +211,7 @@ mod hdr {
                             let mut buf = Vec::<RGBE8Pixel>::with_capacity(uszwidth);
                             unsafe {
                                 buf.set_len(uszwidth);
+                                //~^ERROR: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
                             }
                             (read_scanline(&mut self.r, &mut buf[..]))?;
                             let f = &f;
