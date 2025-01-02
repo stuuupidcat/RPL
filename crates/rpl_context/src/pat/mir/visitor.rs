@@ -6,6 +6,8 @@ pub trait PatternVisitor<'pcx>: Sized {
     fn visit_local(&mut self, _local: Local, _pcx: PlaceContext, _location: Location) {}
     fn visit_scalar_int(&mut self, _scalar_int: IntValue) {}
     fn visit_ty_var(&mut self, _ty_var: TyVar) {}
+    fn visit_adt_pat(&mut self, _adt_pat: Symbol) {}
+    fn visit_fn_pat(&mut self, _fn_pat: Symbol) {}
 
     fn visit_const_var(&mut self, const_var: ConstVar<'pcx>) {
         const_var.visit_with(self);
@@ -191,6 +193,7 @@ pub trait PatternVisitor<'pcx>: Sized {
                 location,
             ),
             Operand::Constant(const_operand) => self.visit_const_operand(const_operand),
+            &Operand::FnPat(fn_pat) => self.visit_fn_pat(fn_pat),
         }
     }
     fn super_statement(&mut self, statement: &StatementKind<'pcx>, location: Location) {
@@ -279,7 +282,7 @@ impl<'pcx> PatternSuperVisitable<'pcx> for Ty<'pcx> {
             | TyKind::Bool
             | TyKind::Char
             | TyKind::Any => {},
-            TyKind::AdtVar(_symbol) => {},
+            &TyKind::AdtPat(adt_pat) => vis.visit_adt_pat(adt_pat),
         }
     }
 }

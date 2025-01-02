@@ -57,7 +57,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
             if let pattern_cast = pattern_rust_str_as_c_str(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.fn_pat).check()
+                && let Some(matches) =
+                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
                 && let Some(cast_from) = matches[pattern_cast.cast_from]
                 && let cast_from = cast_from.span_no_inline(body)
                 && let Some(cast_to) = matches[pattern_cast.cast_to]
@@ -73,7 +74,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             }
             #[allow(irrefutable_let_patterns)]
             if let pattern_ptr = pattern_pass_a_pointer_to_c(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_ptr.fn_pat).check()
+                && let Some(matches) =
+                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_ptr.pattern, pattern_ptr.fn_pat).check()
                 && let Some(ptr) = matches[pattern_ptr.ptr]
                 && let ptr = ptr.span_no_inline(body)
             {
@@ -91,6 +93,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 struct PatternCast<'pcx> {
+    pattern: &'pcx pat::Pattern<'pcx>,
     fn_pat: &'pcx pat::Fn<'pcx>,
     cast_from: pat::Location,
     cast_to: pat::Location,
@@ -120,6 +123,7 @@ fn pattern_rust_str_as_c_str(pcx: PatCtxt<'_>) -> PatternCast<'_> {
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
     PatternCast {
+        pattern,
         fn_pat,
         cast_from,
         cast_to,
@@ -127,6 +131,7 @@ fn pattern_rust_str_as_c_str(pcx: PatCtxt<'_>) -> PatternCast<'_> {
 }
 
 struct PatternPointer<'pcx> {
+    pattern: &'pcx pat::Pattern<'pcx>,
     fn_pat: &'pcx pat::Fn<'pcx>,
     ptr: pat::Location,
 }
@@ -147,7 +152,9 @@ fn pattern_pass_a_pointer_to_c(pcx: PatCtxt<'_>) -> PatternPointer<'_> {
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
     PatternPointer {
+        pattern,
         fn_pat,
+
         ptr,
         // ty_var: c_char_ty,
     }

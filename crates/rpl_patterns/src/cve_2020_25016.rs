@@ -55,7 +55,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
             if let pattern_cast = pattern_cast(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.fn_pat).check()
+                && let Some(matches) =
+                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
                 && let Some(cast_from) = matches[pattern_cast.cast_from]
                 && let cast_from = cast_from.span_no_inline(body)
                 && let Some(cast_to) = matches[pattern_cast.cast_to]
@@ -70,7 +71,14 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     mutability: ty::Mutability::Not.into(),
                 });
             } else if let pattern_cast_mut = pattern_cast_mut(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast_mut.fn_pat).check()
+                && let Some(matches) = CheckMirCtxt::new(
+                    self.tcx,
+                    self.pcx,
+                    body,
+                    pattern_cast_mut.pattern,
+                    pattern_cast_mut.fn_pat,
+                )
+                .check()
                 && let Some(cast_from) = matches[pattern_cast_mut.cast_from]
                 && let cast_from = cast_from.span_no_inline(body)
                 && let Some(cast_to) = matches[pattern_cast_mut.cast_to]
@@ -91,6 +99,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 struct PatternCast<'pcx> {
+    pattern: &'pcx pat::Pattern<'pcx>,
     fn_pat: &'pcx pat::Fn<'pcx>,
     ty_var: pat::TyVarIdx,
     cast_from: pat::Location,
@@ -121,7 +130,9 @@ fn pattern_cast(pcx: PatCtxt<'_>) -> PatternCast<'_> {
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
     PatternCast {
+        pattern,
         fn_pat,
+
         ty_var: ty_var.idx,
         cast_from,
         cast_to,
@@ -154,6 +165,7 @@ fn pattern_cast_mut(pcx: PatCtxt<'_>) -> PatternCast<'_> {
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
     PatternCast {
+        pattern,
         fn_pat,
         ty_var: ty_var.idx,
         cast_from,

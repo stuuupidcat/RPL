@@ -1,4 +1,3 @@
-use rpl_match::MatchFnCtxt;
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
@@ -22,19 +21,6 @@ struct CheckFnCtxt<'pcx, 'tcx> {
     pcx: PatCtxt<'pcx>,
 }
 
-impl CheckFnCtxt<'_, '_> {
-    fn check_ffi_fn(&self, def_id: LocalDefId, span: Span) {
-        #[allow(irrefutable_let_patterns)]
-        if let fn_pat = ffi_pattern(self.pcx)
-            && MatchFnCtxt::new(self.tcx, self.pcx, fn_pat).match_fn(def_id)
-        {
-            #[expect(rustc::untranslatable_diagnostic)]
-            #[expect(rustc::diagnostic_outside_of_impl)]
-            self.tcx.dcx().span_note(span, "fn pattern matched");
-        }
-    }
-}
-
 impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     type NestedFilter = All;
     fn nested_visit_map(&mut self) -> Self::Map {
@@ -47,29 +33,22 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 
     fn visit_mod(&mut self, _m: &'tcx hir::Mod<'tcx>, _span: Span, _id: hir::HirId) -> Self::Result {}
 
-    fn visit_foreign_item(&mut self, item: &'tcx hir::ForeignItem) -> Self::Result {
-        if let hir::ForeignItemKind::Fn(..) = item.kind {
-            self.check_ffi_fn(item.owner_id.def_id, item.span);
-        }
-        intravisit::walk_foreign_item(self, item);
-    }
-
     fn visit_fn(
         &mut self,
         kind: intravisit::FnKind<'tcx>,
         decl: &'tcx hir::FnDecl<'tcx>,
         body_id: hir::BodyId,
-        span: Span,
+        _span: Span,
         def_id: LocalDefId,
     ) -> Self::Result {
-        self.check_ffi_fn(def_id, span);
         if self.tcx.is_mir_available(def_id)
             && let Some(cstring_did) = self.tcx.get_diagnostic_item(sym::cstring_type)
         {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
             if let pattern = pattern(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
+                && let Some(matches) =
+                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
                 && let Some(cstring_drop) = matches[pattern.cstring_drop]
                 && let drop_span = cstring_drop.span_no_inline(body)
                 && let Some(ptr_usage) = matches[pattern.ptr_usage]
@@ -87,17 +66,10 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 struct Pattern<'pcx> {
+    pattern: &'pcx pat::Pattern<'pcx>,
     fn_pat: &'pcx pat::Fn<'pcx>,
     cstring_drop: pat::Location,
     ptr_usage: pat::Location,
-}
-
-#[rpl_macros::pattern_def]
-fn ffi_pattern(pcx: PatCtxt<'_>) -> &pat::Fn<'_> {
-    let pattern = rpl! {
-        fn $pattern(i32, *const std::ffi::c_char) -> i32;
-    };
-    pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap()
 }
 
 #[rpl_macros::pattern_def]
@@ -105,6 +77,7 @@ fn pattern(pcx: PatCtxt<'_>) -> Pattern<'_> {
     let cstring_drop;
     let ptr_usage;
     let pattern = rpl! {
+        fn $ffi_call(i32, *const std::ffi::c_char) -> i32;
         fn $pattern(..) -> _ = mir! {
             type CString = alloc::ffi::c_str::CString;
             type CStr = core::ffi::c_str::CStr;
@@ -126,12 +99,13 @@ fn pattern(pcx: PatCtxt<'_>) -> Pattern<'_> {
             s = _;
             iptr_arg = copy iptr;
             #[export(ptr_usage)]
-            _ = $crate::ffi::sqlite3session_attach(move s, move iptr_arg);
+            _ = $ffi_call(move s, move iptr_arg);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
     Pattern {
+        pattern,
         fn_pat,
         cstring_drop,
         ptr_usage,

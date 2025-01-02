@@ -191,6 +191,7 @@ impl Operand<'_> {
             Self::Copy(place) => write!(f, "(copy {place:?})"),
             Self::Move(place) => write!(f, "(move {place:?})"),
             Self::Constant(konst) => write!(f, "{konst:?}"),
+            Self::FnPat(fn_pat) => write!(f, "${fn_pat}"),
         }
     }
 }
@@ -202,6 +203,7 @@ impl fmt::Debug for Operand<'_> {
             Self::Copy(place) => write!(f, "copy {place:?}"),
             Self::Move(place) => write!(f, "move {place:?}"),
             Self::Constant(konst) => write!(f, "const {konst:?}"),
+            Self::FnPat(fn_pat) => write!(f, "const ${fn_pat}"),
         }
     }
 }

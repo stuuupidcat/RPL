@@ -211,13 +211,7 @@ pub enum Operand<'pcx> {
     Copy(Place<'pcx>),
     Move(Place<'pcx>),
     Constant(ConstOperand<'pcx>),
-}
-
-#[derive(Clone)]
-pub enum FnOperand<'pcx> {
-    Copy(Place<'pcx>),
-    Move(Place<'pcx>),
-    Constant(ConstOperand<'pcx>),
+    FnPat(Symbol),
 }
 
 pub type List<T> = Box<[T]>;
