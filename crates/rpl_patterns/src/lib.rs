@@ -23,6 +23,7 @@ use rustc_middle::ty::TyCtxt;
 mod cve_2018_20992;
 mod cve_2018_21000;
 mod cve_2019_15548;
+mod cve_2019_16138;
 mod cve_2020_25016;
 mod cve_2020_35873;
 mod cve_2020_35881;
@@ -40,6 +41,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     cve_2018_21000::t_to_u8::check_item,
     cve_2018_21000::u8_to_t::check_item,
     cve_2019_15548::check_item,
+    cve_2019_16138::check_item,
     cve_2020_25016::check_item,
     cve_2020_35873::check_item,
     cve_2020_35892_3::check_item,

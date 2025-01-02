@@ -46,3 +46,7 @@ rpl_patterns_slice_from_raw_parts_uninitialized = it violates the precondition o
     .len_label   = slice created with this length
     .ptr_label   = slice created with this pointer
     .help        = See https://doc.rust-lang.org/std/slice/fn.{$fn_name}.html
+
+rpl_patterns_set_len_uninitialized = it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
+    .vec_label = `Vec` created here
+    .help = before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
