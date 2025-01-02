@@ -11,9 +11,10 @@ use rustc_span::symbol::kw;
 use rustc_span::Symbol;
 
 use crate::resolve::{self, lang_item_res, ty_res, PatItemKind};
+
 pub struct MatchTyCtxt<'pcx, 'tcx> {
     pub tcx: TyCtxt<'tcx>,
-    pcx: PatCtxt<'pcx>,
+    pub pcx: PatCtxt<'pcx>,
     param_env: ty::ParamEnv<'tcx>,
     pub ty_vars: IndexVec<pat::TyVarIdx, RefCell<Vec<ty::Ty<'tcx>>>>,
 }
@@ -91,7 +92,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
             (pat::TyKind::Bool, ty::Bool) => true,
             (
                 pat::TyKind::TyVar(_)
-                | pat::TyKind::AdtVar(_)
+                | pat::TyKind::AdtPat(_)
                 | pat::TyKind::Array(..)
                 | pat::TyKind::Slice(_)
                 | pat::TyKind::Tuple(_)

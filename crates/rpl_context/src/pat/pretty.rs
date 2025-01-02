@@ -83,7 +83,7 @@ impl fmt::Debug for TyKind<'_> {
             Self::Bool => f.write_str("bool"),
             Self::Str => f.write_str("str"),
             Self::Char => f.write_str("char"),
-            Self::AdtVar(adt_var) => write!(f, "${adt_var}"),
+            Self::AdtPat(adt_var) => write!(f, "${adt_var}"),
             Self::Any => f.write_str("_"),
         }
     }

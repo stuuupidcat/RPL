@@ -48,8 +48,14 @@ pub mod u8_to_t {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern_misordered_params = pattern_misordered_params(self.pcx)
-                    && let Some(matches) =
-                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_misordered_params.fn_pat).check()
+                    && let Some(matches) = CheckMirCtxt::new(
+                        self.tcx,
+                        self.pcx,
+                        body,
+                        pattern_misordered_params.pattern,
+                        pattern_misordered_params.fn_pat,
+                    )
+                    .check()
                     && let Some(from_raw_parts) = matches[pattern_misordered_params.from_raw_parts]
                     && let span = from_raw_parts.span_no_inline(body)
                 {
@@ -61,6 +67,7 @@ pub mod u8_to_t {
     }
 
     struct PatternMisorderedParams<'pcx> {
+        pattern: &'pcx pat::Pattern<'pcx>,
         fn_pat: &'pcx pat::Fn<'pcx>,
         from_raw_parts: pat::Location,
     }
@@ -167,7 +174,11 @@ pub mod u8_to_t {
         };
         let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-        PatternMisorderedParams { fn_pat, from_raw_parts }
+        PatternMisorderedParams {
+            pattern,
+            fn_pat,
+            from_raw_parts,
+        }
     }
 }
 
@@ -221,8 +232,14 @@ pub mod t_to_u8 {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern_misordered_params = pattern_misordered_params(self.pcx)
-                    && let Some(matches) =
-                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_misordered_params.fn_pat).check()
+                    && let Some(matches) = CheckMirCtxt::new(
+                        self.tcx,
+                        self.pcx,
+                        body,
+                        pattern_misordered_params.pattern,
+                        pattern_misordered_params.fn_pat,
+                    )
+                    .check()
                     && let Some(from_raw_parts) = matches[pattern_misordered_params.from_raw_parts]
                     && let span = from_raw_parts.span_no_inline(body)
                 {
@@ -234,6 +251,7 @@ pub mod t_to_u8 {
     }
 
     struct PatternMisorderedParams<'pcx> {
+        pattern: &'pcx pat::Pattern<'pcx>,
         fn_pat: &'pcx pat::Fn<'pcx>,
         from_raw_parts: pat::Location,
     }
@@ -334,6 +352,10 @@ pub mod t_to_u8 {
         };
         let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-        PatternMisorderedParams { fn_pat, from_raw_parts }
+        PatternMisorderedParams {
+            pattern,
+            fn_pat,
+            from_raw_parts,
+        }
     }
 }

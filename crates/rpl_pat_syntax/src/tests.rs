@@ -173,6 +173,7 @@ fn test_call() {
 
     pass!(Call!( $crate::ffi::sqlite3session_attach(move s, move iptr) ));
     pass!(RvalueOrCall!( $crate::ffi::sqlite3session_attach(move s, move iptr) ));
+    pass!(RvalueOrCall!( $ffi_call(move s, move iptr) ));
 }
 
 #[test]

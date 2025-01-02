@@ -50,7 +50,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
             if let pattern_cast = pattern_set_len_uninitialized(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.fn_pat).check()
+                && let Some(matches) =
+                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
                 && let Some(vec) = matches[pattern_cast.vec]
                 && let vec = vec.span_no_inline(body)
                 && let Some(set_len) = matches[pattern_cast.set_len]
@@ -67,6 +68,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 struct Pattern<'pcx> {
+    pattern: &'pcx pat::Pattern<'pcx>,
     fn_pat: &'pcx pat::Fn<'pcx>,
     vec: pat::Location,
     set_len: pat::Location,
@@ -88,5 +90,10 @@ fn pattern_set_len_uninitialized(pcx: PatCtxt<'_>) -> Pattern<'_> {
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-    Pattern { fn_pat, vec, set_len }
+    Pattern {
+        pattern,
+        fn_pat,
+        vec,
+        set_len,
+    }
 }

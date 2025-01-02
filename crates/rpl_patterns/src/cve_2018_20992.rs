@@ -49,7 +49,8 @@ pub mod extend {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern = pattern_vec_set_len_to_extend(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
+                    && let Some(matches) =
+                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
                     && let Some(set_len_use) = matches[pattern.set_len_use]
                     && let span1 = set_len_use.span_no_inline(body)
                 {
@@ -62,6 +63,7 @@ pub mod extend {
     }
 
     struct VecSetLenToExtend<'pcx> {
+        pattern: &'pcx pat::Pattern<'pcx>,
         fn_pat: &'pcx pat::Fn<'pcx>,
         set_len_use: pat::Location,
     }
@@ -131,7 +133,11 @@ pub mod extend {
 
         let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-        VecSetLenToExtend { fn_pat, set_len_use }
+        VecSetLenToExtend {
+            pattern,
+            fn_pat,
+            set_len_use,
+        }
     }
 }
 
@@ -186,7 +192,8 @@ pub mod truncate {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern = pattern_vec_set_len_to_extend(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
+                    && let Some(matches) =
+                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
                     && let Some(set_len_use) = matches[pattern.set_len_use]
                     && let span1 = set_len_use.span_no_inline(body)
                 {
@@ -199,6 +206,7 @@ pub mod truncate {
     }
 
     struct VecSetLenToTruncate<'pcx> {
+        pattern: &'pcx pat::Pattern<'pcx>,
         fn_pat: &'pcx pat::Fn<'pcx>,
         set_len_use: pat::Location,
     }
@@ -239,6 +247,10 @@ pub mod truncate {
 
         let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-        VecSetLenToTruncate { fn_pat, set_len_use }
+        VecSetLenToTruncate {
+            pattern,
+            fn_pat,
+            set_len_use,
+        }
     }
 }

@@ -50,7 +50,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
             #[allow(irrefutable_let_patterns)]
             if let pattern = pattern_trust_len(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
+                && let Some(matches) =
+                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
                 && let Some(len) = matches[pattern.len]
                 && let len = len.span_no_inline(body)
                 && let Some(set_len) = matches[pattern.set_len]
@@ -63,7 +64,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             }
             #[allow(irrefutable_let_patterns)]
             if let pattern = pattern_uninitialized_slice(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
+                && let Some(matches) =
+                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
                 && let Some(len) = matches[pattern.len]
                 && let len = len.span_no_inline(body)
                 && let Some(ptr) = matches[pattern.ptr]
@@ -84,7 +86,8 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             }
             #[allow(irrefutable_let_patterns)]
             if let pattern = pattern_uninitialized_slice_mut(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
+                && let Some(matches) =
+                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
                 && let Some(len) = matches[pattern.len]
                 && let len = len.span_no_inline(body)
                 && let Some(ptr) = matches[pattern.ptr]
@@ -109,6 +112,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 struct PatternTrustLen<'pcx> {
+    pattern: &'pcx pat::Pattern<'pcx>,
     fn_pat: &'pcx pat::Fn<'pcx>,
     len: pat::Location,
     set_len: pat::Location,
@@ -134,10 +138,16 @@ fn pattern_trust_len(pcx: PatCtxt<'_>) -> PatternTrustLen<'_> {
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-    PatternTrustLen { fn_pat, len, set_len }
+    PatternTrustLen {
+        pattern,
+        fn_pat,
+        len,
+        set_len,
+    }
 }
 
 struct PatternFromRawParts<'pcx> {
+    pattern: &'pcx pat::Pattern<'pcx>,
     fn_pat: &'pcx pat::Fn<'pcx>,
     ptr: pat::Location,
     len: pat::Location,
@@ -168,6 +178,7 @@ fn pattern_uninitialized_slice(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
     PatternFromRawParts {
+        pattern,
         fn_pat,
         ptr,
         len,
@@ -199,6 +210,7 @@ fn pattern_uninitialized_slice_mut(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> 
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
     PatternFromRawParts {
+        pattern,
         fn_pat,
         ptr,
         len,

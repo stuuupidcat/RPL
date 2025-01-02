@@ -354,7 +354,7 @@ pub enum Type {
     /// A tuple type: `(A, B, C, String)`.
     Tuple(TypeTuple),
 
-    /// A `TyVar` from `meta!($T:ty)` or other pattern.
+    /// A `TyVar` from `#[meta($T:ty)]` or other pattern.
     TyVar(TypeVar),
 
     /// A languate item
@@ -572,6 +572,7 @@ pub enum FnOperand {
     Move(Parenthesized<OperandMove>),
     Type(TypePath),
     LangItem(LangItemWithArgs),
+    FnPat(Token![$], Ident),
 }
 
 #[derive(Parse, ToTokens)]

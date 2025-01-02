@@ -50,7 +50,8 @@ pub mod const_const_Transmute_ver {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
+                    && let Some(matches) =
+                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
                     && let Some(ptr_transmute) = matches[pattern.ptr_transmute]
                     && let span1 = ptr_transmute.span_no_inline(body)
                     && let Some(data_ptr_get) = matches[pattern.data_ptr_get]
@@ -68,6 +69,7 @@ pub mod const_const_Transmute_ver {
     }
 
     struct WrongAssumptionOfFatPointerLayout<'pcx> {
+        pattern: &'pcx pat::Pattern<'pcx>,
         fn_pat: &'pcx pat::Fn<'pcx>,
         ptr_transmute: pat::Location,
         data_ptr_get: pat::Location,
@@ -97,6 +99,7 @@ pub mod const_const_Transmute_ver {
         let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
         WrongAssumptionOfFatPointerLayout {
+            pattern,
             fn_pat,
             ptr_transmute,
             data_ptr_get,
@@ -156,7 +159,8 @@ pub mod mut_mut_Transmute_ver {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
+                    && let Some(matches) =
+                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
                     && let Some(ptr_transmute) = matches[pattern.ptr_transmute]
                     && let span1 = ptr_transmute.span_no_inline(body)
                     && let Some(data_ptr_get) = matches[pattern.data_ptr_get]
@@ -174,6 +178,7 @@ pub mod mut_mut_Transmute_ver {
     }
 
     struct WrongAssumptionOfFatPointerLayout<'pcx> {
+        pattern: &'pcx pat::Pattern<'pcx>,
         fn_pat: &'pcx pat::Fn<'pcx>,
         ptr_transmute: pat::Location,
         data_ptr_get: pat::Location,
@@ -204,6 +209,7 @@ pub mod mut_mut_Transmute_ver {
         let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
         WrongAssumptionOfFatPointerLayout {
+            pattern,
             fn_pat,
             ptr_transmute,
             data_ptr_get,
@@ -263,7 +269,8 @@ pub mod mut_const_PtrToPtr_ver {
                 let body = self.tcx.optimized_mir(def_id);
                 #[allow(irrefutable_let_patterns)]
                 if let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.fn_pat).check()
+                    && let Some(matches) =
+                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
                     && let Some(ptr_transmute) = matches[pattern.ptr_transmute]
                     && let span1 = ptr_transmute.span_no_inline(body)
                     && let Some(data_ptr_get) = matches[pattern.data_ptr_get]
@@ -281,6 +288,7 @@ pub mod mut_const_PtrToPtr_ver {
     }
 
     struct WrongAssumptionOfFatPointerLayout<'pcx> {
+        pattern: &'pcx pat::Pattern<'pcx>,
         fn_pat: &'pcx pat::Fn<'pcx>,
         ptr_transmute: pat::Location,
         data_ptr_get: pat::Location,
@@ -307,6 +315,7 @@ pub mod mut_const_PtrToPtr_ver {
         let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
         WrongAssumptionOfFatPointerLayout {
+            pattern,
             fn_pat,
             ptr_transmute,
             data_ptr_get,

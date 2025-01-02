@@ -414,6 +414,8 @@ impl Parse for FnOperand {
             }
         } else if lookahead.peek(Token![#]) {
             FnOperand::LangItem(input.parse()?)
+        } else if lookahead.peek(Token![$]) && input.peek2(Ident) {
+            FnOperand::FnPat(input.parse()?, input.parse()?)
         } else if TypePath::lookahead(&lookahead) {
             FnOperand::Type(input.parse()?)
         } else {
@@ -537,7 +539,7 @@ impl RvalueOrCall {
                     }
                     .into()
                 } else {
-                    use FnOperand::{Copy, LangItem, Move, Type};
+                    use FnOperand::{Copy, FnPat, LangItem, Move, Type};
                     use RvalueUse;
                     RvalueOrCall::Rvalue(match operand {
                         Move(inner) => RvalueUse::from(inner).into(),
@@ -549,6 +551,7 @@ impl RvalueOrCall {
                         LangItem(lang_item) => {
                             RvalueAggregate::AdtUnit(AggregateAdtUnit { adt: lang_item.into() }).into()
                         },
+                        FnPat(_, _fn_pat) => unimplemented!("FnPat not implemented"),
                     })
                 }
             } else if lookahead.peek(token::Paren) {

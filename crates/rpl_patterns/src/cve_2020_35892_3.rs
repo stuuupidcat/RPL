@@ -71,9 +71,9 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let body = self.tcx.optimized_mir(def_id);
 
             #[allow(irrefutable_let_patterns)]
-            if let fn_pat = pattern_loop(self.pcx)
+            if let (pattern, fn_pat) = pattern_loop(self.pcx)
                 && let mir_pat = fn_pat.expect_mir_body()
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, fn_pat).check()
+                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern, fn_pat).check()
             {
                 let matches = self.loop_matches.insert(matches);
                 let mut multi_span = MultiSpan::from_span(span);
@@ -100,7 +100,14 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 #[expect(rustc::diagnostic_outside_of_impl)]
                 self.tcx.dcx().span_note(multi_span, "MIR pattern matched");
             } else if let pattern_offset_by_len = pattern_offset_by_len(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_offset_by_len.fn_pat).check()
+                && let Some(matches) = CheckMirCtxt::new(
+                    self.tcx,
+                    self.pcx,
+                    body,
+                    pattern_offset_by_len.pattern,
+                    pattern_offset_by_len.fn_pat,
+                )
+                .check()
                 && let Some(read) = matches[pattern_offset_by_len.read]
                 && let read = read.span_no_inline(body)
                 && let Some(ptr) = matches[pattern_offset_by_len.ptr]
@@ -141,7 +148,7 @@ fn pattern_slab_t(pcx: PatCtxt<'_>) -> &pat::Adt<'_> {
 }
 
 #[rpl_macros::pattern_def]
-fn pattern_loop(pcx: PatCtxt<'_>) -> &pat::Fn<'_> {
+fn pattern_loop(pcx: PatCtxt<'_>) -> (&pat::Pattern<'_>, &pat::Fn<'_>) {
     let pattern = rpl! {
         #[meta($T:ty, $SlabT:ty = |_tcx, _paramse_env, ty| ty.is_adt())]
         fn $pattern (..) -> _ = mir! {
@@ -197,10 +204,12 @@ fn pattern_loop(pcx: PatCtxt<'_>) -> &pat::Fn<'_> {
             }
         }
     };
-    pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap()
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
+    (pattern, fn_pat)
 }
 
 struct PatternOffsetByLen<'pcx> {
+    pattern: &'pcx pat::Pattern<'pcx>,
     fn_pat: &'pcx pat::Fn<'pcx>,
     len: pat::Location,
     ptr: pat::Location,
@@ -229,5 +238,11 @@ fn pattern_offset_by_len(pcx: PatCtxt<'_>) -> PatternOffsetByLen<'_> {
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-    PatternOffsetByLen { fn_pat, len, ptr, read }
+    PatternOffsetByLen {
+        pattern,
+        fn_pat,
+        len,
+        ptr,
+        read,
+    }
 }

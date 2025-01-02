@@ -1102,6 +1102,10 @@ impl ToTokens for ExpandPat<'_, &FnOperand> {
                 let lang_item = self.ecx.expand(lang_item);
                 quote_each_token!(tokens Constant(#mir_pat.mk_zeroed(#lang_item)));
             },
+            FnOperand::FnPat(_, fn_pat) => {
+                let fn_pat = self.ecx.expand(fn_pat.to_symbol());
+                quote_each_token!(tokens FnPat(#fn_pat));
+            },
         }
     }
 }

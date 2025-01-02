@@ -356,7 +356,13 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
             }) => self.check_place(place),
             FnOperand::Type(path) => self.check_type_path(path),
             FnOperand::LangItem(lang_item) => self.check_lang_item_with_args(lang_item),
+            FnOperand::FnPat(_, fn_pat) => self.check_fn_pat(fn_pat),
         }
+    }
+
+    fn check_fn_pat(&self, _fn_pat: &Ident) -> syn::Result<()> {
+        // TODO: check if the function pattern is defined
+        Ok(())
     }
 
     fn check_operand(&self, operand: &Operand) -> syn::Result<()> {

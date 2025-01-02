@@ -40,7 +40,7 @@ use std::iter::zip;
 
 use crate::graph::{MirControlFlowGraph, MirDataDepGraph, PatControlFlowGraph, PatDataDepGraph};
 use rpl_context::PatCtxt;
-use rpl_match::MatchTyCtxt;
+use rpl_match::{MatchFnCtxt, MatchTyCtxt};
 use rpl_mir_graph::TerminatorEdges;
 use rustc_abi::VariantIdx;
 use rustc_hash::FxHashMap;
@@ -52,6 +52,7 @@ use rustc_middle::mir::interpret::PointerArithmetic;
 use rustc_middle::mir::tcx::PlaceTy;
 use rustc_middle::ty::{GenericArgsRef, TyCtxt};
 use rustc_middle::{mir, ty};
+use rustc_span::Symbol;
 use rustc_target::abi::FieldIdx;
 
 pub use matches::{Matches, StatementMatch};
@@ -60,6 +61,7 @@ pub use rpl_context::pat;
 pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     ty: MatchTyCtxt<'pcx, 'tcx>,
     body: &'a mir::Body<'tcx>,
+    pat: &'a pat::Pattern<'pcx>,
     fn_pat: &'a pat::Fn<'pcx>,
     mir_pat: &'a pat::MirPattern<'pcx>,
     pat_cfg: PatControlFlowGraph,
@@ -72,7 +74,13 @@ pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
 }
 
 impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
-    pub fn new(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>, body: &'a mir::Body<'tcx>, fn_pat: &'a pat::Fn<'pcx>) -> Self {
+    pub fn new(
+        tcx: TyCtxt<'tcx>,
+        pcx: PatCtxt<'pcx>,
+        body: &'a mir::Body<'tcx>,
+        pat: &'a pat::Pattern<'pcx>,
+        fn_pat: &'a pat::Fn<'pcx>,
+    ) -> Self {
         let param_env = tcx.param_env_reveal_all_normalized(body.source.def_id());
         let ty = MatchTyCtxt::new(tcx, pcx, param_env, &fn_pat.meta);
         let mir_pat = fn_pat.expect_mir_body();
@@ -85,6 +93,7 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
         Self {
             ty,
             body,
+            pat,
             fn_pat,
             mir_pat,
             pat_cfg,
@@ -642,14 +651,30 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             (pat::Operand::Constant(konst_pat), mir::Operand::Constant(box konst)) => {
                 self.match_const_operand(konst_pat, konst.const_)
             },
+            (
+                &pat::Operand::FnPat(fn_pat),
+                mir::Operand::Constant(box mir::ConstOperand {
+                    const_: mir::Const::Val(mir::ConstValue::ZeroSized, ty),
+                    ..
+                }),
+            ) if let &ty::FnDef(fn_did, _args) = ty.kind() => self.match_fn_pat(fn_pat, fn_did),
             (pat::Operand::Any, mir::Operand::Copy(_) | mir::Operand::Move(_) | mir::Operand::Constant(_)) => true,
             (
-                pat::Operand::Copy(_) | pat::Operand::Move(_) | pat::Operand::Constant(_),
+                pat::Operand::Copy(_) | pat::Operand::Move(_) | pat::Operand::Constant(_) | pat::Operand::FnPat(_),
                 mir::Operand::Copy(_) | mir::Operand::Move(_) | mir::Operand::Constant(_),
             ) => return false,
         };
         debug!(?pat, ?operand, matched, "match_operand");
         matched
+    }
+
+    fn match_fn_pat(&self, fn_pat: Symbol, fn_did: DefId) -> bool {
+        let fn_pat = self
+            .pat
+            .fns
+            .get_fn_pat(fn_pat)
+            .unwrap_or_else(|| panic!("fn pattern `${fn_pat}` not found"));
+        MatchFnCtxt::new(self.ty.tcx, self.ty.pcx, fn_pat).match_fn(fn_did)
     }
 
     fn match_spanned_operands(
