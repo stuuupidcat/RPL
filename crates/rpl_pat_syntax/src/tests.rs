@@ -362,6 +362,10 @@ fn test_fn_pattern() {
     pass!(FnPat! {
         fn $pattern(i32, *const std::ffi::CStr) -> i32;
     });
+    pass!(Item! {
+        #[meta($SessT:ty)]
+        fn $ffi_call(*mut $SessT, *const std::ffi::c_char) -> i32;
+    });
 }
 
 #[test]

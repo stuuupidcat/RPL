@@ -27,12 +27,6 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         self.tcx.hir()
     }
 
-    fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
-        intravisit::walk_item(self, item);
-    }
-
-    fn visit_mod(&mut self, _m: &'tcx hir::Mod<'tcx>, _span: Span, _id: hir::HirId) -> Self::Result {}
-
     fn visit_fn(
         &mut self,
         kind: intravisit::FnKind<'tcx>,
@@ -77,7 +71,11 @@ fn pattern(pcx: PatCtxt<'_>) -> Pattern<'_> {
     let cstring_drop;
     let ptr_usage;
     let pattern = rpl! {
-        fn $ffi_call(i32, *const std::ffi::c_char) -> i32;
+        #[meta($SessT:ty)]
+        // TODO: match the ABI of the function
+        fn $ffi_call(*mut $SessT, *const std::ffi::c_char) -> i32;
+
+        #[meta($SessT:ty)]
         fn $pattern(..) -> _ = mir! {
             type CString = alloc::ffi::c_str::CString;
             type CStr = core::ffi::c_str::CStr;
@@ -92,7 +90,7 @@ fn pattern(pcx: PatCtxt<'_>) -> Pattern<'_> {
             let islice: *const [i8] = &raw const ((*cstr).inner);
             let iptr: *const i8 = move islice as *const i8 (PtrToPtr);
             let iptr_arg: *const i8;
-            let s: i32;
+            let s: *mut $SessT;
             #[export(cstring_drop)]
             drop(cstring);
 

@@ -1,5 +1,5 @@
 struct Session<'a> {
-    s: i32,
+    sess: *mut ffi::Session,
     _f: &'a (),
 }
 
@@ -26,14 +26,15 @@ impl Session<'_> {
             //~^ NOTE: the `std::ffi::CString` value is dropped here
             std::ptr::null()
         };
-        unsafe { check!(ffi::sqlite3session_attach(self.s, table)) };
+        unsafe { check!(ffi::sqlite3session_attach(self.sess, table)) };
         //~^ ERROR: use a pointer from `std::ffi::CString` after dropped
         Ok(())
     }
 }
 
 mod ffi {
+    pub type Session = std::ffi::c_void;
     extern "C" {
-        pub fn sqlite3session_attach(s: i32, table: *const std::ffi::c_char) -> i32;
+        pub fn sqlite3session_attach(s: *mut Session, table: *const std::ffi::c_char) -> i32;
     }
 }
