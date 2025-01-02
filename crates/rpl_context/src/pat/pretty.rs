@@ -172,22 +172,27 @@ impl fmt::Display for ConstVar<'_> {
     }
 }
 
-impl fmt::Debug for Fn<'_> {
+impl fmt::Display for Fn<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let name = match self.name {
             kw::Underscore => "_".to_string(),
             name => format!("${name}"),
         };
-        let body = match self.body {
-            None => ";".to_string(),
-            Some(body) => format!("{body:?}"),
-        };
         write!(
             f,
-            "fn {name}{params:?} -> {ret:?}{body}",
+            "fn {name}{params:?} -> {ret:?}",
             params = self.params,
             ret = self.ret,
         )
+    }
+}
+
+impl fmt::Debug for Fn<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self.body {
+            None => write!(f, "{self};"),
+            Some(body) => write!(f, "{self}{body:?}"),
+        }
     }
 }
 

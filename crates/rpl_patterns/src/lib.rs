@@ -52,6 +52,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     cve_2021_29941_2::check_item,
 ];
 
+#[instrument(level = "info", skip_all, fields(item = ?item.owner_id.def_id))]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item: ItemId) {
     rustc_data_structures::sync::par_for_each_in(ALL_PATTERNS, |check| check(tcx, pcx, item))
     // ALL_PATTERNS.iter().for_each(|check| check(tcx, item))
