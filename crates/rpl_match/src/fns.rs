@@ -17,7 +17,7 @@ impl<'a, 'pcx, 'tcx> MatchFnCtxt<'a, 'pcx, 'tcx> {
         Self { ty, fn_pat }
     }
 
-    #[instrument(level = "info", skip_all, fields(fn_pat = ?self.fn_pat, fn_did = ?fn_did.into()), ret)]
+    #[instrument(level = "info", skip_all, fields(fn_pat = %self.fn_pat, fn_did = ?fn_did.into()), ret)]
     pub fn match_fn(&self, fn_did: impl Into<DefId> + Copy) -> bool {
         let fn_did = fn_did.into();
         let poly_fn_sig = match self.ty.tcx.type_of(fn_did).instantiate_identity().kind() {

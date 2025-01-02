@@ -11,7 +11,7 @@ use rustc_span::{Span, Symbol};
 
 use crate::lints::{LENGTHLESS_BUFFER_PASSED_TO_EXTERN_FUNCTION, RUST_STRING_POINTER_AS_C_STRING_POINTER};
 
-#[instrument(level = "info", skip(tcx, pcx))]
+#[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
     // let def_id = item_id.owner_id.def_id;

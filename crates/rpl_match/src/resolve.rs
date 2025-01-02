@@ -119,7 +119,7 @@ impl PatItemKind {
     }
 }
 
-#[instrument(level = "info", skip(pcx, tcx), ret)]
+#[instrument(level = "debug", skip(pcx, tcx), ret)]
 pub fn ty_res<'tcx, 'pcx>(
     pcx: PatCtxt<'pcx>,
     tcx: TyCtxt<'tcx>,

@@ -10,7 +10,7 @@ pub mod const_const_Transmute_ver {
 
     use rpl_mir::{pat, CheckMirCtxt};
 
-    #[instrument(level = "info", skip(tcx, pcx))]
+    #[instrument(level = "info", skip_all)]
     pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
         let item = tcx.hir().item(item_id);
         // let def_id = item_id.owner_id.def_id;
@@ -119,7 +119,7 @@ pub mod mut_mut_Transmute_ver {
 
     use rpl_mir::{pat, CheckMirCtxt};
 
-    #[instrument(level = "info", skip(tcx, pcx))]
+    #[instrument(level = "info", skip_all)]
     pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
         let item = tcx.hir().item(item_id);
         // let def_id = item_id.owner_id.def_id;
@@ -229,7 +229,7 @@ pub mod mut_const_PtrToPtr_ver {
 
     use rpl_mir::{pat, CheckMirCtxt};
 
-    #[instrument(level = "info", skip(tcx, pcx))]
+    #[instrument(level = "info", skip_all)]
     pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
         let item = tcx.hir().item(item_id);
         // let def_id = item_id.owner_id.def_id;
