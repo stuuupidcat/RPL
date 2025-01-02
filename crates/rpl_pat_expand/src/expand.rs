@@ -399,22 +399,18 @@ impl ToTokens for ExpandPat<'_, &ItemKind> {
 
 impl ToTokens for ExpandPat<'_, &FnPat> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandPatCtxt { pcx, meta, .. } = self.ecx;
+        let ExpandPatCtxt { pcx, .. } = self.ecx;
         let FnPat { sig, body } = self.value;
         let fn_pat = match sig.ident.as_ident() {
             Some(ident) => ident.as_fn(),
             None => format_ident!("fn_pat"),
         };
-        let ecx_fn_pat = self.ecx.with_pat(PatId::Fn(&fn_pat));
-        ecx_fn_pat.expand(sig).to_tokens(tokens);
+        self.ecx.with_pat(PatId::Fn(&fn_pat)).expand(sig).to_tokens(tokens);
         match body {
             FnBody::Empty(_semi) => {},
             FnBody::Mir(mir_body) => {
                 let mir_pat = format_ident!("mir_pat");
                 let mir_body = self.ecx.with_pat(PatId::Mir(&mir_pat)).expand(&mir_body.mir);
-                if let Some(meta) = meta {
-                    ecx_fn_pat.expand(meta).to_tokens(tokens);
-                }
                 quote_each_token!(tokens
                     #mir_body
                     let #mir_pat = #pcx.mk_mir_pattern(#mir_pat);
@@ -427,25 +423,30 @@ impl ToTokens for ExpandPat<'_, &FnPat> {
 
 impl ToTokens for ExpandPat<'_, &FnSig> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandPatCtxt { pat, .. } = self.ecx;
+        let ExpandPatCtxt { pat, meta, .. } = self.ecx;
         let fn_pat = pat.expect_fn();
         let pattern = self.ecx.get_pattern().unwrap();
         let FnSig { ident, params, ret, .. } = self.value;
         quote_each_token!(tokens let #fn_pat = #pattern.fns.);
-        let params = params.punctuated.iter().map(|param| self.ecx.expand(param));
         let ret = self.ecx.expand(ret);
         match ident {
             IdentPat::Underscore(_) => {
-                quote_each_token!(tokens new_unnamed(#ret); #(#params)*);
+                quote_each_token!(tokens new_unnamed(#ret););
             },
             IdentPat::Pat(_, ident) => {
                 let name = self.ecx.expand(ident.to_symbol());
-                quote_each_token!(tokens new_fn_pat(#name, #ret); #(#params)*);
+                quote_each_token!(tokens new_fn_pat(#name, #ret););
             },
             IdentPat::Ident(ident) => {
                 let name = self.ecx.expand(ident.to_symbol());
-                quote_each_token!(tokens new_fn(#name, #ret); #(#params)*);
+                quote_each_token!(tokens new_fn(#name, #ret););
             },
+        }
+        if let Some(meta) = meta {
+            self.ecx.expand(meta).to_tokens(tokens);
+        }
+        for param in params.punctuated.iter() {
+            self.ecx.expand(param).to_tokens(tokens);
         }
     }
 }

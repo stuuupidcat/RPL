@@ -2010,6 +2010,38 @@ fn test_cve_2020_35873() {
             );
         }
     }
+    test_case! {
+        pat! {
+            #[meta($SessT:ty)]
+            fn $ffi_call(*mut $SessT, *const std::ffi::c_char) -> i32;
+        } => quote! {
+            let ffi_call_fn = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("ffi_call"), pcx.primitive_types.i32);
+            #[allow(non_snake_case)]
+            let SessT_ty_var = ffi_call_fn.meta.new_ty_var(None);
+            #[allow(non_snake_case)]
+            let SessT_ty = pcx.mk_var_ty(SessT_ty_var );
+
+            ffi_call_fn.params.add_param(
+                ::rustc_span::symbol::kw::Empty,
+                ::rustc_middle::mir::Mutability::Not,
+                pcx.mk_raw_ptr_ty(
+                    SessT_ty,
+                    ::rustc_middle::mir::Mutability::Mut
+                )
+            );
+            ffi_call_fn.params.add_param(
+                ::rustc_span::symbol::kw::Empty,
+                ::rustc_middle::mir::Mutability::Not,
+                pcx.mk_raw_ptr_ty(
+                    pcx.mk_path_ty(pcx.mk_path_with_args(
+                        pcx.mk_item_path(&["std", "ffi", "c_char",]),
+                        &[]
+                    )),
+                    ::rustc_middle::mir::Mutability::Not
+                )
+            );
+        }
+    }
 }
 
 #[test]
