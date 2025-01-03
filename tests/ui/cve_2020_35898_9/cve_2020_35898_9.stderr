@@ -1,0 +1,26 @@
+note: Adt pattern matched
+  --> tests/ui/cve_2020_35898_9/cve_2020_35898_9.rs:4:1
+   |
+LL | pub struct Cell<T> {
+   | ^^^^^^^^^^^^^^^^^^
+
+error: Obtaining a mutable reference to the value wrapped by `Rc<UnsafeCell<$T>>` is unsound
+  --> tests/ui/cve_2020_35898_9/cve_2020_35898_9.rs:18:18
+   |
+LL |         unsafe { &mut *self.inner.as_ref().get() }
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: use `std::cell::RefCell` instead
+note: there will be multiple mutable references to the value at the same time
+  --> tests/ui/cve_2020_35898_9/cve_2020_35898_9.rs:18:18
+   |
+LL |         unsafe { &mut *self.inner.as_ref().get() }
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+help: use `std::cell::RefCell` instead
+  --> tests/ui/cve_2020_35898_9/cve_2020_35898_9.rs:18:18
+   |
+LL |         unsafe { &mut *self.inner.as_ref().get() }
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: aborting due to 1 previous error
+
