@@ -94,7 +94,7 @@ fn pattern_cell_t(pcx: PatCtxt<'_>) -> &pat::Adt<'_> {
     let pattern = rpl! {
         #[meta($T:ty)]
         struct $CellT {
-            inner: alloc::rc::Rc<core::cell::UnsafeCell<$T>>,
+            $inner: alloc::rc::Rc<core::cell::UnsafeCell<$T>>,
         }
     };
     pattern.get_adt(Symbol::intern("CellT")).unwrap()

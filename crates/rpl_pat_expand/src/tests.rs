@@ -2050,8 +2050,8 @@ fn test_cve_2020_35892_3() {
         pat! {
             #[meta($T:ty)]
             struct $SlabT {
-                mem: *mut $T,
-                len: usize,
+                $mem: *mut $T,
+                $len: usize,
             }
         } => quote! {
             #[allow(non_snake_case)]

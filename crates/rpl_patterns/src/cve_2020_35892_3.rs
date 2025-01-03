@@ -140,8 +140,8 @@ fn pattern_slab_t(pcx: PatCtxt<'_>) -> &pat::Adt<'_> {
     let pattern = rpl! {
         #[meta($T:ty)]
         struct $SlabT {
-            mem: *mut $T,
-            len: usize,
+            $mem: *mut $T,
+            $len: usize,
         }
     };
     pattern.get_adt(Symbol::intern("SlabT")).unwrap()

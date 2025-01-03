@@ -758,7 +758,7 @@ pub struct AggregateTuple {
     pub operands: ParenthesizedOperands,
 }
 
-#[derive(ToTokens, Parse, From)]
+#[derive(ToTokens, Parse)]
 pub struct StructField {
     pub ident: Ident,
     tk_colon: Token![:],
@@ -1225,6 +1225,7 @@ pub struct FnPat {
 
 #[derive(Parse, ToTokens)]
 pub struct Field {
+    tk_dollar: Token![$],
     pub ident: Ident,
     tk_colon: Token![:],
     pub ty: Type,
