@@ -50,3 +50,7 @@ rpl_patterns_slice_from_raw_parts_uninitialized = it violates the precondition o
 rpl_patterns_set_len_uninitialized = it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
     .vec_label = `Vec` created here
     .help = before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
+
+rpl_patterns_get_mut_in_rc_unsafecell = Obtaining a mutable reference to the value wrapped by `Rc<UnsafeCell<$T>>` is unsound
+    .note = there will be multiple mutable references to the value at the same time
+    .help = use `std::cell::RefCell` instead

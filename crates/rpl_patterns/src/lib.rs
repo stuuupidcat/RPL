@@ -28,6 +28,7 @@ mod cve_2020_25016;
 mod cve_2020_35873;
 mod cve_2020_35881;
 mod cve_2020_35892_3;
+mod cve_2020_35898_9;
 mod cve_2021_27376;
 mod cve_2021_29941_2;
 pub(crate) mod errors;
@@ -48,6 +49,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     cve_2020_35881::const_const_Transmute_ver::check_item,
     cve_2020_35881::mut_mut_Transmute_ver::check_item,
     cve_2020_35881::mut_const_PtrToPtr_ver::check_item,
+    cve_2020_35898_9::check_item,
     cve_2021_27376::check_item,
     cve_2021_29941_2::check_item,
 ];

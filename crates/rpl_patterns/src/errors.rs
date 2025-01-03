@@ -163,3 +163,14 @@ pub struct SetLenUninitialized {
     #[label(rpl_patterns_vec_label)]
     pub vec: Span,
 }
+
+// for cve_2020_35898_9
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_get_mut_in_rc_unsafecell)]
+#[help]
+pub struct GetMutInRcUnsafeCell {
+    #[primary_span]
+    #[note]
+    #[help]
+    pub get_mut: Span,
+}
