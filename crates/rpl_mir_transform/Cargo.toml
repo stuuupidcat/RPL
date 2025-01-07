@@ -1,5 +1,5 @@
 [package]
-name = "rpl_driver"
+name = "rpl_mir_transform"
 version.workspace = true
 description.workspace = true
 repository.workspace = true
@@ -8,10 +8,9 @@ keywords.workspace = true
 edition.workspace = true
 
 [dependencies]
-rpl_context.workspace = true
-rpl_mir_transform.workspace = true
-rpl_patterns.workspace = true
-rpl_utils.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
 
 [features]
 
