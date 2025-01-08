@@ -659,15 +659,19 @@ impl<'tcx> CheckingMatches<'tcx> {
 
     #[instrument(level = "debug", skip(self))]
     fn log_candidates(&self) {
+        debug!("pat block <-> mir candidate blocks"); // how to bold the text?
         for (bb, block) in self.basic_blocks.iter_enumerated() {
             debug!("{bb:?}: {:?}", block.candidates);
+            debug!("pat stmt <-> mir candidate statements");
             for (index, stmt) in block.statements.iter().enumerate() {
-                debug!("{bb:?}[{index}]: {:?}", stmt.candidates);
+                debug!("    {bb:?}[{index}]: {:?}", stmt.candidates);
             }
         }
+        debug!("pat local <-> mir candidate locals");
         for (local, matches) in self.locals.iter_enumerated() {
             debug!("{local:?}: {:?}", matches.candidates);
         }
+        debug!("pat ty metavar <-> mir candidate types");
         for (ty_var, matches) in self.ty_vars.iter_enumerated() {
             debug!("{ty_var:?}: {:?}", matches.candidates);
         }
