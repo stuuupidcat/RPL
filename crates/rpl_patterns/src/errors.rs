@@ -174,3 +174,11 @@ pub struct GetMutInRcUnsafeCell {
     #[help]
     pub get_mut: Span,
 }
+
+// for cve_2020_35888
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_drop_uninit_value)]
+pub struct DropUninitValue {
+    #[primary_span]
+    pub drop: Span,
+}

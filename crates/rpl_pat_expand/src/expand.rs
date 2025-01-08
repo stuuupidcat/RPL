@@ -852,7 +852,7 @@ impl ToTokens for ExpandPat<'_, &Drop> {
         let ExpandPatCtxt { pat, .. } = self.ecx;
         let mir_pat = pat.expect_mir();
         let Drop { ref place, .. } = self.value;
-        let place = place.local().as_local();
+        let place = self.ecx.expand(place);
         quote_each_token!(tokens #mir_pat.mk_drop(#place); );
     }
 }

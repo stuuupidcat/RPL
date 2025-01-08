@@ -54,3 +54,5 @@ rpl_patterns_set_len_uninitialized = it violates the precondition of `Vec::set_l
 rpl_patterns_get_mut_in_rc_unsafecell = Obtaining a mutable reference to the value wrapped by `Rc<UnsafeCell<$T>>` is unsound
     .note = there will be multiple mutable references to the value at the same time
     .help = use `std::cell::RefCell` instead
+
+rpl_patterns_drop_uninit_value = Possibly dropping an uninitialized value

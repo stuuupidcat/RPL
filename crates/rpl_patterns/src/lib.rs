@@ -27,6 +27,7 @@ mod cve_2019_16138;
 mod cve_2020_25016;
 mod cve_2020_35873;
 mod cve_2020_35881;
+mod cve_2020_35888;
 mod cve_2020_35892_3;
 mod cve_2020_35898_9;
 mod cve_2021_27376;
@@ -45,6 +46,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     cve_2019_16138::check_item,
     cve_2020_25016::check_item,
     cve_2020_35873::check_item,
+    cve_2020_35888::check_item,
     cve_2020_35892_3::check_item,
     cve_2020_35881::const_const_Transmute_ver::check_item,
     cve_2020_35881::mut_mut_Transmute_ver::check_item,

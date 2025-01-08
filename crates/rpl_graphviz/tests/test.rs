@@ -304,3 +304,13 @@ test_case! {
         }
     }
 }
+
+test_case! {
+    fn pattern_drop_unit_value()  {
+        meta!($T:ty);
+        let raw_ptr: *mut $T = _;
+        let value: $T = _;
+        drop((*raw_ptr));
+        (*raw_ptr) = move value;
+    }
+}
