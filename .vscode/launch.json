@@ -1,0 +1,29 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'rpl-driver'",
+            "cargo": {
+                "args": ["build", "--bin=rpl-driver", "--package=rpl"],
+                "filter": {
+                    "name": "rpl-driver",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "-Z",
+                "no-codegen",
+                "--crate-type",
+                "lib",
+                "tests/ui/cve_2020_35888_simplified/cve_2020_35888_simplified.rs"
+            ],
+            "env": {
+                "DYLD_LIBRARY_PATH": "${env:HOME}/.rustup/toolchains/nightly-2024-10-23-aarch64-apple-darwin/lib",
+                "LD_LIBRARY_PATH": "${env:HOME}/.rustup/toolchains/nightly-2024-10-23-aarch64-unknown-linux-gnu/lib"
+            },
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
