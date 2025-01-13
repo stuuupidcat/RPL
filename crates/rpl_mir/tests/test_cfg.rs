@@ -190,7 +190,7 @@ test_case! {
         meta!($T1:ty, $T2:ty, $T3:ty);
 
         type VecT1 = std::vec::Vec<$T1>;
-        type VecT2 = std::vec::Vec<$T2>;
+        type _VecT2 = std::vec::Vec<$T2>;
         type VecT3 = std::vec::Vec<$T3>;
         type PtrT1 = *mut $T1;
         type PtrT3 = *mut $T3;
