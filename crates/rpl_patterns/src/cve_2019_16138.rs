@@ -52,6 +52,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             if let pattern_cast = pattern_set_len_uninitialized(self.pcx)
                 && let Some(matches) =
                     CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
+                && let Some(matches) = matches.first()
                 && let Some(vec) = matches[pattern_cast.vec]
                 && let vec = vec.span_no_inline(body)
                 && let Some(set_len) = matches[pattern_cast.set_len]

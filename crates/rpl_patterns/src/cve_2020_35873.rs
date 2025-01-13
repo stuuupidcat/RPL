@@ -43,6 +43,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             if let pattern = pattern(self.pcx)
                 && let Some(matches) =
                     CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
+                && let Some(matches) = matches.first()
                 && let Some(cstring_drop) = matches[pattern.cstring_drop]
                 && let drop_span = cstring_drop.span_no_inline(body)
                 && let Some(ptr_usage) = matches[pattern.ptr_usage]

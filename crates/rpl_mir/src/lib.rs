@@ -105,7 +105,7 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
             ),
         }
     }
-    pub fn check(&self) -> Option<Matches<'tcx>> {
+    pub fn check(&self) -> Option<Vec<Matches<'tcx>>> {
         matches::matches(self)
     }
     /*

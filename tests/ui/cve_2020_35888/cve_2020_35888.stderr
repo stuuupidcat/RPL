@@ -1,0 +1,8 @@
+error: Possibly dropping an uninitialized value
+  --> tests/ui/cve_2020_35888/cve_2020_35888.rs:18:17
+   |
+LL |                 (*(ptr.wrapping_offset(i as isize))) = template.clone();
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: aborting due to 1 previous error
+
