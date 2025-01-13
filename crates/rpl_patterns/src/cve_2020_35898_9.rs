@@ -1,5 +1,4 @@
 use rpl_context::PatCtxt;
-use rpl_match::MatchAdtCtxt;
 use rpl_mir::{pat, CheckMirCtxt};
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
@@ -37,20 +36,6 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
         match item.kind {
             hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn(..) => {},
-            hir::ItemKind::Struct(..) => {
-                #[allow(irrefutable_let_patterns)]
-                if let (pat, adt_pat) = pattern_cell_t(self.pcx)
-                    && let Some(adt_match) = MatchAdtCtxt::new(self.tcx, self.pcx, pat, adt_pat)
-                        .match_adt(self.tcx.adt_def(item.owner_id.def_id))
-                {
-                    #[expect(rustc::untranslatable_diagnostic)]
-                    #[expect(rustc::diagnostic_outside_of_impl)]
-                    self.tcx.dcx().span_note(
-                        self.tcx.def_span(adt_match.adt.did()),
-                        format!("Adt pattern `{adt_pat}` matched"),
-                    );
-                }
-            },
             _ => return,
         }
         intravisit::walk_item(self, item);
@@ -90,18 +75,6 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     }
 }
 
-#[rpl_macros::pattern_def]
-fn pattern_cell_t(pcx: PatCtxt<'_>) -> (&pat::Pattern<'_>, &pat::Adt<'_>) {
-    let pattern = rpl! {
-        #[meta($T:ty)]
-        struct $CellT {
-            $inner: alloc::rc::Rc<core::cell::UnsafeCell<$T>>,
-        }
-    };
-    let adt_pat = pattern.get_adt(Symbol::intern("CellT")).unwrap();
-    (pattern, adt_pat)
-}
-
 struct PatternRcUnsafeCellGetMut<'pcx> {
     pattern: &'pcx pat::Pattern<'pcx>,
     fn_pat: &'pcx pat::Fn<'pcx>,
@@ -112,7 +85,12 @@ struct PatternRcUnsafeCellGetMut<'pcx> {
 fn pattern_rc_unsafe_cell_get_mut(pcx: PatCtxt<'_>) -> PatternRcUnsafeCellGetMut<'_> {
     let get_mut;
     let pattern: &pat::Pattern<'_> = rpl! {
-        #[meta($T:ty, $CellT:ty = |_tcx, _paramse_env, ty| ty.is_adt())]
+        #[meta($T:ty)]
+        struct $CellT {
+            $inner: alloc::rc::Rc<core::cell::UnsafeCell<$T>>,
+        }
+
+        #[meta($T:ty)]
         fn $pattern(..) -> _ = mir! {
             type UnsafeCellT = core::cell::UnsafeCell::<$T>;
             type RcUnsafeCellT = alloc::rc::Rc::<core::cell::UnsafeCell::<$T>>;
@@ -120,7 +98,7 @@ fn pattern_rc_unsafe_cell_get_mut(pcx: PatCtxt<'_>) -> PatternRcUnsafeCellGetMut
             type RcInnerUnsafeCellT = alloc::rc::RcInner::<core::cell::UnsafeCell::<$T>>;
 
             let self: &mut $CellT;
-            let inner_ref: &RcUnsafeCellT = &((*self).inner);
+            let inner_ref: &RcUnsafeCellT = &((*self).$inner);
             let inner_ptr: NonNullRcInnerUnsafeCellT = copy ((*inner_ref).ptr);
             let const_ptr: *const RcInnerUnsafeCellT = copy(inner_ptr.pointer);
             let unsafe_cell: &UnsafeCellT = &((*const_ptr).value);
