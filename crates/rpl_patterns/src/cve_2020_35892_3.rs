@@ -1,5 +1,4 @@
 use rpl_context::PatCtxt;
-use rpl_match::MatchAdtCtxt;
 use rpl_mir::{pat, CheckMirCtxt, Matches};
 use rustc_errors::MultiSpan;
 use rustc_hir::def_id::LocalDefId;
@@ -40,19 +39,6 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
         match item.kind {
             hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn(..) => {},
-            hir::ItemKind::Struct(..) => {
-                #[allow(irrefutable_let_patterns)]
-                if let adt_pat = pattern_slab_t(self.pcx)
-                    && let Some(adt_match) =
-                        MatchAdtCtxt::new(self.tcx, self.pcx, adt_pat).match_adt(self.tcx.adt_def(item.owner_id.def_id))
-                {
-                    #[expect(rustc::untranslatable_diagnostic)]
-                    #[expect(rustc::diagnostic_outside_of_impl)]
-                    self.tcx
-                        .dcx()
-                        .span_note(self.tcx.def_span(adt_match.adt.did()), "Adt pattern matched");
-                }
-            },
             _ => return,
         }
         intravisit::walk_item(self, item);
@@ -136,21 +122,15 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 #[rpl_macros::pattern_def]
-fn pattern_slab_t(pcx: PatCtxt<'_>) -> &pat::Adt<'_> {
+fn pattern_loop(pcx: PatCtxt<'_>) -> (&pat::Pattern<'_>, &pat::Fn<'_>) {
     let pattern = rpl! {
         #[meta($T:ty)]
         struct $SlabT {
             $mem: *mut $T,
             $len: usize,
         }
-    };
-    pattern.get_adt(Symbol::intern("SlabT")).unwrap()
-}
 
-#[rpl_macros::pattern_def]
-fn pattern_loop(pcx: PatCtxt<'_>) -> (&pat::Pattern<'_>, &pat::Fn<'_>) {
-    let pattern = rpl! {
-        #[meta($T:ty, $SlabT:ty = |_tcx, _paramse_env, ty| ty.is_adt())]
+        #[meta($T:ty)]
         fn $pattern (..) -> _ = mir! {
             let self: &mut $SlabT;
             let len: usize;
@@ -171,7 +151,7 @@ fn pattern_loop(pcx: PatCtxt<'_>) -> (&pat::Pattern<'_>, &pat::Fn<'_>) {
             let elem_ptr: *mut $T;
             let cmp: bool;
 
-            len = copy (*self).len;
+            len = copy (*self).$len;
             range = core::ops::range::Range { start: const 0_usize, end: move len };
             iter = move range;
             loop {
@@ -195,7 +175,7 @@ fn pattern_loop(pcx: PatCtxt<'_>) -> (&pat::Pattern<'_>, &pat::Fn<'_>) {
                     0_isize => break,
                     1_isize => {
                         x = copy (opt as Some).0;
-                        base = copy (*self).mem;
+                        base = copy (*self).$mem;
                         offset = copy x as isize (IntToInt);
                         elem_ptr = Offset(copy base, copy offset);
                         _ = core::ptr::drop_in_place(copy elem_ptr);
@@ -222,13 +202,19 @@ fn pattern_offset_by_len(pcx: PatCtxt<'_>) -> PatternOffsetByLen<'_> {
     let ptr;
     let read;
     let pattern = rpl! {
-        #[meta($T:ty, $SlabT:ty = |_tcx, _paramse_env, ty| ty.is_adt())]
+        #[meta($T:ty)]
+        struct $SlabT {
+            $mem: *mut $T,
+            $len: usize,
+        }
+
+        #[meta($T:ty)]
         fn $pattern(..) -> _ = mir! {
             let self: &mut $SlabT;
             #[export(len)]
-            let len: usize = copy (*self).len;
+            let len: usize = copy (*self).$len;
             let len_isize: isize = move len as isize (IntToInt);
-            let base: *mut $T = copy (*self).mem;
+            let base: *mut $T = copy (*self).$mem;
             #[export(ptr)]
             let ptr_mut: *mut $T = Offset(copy base, copy len_isize);
             let ptr: *const $T = copy ptr_mut as *const $T (PtrToPtr);

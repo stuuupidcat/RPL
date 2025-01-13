@@ -4,7 +4,6 @@ use std::ops::Index;
 use std::ptr;
 
 pub struct Slab<T> {
-    //~^ NOTE: Adt pattern matched
     capacity: usize,
     len: usize,
     mem: *mut T,

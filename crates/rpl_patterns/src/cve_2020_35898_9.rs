@@ -39,15 +39,16 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn(..) => {},
             hir::ItemKind::Struct(..) => {
                 #[allow(irrefutable_let_patterns)]
-                if let adt_pat = pattern_cell_t(self.pcx)
-                    && let Some(adt_match) =
-                        MatchAdtCtxt::new(self.tcx, self.pcx, adt_pat).match_adt(self.tcx.adt_def(item.owner_id.def_id))
+                if let (pat, adt_pat) = pattern_cell_t(self.pcx)
+                    && let Some(adt_match) = MatchAdtCtxt::new(self.tcx, self.pcx, pat, adt_pat)
+                        .match_adt(self.tcx.adt_def(item.owner_id.def_id))
                 {
                     #[expect(rustc::untranslatable_diagnostic)]
                     #[expect(rustc::diagnostic_outside_of_impl)]
-                    self.tcx
-                        .dcx()
-                        .span_note(self.tcx.def_span(adt_match.adt.did()), "Adt pattern matched");
+                    self.tcx.dcx().span_note(
+                        self.tcx.def_span(adt_match.adt.did()),
+                        format!("Adt pattern `{adt_pat}` matched"),
+                    );
                 }
             },
             _ => return,
@@ -90,14 +91,15 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 }
 
 #[rpl_macros::pattern_def]
-fn pattern_cell_t(pcx: PatCtxt<'_>) -> &pat::Adt<'_> {
+fn pattern_cell_t(pcx: PatCtxt<'_>) -> (&pat::Pattern<'_>, &pat::Adt<'_>) {
     let pattern = rpl! {
         #[meta($T:ty)]
         struct $CellT {
             $inner: alloc::rc::Rc<core::cell::UnsafeCell<$T>>,
         }
     };
-    pattern.get_adt(Symbol::intern("CellT")).unwrap()
+    let adt_pat = pattern.get_adt(Symbol::intern("CellT")).unwrap();
+    (pattern, adt_pat)
 }
 
 struct PatternRcUnsafeCellGetMut<'pcx> {

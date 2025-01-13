@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::iter::zip;
 
 use rpl_context::{pat, PatCtxt};
+use rustc_data_structures::fx::FxHashMap;
 use rustc_hir::def::Res;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::definitions::DefPathData;
@@ -11,12 +12,15 @@ use rustc_span::symbol::kw;
 use rustc_span::Symbol;
 
 use crate::resolve::{self, lang_item_res, ty_res, PatItemKind};
+use crate::{AdtMatch, MatchAdtCtxt};
 
 pub struct MatchTyCtxt<'pcx, 'tcx> {
     pub tcx: TyCtxt<'tcx>,
     pub pcx: PatCtxt<'pcx>,
+    pub pat: &'pcx pat::Pattern<'pcx>,
     param_env: ty::ParamEnv<'tcx>,
     pub ty_vars: IndexVec<pat::TyVarIdx, RefCell<Vec<ty::Ty<'tcx>>>>,
+    pub adt_matches: RefCell<FxHashMap<Symbol, FxHashMap<DefId, AdtMatch<'tcx>>>>,
 }
 
 impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
@@ -24,13 +28,16 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
         tcx: TyCtxt<'tcx>,
         pcx: PatCtxt<'pcx>,
         param_env: ty::ParamEnv<'tcx>,
+        pat: &'pcx pat::Pattern<'pcx>,
         meta: &pat::MetaVars<'pcx>,
     ) -> Self {
         Self {
             tcx,
             pcx,
+            pat,
             param_env,
             ty_vars: IndexVec::from_elem(RefCell::new(Vec::new()), &meta.ty_vars),
+            adt_matches: Default::default(),
         }
     }
 
@@ -83,6 +90,18 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
                 }
                 .map(|ty_pat| self.match_ty(ty_pat, ty))
                 .unwrap_or(false)
+            },
+            (pat::TyKind::AdtPat(pat), ty::Adt(adt, _))
+                if let Some(adt_pat) = self.pat.get_adt(pat)
+                    && let Some(adt_match) = self.match_adt(adt_pat, adt) =>
+            {
+                self.adt_matches
+                    .borrow_mut()
+                    .entry(pat)
+                    .or_default()
+                    .entry(adt_match.adt.did())
+                    .or_insert(adt_match);
+                true
             },
             // (pat::TyKind::Alias(alias_kind_pat, path, args), ty::Alias(alias_kind, alias)) => {
             //     alias_kind_pat == alias_kind
@@ -138,6 +157,10 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
         };
         debug!(?ty_pat, ?ty, matched, "match_ty");
         matched
+    }
+
+    fn match_adt(&self, adt_pat: &pat::Adt<'pcx>, adt: ty::AdtDef<'tcx>) -> Option<AdtMatch<'tcx>> {
+        MatchAdtCtxt::new(self.tcx, self.pcx, self.pat, adt_pat).match_adt(adt)
     }
 
     pub fn match_const(&self, konst_pat: pat::Const<'pcx>, konst: ty::Const<'tcx>) -> bool {

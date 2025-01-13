@@ -284,19 +284,23 @@ impl Parse for PlaceParen {
 impl Place {
     fn parse_field(self, input: ParseStream<'_>) -> Result<Self> {
         let tk_dot = input.parse()?;
+        let tk_dollar = input.parse()?;
         let field = input.parse()?;
         Ok(Place::Field(PlaceField {
             place: Box::new(self),
             tk_dot,
+            tk_dollar,
             field,
         }))
     }
     fn parse_downcast(self, input: ParseStream<'_>) -> Result<Self> {
         let tk_as = input.parse()?;
+        let tk_dollar = input.parse()?;
         let variant = input.parse()?;
         Ok(Place::DownCast(PlaceDowncast {
             place: Box::new(self),
             tk_as,
+            tk_dollar,
             variant,
         }))
     }

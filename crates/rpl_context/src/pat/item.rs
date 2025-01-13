@@ -1,4 +1,4 @@
-use rustc_data_structures::fx::FxHashMap;
+use rustc_data_structures::fx::{FxHashMap, FxIndexMap};
 use rustc_middle::mir;
 use rustc_span::symbol::kw;
 use rustc_span::Symbol;
@@ -12,12 +12,12 @@ pub struct Adt<'pcx> {
 
 pub enum AdtKind<'pcx> {
     Struct(Variant<'pcx>),
-    Enum(FxHashMap<Symbol, Variant<'pcx>>),
+    Enum(FxIndexMap<Symbol, Variant<'pcx>>),
 }
 
 #[derive(Default)]
 pub struct Variant<'pcx> {
-    pub fields: FxHashMap<Symbol, Field<'pcx>>,
+    pub fields: FxIndexMap<Symbol, Field<'pcx>>,
 }
 
 pub struct Field<'pcx> {
@@ -106,11 +106,47 @@ impl<'pcx> Adt<'pcx> {
             AdtKind::Enum(_) => panic!("cannot access non-enum variant of enum"),
         }
     }
+    pub fn variant_and_index(&self, name: Symbol) -> (&Variant<'pcx>, usize) {
+        match &self.kind {
+            AdtKind::Struct(_) => panic!("expected enum"),
+            AdtKind::Enum(variants) => {
+                let (index, _, variant) = variants
+                    .get_full(&name)
+                    .unwrap_or_else(|| panic!("variant `${name}` not found"));
+                (variant, index)
+            },
+        }
+    }
+    pub fn variant(&self, name: Symbol) -> &Variant<'pcx> {
+        self.variant_and_index(name).0
+    }
+    pub fn variant_index(&self, name: Symbol) -> usize {
+        self.variant_and_index(name).1
+    }
+    pub fn is_enum(&self) -> bool {
+        matches!(self.kind, AdtKind::Enum(_))
+    }
+    pub fn is_struct(&self) -> bool {
+        matches!(self.kind, AdtKind::Struct(_))
+    }
 }
 
 impl<'pcx> Variant<'pcx> {
     pub fn add_field(&mut self, name: Symbol, ty: Ty<'pcx>) {
         self.fields.insert(name, Field { ty });
+    }
+    pub fn field_and_index(&self, name: Symbol) -> (&Field<'pcx>, usize) {
+        let (index, _, field) = self
+            .fields
+            .get_full(&name)
+            .unwrap_or_else(|| panic!("field `${name}` not found"));
+        (field, index)
+    }
+    pub fn field(&self, name: Symbol) -> &Field<'pcx> {
+        self.field_and_index(name).0
+    }
+    pub fn field_index(&self, name: Symbol) -> usize {
+        self.field_and_index(name).1
     }
 }
 

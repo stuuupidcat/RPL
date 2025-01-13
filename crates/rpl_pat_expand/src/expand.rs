@@ -182,12 +182,12 @@ impl ExpandIdent for &'static str {
 }
 impl ExpandIdent for syn::Token![self] {
     fn with_suffix(&self, suffix: impl std::fmt::Display) -> Ident {
-        format_ident!("self{suffix}")
+        format_ident!("self{suffix}", span = self.span)
     }
 }
 impl ExpandIdent for Ident {
     fn with_suffix(&self, suffix: impl std::fmt::Display) -> Ident {
-        format_ident!("{self}{suffix}")
+        format_ident!("{self}{suffix}", span = self.span())
     }
 }
 impl ExpandIdent for PlaceLocal {
@@ -403,7 +403,7 @@ impl ToTokens for ExpandPat<'_, &FnPat> {
         let FnPat { sig, body } = self.value;
         let fn_pat = match sig.ident.as_ident() {
             Some(ident) => ident.as_fn(),
-            None => format_ident!("fn_pat"),
+            None => format_ident!("fn_pat", span = sig.ident.span()),
         };
         self.ecx.with_pat(PatId::Fn(&fn_pat)).expand(sig).to_tokens(tokens);
         match body {
@@ -906,7 +906,7 @@ impl ToTokens for Expand<'_, &GenericArgument> {
 
 impl ToTokens for Expand<'_, &Type> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let ExpandCtxt { pcx, .. } = self.ecx;
+        let ExpandCtxt { pcx, symbols, .. } = self.ecx;
         match self.value {
             Type::Array(TypeArray { box ty, len, .. }) => {
                 let ty = self.ecx.expand(ty);
@@ -951,7 +951,14 @@ impl ToTokens for Expand<'_, &Type> {
                 let tys = self.ecx.expand_punctuated(tys);
                 quote_each_token!(tokens #pcx.mk_tuple_ty(&[#tys]));
             },
-            Type::TyVar(TypeVar { ident, .. }) => ident.as_ty().to_tokens(tokens),
+            Type::TyVar(TypeVar { ident, .. }) => {
+                if symbols.contains_adt(ident) {
+                    let adt_pat = self.ecx.expand(ident.to_symbol());
+                    quote_each_token!(tokens #pcx.mk_adt_pat_ty(#adt_pat));
+                } else {
+                    ident.as_ty().to_tokens(tokens);
+                }
+            },
             Type::LangItem(lang_item) => {
                 let lang_item = self.ecx.expand(lang_item);
                 quote_each_token!(tokens #pcx.mk_adt_ty(#lang_item));
@@ -1194,6 +1201,17 @@ impl ToTokens for Expand<'_, Projections<'_>> {
                     quote_each_token!(proj Deref,);
                     place
                 },
+                Place::Field(
+                    place_field @ PlaceField {
+                        box place,
+                        field: syn::Member::Named(field),
+                        ..
+                    },
+                ) if place_field.is_pattern() => {
+                    let field = self.ecx.expand(field.to_symbol());
+                    quote_each_token!(proj FieldPat(#field),);
+                    place
+                },
                 Place::Field(PlaceField { box place, field, .. }) => {
                     let field = self.ecx.expand(field);
                     quote_each_token!(proj Field(#field),);
@@ -1229,6 +1247,13 @@ impl ToTokens for Expand<'_, Projections<'_>> {
                     let from = from.as_ref().map_or(0, |from| from.index);
                     let from_end = from_end.is_some();
                     quote_each_token!(proj Subslice { from: #from, to: #to, from_end: #from_end },);
+                    place
+                },
+                Place::DownCast(place_downcast @ PlaceDowncast { box place, variant, .. })
+                    if place_downcast.is_pattern() =>
+                {
+                    let variant = self.ecx.expand(variant.to_symbol());
+                    quote_each_token!(proj DowncastPat(#variant),);
                     place
                 },
                 Place::DownCast(PlaceDowncast { box place, variant, .. }) => {

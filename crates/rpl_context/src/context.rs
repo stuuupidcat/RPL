@@ -122,6 +122,9 @@ impl<'pcx> PatCtxt<'pcx> {
     pub fn mk_adt_ty(self, path_with_args: pat::PathWithArgs<'pcx>) -> Ty<'pcx> {
         self.mk_path_ty(path_with_args)
     }
+    pub fn mk_adt_pat_ty(self, pat: Symbol) -> Ty<'pcx> {
+        self.mk_ty(TyKind::AdtPat(pat))
+    }
     pub fn mk_array_ty(self, ty: Ty<'pcx>, len: pat::Const<'pcx>) -> Ty<'pcx> {
         self.mk_ty(TyKind::Array(ty, len))
     }

@@ -5,6 +5,8 @@
 #![feature(box_patterns)]
 #![feature(let_chains)]
 
+extern crate either;
+extern crate rustc_abi;
 extern crate rustc_arena;
 extern crate rustc_ast;
 extern crate rustc_data_structures;

@@ -40,7 +40,7 @@ use std::iter::zip;
 
 use crate::graph::{MirControlFlowGraph, MirDataDepGraph, PatControlFlowGraph, PatDataDepGraph};
 use rpl_context::PatCtxt;
-use rpl_match::{MatchFnCtxt, MatchTyCtxt};
+use rpl_match::{Candidates, MatchFnCtxt, MatchTyCtxt};
 use rpl_mir_graph::TerminatorEdges;
 use rustc_abi::VariantIdx;
 use rustc_hash::FxHashMap;
@@ -49,7 +49,6 @@ use rustc_hir::def_id::DefId;
 use rustc_index::bit_set::HybridBitSet;
 use rustc_index::{IndexSlice, IndexVec};
 use rustc_middle::mir::interpret::PointerArithmetic;
-use rustc_middle::mir::tcx::PlaceTy;
 use rustc_middle::ty::{GenericArgsRef, TyCtxt};
 use rustc_middle::{mir, ty};
 use rustc_span::Symbol;
@@ -61,7 +60,6 @@ pub use rpl_context::pat;
 pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     ty: MatchTyCtxt<'pcx, 'tcx>,
     body: &'a mir::Body<'tcx>,
-    pat: &'a pat::Pattern<'pcx>,
     fn_pat: &'a pat::Fn<'pcx>,
     mir_pat: &'a pat::MirPattern<'pcx>,
     pat_cfg: PatControlFlowGraph,
@@ -78,11 +76,11 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
         tcx: TyCtxt<'tcx>,
         pcx: PatCtxt<'pcx>,
         body: &'a mir::Body<'tcx>,
-        pat: &'a pat::Pattern<'pcx>,
+        pat: &'pcx pat::Pattern<'pcx>,
         fn_pat: &'a pat::Fn<'pcx>,
     ) -> Self {
         let param_env = tcx.param_env_reveal_all_normalized(body.source.def_id());
-        let ty = MatchTyCtxt::new(tcx, pcx, param_env, &fn_pat.meta);
+        let ty = MatchTyCtxt::new(tcx, pcx, param_env, pat, &fn_pat.meta);
         let mir_pat = fn_pat.expect_mir_body();
         // let pat_pdg = crate::graph::pat_program_dep_graph(&patterns, tcx.pointer_size().bytes_usize());
         // let mir_pdg = crate::graph::mir_program_dep_graph(body);
@@ -93,7 +91,6 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
         Self {
             ty,
             body,
-            pat,
             fn_pat,
             mir_pat,
             pat_cfg,
@@ -274,70 +271,178 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
     pub fn match_place(&self, pat: pat::Place<'pcx>, place: mir::Place<'tcx>) -> bool {
         self.match_place_ref(pat, place.as_ref())
     }
-    fn match_place_ref(&self, pat: pat::Place<'pcx>, place: mir::PlaceRef<'tcx>) -> bool {
-        use mir::ProjectionElem::*;
-        use pat::FieldAcc::{Named, Unnamed};
-        let place_proj_and_ty = place.projection.iter().scan(
-            PlaceTy::from_ty(self.body.local_decls[place.local].ty),
+    // Since `match_place` may change the state of ADT matches, we need to use `unmatch_place` to
+    // revert it.
+    pub fn unmatch_place(&self, pat: pat::Place<'pcx>, place: mir::Place<'tcx>) {
+        self.unmatch_place_ref(pat, place.as_ref())
+    }
+    fn iter_place_proj_and_ty(
+        &self,
+        place: mir::PlaceRef<'tcx>,
+    ) -> impl Iterator<Item = (mir::PlaceElem<'tcx>, mir::tcx::PlaceTy<'tcx>)> + use<'tcx, '_, 'pcx> {
+        place.projection.iter().scan(
+            mir::tcx::PlaceTy::from_ty(self.body.local_decls[place.local].ty),
             |place_ty, &proj| {
                 Some((
                     proj,
                     std::mem::replace(place_ty, place_ty.projection_ty(self.ty.tcx, proj)),
                 ))
             },
-        );
-        self.match_local(pat.local, place.local)
-            && pat.projection.len() == place.projection.len()
-            && std::iter::zip(pat.projection, place_proj_and_ty).all(|(&proj_pat, (proj, place_ty))| {
-                match (place_ty.ty.kind(), proj_pat, proj) {
-                    (_, pat::PlaceElem::Deref, Deref) => true,
-                    (ty::Adt(adt, _), pat::PlaceElem::Field(field), Field(idx, _)) => {
-                        let variant = match place_ty.variant_index {
-                            None => adt.non_enum_variant(),
-                            Some(idx) => adt.variant(idx),
-                        };
-                        match (variant.ctor, field) {
-                            (None, Named(name)) => variant.ctor.is_none() && variant.fields[idx].name == name,
-                            (Some((CtorKind::Fn, _)), Unnamed(idx_pat)) => idx_pat == idx,
-                            _ => false,
-                        }
+        )
+    }
+    fn iter_place_pat_proj_and_ty(
+        &self,
+        place: pat::Place<'pcx>,
+    ) -> impl Iterator<Item = (pat::PlaceElem<'pcx>, Option<pat::PlaceTy<'pcx>>)> + use<'tcx, '_, 'pcx> {
+        place.projection.iter().scan(
+            Some(pat::PlaceTy::from_ty(self.mir_pat.locals[place.local])),
+            |place_ty, &proj| {
+                Some((
+                    proj,
+                    std::mem::replace(place_ty, (*place_ty)?.projection_ty(self.ty.pat, proj)),
+                ))
+            },
+        )
+    }
+
+    fn match_place_ref(&self, pat: pat::Place<'pcx>, place: mir::PlaceRef<'tcx>) -> bool {
+        if !self.match_local(pat.local, place.local) {
+            return false;
+        }
+        use mir::ProjectionElem::*;
+        use pat::FieldAcc::{Named, Unnamed};
+        let matched = pat.projection.len() == place.projection.len()
+            && std::iter::zip(self.iter_place_pat_proj_and_ty(pat), self.iter_place_proj_and_ty(place))
+                .inspect(|((proj_pat, place_pat_ty), (proj, place_ty))| {
+                    trace!(?place_pat_ty, ?proj_pat, ?place_ty, ?proj, "match_place")
+                })
+                .all(|((proj_pat, place_pat_ty), (proj, place_ty))| {
+                    match (place_pat_ty.map(|p| p.ty.kind()), place_ty.ty.kind(), proj_pat, proj) {
+                        (_, _, pat::PlaceElem::Deref, Deref) => true,
+                        (
+                            Some(&pat::TyKind::AdtPat(adt_pat)),
+                            &ty::Adt(adt, _),
+                            pat::PlaceElem::FieldPat(field),
+                            Field(idx, _),
+                        ) => self.match_place_field_pat(
+                            adt_pat, adt,
+                            // place_pat_ty.variant,
+                            // place_ty.variant_index,
+                            field, idx,
+                        ),
+                        (_, ty::Adt(adt, _), pat::PlaceElem::Field(field), Field(idx, _)) => {
+                            let variant = match place_ty.variant_index {
+                                None => adt.non_enum_variant(),
+                                Some(idx) => adt.variant(idx),
+                            };
+                            match (variant.ctor, field) {
+                                (None, Named(name)) => variant.ctor.is_none() && variant.fields[idx].name == name,
+                                (Some((CtorKind::Fn, _)), Unnamed(idx_pat)) => idx_pat == idx,
+                                _ => false,
+                            }
+                        },
+                        (_, _, pat::PlaceElem::Index(local_pat), Index(local)) => self.match_local(local_pat, local),
+                        (
+                            _,
+                            _,
+                            pat::PlaceElem::ConstantIndex {
+                                offset: offset_pat,
+                                from_end: from_end_pat,
+                                min_length: min_length_pat,
+                            },
+                            ConstantIndex {
+                                offset,
+                                from_end,
+                                min_length,
+                            },
+                        ) => (offset_pat, from_end_pat, min_length_pat) == (offset, from_end, min_length),
+                        (
+                            _,
+                            _,
+                            pat::PlaceElem::Subslice {
+                                from: from_pat,
+                                to: to_pat,
+                                from_end: from_end_pat,
+                            },
+                            Subslice { from, to, from_end },
+                        ) => (from_pat, to_pat, from_end_pat) == (from, to, from_end),
+                        (
+                            Some(pat::TyKind::AdtPat(_)),
+                            ty::Adt(_adt, _),
+                            pat::PlaceElem::DowncastPat(_sym),
+                            Downcast(_, _idx),
+                        ) => {
+                            todo!()
+                        },
+                        (_, ty::Adt(adt, _), pat::PlaceElem::Downcast(sym), Downcast(_, idx)) => {
+                            adt.is_enum() && adt.variant(idx).name == sym
+                        },
+                        (_, _, pat::PlaceElem::OpaqueCast(ty_pat), OpaqueCast(ty))
+                        | (_, _, pat::PlaceElem::Subtype(ty_pat), Subtype(ty)) => self.ty.match_ty(ty_pat, ty),
+                        (
+                            _,
+                            _,
+                            pat::PlaceElem::Deref
+                            | pat::PlaceElem::Field(_)
+                            | pat::PlaceElem::FieldPat(_)
+                            | pat::PlaceElem::Index(_)
+                            | pat::PlaceElem::ConstantIndex { .. }
+                            | pat::PlaceElem::Subslice { .. }
+                            | pat::PlaceElem::Downcast(..)
+                            | pat::PlaceElem::DowncastPat(..)
+                            | pat::PlaceElem::OpaqueCast(..)
+                            | pat::PlaceElem::Subtype(..),
+                            Deref
+                            | Field(..)
+                            | Index(_)
+                            | ConstantIndex { .. }
+                            | Subslice { .. }
+                            | Downcast(..)
+                            | OpaqueCast(_)
+                            | Subtype(_),
+                        ) => false,
+                    }
+                });
+        debug!(?pat, ?place, matched, "match_place");
+        matched
+    }
+
+    fn unmatch_place_ref(&self, pat: pat::Place<'pcx>, place: mir::PlaceRef<'tcx>) {
+        use mir::ProjectionElem::*;
+        std::iter::zip(self.iter_place_pat_proj_and_ty(pat), self.iter_place_proj_and_ty(place)).for_each(
+            |((proj_pat, place_pat_ty), (proj, place_ty))| {
+                match (place_pat_ty.map(|p| p.ty.kind()), place_ty.ty.kind(), proj_pat, proj) {
+                    (_, _, pat::PlaceElem::Deref, Deref) => {},
+                    (
+                        Some(&pat::TyKind::AdtPat(adt_pat)),
+                        &ty::Adt(adt, _),
+                        pat::PlaceElem::FieldPat(field),
+                        Field(idx, _),
+                    ) => self.unmatch_place_field_pat(
+                        adt_pat, adt,
+                        // place_pat_ty.variant,
+                        // place_ty.variant_index,
+                        field, idx,
+                    ),
+                    (
+                        Some(pat::TyKind::AdtPat(_)),
+                        ty::Adt(_adt, _),
+                        pat::PlaceElem::DowncastPat(_sym),
+                        Downcast(_, _idx),
+                    ) => {
+                        todo!()
                     },
-                    (_, pat::PlaceElem::Index(local_pat), Index(local)) => self.match_local(local_pat, local),
                     (
                         _,
-                        pat::PlaceElem::ConstantIndex {
-                            offset: offset_pat,
-                            from_end: from_end_pat,
-                            min_length: min_length_pat,
-                        },
-                        ConstantIndex {
-                            offset,
-                            from_end,
-                            min_length,
-                        },
-                    ) => (offset_pat, from_end_pat, min_length_pat) == (offset, from_end, min_length),
-                    (
-                        _,
-                        pat::PlaceElem::Subslice {
-                            from: from_pat,
-                            to: to_pat,
-                            from_end: from_end_pat,
-                        },
-                        Subslice { from, to, from_end },
-                    ) => (from_pat, to_pat, from_end_pat) == (from, to, from_end),
-                    (ty::Adt(adt, _), pat::PlaceElem::Downcast(sym), Downcast(_, idx)) => {
-                        adt.is_enum() && adt.variant(idx).name == sym
-                    },
-                    (_, pat::PlaceElem::OpaqueCast(ty_pat), OpaqueCast(ty))
-                    | (_, pat::PlaceElem::Subtype(ty_pat), Subtype(ty)) => self.ty.match_ty(ty_pat, ty),
-                    (
                         _,
                         pat::PlaceElem::Deref
                         | pat::PlaceElem::Field(_)
+                        | pat::PlaceElem::FieldPat(_)
                         | pat::PlaceElem::Index(_)
                         | pat::PlaceElem::ConstantIndex { .. }
                         | pat::PlaceElem::Subslice { .. }
                         | pat::PlaceElem::Downcast(..)
+                        | pat::PlaceElem::DowncastPat(..)
                         | pat::PlaceElem::OpaqueCast(..)
                         | pat::PlaceElem::Subtype(..),
                         Deref
@@ -348,9 +453,77 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                         | Downcast(..)
                         | OpaqueCast(_)
                         | Subtype(_),
-                    ) => false,
+                    ) => {},
                 }
-            })
+            },
+        )
+    }
+
+    fn for_variant_and_match(
+        &self,
+        adt_pat: Symbol,
+        adt: ty::AdtDef<'tcx>,
+        // variant_idx_pat: Option<Symbol>,
+        // variant_idx: Option<VariantIdx>,
+        f: impl FnOnce(&pat::Variant<'pcx>, &Candidates<FieldIdx>, &'tcx ty::VariantDef),
+    ) {
+        let adt_matches = self.ty.adt_matches.borrow();
+        let Some(adt_match) = adt_matches
+            .get(&adt_pat)
+            .and_then(|adt_match| adt_match.get(&adt.did()))
+        else {
+            return;
+        };
+        let adt_pat = self
+            .ty
+            .pat
+            .get_adt(adt_pat)
+            .unwrap_or_else(|| panic!("AdtPat `${adt_pat}` not found"));
+        if adt_pat.is_enum() {
+            todo!()
+            // let (variant_pat, variant_index) =
+            //     adt_pat.variant_and_index(variant_idx_pat.expect("variant_idx_pat is None"));
+            // let variant = adt.variant(variant_idx.expect("variant_idx is None"));
+            // let variant_match = adt_match.expect_enum().candidates[variant_index]
+            //     .matched()
+            //     .expect("variant not matched");
+            // (variant_pat, variant_match, variant)
+        } else {
+            let variant_pat = adt_pat.non_enum_variant();
+            let variant_match = &adt_match.expect_struct().candidates;
+            let variant = adt.non_enum_variant();
+            f(variant_pat, variant_match, variant);
+        }
+    }
+
+    fn match_place_field_pat(
+        &self,
+        adt_pat: Symbol,
+        adt: ty::AdtDef<'tcx>,
+        // variant_idx_pat: Option<Symbol>,
+        // variant_idx: Option<VariantIdx>,
+        field_pat: Symbol,
+        field: FieldIdx,
+    ) -> bool {
+        let mut matched = false;
+        self.for_variant_and_match(adt_pat, adt, |_variant_pat, variant_match, _variant| {
+            matched |= variant_match.r#match(field_pat, field);
+        });
+        matched
+    }
+
+    fn unmatch_place_field_pat(
+        &self,
+        adt_pat: Symbol,
+        adt: ty::AdtDef<'tcx>,
+        // variant_idx_pat: Option<Symbol>,
+        // variant_idx: Option<VariantIdx>,
+        field_pat: Symbol,
+        field: FieldIdx,
+    ) {
+        self.for_variant_and_match(adt_pat, adt, |_variant_pat, variant_match, _variant| {
+            variant_match.unmatch(field_pat, field);
+        });
     }
 
     pub fn match_statement_or_terminator(&self, pat: pat::Location, loc: mir::Location) -> bool {
@@ -670,11 +843,12 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
 
     fn match_fn_pat(&self, fn_pat: Symbol, fn_did: DefId) -> bool {
         let fn_pat = self
+            .ty
             .pat
             .fns
             .get_fn_pat(fn_pat)
             .unwrap_or_else(|| panic!("fn pattern `${fn_pat}` not found"));
-        MatchFnCtxt::new(self.ty.tcx, self.ty.pcx, fn_pat).match_fn(fn_did)
+        MatchFnCtxt::new(self.ty.tcx, self.ty.pcx, self.ty.pat, fn_pat).match_fn(fn_did)
     }
 
     fn match_spanned_operands(

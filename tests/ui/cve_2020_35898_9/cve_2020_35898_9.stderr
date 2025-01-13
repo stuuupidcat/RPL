@@ -1,4 +1,4 @@
-note: Adt pattern matched
+note: Adt pattern `struct { $inner: alloc::rc::Rc< core::cell::UnsafeCell< ?T0 > >, }` matched
   --> tests/ui/cve_2020_35898_9/cve_2020_35898_9.rs:4:1
    |
 LL | pub struct Cell<T> {
