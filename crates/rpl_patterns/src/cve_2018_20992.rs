@@ -76,7 +76,7 @@ pub mod extend {
             fn $pattern(..) -> _ = mir! {
 
                 type VecT = alloc::vec::Vec::<$T>;
-                type VecTRef = &alloc::vec::Vec::<$T>;
+                type _VecTRef = &alloc::vec::Vec::<$T>;
                 type VecTMutRef = &mut alloc::vec::Vec::<$T>;
 
 
