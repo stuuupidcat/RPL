@@ -1,4 +1,3 @@
-//@ ignore-on-host
 use std::alloc::{alloc, Layout};
 
 struct DropDetector(u32);
@@ -17,6 +16,7 @@ fn main() {
 
     unsafe {
         (*ptr) = DropDetector(12345);
-        // std::ptr::drop_in_place(ptr);
+        //~^ ERROR: Possibly dropping an uninitialized value
+        std::ptr::drop_in_place(ptr);
     }
 }

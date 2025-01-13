@@ -1,5 +1,3 @@
-//@ignore-on-host
-
 use std::mem::{forget, size_of};
 use std::vec::Vec;
 
@@ -9,7 +7,8 @@ pub unsafe fn guarded_transmute_vec_permissive<T>(mut bytes: Vec<u8>) -> Vec<T> 
     let capacity = bytes.capacity() / size_of::<T>();
     let len = bytes.len() / size_of::<T>();
     forget(bytes);
-    Vec::from_raw_parts(ptr as *mut T, capacity, len) // FIXME
+    Vec::from_raw_parts(ptr as *mut T, capacity, len)
+    //~^ ERROR: misordered parameters `len` and `cap` in `Vec::from_raw_parts`
 }
 
 pub unsafe fn guarded_transmute_to_bytes_vec<T>(mut from: Vec<T>) -> Vec<u8> {
@@ -17,7 +16,8 @@ pub unsafe fn guarded_transmute_to_bytes_vec<T>(mut from: Vec<T>) -> Vec<u8> {
     let len = from.len() * size_of::<T>();
     let ptr = from.as_mut_ptr();
     forget(from);
-    Vec::from_raw_parts(ptr as *mut u8, capacity, len) // FIXME
+    Vec::from_raw_parts(ptr as *mut u8, capacity, len)
+    //~^ ERROR: misordered parameters `len` and `cap` in `Vec::from_raw_parts`
 }
 
 fn main() {

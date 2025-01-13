@@ -51,6 +51,7 @@ pub mod extend {
                 if let pattern = pattern_vec_set_len_to_extend(self.pcx)
                     && let Some(matches) =
                         CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
+                    && let Some(matches) = matches.first()
                     && let Some(set_len_use) = matches[pattern.set_len_use]
                     && let span1 = set_len_use.span_no_inline(body)
                 {
@@ -76,7 +77,7 @@ pub mod extend {
             fn $pattern(..) -> _ = mir! {
 
                 type VecT = alloc::vec::Vec::<$T>;
-                type _VecTRef = &alloc::vec::Vec::<$T>;
+                // type VecTRef = &alloc::vec::Vec::<$T>;
                 type VecTMutRef = &mut alloc::vec::Vec::<$T>;
 
 
@@ -194,6 +195,7 @@ pub mod truncate {
                 if let pattern = pattern_vec_set_len_to_extend(self.pcx)
                     && let Some(matches) =
                         CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
+                    && let Some(matches) = matches.first()
                     && let Some(set_len_use) = matches[pattern.set_len_use]
                     && let span1 = set_len_use.span_no_inline(body)
                 {

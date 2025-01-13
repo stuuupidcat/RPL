@@ -1,4 +1,3 @@
-//@ ignore-on-host
 use std::alloc::{alloc, Layout};
 
 pub struct Array<T> {
@@ -17,12 +16,13 @@ where
         for i in 0..size {
             unsafe {
                 (*(ptr.wrapping_offset(i as isize))) = template.clone();
+                //~^ ERROR: Possibly dropping an uninitialized value
             }
         }
         Self { size, ptr }
     }
 }
-/* 
+ 
 #[derive(Clone, Debug)]
 struct DropDetector(u32);
 
@@ -40,4 +40,4 @@ fn main() {
             std::ptr::drop_in_place(ptr);
         }
     }
-} */
+} 

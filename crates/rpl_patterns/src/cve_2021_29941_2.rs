@@ -52,6 +52,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             if let pattern = pattern_trust_len(self.pcx)
                 && let Some(matches) =
                     CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
+                && let Some(matches) = matches.first()
                 && let Some(len) = matches[pattern.len]
                 && let len = len.span_no_inline(body)
                 && let Some(set_len) = matches[pattern.set_len]
@@ -66,6 +67,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             if let pattern = pattern_uninitialized_slice(self.pcx)
                 && let Some(matches) =
                     CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
+                && let Some(matches) = matches.first()
                 && let Some(len) = matches[pattern.len]
                 && let len = len.span_no_inline(body)
                 && let Some(ptr) = matches[pattern.ptr]
@@ -88,6 +90,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             if let pattern = pattern_uninitialized_slice_mut(self.pcx)
                 && let Some(matches) =
                     CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
+                && let Some(matches) = matches.first()
                 && let Some(len) = matches[pattern.len]
                 && let len = len.span_no_inline(body)
                 && let Some(ptr) = matches[pattern.ptr]

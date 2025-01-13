@@ -64,6 +64,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     pattern_offset_by_len.fn_pat,
                 )
                 .check()
+                && let Some(matches) = matches.first()
                 && let Some(get_mut) = matches[pattern_offset_by_len.get_mut]
                 && let get_mut = get_mut.span_no_inline(body)
             {

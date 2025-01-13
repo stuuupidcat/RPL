@@ -56,6 +56,7 @@ pub mod u8_to_t {
                         pattern_misordered_params.fn_pat,
                     )
                     .check()
+                    && let Some(matches) = matches.first()
                     && let Some(from_raw_parts) = matches[pattern_misordered_params.from_raw_parts]
                     && let span = from_raw_parts.span_no_inline(body)
                 {
@@ -240,6 +241,7 @@ pub mod t_to_u8 {
                         pattern_misordered_params.fn_pat,
                     )
                     .check()
+                    && let Some(matches) = matches.first()
                     && let Some(from_raw_parts) = matches[pattern_misordered_params.from_raw_parts]
                     && let span = from_raw_parts.span_no_inline(body)
                 {
@@ -270,7 +272,6 @@ pub mod t_to_u8 {
                 type RawVecInner = alloc::raw_vec::RawVecInner;
                 type RawVecU8 = alloc::raw_vec::RawVec::<u8>;
 
-                #[export(from_raw_parts)]
                 let from_vec: VecT = _; // _1
                 let mut from_vec_immutable_borrow_1: &VecT; // _4
                 let mut from_vec_immutable_borrow_2: &VecT; // _8
@@ -344,6 +345,7 @@ pub mod t_to_u8 {
                     _marker: const core::marker::PhantomData::<u8>
                 };
                 // _0 = std::vec::Vec::<u8> { buf: move _16, len: copy _2 };
+                #[export(from_raw_parts)]
                 to_vec = alloc::vec::Vec::<u8> {
                     buf: move to_vec_raw,
                     len: copy to_vec_cap
