@@ -130,7 +130,9 @@ pub trait PatternVisitor<'pcx>: Sized {
                 from_end: _,
             }
             | PlaceElem::Downcast(_)
-            | PlaceElem::Field(_) => {},
+            | PlaceElem::DowncastPat(_)
+            | PlaceElem::Field(_)
+            | PlaceElem::FieldPat(_) => {},
         }
     }
     fn super_rvalue(&mut self, rvalue: &Rvalue<'pcx>, location: Location) {

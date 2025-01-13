@@ -1,6 +1,7 @@
 use core::iter::IntoIterator;
 use std::ops::Index;
 
+use either::Either;
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_hir::Target;
 use rustc_index::IndexVec;
@@ -96,6 +97,7 @@ impl<'pcx> BasicBlockData<'pcx> {
 pub enum PlaceElem<'pcx> {
     Deref,
     Field(FieldAcc),
+    FieldPat(Symbol),
     Index(Local),
     ConstantIndex {
         offset: u64,
@@ -108,6 +110,7 @@ pub enum PlaceElem<'pcx> {
         from_end: bool,
     },
     Downcast(Symbol),
+    DowncastPat(Symbol),
     OpaqueCast(Ty<'pcx>),
     Subtype(Ty<'pcx>),
 }
@@ -154,6 +157,56 @@ impl From<Local> for Place<'_> {
 impl Local {
     pub fn into_place<'pcx>(self) -> Place<'pcx> {
         self.into()
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PlaceTy<'pcx> {
+    pub ty: Ty<'pcx>,
+    pub variant: Option<Symbol>,
+}
+
+impl<'pcx> PlaceTy<'pcx> {
+    pub fn from_ty(ty: Ty<'pcx>) -> Self {
+        Self { ty, variant: None }
+    }
+    pub fn projection_ty(&self, pat: &'pcx Pattern<'pcx>, proj: PlaceElem<'pcx>) -> Option<Self> {
+        match proj {
+            PlaceElem::Deref => match self.ty.kind() {
+                &TyKind::Ref(_, ty, _) | &TyKind::RawPtr(ty, _) => Some(PlaceTy::from_ty(ty)),
+                _ => None,
+            },
+            PlaceElem::Field(_) => None,
+            PlaceElem::FieldPat(field) => {
+                let &TyKind::AdtPat(adt) = self.ty.kind() else {
+                    return None;
+                };
+                let adt = pat.get_adt(adt)?;
+                let variant = if adt.is_enum() {
+                    adt.variant(
+                        self.variant
+                            .expect("Cannot assess field without downcasting to a variant"),
+                    )
+                } else {
+                    adt.non_enum_variant()
+                };
+                Some(PlaceTy::from_ty(variant.fields.get(&field)?.ty))
+            },
+            PlaceElem::Index(_) | PlaceElem::ConstantIndex { .. } => match self.ty.kind() {
+                &TyKind::Array(ty, _) | &TyKind::Slice(ty) => Some(PlaceTy::from_ty(ty)),
+                _ => None,
+            },
+            PlaceElem::Subslice { .. } => match self.ty.kind() {
+                &TyKind::Array(ty, _) | &TyKind::Slice(ty) => Some(PlaceTy::from_ty(pat.pcx.mk_slice_ty(ty))),
+                _ => None,
+            },
+            PlaceElem::Downcast(_) => None,
+            PlaceElem::DowncastPat(variant) => Some(PlaceTy {
+                ty: self.ty,
+                variant: Some(variant),
+            }),
+            PlaceElem::OpaqueCast(ty) | PlaceElem::Subtype(ty) => Some(PlaceTy::from_ty(ty)),
+        }
     }
 }
 
@@ -288,6 +341,13 @@ struct Loop {
 impl<'pcx> MirPattern<'pcx> {
     pub fn builder() -> MirPatternBuilder<'pcx> {
         MirPatternBuilder::new()
+    }
+    pub fn stmt_at(&self, loc: Location) -> Either<&StatementKind<'pcx>, &TerminatorKind<'pcx>> {
+        if loc.statement_index < self[loc.block].statements.len() {
+            Either::Left(&self[loc.block].statements[loc.statement_index])
+        } else {
+            Either::Right(self[loc.block].terminator())
+        }
     }
 }
 

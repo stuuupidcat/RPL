@@ -401,7 +401,15 @@ pub struct PlaceDeref {
 pub struct PlaceField {
     pub place: Box<Place>,
     tk_dot: Token![.],
+    /// Some if it is a pattern field
+    tk_dollar: Option<Token![$]>,
     pub field: syn::Member,
+}
+
+impl PlaceField {
+    pub fn is_pattern(&self) -> bool {
+        self.tk_dollar.is_some()
+    }
 }
 
 #[derive(ToTokens)]
@@ -447,7 +455,15 @@ pub struct PlaceSubslice {
 pub struct PlaceDowncast {
     pub place: Box<Place>,
     tk_as: Token![as],
+    /// `Some` if it is a pattern downcast
+    tk_dollar: Option<Token![$]>,
     pub variant: Ident,
+}
+
+impl PlaceDowncast {
+    pub fn is_pattern(&self) -> bool {
+        self.tk_dollar.is_some()
+    }
 }
 
 #[derive(ToTokens, From)]
@@ -458,7 +474,7 @@ pub enum Place {
     Paren(PlaceParen),
     /// `*place`
     Deref(PlaceDeref),
-    /// `place.field`
+    /// `place.field` or `place.$field`
     Field(PlaceField),
     /// `place[index]`
     Index(PlaceIndex),
@@ -466,7 +482,7 @@ pub enum Place {
     ConstIndex(PlaceConstIndex),
     /// `place[from..to]`
     Subslice(PlaceSubslice),
-    /// `place as Variant`
+    /// `place as Variant` or `place as $Variant`
     DownCast(PlaceDowncast),
 }
 
@@ -1123,6 +1139,13 @@ impl IdentPat {
         match self {
             IdentPat::Ident(ident) | IdentPat::Pat(_, ident) => Some(ident),
             _ => None,
+        }
+    }
+    pub fn span(&self) -> Span {
+        match self {
+            IdentPat::Underscore(underscore) => underscore.span,
+            IdentPat::Pat(_, ident) => ident.span(),
+            IdentPat::Ident(ident) => ident.span(),
         }
     }
 }

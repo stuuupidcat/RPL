@@ -1,9 +1,9 @@
 use std::cell::Cell;
 use std::fmt;
-use std::num::NonZero;
 use std::ops::Index;
 
 use itertools::Itertools;
+use rpl_match::CountedMatch;
 use rpl_mir_graph::TerminatorEdges;
 use rustc_index::bit_set::HybridBitSet;
 use rustc_index::IndexVec;
@@ -282,7 +282,9 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     fn do_match(&mut self) -> bool {
         self.build_candidates();
         self.matches.log_candidates();
-        !self.matches.has_empty_candidates() && self.match_only_candidates() && self.match_block(pat::BasicBlock::ZERO)
+        !self.matches.has_empty_candidates(self.cx)
+            && self.match_only_candidates()
+            && self.match_block(pat::BasicBlock::ZERO)
     }
     #[instrument(level = "debug", skip(self), ret)]
     fn match_block(&self, bb_pat: pat::BasicBlock) -> bool {
@@ -579,10 +581,49 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     }
     #[instrument(level = "debug", skip(self))]
     fn unmatch_stmt_locals(&self, loc_pat: pat::Location) {
+        self.unmatch_stmt_adt_matches(loc_pat);
         for &(local_pat, _) in self.cx.pat_ddg[loc_pat.block].accesses(loc_pat.statement_index) {
             self.unmatch_local(local_pat);
         }
     }
+    fn unmatch_stmt_adt_matches(&self, loc_pat: pat::Location) {
+        let Some(StatementMatch::Location(loc)) = self.matches[loc_pat].matched.get() else {
+            return;
+        };
+        use mir::visit::Visitor;
+        use pat::visitor::PatternVisitor;
+        struct CollectPlaces<P> {
+            places: Vec<P>,
+        }
+        impl<'pcx> PatternVisitor<'pcx> for CollectPlaces<pat::Place<'pcx>> {
+            fn visit_place(&mut self, place: pat::Place<'pcx>, pcx: PlaceContext, loc: pat::Location) {
+                self.places.push(place);
+                self.super_place(place, pcx, loc);
+            }
+        }
+        impl<'tcx> Visitor<'tcx> for CollectPlaces<mir::Place<'tcx>> {
+            fn visit_place(&mut self, &place: &mir::Place<'tcx>, pcx: PlaceContext, loc: mir::Location) {
+                self.places.push(place);
+                self.super_place(&place, pcx, loc);
+            }
+        }
+        let mut place_pats = CollectPlaces::<pat::Place<'_>> { places: Vec::new() };
+        let mut places = CollectPlaces::<mir::Place<'_>> { places: Vec::new() };
+        self.cx.mir_pat.stmt_at(loc_pat).either_with(
+            &mut place_pats,
+            |place_pats, statement| place_pats.visit_statement(statement, loc_pat),
+            |place_pats, terminator| place_pats.visit_terminator(terminator, loc_pat),
+        );
+        self.cx.body.stmt_at(loc).either_with(
+            &mut places,
+            |places, statement| places.visit_statement(statement, loc),
+            |places, terminator| places.visit_terminator(terminator, loc),
+        );
+        for (place_pat, place) in core::iter::zip(place_pats.places, places.places) {
+            self.cx.unmatch_place(place_pat, place);
+        }
+    }
+
     #[instrument(level = "debug", skip(self))]
     fn unmatch_local(&self, local_pat: pat::Local) {
         self.matches[local_pat].matched.unmatch();
@@ -600,7 +641,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         );
     }
     fn log_local_conflicted(&self, local_pat: pat::Local, local: mir::Local) {
-        let conflicted_local = self.matches[local_pat].matched.get().unwrap().into_inner();
+        let conflicted_local = self.matches[local_pat].matched.get().unwrap();
         info!(
             "local conflicted: {local_pat:?}: {ty_pat:?} !! {local:?} / {conflicted_local:?}: {ty:?}",
             ty_pat = self.cx.mir_pat.locals[local_pat],
@@ -615,7 +656,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         );
     }
     fn log_ty_var_conflicted(&self, ty_var: pat::TyVarIdx, ty: Ty<'tcx>) {
-        let conflicted_ty = self.matches[ty_var].matched.get().unwrap().into_inner();
+        let conflicted_ty = self.matches[ty_var].matched.get().unwrap();
         info!("type variable conflicted, {ty_var:?}: {ty:?} !! {conflicted_ty:?}");
     }
     fn log_ty_var_matched(&self, ty_var: pat::TyVarIdx, ty: Ty<'tcx>) {
@@ -651,8 +692,10 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
 
 impl<'tcx> CheckingMatches<'tcx> {
     /// Test if there are any empty candidates in the matches.
-    fn has_empty_candidates(&self) -> bool {
-        self.basic_blocks.iter().any(CheckBlockMatches::has_empty_candidates)
+    fn has_empty_candidates(&self, cx: &CheckMirCtxt<'_, '_, 'tcx>) -> bool {
+        self.basic_blocks
+            .iter_enumerated()
+            .any(|(bb, matches)| matches.has_empty_candidates(cx, bb))
             || self.locals.iter().any(LocalMatches::has_empty_candidates)
             || self.ty_vars.iter().any(TyVarMatches::has_empty_candidates)
     }
@@ -730,8 +773,19 @@ impl CheckBlockMatches {
         }
     }
     /// Test if there are any empty candidates in the matches.
-    fn has_empty_candidates(&self) -> bool {
-        self.candidates.is_empty() || self.statements.iter().any(StatementMatches::has_empty_candidates)
+    fn has_empty_candidates(&self, cx: &CheckMirCtxt<'_, '_, '_>, bb: pat::BasicBlock) -> bool {
+        self.candidates.is_empty()
+            || self
+                .statements
+                .iter()
+                .position(StatementMatches::has_empty_candidates)
+                .inspect(|&stmt| {
+                    info!(
+                        "Statement {bb:?}[{stmt}] has no candidates: {:?}",
+                        cx.mir_pat[bb].debug_stmt_at(stmt)
+                    )
+                })
+                .is_some()
     }
 
     fn into_matches(self) -> BlockMatches {
@@ -755,6 +809,7 @@ impl StatementMatches {
         if let &[m] = &self.candidates[..] {
             self.matched.set(Some(m));
         }
+
         self.candidates.is_empty()
     }
 
@@ -783,7 +838,7 @@ impl LocalMatches {
     }
 
     fn try_take(self) -> Result<mir::Local, MatchFailed> {
-        self.matched.try_take()
+        self.matched.try_take().ok_or(MatchFailed)
     }
 }
 
@@ -799,82 +854,12 @@ impl<'tcx> TyVarMatches<'tcx> {
     }
 
     fn try_take(self) -> Result<Ty<'tcx>, MatchFailed> {
-        self.matched.try_take()
+        self.matched.try_take().ok_or(MatchFailed)
     }
 
     /// Test if there are any empty candidates in the matches.
     fn has_empty_candidates(&self) -> bool {
         self.candidates.is_empty()
-    }
-}
-
-struct CountedMatch<T>(Cell<Option<Counted<T>>>);
-
-impl<T> Default for CountedMatch<T> {
-    fn default() -> Self {
-        Self(Cell::new(None))
-    }
-}
-
-impl<T: Copy + PartialEq> CountedMatch<T> {
-    fn get(&self) -> Option<Counted<T>> {
-        self.0.get()
-    }
-    fn r#match(&self, value: T) -> bool {
-        match self.0.get() {
-            None => self.0.set(Some(Counted::new(value))),
-            Some(l) if l.value == value => self.0.set(Some(l.inc())),
-            Some(_) => return false,
-        }
-        true
-    }
-    fn unmatch(&self) {
-        self.0.update(|m| m.and_then(Counted::dec));
-    }
-    fn try_take(self) -> Result<T, MatchFailed> {
-        self.0.take().map(Counted::into_inner).ok_or(MatchFailed)
-    }
-}
-
-#[derive(Clone, Copy)]
-struct Counted<T> {
-    value: T,
-    count: NonZero<u32>,
-}
-
-impl<T> Counted<T> {
-    fn new(value: T) -> Self {
-        Self {
-            value,
-            count: NonZero::<u32>::MIN,
-        }
-    }
-    fn into_inner(self) -> T {
-        self.value
-    }
-    fn inc(self) -> Self {
-        Self {
-            count: self.count.checked_add(1).unwrap(),
-            ..self
-        }
-    }
-    fn dec(self) -> Option<Self> {
-        Some(Self {
-            count: NonZero::new(self.count.get().wrapping_sub(1))?,
-            ..self
-        })
-    }
-}
-
-impl<T: fmt::Debug> fmt::Debug for Counted<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?} {{{}}}", self.value, self.count)
-    }
-}
-
-impl<T: Copy + fmt::Debug> fmt::Debug for CountedMatch<T> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.get().fmt(f)
     }
 }
 

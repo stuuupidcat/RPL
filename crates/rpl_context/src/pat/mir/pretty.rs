@@ -38,6 +38,7 @@ fn fmt_projection<'pcx>(f: &mut fmt::Formatter<'_>, place: Place<'pcx>, proj: &P
     match proj {
         PlaceElem::Deref => write!(f, "(*{place:?})"),
         PlaceElem::Field(field) => write!(f, "({place:?}.{field:?})"),
+        PlaceElem::FieldPat(field) => write!(f, "({place:?}.${field})"),
         PlaceElem::Index(local) => write!(f, "({place:?}[{local:?}])"),
         &PlaceElem::ConstantIndex {
             offset,
@@ -52,6 +53,7 @@ fn fmt_projection<'pcx>(f: &mut fmt::Formatter<'_>, place: Place<'pcx>, proj: &P
             write!(f, "({place:?}[{from}:{from_end}{to}])")
         },
         PlaceElem::Downcast(variant) => write!(f, "({place:?} as {variant})"),
+        PlaceElem::DowncastPat(variant) => write!(f, "({place:?} as ${variant})"),
         PlaceElem::OpaqueCast(ty) | PlaceElem::Subtype(ty) => write!(f, "({place:?} as {ty:?})"),
     }
 }

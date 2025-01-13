@@ -230,3 +230,27 @@ impl fmt::Debug for FnBody<'_> {
         }
     }
 }
+
+impl fmt::Display for Adt<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match &self.kind {
+            AdtKind::Struct(variant) => write!(f, "struct {{ {variant}}}"),
+            AdtKind::Enum(variants) => {
+                f.write_str("enum {")?;
+                for (name, variant) in variants {
+                    write!(f, "${name} {{ {variant}}}, ")?;
+                }
+                f.write_str("}")
+            },
+        }
+    }
+}
+
+impl fmt::Display for Variant<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for (name, field) in &self.fields {
+            write!(f, "${name}: {ty:?}, ", ty = field.ty)?;
+        }
+        Ok(())
+    }
+}

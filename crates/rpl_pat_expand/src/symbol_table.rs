@@ -305,6 +305,9 @@ impl<'a> SymbolTable<'a> {
         self.impls.push(ImplInner::new(impl_pat).into());
         self.impls.last_mut().unwrap()
     }
+    pub fn contains_adt(&self, ident: &Ident) -> bool {
+        self.structs.contains_key(ident) || self.enums.contains_key(ident)
+    }
 }
 
 impl<'a> ImplInner<'a> {

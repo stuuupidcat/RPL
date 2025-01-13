@@ -1,11 +1,5 @@
-note: Adt pattern matched
-  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:6:1
-   |
-LL | pub struct Slab<T> {
-   | ^^^^^^^^^^^^^^^^^^
-
 error: pointer out of bound
-  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:51:25
+  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:50:25
    |
 LL |             last_elem_ptr = self.mem.offset(self.len as isize);
    |                                      -------------------------
@@ -17,7 +11,7 @@ LL |             last_elem = ptr::read(last_elem_ptr);
    |                         ^^^^^^^^^^^^^^^^^^^^^^^^ pointer read here
    |
 help: this is because `self.len` exceeds the container's length by one
-  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:46:45
+  --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:45:45
    |
 LL |             last_elem_ptr = self.mem.offset(self.len as isize);
    |                                             ^^^^^^^^

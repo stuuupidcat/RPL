@@ -12,8 +12,13 @@ pub struct MatchFnCtxt<'a, 'pcx, 'tcx> {
 }
 
 impl<'a, 'pcx, 'tcx> MatchFnCtxt<'a, 'pcx, 'tcx> {
-    pub fn new(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>, fn_pat: &'a pat::Fn<'pcx>) -> Self {
-        let ty = MatchTyCtxt::new(tcx, pcx, ty::ParamEnv::reveal_all(), &fn_pat.meta);
+    pub fn new(
+        tcx: TyCtxt<'tcx>,
+        pcx: PatCtxt<'pcx>,
+        pat: &'pcx pat::Pattern<'pcx>,
+        fn_pat: &'a pat::Fn<'pcx>,
+    ) -> Self {
+        let ty = MatchTyCtxt::new(tcx, pcx, ty::ParamEnv::reveal_all(), pat, &fn_pat.meta);
         Self { ty, fn_pat }
     }
 

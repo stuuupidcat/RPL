@@ -21,7 +21,7 @@ pub struct MetaVars<'pcx> {
 
 pub struct Pattern<'pcx> {
     pub pcx: PatCtxt<'pcx>,
-    adts: FxHashMap<Symbol, Adt<'pcx>>,
+    pub adts: FxHashMap<Symbol, Adt<'pcx>>,
     pub fns: Fns<'pcx>,
     #[expect(dead_code)]
     impls: Vec<Impl<'pcx>>,
