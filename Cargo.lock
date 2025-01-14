@@ -905,6 +905,7 @@ dependencies = [
  "rustc_tools_util",
  "scoped_threadpool",
  "serde",
+ "serde_json",
  "syn",
  "tester",
  "toml",

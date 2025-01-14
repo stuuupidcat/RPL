@@ -22,6 +22,8 @@ extern crate itertools;
 extern crate parking_lot;
 extern crate quote;
 extern crate scoped_threadpool;
+extern crate serde;
+extern crate serde_json;
 extern crate syn;
 // extern crate tokio;
 
@@ -32,15 +34,16 @@ static TEST_DEPENDENCIES: &[&str] = &[
     "futures",
     "if_chain",
     "itertools",
+    "libc",
+    "log",
     "parking_lot",
     "quote",
     "regex",
-    "serde_derive",
     "serde",
+    "serde_derive",
+    "serde_json",
     "syn",
-    "log",
     "tracing",
-    "libc",
     "scoped_threadpool",
     // "tokio",
 ];

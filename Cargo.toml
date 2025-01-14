@@ -28,6 +28,7 @@ rpl_patterns = { path = "./crates/rpl_patterns" }
 rpl_utils = { path = "./crates/rpl_utils" }
 rustc_tools_util = "0.3.0"
 serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0" }
 toml = "0.7.3"
 arrayvec = { version = "0.7", default-features = false }
 itertools = "0.12"
@@ -87,6 +88,7 @@ tracing.workspace = true
 log = "0.4"
 libc.workspace = true
 scoped_threadpool = "0.1"
+serde_json.workspace = true
 
 [build-dependencies]
 rustc_tools_util.workspace = true
