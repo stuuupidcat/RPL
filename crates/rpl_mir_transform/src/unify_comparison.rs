@@ -25,7 +25,7 @@ use rustc_middle::ty::TyCtxt;
 ///
 /// ```ignore (MIR)
 /// _3 = Lt(move _2, move _1);
-/// _4 = Le(move _1, move _2);
+/// _4 = Le(move _2, move _1);
 /// ```
 pub(crate) fn unify_comparison(_tcx: TyCtxt<'_>, body: &mut Body<'_>) {
     for block in body.basic_blocks_mut() {
