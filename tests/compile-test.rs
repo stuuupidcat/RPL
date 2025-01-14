@@ -15,10 +15,13 @@ use std::sync::LazyLock;
 // in the depinfo file (otherwise cargo thinks they are unused)
 // extern crate clippy_utils;
 
+extern crate byte_slice_cast;
 extern crate futures;
 extern crate if_chain;
 extern crate itertools;
 // extern crate libc;
+extern crate num_derive;
+extern crate num_rational;
 extern crate parking_lot;
 extern crate quote;
 extern crate scoped_threadpool;
@@ -31,11 +34,15 @@ mod test_utils;
 
 /// All crates used in UI tests are listed here
 static TEST_DEPENDENCIES: &[&str] = &[
+    "byte_slice_cast",
     "futures",
     "if_chain",
     "itertools",
     "libc",
     "log",
+    "num_derive",
+    "num_rational",
+    "num_traits",
     "parking_lot",
     "quote",
     "regex",
@@ -43,8 +50,9 @@ static TEST_DEPENDENCIES: &[&str] = &[
     "serde_derive",
     "serde_json",
     "syn",
-    "tracing",
     "scoped_threadpool",
+    "thiserror",
+    "tracing",
     // "tokio",
 ];
 

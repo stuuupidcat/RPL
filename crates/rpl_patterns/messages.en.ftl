@@ -56,3 +56,8 @@ rpl_patterns_get_mut_in_rc_unsafecell = Obtaining a mutable reference to the val
     .help = use `std::cell::RefCell` instead
 
 rpl_patterns_drop_uninit_value = Possibly dropping an uninitialized value
+
+rpl_patterns_from_raw_parts = it is unsound to trust pointers from passed-in iterators in a public safe function
+    .ptr_label = pointer created here
+    .slice_label = used here to create a slice from the pointer
+    .help = please mark the function as unsafe

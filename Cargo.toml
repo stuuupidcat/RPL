@@ -45,7 +45,10 @@ gsgdt = "0.1.2"
 syn_derive = "0.2"
 derive_more = { version = "1.0", features = ["from", "into_iterator", "deref", "display"] }
 libc = "0.2"
-
+byte-slice-cast = "1.0.0"
+num-derive = "0.3"
+num-rational = "0.3.0"
+num-traits = "0.2.8"
 
 [package]
 name = "rpl"
@@ -89,6 +92,11 @@ log = "0.4"
 libc.workspace = true
 scoped_threadpool = "0.1"
 serde_json.workspace = true
+byte-slice-cast.workspace = true
+num-derive.workspace = true
+num-rational.workspace = true
+num-traits.workspace = true
+thiserror.workspace = true
 
 [build-dependencies]
 rustc_tools_util.workspace = true

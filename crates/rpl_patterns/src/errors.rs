@@ -182,3 +182,17 @@ pub struct DropUninitValue {
     #[primary_span]
     pub drop: Span,
 }
+
+// for cve_2021_25904
+// FIXME: add a span for `#[help]` containing the function header
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_from_raw_parts)]
+#[help]
+pub struct UnvalidatedSliceFromRawParts {
+    #[primary_span]
+    pub src: Span,
+    #[label(rpl_patterns_ptr_label)]
+    pub ptr: Span,
+    #[label(rpl_patterns_slice_label)]
+    pub slice: Span,
+}
