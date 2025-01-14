@@ -594,7 +594,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             ) => false,
         };
         if matched {
-            info!("candidate matched: {loc_pat:?} {pat:?} <-> {loc:?} {statement:?}");
+            debug!("candidate matched: {loc_pat:?} {pat:?} <-> {loc:?} {statement:?}");
         }
         matched
     }
@@ -611,7 +611,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             &mir::TerminatorKind::Call { destination, .. },
         ) if self.match_place(place_pat, destination));
         if matched {
-            info!(
+            debug!(
                 "candidate matched: {loc_pat:?} {pat:?} <-> {loc:?} {:?}",
                 terminator.kind
             );
@@ -699,7 +699,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             ) => false,
         };
         if matched {
-            info!(
+            debug!(
                 "candidate matched: {loc_pat:?} {pat:?} <-> {loc:?} {:?}",
                 terminator.kind
             );

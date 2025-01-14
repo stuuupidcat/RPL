@@ -304,7 +304,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     fn match_candidates(&self, locs_pat: &Vec<pat::Location>, index: usize) {
         if index == locs_pat.len() {
             if self.match_graph() {
-                info!("Code instance matched");
+                info!("Code instance matched.");
                 self.matches.log_matches(self.cx.body);
                 let mut vec = self.succeed.take();
                 vec.push(self.matches.clone());
@@ -329,14 +329,17 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         }
     }
 
+    #[instrument(level = "info", skip(self))]
     fn match_graph(&self) -> bool {
         self.match_cfg() && self.match_ddg()
     }
 
+    #[instrument(level = "info", skip(self), ret)]
     fn match_cfg(&self) -> bool {
         self.match_block(pat::BasicBlock::ZERO)
     }
 
+    #[instrument(level = "info", skip(self), ret)]
     fn match_ddg(&self) -> bool {
         // dep_loc_pat -----> dep_loc
         //   ^                   ^
@@ -380,7 +383,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                 false
             }
     }
-    #[instrument(level = "info", skip(self), ret)]
+    #[instrument(level = "debug", skip(self), ret)]
     fn match_block_ends_with(&self, bb_pat: pat::BasicBlock, bb: mir::BasicBlock) -> bool {
         // FIXME: handle empty blocks
         if self.cx.mir_pat[bb_pat].statements.is_empty()
@@ -411,27 +414,42 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     fn match_stmt_deps_of(&self, bb_pat: pat::BasicBlock, mut pat: impl Iterator<Item = (usize, pat::Local)>) -> bool {
         pat.all(|(stmt, _)| self.match_stmt_deps((bb_pat, stmt).into_location()))
     }
+    #[instrument(level = "debug", skip(self), ret)]
     fn match_stmt_deps(&self, loc_pat: pat::Location) -> bool {
         let loc_pat = loc_pat.into_location();
         let stmt_match = self.matches[loc_pat].matched.get().unwrap();
 
         match stmt_match {
-            StatementMatch::Arg(_) => true,
+            StatementMatch::Arg(local) => {
+                debug!("matched with arg: {loc_pat:?} associated with {local:?}");
+                true
+            },
             StatementMatch::Location(loc) => {
                 let mut pat_dep_edges = self.cx.pat_ddg[loc_pat.block].deps(loc_pat.statement_index);
+                if pat_dep_edges.next().is_none() {
+                    debug!("no pat_dep_edge: {loc_pat:?}");
+                    return true;
+                }
                 pat_dep_edges.all(|(dep_loc_pat, local_pat)| {
+                    debug!("pat_dep_edge: {dep_loc_pat:?} -> {loc_pat:?}, associated with {local_pat:?}");
                     let is_dep = |local| self.matches[local_pat].matched.get().is_some_and(|l| l == local);
                     let dep_loc = self.matches[loc_pat.block].statements[dep_loc_pat]
                         .matched
                         .get()
                         .unwrap();
                     match dep_loc {
-                        StatementMatch::Arg(local) => is_dep(local),
+                        StatementMatch::Arg(local) => {
+                            debug!("mir_dep_edge: {dep_loc:?} -> {loc:?}, associated with {local:?}");
+                            is_dep(local)
+                        },
                         StatementMatch::Location(dep_loc) => self
                             .cx
                             .mir_ddg
                             .get_dep(loc.block, loc.statement_index, dep_loc.block, dep_loc.statement_index)
-                            .is_some_and(is_dep),
+                            .is_some_and(|local| {
+                                debug!("mir_dep_edge: {dep_loc:?} -> {loc:?}, associated with {local:?}");
+                                is_dep(local)
+                            }),
                     }
                 })
             },
@@ -602,7 +620,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     }
     fn log_local_conflicted(&self, local_pat: pat::Local, local: mir::Local) {
         let conflicted_local = self.matches[local_pat].matched.get().unwrap();
-        info!(
+        debug!(
             "local conflicted: {local_pat:?}: {ty_pat:?} !! {local:?} / {conflicted_local:?}: {ty:?}",
             ty_pat = self.cx.mir_pat.locals[local_pat],
             ty = self.cx.body.local_decls[conflicted_local].ty,
@@ -617,7 +635,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     }
     fn log_ty_var_conflicted(&self, ty_var: pat::TyVarIdx, ty: Ty<'tcx>) {
         let conflicted_ty = self.matches[ty_var].matched.get().unwrap();
-        info!("type variable conflicted, {ty_var:?}: {ty:?} !! {conflicted_ty:?}");
+        debug!("type variable conflicted, {ty_var:?}: {ty:?} !! {conflicted_ty:?}");
     }
     fn log_ty_var_matched(&self, ty_var: pat::TyVarIdx, ty: Ty<'tcx>) {
         debug!("type variable matched, {ty_var:?} <-> {ty:?}");
@@ -661,23 +679,23 @@ impl<'tcx> CheckingMatches<'tcx> {
         // || self.ty_vars.iter().any(TyVarMatches::has_empty_candidates)
     }
 
-    #[instrument(level = "debug", skip(self))]
+    #[instrument(level = "info", skip(self))]
     fn log_candidates(&self) {
-        debug!("pat block <-> mir candidate blocks"); // how to bold the text?
+        info!("pat block <-> mir candidate blocks");
         for (bb, block) in self.basic_blocks.iter_enumerated() {
-            debug!("{bb:?}: {:?}", block.candidates);
-            debug!("pat stmt <-> mir candidate statements");
+            info!("{bb:?}: {:?}", block.candidates);
+            info!("pat stmt <-> mir candidate statements");
             for (index, stmt) in block.statements.iter().enumerate() {
-                debug!("    {bb:?}[{index}]: {:?}", stmt.candidates);
+                info!("    {bb:?}[{index}]: {:?}", stmt.candidates);
             }
         }
-        debug!("pat local <-> mir candidate locals");
+        info!("pat local <-> mir candidate locals");
         for (local, matches) in self.locals.iter_enumerated() {
-            debug!("{local:?}: {:?}", matches.candidates);
+            info!("{local:?}: {:?}", matches.candidates);
         }
-        debug!("pat ty metavar <-> mir candidate types");
+        info!("pat ty metavar <-> mir candidate types");
         for (ty_var, matches) in self.ty_vars.iter_enumerated() {
-            debug!("{ty_var:?}: {:?}", matches.candidates);
+            info!("{ty_var:?}: {:?}", matches.candidates);
         }
     }
 
