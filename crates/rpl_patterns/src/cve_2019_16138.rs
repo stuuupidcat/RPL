@@ -123,7 +123,10 @@ fn pattern_set_len_uninitialized_inlined(pcx: PatCtxt<'_>) -> Pattern<'_> {
         fn $pattern (..) -> _ = mir! {
             // let vec: std::vec::Vec<$T> = std::vec::Vec::with_capacity(_);
             let raw_vec_inner: alloc::raw_vec::RawVecInner = alloc::raw_vec::RawVecInner::with_capacity_in(_, _, _);
-            let raw_vec: alloc::raw_vec::RawVec<$T> = alloc::raw_vec::RawVec::<$T> { inner: move raw_vec_inner, _marker: const std::marker::PhantomData::<$T> };
+            let raw_vec: alloc::raw_vec::RawVec<$T> = alloc::raw_vec::RawVec::<$T> {
+                inner: move raw_vec_inner,
+                _marker: const std::marker::PhantomData::<$T>
+            };
             #[export(vec)]
             let vec: std::vec::Vec<$T> = std::vec::Vec::<$T> { buf: move raw_vec, len: const 0_usize };
 

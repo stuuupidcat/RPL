@@ -292,7 +292,10 @@ fn pattern_uninitialized_slice_inlined(pcx: PatCtxt<'_>) -> PatternFromRawParts<
 
             // let vec: std::vec::Vec<$T> = std::vec::Vec::with_capacity(_);
             let raw_vec_inner: alloc::raw_vec::RawVecInner = alloc::raw_vec::RawVecInner::with_capacity_in(_, _, _);
-            let raw_vec: alloc::raw_vec::RawVec<$T> = alloc::raw_vec::RawVec::<$T> { inner: move raw_vec_inner, _marker: const std::marker::PhantomData::<$T> };
+            let raw_vec: alloc::raw_vec::RawVec<$T> = alloc::raw_vec::RawVec::<$T> {
+                inner: move raw_vec_inner,
+                _marker: const std::marker::PhantomData::<$T>
+            };
             #[export(vec)]
             let vec: std::vec::Vec<$T> = std::vec::Vec::<$T> { buf: move raw_vec, len: const 0_usize };
 
@@ -369,7 +372,10 @@ fn pattern_uninitialized_slice_mut_inlined(pcx: PatCtxt<'_>) -> PatternFromRawPa
 
             // let vec: std::vec::Vec<$T> = std::vec::Vec::with_capacity(_);
             let raw_vec_inner: alloc::raw_vec::RawVecInner = alloc::raw_vec::RawVecInner::with_capacity_in(_, _, _);
-            let raw_vec: alloc::raw_vec::RawVec<$T> = alloc::raw_vec::RawVec::<$T> { inner: move raw_vec_inner, _marker: const std::marker::PhantomData::<$T> };
+            let raw_vec: alloc::raw_vec::RawVec<$T> = alloc::raw_vec::RawVec::<$T> {
+                inner: move raw_vec_inner,
+                _marker: const std::marker::PhantomData::<$T>
+            };
             #[export(vec)]
             let vec: std::vec::Vec<$T> = std::vec::Vec::<$T> { buf: move raw_vec, len: const 0_usize };
 
