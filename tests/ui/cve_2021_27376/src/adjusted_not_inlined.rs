@@ -1,3 +1,4 @@
+//@compile-flags: -Z inline-mir=false
 extern crate libc;
 
 use libc::{sockaddr, sockaddr_storage, socklen_t};

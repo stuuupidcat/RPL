@@ -1,5 +1,4 @@
 //@ignore-on-host
-//@compile-flags: -Z inline-mir=false
 use std::slice;
 
 // #[rpl::dump_mir(dump_cfg, dump_ddg)]

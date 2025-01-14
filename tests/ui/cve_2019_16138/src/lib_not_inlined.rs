@@ -1,3 +1,4 @@
+//@compile-flags: -Z inline-mir=false
 extern crate scoped_threadpool;
 
 pub use hdr::decoder::HDRDecoder;
@@ -199,13 +200,10 @@ mod hdr {
                     // RGBE8Pixel doesn't implement Drop, so it's Ok to drop half-initialized ret
                     ret.set_len(pixel_count);
                     //~^ERROR: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
-                    //~|ERROR: Use `Vec::set_len` to extend the length of a `Vec`, potentially including uninitialized elements
                 } // ret contains uninitialized data, so now it's my responsibility to return fully initialized ret
 
                 {
                     let chunks_iter = ret.chunks_mut(uszwidth);
-                    //~^ERROR: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
-                    //FIXME: maybe too noisy
                     let mut pool = Pool::new(8); //
 
                     (pool.scoped(|scope| {
@@ -216,8 +214,6 @@ mod hdr {
                                 //~^ERROR: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
                             }
                             (read_scanline(&mut self.r, &mut buf[..]))?;
-                            //~^ERROR: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
-                            //FIXME: maybe too noisy
                             let f = &f;
                             scope.execute(move || {
                                 for (dst, &pix) in chunk.iter_mut().zip(buf.iter()) {

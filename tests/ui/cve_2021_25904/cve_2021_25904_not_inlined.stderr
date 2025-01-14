@@ -1,11 +1,11 @@
 error: it is unsound to trust pointers from passed-in iterators in a public safe function
-  --> tests/ui/cve_2021_25904/cve_2021_25904.rs:439:50
+  --> tests/ui/cve_2021_25904/cve_2021_25904_not_inlined.rs:441:50
    |
 LL |     pub fn copy_from_raw_parts<I, IU>(&mut self, mut src: I, mut src_linesize: IU)
    |                                                  ^^^^^^^
 ...
 LL |                 let rr = src.next().unwrap();
-   |                                     -------- pointer created here
+   |                          ------------------- pointer created here
 ...
 LL |                 let ss = unsafe { slice::from_raw_parts(rr, hb * s_linesize) };
    |                                   ------------------------------------------ used here to create a slice from the pointer

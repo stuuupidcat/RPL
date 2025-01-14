@@ -1,4 +1,6 @@
 //@compile-flags: -lncurses
+//@compile-flags: -Z inline-mir=false
+
 use std::mem;
 
 mod ll {

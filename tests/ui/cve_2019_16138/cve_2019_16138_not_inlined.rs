@@ -1,3 +1,5 @@
+//@compile-flags: -Z inline-mir=false
+
 // #[rpl::dump_mir(dump_cfg, dump_ddg)]
 fn foo() {
     let pixel_count = 1920 * 1080;
