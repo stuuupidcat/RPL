@@ -1,9 +1,7 @@
 //@ ignore-on-host
 
 use std::{ffi::CStr, ops::Deref};
-
-#[allow(non_camel_case_types)]
-type c_char = i8;
+use libc::c_char;
 
 pub trait DisposeRef {
     /// What a reference to this type represents as a C pointer.
