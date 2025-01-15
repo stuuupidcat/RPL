@@ -294,7 +294,7 @@ note: bb1: {
 LL |     if f2() {
    |        ^^^^ switchInt(move _6) -> [0: bb4, otherwise: bb2]; // scope[2]
 note: bb2: {
-          _7 = Gt(copy _3, const 0_i16); // scope[2]
+          _7 = Lt(const 0_i16, copy _3); // scope[2]
           switchInt(move _7) -> [0: bb4, otherwise: bb3]; // scope[2]
       }
   --> tests/ui/utils/dump_mir.rs:51:12
@@ -302,7 +302,7 @@ note: bb2: {
 LL |         if k > 0 {
    |            ^^^^^
    |            |
-   |            _7 = Gt(copy _3, const 0_i16); // scope[2]
+   |            _7 = Lt(const 0_i16, copy _3); // scope[2]
    |            switchInt(move _7) -> [0: bb4, otherwise: bb3]; // scope[2]
 note: bb3: {
           _0 = std::result::Result::<i16, ()>::Err(const ()); // scope[2]
