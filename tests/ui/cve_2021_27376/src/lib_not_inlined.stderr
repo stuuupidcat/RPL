@@ -1,0 +1,28 @@
+error: wrong assumption of layout compatibility from `std::net::SocketAddrV6` to `libc::sockaddr`
+  --> tests/ui/cve_2021_27376/src/lib_not_inlined.rs:25:17
+   |
+LL |                 addr as *const SocketAddrV6 as *const sockaddr,
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: it's not guaranteed by Rust standard library. See https://github.com/rust-lang/rust/pull/78802
+note: casted from this
+  --> tests/ui/cve_2021_27376/src/lib_not_inlined.rs:25:17
+   |
+LL |                 addr as *const SocketAddrV6 as *const sockaddr,
+   |                 ^^^^
+
+error: wrong assumption of layout compatibility from `std::net::SocketAddrV4` to `libc::sockaddr`
+  --> tests/ui/cve_2021_27376/src/lib_not_inlined.rs:20:17
+   |
+LL |                 addr as *const SocketAddrV4 as *const sockaddr,
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: it's not guaranteed by Rust standard library. See https://github.com/rust-lang/rust/pull/78802
+note: casted from this
+  --> tests/ui/cve_2021_27376/src/lib_not_inlined.rs:20:17
+   |
+LL |                 addr as *const SocketAddrV4 as *const sockaddr,
+   |                 ^^^^
+
+error: aborting due to 2 previous errors
+

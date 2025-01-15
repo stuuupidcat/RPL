@@ -17,6 +17,11 @@
                 "no-codegen",
                 "--crate-type",
                 "lib",
+                // You can also use the following line to specify the path to the rlib file.
+                // But I'm not sure how to get the path to the rlib file,
+                // as it uses a hash in the file name.
+                // "--extern",
+                // "libc=${workspaceFolder}/target/debug/deps/liblibc-f5b3b8a882fe8188.rlib",
                 "tests/ui/cve_2020_35888_simplified/cve_2020_35888_simplified.rs"
             ],
             "env": {

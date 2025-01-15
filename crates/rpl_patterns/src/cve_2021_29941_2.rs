@@ -64,7 +64,45 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     .emit_err(crate::errors::TrustExactSizeIterator { len, set_len });
             }
             #[allow(irrefutable_let_patterns)]
+            if let pattern = pattern_trust_len_inlined(self.pcx)
+                && let Some(matches) =
+                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
+                && let Some(matches) = matches.first()
+                && let Some(len) = matches[pattern.len]
+                && let len = len.span_no_inline(body)
+                && let Some(set_len) = matches[pattern.set_len]
+                && let set_len = set_len.span_no_inline(body)
+            {
+                debug!(?len, ?set_len);
+                self.tcx
+                    .dcx()
+                    .emit_err(crate::errors::TrustExactSizeIterator { len, set_len });
+            }
+            #[allow(irrefutable_let_patterns)]
             if let pattern = pattern_uninitialized_slice(self.pcx)
+                && let Some(matches) =
+                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
+                && let Some(matches) = matches.first()
+                && let Some(len) = matches[pattern.len]
+                && let len = len.span_no_inline(body)
+                && let Some(ptr) = matches[pattern.ptr]
+                && let ptr = ptr.span_no_inline(body)
+                && let Some(vec) = matches[pattern.vec]
+                && let vec = vec.span_no_inline(body)
+                && let Some(slice) = matches[pattern.slice]
+                && let slice = slice.span_no_inline(body)
+            {
+                debug!(?len, ?ptr, ?vec, ?slice);
+                self.tcx.dcx().emit_err(crate::errors::SliceFromRawPartsUninitialized {
+                    len,
+                    ptr,
+                    vec,
+                    slice,
+                    fn_name: "std::slice::from_raw_parts",
+                });
+            }
+            #[allow(irrefutable_let_patterns)]
+            if let pattern = pattern_uninitialized_slice_inlined(self.pcx)
                 && let Some(matches) =
                     CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
                 && let Some(matches) = matches.first()
@@ -109,6 +147,29 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     fn_name: "std::slice::from_raw_parts_mut",
                 });
             }
+            #[allow(irrefutable_let_patterns)]
+            if let pattern = pattern_uninitialized_slice_mut_inlined(self.pcx)
+                && let Some(matches) =
+                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
+                && let Some(matches) = matches.first()
+                && let Some(len) = matches[pattern.len]
+                && let len = len.span_no_inline(body)
+                && let Some(ptr) = matches[pattern.ptr]
+                && let ptr = ptr.span_no_inline(body)
+                && let Some(vec) = matches[pattern.vec]
+                && let vec = vec.span_no_inline(body)
+                && let Some(slice) = matches[pattern.slice]
+                && let slice = slice.span_no_inline(body)
+            {
+                debug!(?len, ?ptr, ?vec, ?slice);
+                self.tcx.dcx().emit_err(crate::errors::SliceFromRawPartsUninitialized {
+                    len,
+                    ptr,
+                    vec,
+                    slice,
+                    fn_name: "std::slice::from_raw_parts_mut",
+                });
+            }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
     }
@@ -128,15 +189,42 @@ fn pattern_trust_len(pcx: PatCtxt<'_>) -> PatternTrustLen<'_> {
     let pattern = rpl! {
         #[meta($T:ty, $I:ty)]
         fn $pattern (..) -> _ = mir! {
-            // let len: usize = <$I as std::iter::ExactSizeIterator>::len(iter);
             let iter: $I = _;
             #[export(len)]
             let len: usize = std::iter::ExactSizeIterator::len(move iter);
-            // let len: usize = std::iter::ExactSizeIterator::len(_);
-            // let len: usize = _;
             let vec: &mut alloc::vec::Vec<$T> = _;
             #[export(set_len)]
             let set_len: () = alloc::vec::Vec::set_len(move vec, copy len);
+        }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
+
+    PatternTrustLen {
+        pattern,
+        fn_pat,
+        len,
+        set_len,
+    }
+}
+
+#[rpl_macros::pattern_def]
+fn pattern_trust_len_inlined(pcx: PatCtxt<'_>) -> PatternTrustLen<'_> {
+    let len;
+    let set_len;
+    let pattern = rpl! {
+        #[meta($T:ty, $I:ty)]
+        fn $pattern (..) -> _ = mir! {
+            let iter: $I = _;
+
+            #[export(len)]
+            let len: usize = std::iter::ExactSizeIterator::len(move iter);
+
+            let vec: &mut alloc::vec::Vec<$T> = _;
+
+            // #[export(set_len)]
+            // let set_len: () = alloc::vec::Vec::set_len(move vec, copy len);
+            #[export(set_len)]
+            ((*vec).len) = copy len;
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
@@ -191,6 +279,54 @@ fn pattern_uninitialized_slice(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
 }
 
 #[rpl_macros::pattern_def]
+fn pattern_uninitialized_slice_inlined(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
+    let ptr;
+    let len;
+    let vec;
+    let slice;
+    let pattern = rpl! {
+        #[meta($T:ty)]
+        fn $pattern (..) -> _ = mir! {
+            #[export(len)]
+            let len: usize = _;
+
+            // let vec: std::vec::Vec<$T> = std::vec::Vec::with_capacity(_);
+            let raw_vec_inner: alloc::raw_vec::RawVecInner = alloc::raw_vec::RawVecInner::with_capacity_in(_, _, _);
+            let raw_vec: alloc::raw_vec::RawVec<$T> = alloc::raw_vec::RawVec::<$T> {
+                inner: move raw_vec_inner,
+                _marker: const std::marker::PhantomData::<$T>
+            };
+            #[export(vec)]
+            let vec: std::vec::Vec<$T> = std::vec::Vec::<$T> { buf: move raw_vec, len: const 0_usize };
+
+            let vec_ref: &alloc::vec::Vec<$T> = &vec;
+
+            // #[export(ptr)]
+            // let ptr: *const $T = alloc::vec::Vec::as_ptr(move vec_ref);
+            let vec_inner_non_null: alloc::raw_vec::RawVecInner = copy (*vec_ref).buf.inner.ptr;
+            let vec_inner_ptr: *const u8 = copy vec_inner_non_null.ptr;
+            #[export(ptr)]
+            let ptr: *const $T = copy vec_inner_ptr as *const $T (PtrToPtr); //FIXME: Maybe duplicate if `$T` is `u8`
+
+            // let slice: &[$T] = std::slice::from_raw_parts::<'_, $T>(move ptr, copy len);
+            let slice_ptr: *const [$T] = *const [$T] from (copy ptr, copy len);
+            #[export(slice)]
+            let slice: &[$T] = &*slice_ptr;
+        }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
+
+    PatternFromRawParts {
+        pattern,
+        fn_pat,
+        ptr,
+        len,
+        vec,
+        slice,
+    }
+}
+
+#[rpl_macros::pattern_def]
 fn pattern_uninitialized_slice_mut(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
     let ptr;
     let len;
@@ -207,7 +343,56 @@ fn pattern_uninitialized_slice_mut(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> 
             #[export(ptr)]
             let ptr: *mut $T = alloc::vec::Vec::as_mut_ptr(move vec_ref);
             #[export(slice)]
-            let slice: &mut [$T] = std::slice::from_raw_parts_mut::<'_, $T>(move ptr, copy len);
+            let slice: &mut [$T] = std::slice::from_raw_parts_mut::<'_, $T>(move ptr, move len);
+        }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
+
+    PatternFromRawParts {
+        pattern,
+        fn_pat,
+        ptr,
+        len,
+        vec,
+        slice,
+    }
+}
+
+#[rpl_macros::pattern_def]
+fn pattern_uninitialized_slice_mut_inlined(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
+    let ptr;
+    let len;
+    let vec;
+    let slice;
+    let pattern = rpl! {
+        #[meta($T:ty)]
+        fn $pattern (..) -> _ = mir! {
+            #[export(len)]
+            let len: usize = _;
+
+            // let vec: std::vec::Vec<$T> = std::vec::Vec::with_capacity(_);
+            let raw_vec_inner: alloc::raw_vec::RawVecInner = alloc::raw_vec::RawVecInner::with_capacity_in(_, _, _);
+            let raw_vec: alloc::raw_vec::RawVec<$T> = alloc::raw_vec::RawVec::<$T> {
+                inner: move raw_vec_inner,
+                _marker: const std::marker::PhantomData::<$T>
+            };
+            #[export(vec)]
+            let vec: std::vec::Vec<$T> = std::vec::Vec::<$T> { buf: move raw_vec, len: const 0_usize };
+
+            let vec_ref: &mut alloc::vec::Vec<$T> = &mut vec;
+
+            // #[export(ptr)]
+            // let ptr: *mut $T = alloc::vec::Vec::as_ptr(move vec_ref);
+            let vec_inner_non_null: std::ptr::NonNull<u8> = copy (*vec_ref).buf.inner.ptr.pointer;
+            let vec_inner_ptr: *const u8 = copy vec_inner_non_null.pointer;
+            #[export(ptr)]
+            let ptr: *mut $T = copy vec_inner_ptr as *mut $T (PtrToPtr);
+
+            // #[export(slice)]
+            // let slice: &mut [$T] = std::slice::from_raw_parts_mut::<'_, $T>(move ptr, copy len);
+            let slice_ptr: *mut [$T] = *mut [$T] from (copy ptr, copy len);
+            #[export(slice)]
+            let slice: &mut [$T] = &mut *slice_ptr;
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

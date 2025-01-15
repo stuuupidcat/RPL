@@ -258,6 +258,7 @@ pub enum Rvalue<'pcx> {
     CopyForDeref(Place<'pcx>),
 }
 
+//FIXME: Add a new variant for `Copy` or `Move` a value that is a `Copy` type.
 #[derive(Clone)]
 pub enum Operand<'pcx> {
     Any,

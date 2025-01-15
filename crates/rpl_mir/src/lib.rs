@@ -254,8 +254,10 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
 }
 
 impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
+    #[instrument(level = "trace", skip(self), ret)]
     pub fn match_local(&self, pat: pat::Local, local: mir::Local) -> bool {
         let mut locals = self.locals[pat].borrow_mut();
+        trace!(?locals, ?pat, ?local, "match_local");
         if locals.contains(local) {
             return true;
         }
@@ -268,6 +270,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         }
         matched
     }
+    #[instrument(level = "trace", skip(self), ret)]
     pub fn match_place(&self, pat: pat::Place<'pcx>, place: mir::Place<'tcx>) -> bool {
         self.match_place_ref(pat, place.as_ref())
     }
@@ -305,6 +308,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         )
     }
 
+    #[instrument(level = "trace", skip(self), ret)]
     fn match_place_ref(&self, pat: pat::Place<'pcx>, place: mir::PlaceRef<'tcx>) -> bool {
         if !self.match_local(pat.local, place.local) {
             return false;
@@ -526,13 +530,22 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         });
     }
 
+    #[instrument(level = "trace", skip(self), ret)]
     pub fn match_statement_or_terminator(&self, pat: pat::Location, loc: mir::Location) -> bool {
         let block_pat = &self.mir_pat[pat.block];
         let block = &self.body[loc.block];
-        match (
+        let (is_terminator_pat, is_terminator) = (
             pat.statement_index < block_pat.statements.len(),
             loc.statement_index < block.statements.len(),
-        ) {
+        );
+        trace!(
+            ?pat,
+            ?loc,
+            is_terminator_pat,
+            is_terminator,
+            "match_statement_or_terminator",
+        );
+        match (is_terminator_pat, is_terminator) {
             (true, true) => self.match_statement(
                 pat,
                 loc,
@@ -550,6 +563,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         }
     }
 
+    #[instrument(level = "trace", skip(self), ret)]
     pub fn match_statement(
         &self,
         loc_pat: pat::Location,
@@ -605,6 +619,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         matched
     }
 
+    #[instrument(level = "trace", skip(self), ret)]
     pub fn match_terminator(
         &self,
         loc_pat: pat::Location,
@@ -702,6 +717,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             && pat.otherwise.is_none_or(|_| targets.otherwise.is_some())
     }
 
+    #[instrument(level = "trace", skip(self), ret)]
     fn match_rvalue(&self, pat: &pat::Rvalue<'pcx>, rvalue: &mir::Rvalue<'tcx>) -> bool {
         let matched = match (pat, rvalue) {
             // Special case of `Len(*p)` <=> `PtrMetadata(p)`
@@ -815,6 +831,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         matched
     }
 
+    #[instrument(level = "trace", skip(self), ret)]
     fn match_operand(&self, pat: &pat::Operand<'pcx>, operand: &mir::Operand<'tcx>) -> bool {
         let matched = match (pat, operand) {
             (&pat::Operand::Copy(place_pat), &mir::Operand::Copy(place))
@@ -851,6 +868,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         MatchFnCtxt::new(self.ty.tcx, self.ty.pcx, self.ty.pat, fn_pat).match_fn(fn_did)
     }
 
+    #[instrument(level = "trace", skip(self), ret)]
     fn match_spanned_operands(
         &self,
         pat: &[pat::Operand<'pcx>],

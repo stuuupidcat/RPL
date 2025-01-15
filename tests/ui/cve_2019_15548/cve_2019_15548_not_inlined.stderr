@@ -1,19 +1,19 @@
 error: it is usually a bug to cast a `&str` to a `*const libc::c_char`, and then pass it to an extern function
-  --> tests/ui/cve_2019_15548/cve_2019_15548.rs:16:19
+  --> tests/ui/cve_2019_15548/cve_2019_15548_not_inlined.rs:18:19
    |
 LL |         let buf = s.as_bytes().as_ptr();
    |                   ^ the string is here
    |
    = help: try `std::ffi::CStr` instead
 note: the `*const libc::c_char` is created here
-  --> tests/ui/cve_2019_15548/cve_2019_15548.rs:18:29
+  --> tests/ui/cve_2019_15548/cve_2019_15548_not_inlined.rs:20:29
    |
 LL |         let ret = ll::instr(mem::transmute(buf));
    |                             ^^^^^^^^^^^^^^^^^^^
    = note: `#[deny(rust_string_pointer_as_c_string_pointer)]` on by default
 
 error: it is usually a bug to pass a buffer pointer to an extern function without specifying its length
-  --> tests/ui/cve_2019_15548/cve_2019_15548.rs:18:29
+  --> tests/ui/cve_2019_15548/cve_2019_15548_not_inlined.rs:20:29
    |
 LL |         let ret = ll::instr(mem::transmute(buf));
    |                             ^^^^^^^^^^^^^^^^^^^ the pointer is passed here

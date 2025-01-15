@@ -62,7 +62,7 @@ pub enum PatItemKind {
 }
 
 impl PatItemKind {
-    #[instrument(level = "debug", ret)]
+    #[instrument(level = "trace", ret)]
     fn match_resolve(&self, res: &Res) -> bool {
         match self {
             Self::Mod => matches!(res, Res::Def(DefKind::Mod, _)),
@@ -198,7 +198,7 @@ pub fn def_path_res(tcx: TyCtxt<'_>, path: &[Symbol], kind: PatItemKind) -> Vec<
 ///
 /// This is lighter than [`def_path_res`], and should be called with [`find_crates`] looking up
 /// items from the same crate repeatedly, although should still be used sparingly.
-#[instrument(level = "debug", skip(tcx), ret)]
+// #[instrument(level = "trace", skip(tcx), ret)]
 pub fn def_path_res_with_base(tcx: TyCtxt<'_>, mut base: Vec<Res>, mut path: &[Symbol], kind: PatItemKind) -> Vec<Res> {
     while let [segment, rest @ ..] = path {
         path = rest;
@@ -239,7 +239,7 @@ pub fn def_path_res_with_base(tcx: TyCtxt<'_>, mut base: Vec<Res>, mut path: &[S
     base.into_iter().filter(|res| kind.match_resolve(res)).collect()
 }
 
-#[instrument(level = "trace", skip(tcx), ret)]
+// #[instrument(level = "trace", skip(tcx), ret)]
 fn non_local_item_children_by_name(tcx: TyCtxt<'_>, def_id: DefId, name: Symbol) -> Vec<Res> {
     match tcx.def_kind(def_id) {
         DefKind::Mod | DefKind::Enum | DefKind::Trait => tcx
@@ -259,7 +259,7 @@ fn non_local_item_children_by_name(tcx: TyCtxt<'_>, def_id: DefId, name: Symbol)
     }
 }
 
-#[instrument(level = "trace", skip(tcx), ret)]
+// #[instrument(level = "trace", skip(tcx), ret)]
 fn local_item_children_by_name(tcx: TyCtxt<'_>, local_id: LocalDefId, name: Symbol) -> Vec<Res> {
     let hir = tcx.hir();
 
@@ -312,7 +312,7 @@ fn local_item_children_by_name(tcx: TyCtxt<'_>, local_id: LocalDefId, name: Symb
     }
 }
 
-#[instrument(level = "debug", skip(tcx), ret)]
+// #[instrument(level = "trace", skip(tcx), ret)]
 fn item_children_by_name(tcx: TyCtxt<'_>, def_id: DefId, name: Symbol) -> Vec<Res> {
     if let Some(local_id) = def_id.as_local() {
         local_item_children_by_name(tcx, local_id, name)

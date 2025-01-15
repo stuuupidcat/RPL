@@ -56,6 +56,8 @@ where
         for i in 0..size {
             unsafe {
                 (*(ptr.wrapping_offset(i as isize))) = template.clone();
+                //~^ ERROR: Possibly dropping an uninitialized value
+                //FIXME: check if this is a false positive
             }
         }
         Self { size, ptr }
@@ -65,7 +67,7 @@ where
 impl<T> Index<usize> for Array<T> {
     type Output = T;
 
-    #[rpl::dump_mir(dump_cfg, dump_ddg)]
+    // #[rpl::dump_mir(dump_cfg, dump_ddg)]
     fn index<'a>(&'a self, idx: usize) -> &'a Self::Output {
         unsafe { self.ptr.wrapping_offset(idx as isize).as_ref() }.unwrap()
     }

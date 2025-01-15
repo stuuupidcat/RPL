@@ -6,6 +6,8 @@ on:
     paths-ignore:
       - 'docs/**'
       - 'README.md'
+      - 'CONTRIBUTING.md'
+      - '.vscode/**'
   pull_request:
     branches: [ master ]
     paths-ignore:

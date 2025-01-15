@@ -163,6 +163,13 @@ fn test_rvalue() {
 }
 
 #[test]
+fn test_aggregate_adt_struct() {
+    pass!(
+        AggregateAdtStruct!(alloc::raw_vec::RawVec { inner: move raw_vec_inner, _marker: const std::marker::PhantomData::<$T> })
+    );
+}
+
+#[test]
 fn test_call() {
     pass!(Call!( std::mem::take(move y) ));
     pass!(RvalueOrCall!( std::mem::take(move y) ));

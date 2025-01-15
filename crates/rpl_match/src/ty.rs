@@ -192,6 +192,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
         false
     }
 
+    #[instrument(level = "trace", skip(self), ret)]
     pub fn match_region(&self, pat: pat::RegionKind, region: ty::Region<'tcx>) -> bool {
         matches!(
             (pat, region.kind()),
