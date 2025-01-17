@@ -47,17 +47,13 @@ pub mod extend {
         ) -> Self::Result {
             if self.tcx.visibility(def_id).is_public() && self.tcx.is_mir_available(def_id) {
                 let body = self.tcx.optimized_mir(def_id);
-                #[allow(irrefutable_let_patterns)]
-                if let pattern = pattern_vec_set_len_to_extend(self.pcx)
-                    && let Some(matches) =
-                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                    && let Some(matches) = matches.first()
-                    && let Some(set_len_use) = matches[pattern.set_len_use]
-                    && let span1 = set_len_use.span_no_inline(body)
-                {
+                let pattern = pattern_vec_set_len_to_extend(self.pcx);
+                for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                    let set_len = matches[pattern.set_len_use].span_no_inline(body);
+                    let vec = matches[pattern.vec].span_no_inline(body);
                     self.tcx
                         .dcx()
-                        .emit_err(crate::errors::VecSetLenToExtend { span: span1 });
+                        .emit_err(crate::errors::VecSetLenToExtend { set_len, vec });
                 }
             }
         }
@@ -66,11 +62,13 @@ pub mod extend {
     struct VecSetLenToExtend<'pcx> {
         pattern: &'pcx pat::Pattern<'pcx>,
         fn_pat: &'pcx pat::Fn<'pcx>,
+        vec: pat::Location,
         set_len_use: pat::Location,
     }
 
     #[rpl_macros::pattern_def]
     fn pattern_vec_set_len_to_extend(pcx: PatCtxt<'_>) -> VecSetLenToExtend<'_> {
+        let vec;
         let set_len_use;
         let pattern = rpl! {
             #[meta($T:ty)]
@@ -88,6 +86,7 @@ pub mod extend {
                 let vec_mut_ref: VecTMutRef; // _10;
 
                 new_len = _;
+                #[export(vec)]
                 vec = _;
                 // _5 = &_1;
                 // vec_ref = &vec;
@@ -137,6 +136,7 @@ pub mod extend {
         VecSetLenToExtend {
             pattern,
             fn_pat,
+            vec,
             set_len_use,
         }
     }
@@ -191,17 +191,10 @@ pub mod truncate {
         ) -> Self::Result {
             if self.tcx.visibility(def_id).is_public() && self.tcx.is_mir_available(def_id) {
                 let body = self.tcx.optimized_mir(def_id);
-                #[allow(irrefutable_let_patterns)]
-                if let pattern = pattern_vec_set_len_to_extend(self.pcx)
-                    && let Some(matches) =
-                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                    && let Some(matches) = matches.first()
-                    && let Some(set_len_use) = matches[pattern.set_len_use]
-                    && let span1 = set_len_use.span_no_inline(body)
-                {
-                    self.tcx
-                        .dcx()
-                        .emit_err(crate::errors::VecSetLenToTruncate { span: span1 });
+                let pattern = pattern_vec_set_len_to_extend(self.pcx);
+                for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                    let span = matches[pattern.set_len_use].span_no_inline(body);
+                    self.tcx.dcx().emit_err(crate::errors::VecSetLenToTruncate { span });
                 }
             }
         }

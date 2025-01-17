@@ -12,8 +12,8 @@ LL |         vec.set_len(len);
 error: it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
   --> tests/ui/cve_2021_29941_2/cve_2021_29941_2_not_inlined.rs:14:9
    |
-LL |     let arr: &mut [u32] = unsafe { std::slice::from_raw_parts_mut(vec.as_mut_ptr(), bla.len()) };
-   |                                                                                     --------- `std::iter::ExactSizeIterator::len` used here
+LL |     let len = bla.len();
+   |               --------- `std::iter::ExactSizeIterator::len` used here
 ...
 LL |         vec.set_len(len);
    |         ^^^^^^^^^^^^^^^^

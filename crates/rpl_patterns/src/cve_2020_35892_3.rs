@@ -1,5 +1,5 @@
 use rpl_context::PatCtxt;
-use rpl_mir::{pat, CheckMirCtxt, Matches};
+use rpl_mir::{pat, CheckMirCtxt};
 use rustc_errors::MultiSpan;
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
@@ -19,13 +19,11 @@ pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
 struct CheckFnCtxt<'pcx, 'tcx> {
     tcx: TyCtxt<'tcx>,
     pcx: PatCtxt<'pcx>,
-    loop_matches: Option<Matches<'tcx>>,
 }
 
 impl<'pcx, 'tcx> CheckFnCtxt<'pcx, 'tcx> {
     fn new(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>) -> Self {
-        let loop_matches = None;
-        Self { tcx, pcx, loop_matches }
+        Self { tcx, pcx }
     }
 }
 
@@ -56,14 +54,9 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         if self.tcx.is_mir_available(def_id) {
             let body = self.tcx.optimized_mir(def_id);
 
-            #[allow(irrefutable_let_patterns)]
-            if let (pattern, fn_pat) = pattern_loop(self.pcx)
-                && let mir_pat = fn_pat.expect_mir_body()
-                && let Some(mut matches) = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern, fn_pat).check()
-                && !matches.is_empty()
-                && let matches = matches.remove(0)
-            {
-                let matches = self.loop_matches.insert(matches);
+            let (pattern, fn_pat) = pattern_loop(self.pcx);
+            let mir_pat = fn_pat.expect_mir_body();
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern, fn_pat).check() {
                 let mut multi_span = MultiSpan::from_span(span);
                 matches
                     .basic_blocks
@@ -74,7 +67,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                             .iter()
                             .copied()
                             .enumerate()
-                            .filter_map(move |(index, stmt)| Some((bb, index, stmt?)))
+                            .map(move |(index, stmt)| (bb, index, stmt))
                     })
                     .for_each(|(bb, index, stmt)| {
                         let span = stmt.span_no_inline(body);
@@ -87,23 +80,12 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 #[expect(rustc::untranslatable_diagnostic)]
                 #[expect(rustc::diagnostic_outside_of_impl)]
                 self.tcx.dcx().span_note(multi_span, "MIR pattern matched");
-            } else if let pattern_offset_by_len = pattern_offset_by_len(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(
-                    self.tcx,
-                    self.pcx,
-                    body,
-                    pattern_offset_by_len.pattern,
-                    pattern_offset_by_len.fn_pat,
-                )
-                .check()
-                && let Some(matches) = matches.first()
-                && let Some(read) = matches[pattern_offset_by_len.read]
-                && let read = read.span_no_inline(body)
-                && let Some(ptr) = matches[pattern_offset_by_len.ptr]
-                && let ptr = ptr.span_no_inline(body)
-                && let Some(len) = matches[pattern_offset_by_len.len]
-                && let len = len.span_no_inline(body)
-            {
+            }
+            let pattern = pattern_offset_by_len(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let read = matches[pattern.read].span_no_inline(body);
+                let ptr = matches[pattern.ptr].span_no_inline(body);
+                let len = matches[pattern.len].span_no_inline(body);
                 debug!(?ptr, ?read, ?len);
                 let len_local = self
                     .tcx
@@ -118,7 +100,6 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     len_local,
                 });
             }
-            _ = pattern_loop(self.pcx);
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
     }

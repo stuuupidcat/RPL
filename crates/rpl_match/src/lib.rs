@@ -58,8 +58,8 @@ impl<T: Copy + PartialEq> CountedMatch<T> {
     pub fn unmatch(&self) {
         self.0.update(|m| m.and_then(Counted::dec));
     }
-    pub fn try_take(self) -> Option<T> {
-        self.0.take().map(Counted::into_inner)
+    pub fn try_take(&self) -> Option<T> {
+        self.0.get().map(Counted::into_inner)
     }
 }
 

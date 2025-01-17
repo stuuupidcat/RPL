@@ -48,50 +48,32 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     ) -> Self::Result {
         if self.tcx.is_mir_available(def_id) {
             let body = self.tcx.optimized_mir(def_id);
-            #[allow(irrefutable_let_patterns)]
-            if let pattern = pattern_trust_len(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(len) = matches[pattern.len]
-                && let len = len.span_no_inline(body)
-                && let Some(set_len) = matches[pattern.set_len]
-                && let set_len = set_len.span_no_inline(body)
-            {
+            let pattern = pattern_trust_len(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let len = matches[pattern.len].span_no_inline(body);
+                let set_len = matches[pattern.set_len].span_no_inline(body);
+
                 debug!(?len, ?set_len);
                 self.tcx
                     .dcx()
                     .emit_err(crate::errors::TrustExactSizeIterator { len, set_len });
             }
-            #[allow(irrefutable_let_patterns)]
-            if let pattern = pattern_trust_len_inlined(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(len) = matches[pattern.len]
-                && let len = len.span_no_inline(body)
-                && let Some(set_len) = matches[pattern.set_len]
-                && let set_len = set_len.span_no_inline(body)
-            {
+            let pattern = pattern_trust_len_inlined(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let len = matches[pattern.len].span_no_inline(body);
+                let set_len = matches[pattern.set_len].span_no_inline(body);
                 debug!(?len, ?set_len);
                 self.tcx
                     .dcx()
                     .emit_err(crate::errors::TrustExactSizeIterator { len, set_len });
             }
-            #[allow(irrefutable_let_patterns)]
-            if let pattern = pattern_uninitialized_slice(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(len) = matches[pattern.len]
-                && let len = len.span_no_inline(body)
-                && let Some(ptr) = matches[pattern.ptr]
-                && let ptr = ptr.span_no_inline(body)
-                && let Some(vec) = matches[pattern.vec]
-                && let vec = vec.span_no_inline(body)
-                && let Some(slice) = matches[pattern.slice]
-                && let slice = slice.span_no_inline(body)
-            {
+            let pattern = pattern_uninitialized_slice(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let len = matches[pattern.len].span_no_inline(body);
+                let ptr = matches[pattern.ptr].span_no_inline(body);
+                let vec = matches[pattern.vec].span_no_inline(body);
+                let slice = matches[pattern.slice].span_no_inline(body);
+
                 debug!(?len, ?ptr, ?vec, ?slice);
                 self.tcx.dcx().emit_err(crate::errors::SliceFromRawPartsUninitialized {
                     len,
@@ -101,20 +83,13 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     fn_name: "std::slice::from_raw_parts",
                 });
             }
-            #[allow(irrefutable_let_patterns)]
-            if let pattern = pattern_uninitialized_slice_inlined(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(len) = matches[pattern.len]
-                && let len = len.span_no_inline(body)
-                && let Some(ptr) = matches[pattern.ptr]
-                && let ptr = ptr.span_no_inline(body)
-                && let Some(vec) = matches[pattern.vec]
-                && let vec = vec.span_no_inline(body)
-                && let Some(slice) = matches[pattern.slice]
-                && let slice = slice.span_no_inline(body)
-            {
+            let pattern = pattern_uninitialized_slice_inlined(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let len = matches[pattern.len].span_no_inline(body);
+                let ptr = matches[pattern.ptr].span_no_inline(body);
+                let vec = matches[pattern.vec].span_no_inline(body);
+                let slice = matches[pattern.slice].span_no_inline(body);
+
                 debug!(?len, ?ptr, ?vec, ?slice);
                 self.tcx.dcx().emit_err(crate::errors::SliceFromRawPartsUninitialized {
                     len,
@@ -124,20 +99,13 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     fn_name: "std::slice::from_raw_parts",
                 });
             }
-            #[allow(irrefutable_let_patterns)]
-            if let pattern = pattern_uninitialized_slice_mut(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(len) = matches[pattern.len]
-                && let len = len.span_no_inline(body)
-                && let Some(ptr) = matches[pattern.ptr]
-                && let ptr = ptr.span_no_inline(body)
-                && let Some(vec) = matches[pattern.vec]
-                && let vec = vec.span_no_inline(body)
-                && let Some(slice) = matches[pattern.slice]
-                && let slice = slice.span_no_inline(body)
-            {
+            let pattern = pattern_uninitialized_slice_mut(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let len = matches[pattern.len].span_no_inline(body);
+                let ptr = matches[pattern.ptr].span_no_inline(body);
+                let vec = matches[pattern.vec].span_no_inline(body);
+                let slice = matches[pattern.slice].span_no_inline(body);
+
                 debug!(?len, ?ptr, ?vec, ?slice);
                 self.tcx.dcx().emit_err(crate::errors::SliceFromRawPartsUninitialized {
                     len,
@@ -147,20 +115,12 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     fn_name: "std::slice::from_raw_parts_mut",
                 });
             }
-            #[allow(irrefutable_let_patterns)]
-            if let pattern = pattern_uninitialized_slice_mut_inlined(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(len) = matches[pattern.len]
-                && let len = len.span_no_inline(body)
-                && let Some(ptr) = matches[pattern.ptr]
-                && let ptr = ptr.span_no_inline(body)
-                && let Some(vec) = matches[pattern.vec]
-                && let vec = vec.span_no_inline(body)
-                && let Some(slice) = matches[pattern.slice]
-                && let slice = slice.span_no_inline(body)
-            {
+            let pattern = pattern_uninitialized_slice_mut_inlined(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let len = matches[pattern.len].span_no_inline(body);
+                let ptr = matches[pattern.ptr].span_no_inline(body);
+                let vec = matches[pattern.vec].span_no_inline(body);
+                let slice = matches[pattern.slice].span_no_inline(body);
                 debug!(?len, ?ptr, ?vec, ?slice);
                 self.tcx.dcx().emit_err(crate::errors::SliceFromRawPartsUninitialized {
                     len,
@@ -335,13 +295,18 @@ fn pattern_uninitialized_slice_mut(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> 
     let pattern = rpl! {
         #[meta($T:ty)]
         fn $pattern (..) -> _ = mir! {
-            #[export(len)]
-            let len: usize = _;
+            // #[export(len)]
+            // let len: usize = _;
             #[export(vec)]
             let vec: alloc::vec::Vec<$T> = alloc::vec::Vec::with_capacity(_);
             let vec_ref: &mut alloc::vec::Vec<$T> = &mut vec;
             #[export(ptr)]
             let ptr: *mut $T = alloc::vec::Vec::as_mut_ptr(move vec_ref);
+            // FIXME: if this statement is put in the beginning, it may fail to match the cdoe where
+            // `Vec::with_capacity` is called in advance of `ExactSizeIterator::len`.
+            // See `rpl_mir::matches::match_block_ends_with` for more details.
+            #[export(len)]
+            let len: usize = _;
             #[export(slice)]
             let slice: &mut [$T] = std::slice::from_raw_parts_mut::<'_, $T>(move ptr, move len);
         }
@@ -367,8 +332,8 @@ fn pattern_uninitialized_slice_mut_inlined(pcx: PatCtxt<'_>) -> PatternFromRawPa
     let pattern = rpl! {
         #[meta($T:ty)]
         fn $pattern (..) -> _ = mir! {
-            #[export(len)]
-            let len: usize = _;
+            // #[export(len)]
+            // let len: usize = _;
 
             // let vec: std::vec::Vec<$T> = std::vec::Vec::with_capacity(_);
             let raw_vec_inner: alloc::raw_vec::RawVecInner = alloc::raw_vec::RawVecInner::with_capacity_in(_, _, _);
@@ -390,6 +355,13 @@ fn pattern_uninitialized_slice_mut_inlined(pcx: PatCtxt<'_>) -> PatternFromRawPa
 
             // #[export(slice)]
             // let slice: &mut [$T] = std::slice::from_raw_parts_mut::<'_, $T>(move ptr, copy len);
+
+            // FIXME: if this statement is put in the beginning, it may fail to match the cdoe where
+            // `Vec::with_capacity` is called in advance of `ExactSizeIterator::len`.
+            // See `rpl_mir::matches::match_block_ends_with` for more details.
+            #[export(len)]
+            let len: usize = _;
+
             let slice_ptr: *mut [$T] = *mut [$T] from (copy ptr, copy len);
             #[export(slice)]
             let slice: &mut [$T] = &mut *slice_ptr;

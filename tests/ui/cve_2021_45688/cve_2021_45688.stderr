@@ -1,14 +1,13 @@
 error: Use `Vec::set_len` to extend the length of a `Vec`, potentially including uninitialized elements
   --> tests/ui/cve_2021_45688/cve_2021_45688.rs:23:16
    |
+LL |     let mut result = Vec::<u32>::with_capacity(words);
+   |                      -------------------------------- `Vec` created here
+...
 LL |         result.set_len(words);
    |                ^^^^^^^^^^^^^^
    |
-note: make sure all elements are initialized before using them
-  --> tests/ui/cve_2021_45688/cve_2021_45688.rs:23:16
-   |
-LL |         result.set_len(words);
-   |                ^^^^^^^^^^^^^^
+   = note: make sure all elements are initialized before using them
 
 error: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
   --> tests/ui/cve_2021_45688/cve_2021_45688.rs:23:16

@@ -48,31 +48,21 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     ) -> Self::Result {
         if self.tcx.is_mir_available(def_id) {
             let body = self.tcx.optimized_mir(def_id);
-            #[allow(irrefutable_let_patterns)]
-            if let pattern_cast = pattern_set_len_uninitialized(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(vec) = matches[pattern_cast.vec]
-                && let vec = vec.span_no_inline(body)
-                && let Some(set_len) = matches[pattern_cast.set_len]
-                && let set_len = set_len.span_no_inline(body)
-            {
+            let pattern = pattern_set_len_uninitialized(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let vec = matches[pattern.vec].span_no_inline(body);
+                let set_len = matches[pattern.set_len].span_no_inline(body);
                 debug!(?vec, ?set_len);
                 self.tcx
                     .dcx()
                     .emit_err(crate::errors::SetLenUninitialized { vec, set_len });
             }
-            #[allow(irrefutable_let_patterns)]
-            if let pattern_cast = pattern_set_len_uninitialized_inlined(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(vec) = matches[pattern_cast.vec]
-                && let vec = vec.span_no_inline(body)
-                && let Some(set_len) = matches[pattern_cast.set_len]
-                && let set_len = set_len.span_no_inline(body)
+            let pattern_cast = pattern_set_len_uninitialized_inlined(self.pcx);
+            for matches in
+                CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
             {
+                let vec = matches[pattern_cast.vec].span_no_inline(body);
+                let set_len = matches[pattern_cast.set_len].span_no_inline(body);
                 debug!(?vec, ?set_len);
                 self.tcx
                     .dcx()
