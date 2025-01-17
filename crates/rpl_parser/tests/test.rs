@@ -1,5 +1,5 @@
 #[cfg(test)]
-use parser::{Grammar, pairs};
+use rpl_parser::parser::{pairs, Grammar};
 
 macro_rules! full_test {
     ($T:ident, $input:expr $(,)?) => {{
@@ -8,30 +8,27 @@ macro_rules! full_test {
         match Grammar::try_parse::<pairs::$T>(input) {
             Ok(_res) => {
                 // println!("{:#?}", _res);
-            }
+            },
             Err(e) => {
                 eprintln!("Failed to parse input :\n{}", $input);
                 // eprintln!("{}", e);
                 panic!("\n{}\n", e);
-            }
+            },
         }
     }};
 }
-
 #[test]
 fn mir_rvalue_or_call() {
     full_test!(MirRvalueCast, "copy $x as isize (IntToInt)");
     full_test!(MirRvalue, "copy $x as isize (IntToInt)");
     full_test!(MirRvalueOrCall, "copy $x as isize (IntToInt)");
 }
-
 #[test]
 fn cve_2018_21000() {
     full_test!(
         main,
         "\
 pattern CVE-2018-21000
-
 util {
     use alloc::vec::Vec;
     use core::ptr::non_null::NonNull;
@@ -41,7 +38,6 @@ util {
     use alloc::raw_vec::RawVec;
     use alloc::alloc::Global;
     use core::marker::PhantomData;
-
     p_misordered_para[
         $T1: ty,
         $T2: ty,
@@ -84,7 +80,6 @@ util {
         };
     }
 }
-
 patt {
     p1[$T: ty] = p_reversed_para[
         $T1 = u8,
@@ -92,7 +87,6 @@ patt {
         $T3 = $T,
         // $Op = Div
     ]
-
     p2[$T: ty] = p_reversed_para[
         $T1 = $T,
         $T2 = $T,
@@ -103,19 +97,16 @@ patt {
 "
     );
 }
-
 #[test]
 fn cve_2019_15548() {
     full_test!(
         main,
         "\
 pattern CVE-2019-15548-MIR
-
 patt {
     use ncurses::instr;
     use libc::c_char;
     use std::string::String;
-
     // Only work for crate::ll::instr or ncures::instr
     p1[
         $T: ty,
@@ -126,7 +117,6 @@ patt {
         let $dst: *const c_char = copy $ptr as *const c_char (Transmute);
         let $ret: $T = $crate::ll::instr(move $dst);
     }
-
     // Pass a string ptr to $c_func
     p2 = #[mir] fn _ (..) -> _ {
         let $ptr: *const c_char = _;
@@ -136,17 +126,14 @@ patt {
 "
     );
 }
-
 #[test]
 fn cve_2019_16138() {
     full_test!(
         main,
         "\
 pattern CVE-2019-16138
-
 patt {
     use std::vec::Vec;
-
     p[
         $T: ty
     ] = #[mir] pub fn _ (..) -> _ {
@@ -158,14 +145,12 @@ patt {
 "
     );
 }
-
 #[test]
 fn cve_2020_25016() {
     full_test!(
         main,
         "\
 pattern CVE-2020-25016
-
 patt {
     p_unsound_cast_const[
         $T: ty
@@ -179,7 +164,6 @@ patt {
         let $to_raw: *const [u8] = *const [u8] from (copy $to_ptr, copy $to_len);
         let $to_slice: &[u8] = &*$to_raw;
     } #~[safety = safe]
-
     p_unsound_cast_mut[
         $T: ty
     ] = #[mir] fn _ (..) -> _ {
@@ -193,20 +177,17 @@ patt {
         let $to_slice_mut: &mut [u8] = &mut *$to_raw_mut;
     } #~[safety = safe]
 }
-
 // Here, the metavariable $T is placed in square brackets, which is also for later constraints on T. The specific content of the constraint is: the type $T does not have unsafe trait constraints (except Send, Sync)
 // (Since the expression of this constraint requires rustc code/encapsulation in the rpl standard library, it is not reflected in this example)
 "
     );
 }
-
 #[test]
 fn cve_2020_35881() {
     full_test!(
         main,
         "\
 pattern CVE-2020-35881
-
 patt {
     p_wrong_assumption_of_fat_pointer_layout_const_const = #[mir] fn _ (..) -> _ {
         let $ptr: *const $T = _;
@@ -215,7 +196,6 @@ patt {
         let $ptr_to_ptr: *const *const () = move $ptr_to_ptr_t as *const *const () (Transmute);
         let $data_ptr: *const () = _;
     }
-
     p_wrong_assumption_of_fat_pointer_layout_const_mut = #[mir] fn _ (..) -> _ {
         let $ptr: *const $T = _;
         let $ref_to_ptr: &mut *const $T = &mut $ptr;
@@ -243,14 +223,12 @@ patt {
 "
     );
 }
-
 #[test]
 fn cve_2020_35888() {
     full_test!(
         main,
         "\
 pattern CVE-2020-35888
-
 patt {
     p_move[
         $T: ty,
@@ -264,17 +242,14 @@ patt {
 "
     );
 }
-
 #[test]
 fn cve_2020_35892_35893() {
     full_test!(
         main,
         r#"
 pattern CVE-2020-35892-3
-
 patt {
     use core::ops::range::Range<usize>;
-
     // how to express constraints on meta variables?
     // 1. use a where clause (how to define a where clause?)
     // 2. use a predicate (how to define a predicate?)
@@ -321,26 +296,22 @@ patt {
 "#
     );
 }
-
 #[test]
 fn cve_2020_35898_9() {
     full_test!(
         main,
         r#"
 pattern CVE-2020-35898-9
-
 patt {
     use std::cell::UnsafeCell;
     use std::rc::Rc;
     use std::rc::RcInner;
-
     p_rc_unsafe_cell[
         $T: ty
     ] = {                       
         pub struct $Cell {
             $inner: Rc<UnsafeCell<$T>>,
         }
-
         impl $Cell {
             fn $get_mut(..) -> _ {
                 let $self: &mut $Cell = _;
@@ -355,28 +326,23 @@ patt {
         }
     }
 }
-
 // detection after monomorpization?
 "#
     );
 }
-
 #[test]
 fn cve_2021_27376() {
     full_test!(
         main,
         r#"
 pattern CVE-2021-27376
-
 patt {
     use std::net::SocketAddrV6;
     use libc::socketaddr;
-
     p_const_const_ver = #[mir] fn _ (..) -> _ {
         let $src: *const SocketAddrV6 = _;
         let $dst: *const socketaddr = move $src as *const socketaddr (PtrToPtr);
     }
-
     p_mut_const_ver = #[mir] fn _ (..) -> _ {
         let $src: *mut SocketAddrV6 = _;
         let $dst: *const socketaddr = move $src as *const socketaddr (PtrToPtr);
@@ -395,19 +361,16 @@ patt {
 "#
     );
 }
-
 #[test]
 fn cve_2020_35873() {
     full_test!(
         main,
         r#"
 pattern CVE-2021-35873
-
 patt {
     use alloc::ffi::c_str::CString;
     use core::ffi::c_str::CStr;
     use core::ptr::non_null::NonNull;
-
     p = #[mir] pub fn _ (..) -> _ {
         let $cstring: CString = _;
         let $cstring_ref: &CString = &$cstring;
@@ -420,7 +383,6 @@ patt {
         let $iptr_arg: *const i8;
         let $s: i32;
         drop($cstring);
-
         $s = _;
         $iptr_arg = copy $iptr;
         _ = $crate::ffi::sqlite3session_attach(move $s, move $iptr_arg);
@@ -429,21 +391,18 @@ patt {
 "#
     );
 }
-
 #[test]
 fn cve_2024_27284() {
     full_test!(
         main,
         r#"
 pattern CVE-2024-27284
-
 patt {
     use std::iter::Iterator;
     use cassandra_cpp_sys::CassIterator;
     use cassandra_cpp_sys::cassandra::case_iterator_next;
     use cassandra_cpp_sys::cassandra::cass_iterator_get_row;
     use cassandra_cpp_sys::cassandra::case_bool_t;
-
     p_incorrect_iterator_impl[
         $T: ty,
         $Item: ty

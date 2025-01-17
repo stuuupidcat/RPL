@@ -1218,14 +1218,17 @@ name = "rpl_parser"
 version = "0.1.0"
 dependencies = [
  "colored 3.0.0",
+ "derive_more",
  "pest",
  "pest_derive",
  "pest_generator",
  "pest_typed",
  "pest_typed_derive",
  "pest_typed_generator",
+ "pretty_assertions",
  "serde",
  "serde_json",
+ "thiserror 1.0.63",
 ]
 
 [[package]]
