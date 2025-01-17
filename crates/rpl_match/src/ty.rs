@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::iter::zip;
 
 use rpl_context::{pat, PatCtxt};
-use rustc_data_structures::fx::FxHashMap;
+use rustc_data_structures::fx::{FxHashMap, FxIndexSet};
 use rustc_hir::def::Res;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::definitions::DefPathData;
@@ -19,7 +19,7 @@ pub struct MatchTyCtxt<'pcx, 'tcx> {
     pub pcx: PatCtxt<'pcx>,
     pub pat: &'pcx pat::Pattern<'pcx>,
     param_env: ty::ParamEnv<'tcx>,
-    pub ty_vars: IndexVec<pat::TyVarIdx, RefCell<Vec<ty::Ty<'tcx>>>>,
+    pub ty_vars: IndexVec<pat::TyVarIdx, RefCell<FxIndexSet<ty::Ty<'tcx>>>>,
     pub adt_matches: RefCell<FxHashMap<Symbol, FxHashMap<DefId, AdtMatch<'tcx>>>>,
 }
 
@@ -36,7 +36,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
             pcx,
             pat,
             param_env,
-            ty_vars: IndexVec::from_elem(RefCell::new(Vec::new()), &meta.ty_vars),
+            ty_vars: IndexVec::from_elem(RefCell::new(FxIndexSet::default()), &meta.ty_vars),
             adt_matches: Default::default(),
         }
     }
@@ -48,7 +48,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
             (pat::TyKind::TyVar(ty_var), _)
                 if ty_var.pred.is_none_or(|ty_pred| ty_pred(self.tcx, self.param_env, ty)) =>
             {
-                self.ty_vars[ty_var.idx].borrow_mut().push(ty);
+                self.ty_vars[ty_var.idx].borrow_mut().insert(ty);
                 true
             },
             (pat::TyKind::Array(ty_pat, konst_pat), ty::Array(ty, konst)) => {

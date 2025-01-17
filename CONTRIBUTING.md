@@ -61,6 +61,19 @@ I haven't found a good solution but here is the hacks:
 -   Run `source ~/.bashrc` (or `source ~/.zshrc` if you use ZSH);
 -   Now return to the RPL repository and you may succeed to run `RPL_LOG=debug cargo +nightly-stage1 run -b rpl-driver` and you will see the debugging logs printed on the screen;
 
+### View logs
+
+The rustc logs are scope trees with indentations, it is helpful if your code editor support folding by indentations.
+
+In Vim, you can set fold method to `indent` and use `za` to toggle the folds on and off.
+```vim
+set shiftwidth=2
+set foldenable
+set foldmethod=indent
+```
+
+In VsCode, folding by indentation is supported by default.
+
 ## Debugging with VSCode and lldb
 
 When use the debug mode in VSCode, you may encounter the following error:

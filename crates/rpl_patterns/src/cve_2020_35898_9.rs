@@ -54,20 +54,9 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         if self.tcx.is_mir_available(def_id) {
             let body = self.tcx.optimized_mir(def_id);
 
-            #[allow(irrefutable_let_patterns)]
-            if let pattern_offset_by_len = pattern_rc_unsafe_cell_get_mut(self.pcx)
-                && let Some(matches) = CheckMirCtxt::new(
-                    self.tcx,
-                    self.pcx,
-                    body,
-                    pattern_offset_by_len.pattern,
-                    pattern_offset_by_len.fn_pat,
-                )
-                .check()
-                && let Some(matches) = matches.first()
-                && let Some(get_mut) = matches[pattern_offset_by_len.get_mut]
-                && let get_mut = get_mut.span_no_inline(body)
-            {
+            let pattern = pattern_rc_unsafe_cell_get_mut(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let get_mut = matches[pattern.get_mut].span_no_inline(body);
                 debug!(?get_mut);
                 self.tcx.dcx().emit_err(crate::errors::GetMutInRcUnsafeCell { get_mut });
             }

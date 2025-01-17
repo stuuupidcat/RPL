@@ -46,20 +46,9 @@ pub mod u8_to_t {
         ) -> Self::Result {
             if self.tcx.visibility(def_id).is_public() && self.tcx.is_mir_available(def_id) {
                 let body = self.tcx.optimized_mir(def_id);
-                #[allow(irrefutable_let_patterns)]
-                if let pattern_misordered_params = pattern_misordered_params(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(
-                        self.tcx,
-                        self.pcx,
-                        body,
-                        pattern_misordered_params.pattern,
-                        pattern_misordered_params.fn_pat,
-                    )
-                    .check()
-                    && let Some(matches) = matches.first()
-                    && let Some(from_raw_parts) = matches[pattern_misordered_params.from_raw_parts]
-                    && let span = from_raw_parts.span_no_inline(body)
-                {
+                let pattern = pattern_misordered_params(self.pcx);
+                for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                    let span = matches[pattern.from_raw_parts].span_no_inline(body);
                     debug!(?span);
                     self.tcx.dcx().emit_err(crate::errors::MisorderedParameters { span });
                 }
@@ -231,20 +220,9 @@ pub mod t_to_u8 {
         ) -> Self::Result {
             if self.tcx.visibility(def_id).is_public() && self.tcx.is_mir_available(def_id) {
                 let body = self.tcx.optimized_mir(def_id);
-                #[allow(irrefutable_let_patterns)]
-                if let pattern_misordered_params = pattern_misordered_params(self.pcx)
-                    && let Some(matches) = CheckMirCtxt::new(
-                        self.tcx,
-                        self.pcx,
-                        body,
-                        pattern_misordered_params.pattern,
-                        pattern_misordered_params.fn_pat,
-                    )
-                    .check()
-                    && let Some(matches) = matches.first()
-                    && let Some(from_raw_parts) = matches[pattern_misordered_params.from_raw_parts]
-                    && let span = from_raw_parts.span_no_inline(body)
-                {
+                let pattern = pattern_misordered_params(self.pcx);
+                for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                    let span = matches[pattern.from_raw_parts].span_no_inline(body);
                     debug!(?span);
                     self.tcx.dcx().emit_err(crate::errors::MisorderedParameters { span });
                 }

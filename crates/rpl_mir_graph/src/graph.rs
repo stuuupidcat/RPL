@@ -563,10 +563,17 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
     pub fn get_rdep_start(&self, statement: usize) -> impl Iterator<Item = Local> + '_ {
         self.rdep_start.get(&statement).into_iter().flat_map(HybridBitSet::iter)
     }
+    #[instrument(level = "debug", skip(self))]
+    pub fn is_rdep_start(&self, statement: usize, local: Local) -> bool {
+        self.rdep_start
+            .get(&statement)
+            .is_some_and(|locals| locals.contains(local))
+    }
     #[instrument(level = "debug", skip(self), ret)]
     pub fn get_dep_end(&self, statement: usize) -> Option<Local> {
         self.dep_end.get(&statement).copied()
     }
+    #[instrument(level = "debug", skip(self))]
     pub fn rdep_start(&self) -> impl Iterator<Item = (usize, Local)> + '_ {
         self.rdep_start
             .iter()
@@ -577,6 +584,9 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
     }
     pub fn rdep_start_end(&self) -> impl Iterator<Item = Local> + '_ {
         self.rdep_start_end.iter()
+    }
+    pub fn is_rdep_start_end(&self, local: Local) -> bool {
+        self.rdep_start_end.contains(local)
     }
     pub fn full_rdep_start_end(&self) -> bool {
         (0..self.rw_states.num_locals())

@@ -39,16 +39,10 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             && let Some(cstring_did) = self.tcx.get_diagnostic_item(sym::cstring_type)
         {
             let body = self.tcx.optimized_mir(def_id);
-            #[allow(irrefutable_let_patterns)]
-            if let pattern = pattern(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(cstring_drop) = matches[pattern.cstring_drop]
-                && let drop_span = cstring_drop.span_no_inline(body)
-                && let Some(ptr_usage) = matches[pattern.ptr_usage]
-                && let use_span = ptr_usage.span_no_inline(body)
-            {
+            let pattern = pattern(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let use_span = matches[pattern.ptr_usage].span_no_inline(body);
+                let drop_span = matches[pattern.cstring_drop].span_no_inline(body);
                 self.tcx.dcx().emit_err(crate::errors::UseAfterDrop {
                     use_span,
                     drop_span,

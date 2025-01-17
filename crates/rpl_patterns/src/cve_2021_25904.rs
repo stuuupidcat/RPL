@@ -52,34 +52,20 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             && self.tcx.is_mir_available(def_id)
         {
             let body = self.tcx.optimized_mir(def_id);
-            #[allow(irrefutable_let_patterns)]
-            if let pattern = pattern_from_raw_parts_iter(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(slice) = matches[pattern.slice]
-                && let slice = slice.span_no_inline(body)
-                && let Some(src) = matches[pattern.src]
-                && let src = src.span_no_inline(body)
-                && let Some(ptr) = matches[pattern.ptr]
-                && let ptr = ptr.span_no_inline(body)
-            {
+            let pattern = pattern_from_raw_parts_iter(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let slice = matches[pattern.slice].span_no_inline(body);
+                let src = matches[pattern.src].span_no_inline(body);
+                let ptr = matches[pattern.ptr].span_no_inline(body);
                 self.tcx
                     .dcx()
                     .emit_err(crate::errors::UnvalidatedSliceFromRawParts { src, ptr, slice });
             }
-            #[allow(irrefutable_let_patterns)]
-            if let pattern = pattern_from_raw_parts_iter_inlined(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(slice) = matches[pattern.slice]
-                && let slice = slice.span_no_inline(body)
-                && let Some(src) = matches[pattern.src]
-                && let src = src.span_no_inline(body)
-                && let Some(ptr) = matches[pattern.ptr]
-                && let ptr = ptr.span_no_inline(body)
-            {
+            let pattern = pattern_from_raw_parts_iter_inlined(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let slice = matches[pattern.slice].span_no_inline(body);
+                let src = matches[pattern.src].span_no_inline(body);
+                let ptr = matches[pattern.ptr].span_no_inline(body);
                 self.tcx
                     .dcx()
                     .emit_err(crate::errors::UnvalidatedSliceFromRawParts { src, ptr, slice });

@@ -48,14 +48,9 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     ) -> Self::Result {
         if self.tcx.is_mir_available(def_id) {
             let body = self.tcx.optimized_mir(def_id);
-            #[allow(irrefutable_let_patterns)]
-            if let pattern = pattern_drop_unit_value(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(drop) = matches[pattern.drop]
-                && let drop = drop.span_no_inline(body)
-            {
+            let pattern = pattern_drop_unit_value(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let drop = matches[pattern.drop].span_no_inline(body);
                 debug!(?drop);
                 self.tcx.dcx().emit_err(crate::errors::DropUninitValue { drop });
             }

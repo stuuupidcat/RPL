@@ -48,44 +48,32 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     ) -> Self::Result {
         if self.tcx.is_mir_available(def_id) {
             let body = self.tcx.optimized_mir(def_id);
-            #[allow(irrefutable_let_patterns)]
-            if let pattern_cast = pattern_cast_socket_addr_v6(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(cast_from) = matches[pattern_cast.cast_from]
-                && let cast_from = cast_from.span_no_inline(body)
-                && let Some(cast_to) = matches[pattern_cast.cast_to]
-                && let cast_to = cast_to.span_no_inline(body)
-            {
+            let pattern = pattern_cast_socket_addr_v6(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let cast_from = matches[pattern.cast_from].span_no_inline(body);
+                let cast_to = matches[pattern.cast_to].span_no_inline(body);
                 debug!(?cast_from, ?cast_to);
                 self.tcx
                     .dcx()
                     .emit_err(crate::errors::WrongAssumptionOfLayoutCompatibility {
                         cast_from,
                         cast_to,
-                        type_from: pattern_cast.type_from,
-                        type_to: pattern_cast.type_to,
+                        type_from: pattern.type_from,
+                        type_to: pattern.type_to,
                     });
             }
-            #[allow(irrefutable_let_patterns)]
-            if let pattern_cast = pattern_cast_socket_addr_v4(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(cast_from) = matches[pattern_cast.cast_from]
-                && let cast_from = cast_from.span_no_inline(body)
-                && let Some(cast_to) = matches[pattern_cast.cast_to]
-                && let cast_to = cast_to.span_no_inline(body)
-            {
+            let pattern = pattern_cast_socket_addr_v4(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let cast_from = matches[pattern.cast_from].span_no_inline(body);
+                let cast_to = matches[pattern.cast_to].span_no_inline(body);
                 debug!(?cast_from, ?cast_to);
                 self.tcx
                     .dcx()
                     .emit_err(crate::errors::WrongAssumptionOfLayoutCompatibility {
                         cast_from,
                         cast_to,
-                        type_from: pattern_cast.type_from,
-                        type_to: pattern_cast.type_to,
+                        type_from: pattern.type_from,
+                        type_to: pattern.type_to,
                     });
             }
         }

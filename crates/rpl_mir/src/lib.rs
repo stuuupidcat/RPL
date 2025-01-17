@@ -26,7 +26,6 @@ extern crate rustc_span;
 extern crate rustc_target;
 extern crate rustc_type_ir;
 
-extern crate itertools;
 extern crate smallvec;
 #[macro_use]
 extern crate tracing;
@@ -54,7 +53,7 @@ use rustc_middle::{mir, ty};
 use rustc_span::Symbol;
 use rustc_target::abi::FieldIdx;
 
-pub use matches::{Matches, StatementMatch};
+pub use matches::{Matched, StatementMatch};
 pub use rpl_context::pat;
 
 pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
@@ -105,7 +104,7 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
             ),
         }
     }
-    pub fn check(&self) -> Option<Vec<Matches<'tcx>>> {
+    pub fn check(&self) -> Vec<Matched<'tcx>> {
         matches::matches(self)
     }
     /*
@@ -534,18 +533,10 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
     pub fn match_statement_or_terminator(&self, pat: pat::Location, loc: mir::Location) -> bool {
         let block_pat = &self.mir_pat[pat.block];
         let block = &self.body[loc.block];
-        let (is_terminator_pat, is_terminator) = (
+        match (
             pat.statement_index < block_pat.statements.len(),
             loc.statement_index < block.statements.len(),
-        );
-        trace!(
-            ?pat,
-            ?loc,
-            is_terminator_pat,
-            is_terminator,
-            "match_statement_or_terminator",
-        );
-        match (is_terminator_pat, is_terminator) {
+        ) {
             (true, true) => self.match_statement(
                 pat,
                 loc,
@@ -594,11 +585,12 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             ) => false,
         };
         if matched {
-            debug!("candidate matched: {loc_pat:?} {pat:?} <-> {loc:?} {statement:?}");
+            debug!(?loc_pat, ?pat, ?loc, statement = ?statement.kind, "match_statement");
         }
         matched
     }
 
+    #[instrument(level = "trace", skip(self), ret)]
     pub fn match_statement_with_terminator(
         &self,
         loc_pat: pat::Location,
@@ -611,10 +603,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             &mir::TerminatorKind::Call { destination, .. },
         ) if self.match_place(place_pat, destination));
         if matched {
-            debug!(
-                "candidate matched: {loc_pat:?} {pat:?} <-> {loc:?} {:?}",
-                terminator.kind
-            );
+            debug!(?loc_pat, ?pat, ?loc, terminator = ?terminator.kind, "match_statement_with_terminator");
         }
         matched
     }
@@ -627,19 +616,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         pat: &pat::TerminatorKind<'pcx>,
         terminator: &mir::Terminator<'tcx>,
     ) -> bool {
-        let matched = match (
-            self.mir_pat[loc_pat.block].terminator(),
-            &self.body[loc.block].terminator().kind,
-        ) {
-            // (&pat::StatementKind::Init(local_pat) ,
-            //     mir::TerminatorKind::Call {
-            //         destination,
-            //         target: Some(target),
-            //         ..
-            //     }) => destination
-            //         .as_local()
-            //         .is_some_and(|local| self.match_local(local_pat, local))
-            //         .then_some(target),
+        let matched = match (pat, &terminator.kind) {
             (
                 &pat::TerminatorKind::Call {
                     func: ref func_pat,
@@ -699,10 +676,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             ) => false,
         };
         if matched {
-            debug!(
-                "candidate matched: {loc_pat:?} {pat:?} <-> {loc:?} {:?}",
-                terminator.kind
-            );
+            debug!(?loc_pat, ?pat, ?loc, terminator = ?terminator.kind, "match_terminator");
         }
         matched
     }
@@ -878,8 +852,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             && zip(pat, operands).all(|(operand_pat, operand)| self.match_operand(operand_pat, &operand.node))
     }
 
-    // FIXME
-    #[allow(clippy::too_many_arguments)]
+    #[allow(clippy::too_many_arguments)] // FIXME
     #[instrument(level = "trace", skip(self), ret)]
     fn match_agg_adt(
         &self,

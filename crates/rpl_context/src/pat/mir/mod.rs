@@ -57,6 +57,9 @@ pub struct BasicBlockData<'pcx> {
 }
 
 impl<'pcx> BasicBlockData<'pcx> {
+    pub fn has_pat_end(&self) -> bool {
+        matches!(self.terminator(), TerminatorKind::PatEnd)
+    }
     pub fn terminator(&self) -> &TerminatorKind<'pcx> {
         self.terminator.as_ref().expect("terminator not set")
     }

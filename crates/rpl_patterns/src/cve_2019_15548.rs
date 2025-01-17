@@ -55,16 +55,12 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             && self.tcx.is_mir_available(def_id)
         {
             let body = self.tcx.optimized_mir(def_id);
-            #[allow(irrefutable_let_patterns)]
-            if let pattern_cast = pattern_rust_str_as_c_str(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(cast_from) = matches[pattern_cast.cast_from]
-                && let cast_from = cast_from.span_no_inline(body)
-                && let Some(cast_to) = matches[pattern_cast.cast_to]
-                && let cast_to = cast_to.span_no_inline(body)
+            let pattern_cast = pattern_rust_str_as_c_str(self.pcx);
+            for matches in
+                CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
             {
+                let cast_from = matches[pattern_cast.cast_from].span_no_inline(body);
+                let cast_to = matches[pattern_cast.cast_to].span_no_inline(body);
                 debug!(?cast_from, ?cast_to);
                 self.tcx.emit_node_span_lint(
                     RUST_STRING_POINTER_AS_C_STRING_POINTER,
@@ -73,16 +69,13 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     crate::errors::RustStrAsCStr { cast_from, cast_to },
                 );
             }
-            #[allow(irrefutable_let_patterns)]
-            if let pattern_cast = pattern_rust_str_as_c_str_inlined(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(cast_from) = matches[pattern_cast.cast_from]
-                && let cast_from = cast_from.span_no_inline(body)
-                && let Some(cast_to) = matches[pattern_cast.cast_to]
-                && let cast_to = cast_to.span_no_inline(body)
+            let pattern_cast = pattern_rust_str_as_c_str_inlined(self.pcx);
+            for matches in
+                CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
             {
+                let cast_from = matches[pattern_cast.cast_from].span_no_inline(body);
+                let cast_to = matches[pattern_cast.cast_to].span_no_inline(body);
+
                 debug!(?cast_from, ?cast_to);
                 self.tcx.emit_node_span_lint(
                     RUST_STRING_POINTER_AS_C_STRING_POINTER,
@@ -91,14 +84,10 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     crate::errors::RustStrAsCStr { cast_from, cast_to },
                 );
             }
-            #[allow(irrefutable_let_patterns)]
-            if let pattern_ptr = pattern_pass_a_pointer_to_c(self.pcx)
-                && let Some(matches) =
-                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_ptr.pattern, pattern_ptr.fn_pat).check()
-                && let Some(matches) = matches.first()
-                && let Some(ptr) = matches[pattern_ptr.ptr]
-                && let ptr = ptr.span_no_inline(body)
+            let pattern_ptr = pattern_pass_a_pointer_to_c(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_ptr.pattern, pattern_ptr.fn_pat).check()
             {
+                let ptr = matches[pattern_ptr.ptr].span_no_inline(body);
                 debug!(?ptr);
                 self.tcx.emit_node_span_lint(
                     LENGTHLESS_BUFFER_PASSED_TO_EXTERN_FUNCTION,

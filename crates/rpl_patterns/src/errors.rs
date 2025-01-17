@@ -136,10 +136,12 @@ pub struct SliceFromRawPartsUninitialized {
 // use `Vec::set_len` to extend the length of a `Vec` without initializing the new elements
 #[derive(Diagnostic)]
 #[diag(rpl_patterns_vec_set_len_to_extend)]
+#[note]
 pub struct VecSetLenToExtend {
     #[primary_span]
-    #[note]
-    pub span: Span,
+    pub set_len: Span,
+    #[label]
+    pub vec: Span,
 }
 
 // for cve_2018_20992

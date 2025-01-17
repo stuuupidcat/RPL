@@ -48,21 +48,15 @@ pub mod const_const_Transmute_ver {
         ) -> Self::Result {
             if self.tcx.visibility(def_id).is_public() && self.tcx.is_mir_available(def_id) {
                 let body = self.tcx.optimized_mir(def_id);
-                #[allow(irrefutable_let_patterns)]
-                if let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx)
-                    && let Some(matches) =
-                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                    && let Some(matches) = matches.first()
-                    && let Some(ptr_transmute) = matches[pattern.ptr_transmute]
-                    && let span1 = ptr_transmute.span_no_inline(body)
-                    && let Some(data_ptr_get) = matches[pattern.data_ptr_get]
-                    && let span2 = data_ptr_get.span_no_inline(body)
-                {
+                let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx);
+                for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                    let ptr_transmute = matches[pattern.ptr_transmute].span_no_inline(body);
+                    let data_ptr_get = matches[pattern.data_ptr_get].span_no_inline(body);
                     self.tcx
                         .dcx()
                         .emit_err(crate::errors::WrongAssumptionOfFatPointerLayout {
-                            ptr_transmute: span1,
-                            data_ptr_get: span2,
+                            ptr_transmute,
+                            data_ptr_get,
                         });
                 }
             }
@@ -158,21 +152,15 @@ pub mod mut_mut_Transmute_ver {
         ) -> Self::Result {
             if self.tcx.visibility(def_id).is_public() && self.tcx.is_mir_available(def_id) {
                 let body = self.tcx.optimized_mir(def_id);
-                #[allow(irrefutable_let_patterns)]
-                if let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx)
-                    && let Some(matches) =
-                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                    && let Some(matches) = matches.first()
-                    && let Some(ptr_transmute) = matches[pattern.ptr_transmute]
-                    && let span1 = ptr_transmute.span_no_inline(body)
-                    && let Some(data_ptr_get) = matches[pattern.data_ptr_get]
-                    && let span2 = data_ptr_get.span_no_inline(body)
-                {
+                let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx);
+                for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                    let ptr_transmute = matches[pattern.ptr_transmute].span_no_inline(body);
+                    let data_ptr_get = matches[pattern.data_ptr_get].span_no_inline(body);
                     self.tcx
                         .dcx()
                         .emit_err(crate::errors::WrongAssumptionOfFatPointerLayout {
-                            ptr_transmute: span1,
-                            data_ptr_get: span2,
+                            ptr_transmute,
+                            data_ptr_get,
                         });
                 }
             }
@@ -269,21 +257,15 @@ pub mod mut_const_PtrToPtr_ver {
         ) -> Self::Result {
             if self.tcx.visibility(def_id).is_public() && self.tcx.is_mir_available(def_id) {
                 let body = self.tcx.optimized_mir(def_id);
-                #[allow(irrefutable_let_patterns)]
-                if let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx)
-                    && let Some(matches) =
-                        CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check()
-                    && let Some(matches) = matches.first()
-                    && let Some(ptr_transmute) = matches[pattern.ptr_transmute]
-                    && let span1 = ptr_transmute.span_no_inline(body)
-                    && let Some(data_ptr_get) = matches[pattern.data_ptr_get]
-                    && let span2 = data_ptr_get.span_no_inline(body)
-                {
+                let pattern = pattern_wrong_assumption_of_fat_pointer_layout(self.pcx);
+                for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                    let ptr_transmute = matches[pattern.ptr_transmute].span_no_inline(body);
+                    let data_ptr_get = matches[pattern.data_ptr_get].span_no_inline(body);
                     self.tcx
                         .dcx()
                         .emit_err(crate::errors::WrongAssumptionOfFatPointerLayout {
-                            ptr_transmute: span1,
-                            data_ptr_get: span2,
+                            ptr_transmute,
+                            data_ptr_get,
                         });
                 }
             }
