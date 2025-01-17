@@ -439,6 +439,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "error-enum"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a09e83910bed4811a139bb6ac2502fcc6fcf6b5b6a885a3024fe70b3ee1935d9"
+dependencies = [
+ "ansi_term",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.96",
+]
+
+[[package]]
 name = "eyre"
 version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1186,6 +1198,26 @@ name = "rpl_match"
 version = "0.1.0"
 dependencies = [
  "rpl_context",
+]
+
+[[package]]
+name = "rpl_meta_pest"
+version = "0.1.0"
+dependencies = [
+ "colored 3.0.0",
+ "derive_more",
+ "error-enum",
+ "pest",
+ "pest_derive",
+ "pest_generator",
+ "pest_typed",
+ "pest_typed_derive",
+ "pest_typed_generator",
+ "pretty_assertions",
+ "rpl_parser",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.63",
 ]
 
 [[package]]

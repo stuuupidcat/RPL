@@ -27,6 +27,7 @@ rpl_pat_expand = { path = "./crates/rpl_pat_expand" }
 rpl_pat_syntax = { path = "./crates/rpl_pat_syntax" }
 rpl_patterns = { path = "./crates/rpl_patterns" }
 rpl_utils = { path = "./crates/rpl_utils" }
+rpl_meta_pest = { path = "./crates/rpl_meta_pest" }
 rustc_tools_util = "0.3.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
@@ -57,6 +58,7 @@ pest_typed = { version = "0.17.1", features = ["std"] }
 pest_typed_generator = { version = "0.17.1", features = ["grammar-extras"] }
 pest_typed_derive = { version = "0.17.1", features = ["grammar-extras"] }
 colored = "3.0.0"
+error-enum = "0.4.1"
 
 [package]
 name = "rpl"
