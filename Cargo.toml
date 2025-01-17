@@ -16,6 +16,7 @@ repository = "https://github.com/stuuupidcat/RPL"
 [workspace.dependencies]
 rpl_context = { path = "./crates/rpl_context" }
 rpl_driver = { path = "./crates/rpl_driver" }
+rpl_parser = { path = "./crates/rpl_parser" }
 rpl_graphviz = { path = "./crates/rpl_graphviz" }
 rpl_interface = { path = "./crates/rpl_interface" }
 rpl_macros = { path = "./crates/rpl_macros" }
@@ -27,7 +28,7 @@ rpl_pat_expand = { path = "./crates/rpl_pat_expand" }
 rpl_pat_syntax = { path = "./crates/rpl_pat_syntax" }
 rpl_patterns = { path = "./crates/rpl_patterns" }
 rpl_utils = { path = "./crates/rpl_utils" }
-rpl_parser = { path = "./crates/rpl_parser" }
+rpl_meta_pest = { path = "./crates/rpl_meta_pest" }
 rustc_tools_util = "0.3.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
@@ -36,7 +37,7 @@ arrayvec = { version = "0.7", default-features = false }
 itertools = "0.12"
 rustc-semver = "1.1"
 walkdir = "2.3"
-quote = "1.0"
+quote = "1.0.38"
 syn = { version = "2.0", features = ["full"] }
 proc-macro2 = "1.0"
 tracing = "0.1.28"
@@ -50,6 +51,14 @@ byte-slice-cast = "1.0.0"
 num-derive = "0.3"
 num-rational = "0.3.0"
 num-traits = "0.2.8"
+pest = { version = "2.7.10", features = ["std"] }
+pest_generator = { version = "2.7.10", features = ["grammar-extras"] }
+pest_derive = { version = "2.7.10", features = ["grammar-extras"] }
+pest_typed = { version = "0.17.1", features = ["std"] }
+pest_typed_generator = { version = "0.17.1", features = ["grammar-extras"] }
+pest_typed_derive = { version = "0.17.1", features = ["grammar-extras"] }
+colored = "3.0.0"
+error-enum = "0.4.1"
 memmap = "0.5.0"
 pin-project = "1.0"
 radium = "0.3"
