@@ -1,0 +1,33 @@
+[package]
+name = "rpl_parser"
+version.workspace = true
+description.workspace = true
+repository.workspace = true
+license.workspace = true
+keywords.workspace = true
+edition.workspace = true
+
+[dependencies]
+pest.workspace = true
+pest_generator.workspace = true
+pest_derive.workspace = true
+pest_typed.workspace = true
+pest_typed_generator.workspace = true
+pest_typed_derive.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+derive_more.workspace = true
+colored.workspace = true
+quote.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[build-dependencies]
+quote.workspace = true
+pest_typed_generator.workspace = true
+pest_generator.workspace = true
+
+[lib]
+doctest = false
