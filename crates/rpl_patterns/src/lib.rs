@@ -33,6 +33,7 @@ mod cve_2020_35898_9;
 mod cve_2021_25904;
 mod cve_2021_27376;
 mod cve_2021_29941_2;
+mod cve_2022_23639;
 pub(crate) mod errors;
 mod lints;
 
@@ -56,6 +57,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     cve_2021_25904::check_item,
     cve_2021_27376::check_item,
     cve_2021_29941_2::check_item,
+    cve_2022_23639::check_item,
 ];
 
 #[instrument(level = "info", skip_all, fields(item = ?item.owner_id.def_id))]

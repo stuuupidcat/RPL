@@ -1,4 +1,4 @@
-//@ ignore-on-host
+//@compile-flags: -Z inline-mir=false
 use std::cell::UnsafeCell;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -59,9 +59,9 @@ macro_rules! impl_arithmetic {
 // impl_arithmetic!(u64, AtomicU64, "let a = AtomicCell::new(7u64);");
 
 impl AtomicCell<u64> {
-    #[rpl::dump_mir(dump_cfg, dump_ddg)]
     pub fn fetch_add(&self, val: u64) -> u64 {
         let a = unsafe { &*(self.value.get() as *const AtomicU64) };
+                        //~^ ERROR: it is unsound to cast between `u64` and `AtomicU64`
         a.fetch_add(val, Ordering::AcqRel)
     }
 }

@@ -1,0 +1,12 @@
+error: it is unsound to cast between `u64` and `AtomicU64`
+  --> tests/ui/cve_2022_23639/cve_2022_23639.rs:63:28
+   |
+LL |         let a = unsafe { &*(self.value.get() as *const AtomicU64) };
+   |                            ^----------------^^^^^^^^^^^^^^^^^^^^^
+   |                             |
+   |                             u64 created here
+   |
+   = note: the alignment of `u64` is smaller than `AtomicU64` on many 32-bits platforms
+
+error: aborting due to 1 previous error
+
