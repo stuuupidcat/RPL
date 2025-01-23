@@ -50,13 +50,6 @@ byte-slice-cast = "1.0.0"
 num-derive = "0.3"
 num-rational = "0.3.0"
 num-traits = "0.2.8"
-pest = { version = "2.7.10", features = ["std"] }
-pest_generator = { version = "2.7.10", features = ["grammar-extras"] }
-pest_derive = { version = "2.7.10", features = ["grammar-extras"] }
-pest_typed = { version = "0.17.1", features = ["std"] }
-pest_typed_generator = { version = "0.17.1", features = ["grammar-extras"] }
-pest_typed_derive = { version = "0.17.1", features = ["grammar-extras"] }
-colored = "3.0.0"
 
 [package]
 name = "rpl"
