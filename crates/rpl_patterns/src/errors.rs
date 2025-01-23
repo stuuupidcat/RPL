@@ -198,3 +198,14 @@ pub struct UnvalidatedSliceFromRawParts {
     #[label(rpl_patterns_slice_label)]
     pub slice: Span,
 }
+
+// for cve_2022_23639
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_unsound_cast_between_u64_and_atomic_u64)]
+#[note]
+pub struct UnsoundCastBetweenU64AndAtomicU64 {
+    #[primary_span]
+    pub transmute: Span,
+    #[label(rpl_patterns_src_label)]
+    pub src: Span,
+}

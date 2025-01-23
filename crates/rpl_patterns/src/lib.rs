@@ -10,56 +10,74 @@ extern crate rustc_hir;
 extern crate rustc_lint_defs;
 extern crate rustc_macros;
 extern crate rustc_middle;
+extern crate rustc_session;
 extern crate rustc_span;
 #[macro_use]
 extern crate tracing;
-
 extern crate rpl_macros;
 
 use rpl_context::PatCtxt;
 use rustc_hir::ItemId;
 use rustc_middle::ty::TyCtxt;
+use rustc_session::config::OptLevel;
 
-mod cve_2018_20992;
-mod cve_2018_21000;
-mod cve_2019_15548;
-mod cve_2019_16138;
-mod cve_2020_25016;
-mod cve_2020_35873;
-mod cve_2020_35881;
-mod cve_2020_35888;
-mod cve_2020_35892_3;
-mod cve_2020_35898_9;
-mod cve_2021_25904;
-mod cve_2021_27376;
-mod cve_2021_29941_2;
+mod inline;
+mod normal;
+
 pub(crate) mod errors;
-mod lints;
+pub(crate) mod lints;
 
 rustc_fluent_macro::fluent_messages! { "../messages.en.ftl" }
 
 static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
-    cve_2018_20992::truncate::check_item,
-    cve_2018_20992::extend::check_item,
-    cve_2018_21000::t_to_u8::check_item,
-    cve_2018_21000::u8_to_t::check_item,
-    cve_2019_15548::check_item,
-    cve_2019_16138::check_item,
-    cve_2020_25016::check_item,
-    cve_2020_35873::check_item,
-    cve_2020_35888::check_item,
-    cve_2020_35892_3::check_item,
-    cve_2020_35881::const_const_Transmute_ver::check_item,
-    cve_2020_35881::mut_mut_Transmute_ver::check_item,
-    cve_2020_35881::mut_const_PtrToPtr_ver::check_item,
-    cve_2020_35898_9::check_item,
-    cve_2021_25904::check_item,
-    cve_2021_27376::check_item,
-    cve_2021_29941_2::check_item,
+    inline::cve_2018_20992::truncate::check_item,
+    inline::cve_2018_20992::extend::check_item,
+    inline::cve_2018_21000::t_to_u8::check_item,
+    inline::cve_2018_21000::u8_to_t::check_item,
+    inline::cve_2019_15548::check_item,
+    normal::cve_2019_15548::check_item,
+    inline::cve_2019_16138::check_item,
+    normal::cve_2019_16138::check_item,
+    inline::cve_2020_25016::check_item,
+    inline::cve_2020_35873::check_item,
+    inline::cve_2020_35881::const_const_Transmute_ver::check_item,
+    inline::cve_2020_35881::mut_mut_Transmute_ver::check_item,
+    inline::cve_2020_35881::mut_const_PtrToPtr_ver::check_item,
+    inline::cve_2020_35888::check_item,
+    inline::cve_2020_35892_3::check_item,
+    inline::cve_2020_35898_9::check_item,
+    normal::cve_2021_25904::check_item,
+    inline::cve_2021_25904::check_item,
+    normal::cve_2021_27376::check_item,
+    inline::cve_2021_29941_2::check_item,
+    normal::cve_2021_29941_2::check_item,
+    normal::cve_2022_23639::check_item,
 ];
 
 #[instrument(level = "info", skip_all, fields(item = ?item.owner_id.def_id))]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item: ItemId) {
     rustc_data_structures::sync::par_for_each_in(ALL_PATTERNS, |check| check(tcx, pcx, item))
     // ALL_PATTERNS.iter().for_each(|check| check(tcx, item))
+}
+
+#[allow(unused)]
+pub(crate) fn is_inline_mir(sess: &rustc_session::Session) -> bool {
+    // FIXME(#127234): Coverage instrumentation currently doesn't handle inlined
+    // MIR correctly when Modified Condition/Decision Coverage is enabled.
+    if sess.instrument_coverage_mcdc() {
+        return false;
+    }
+
+    if let Some(enabled) = sess.opts.unstable_opts.inline_mir {
+        return enabled;
+    }
+
+    match sess.mir_opt_level() {
+        0 | 1 => false,
+        2 => {
+            (sess.opts.optimize == OptLevel::Default || sess.opts.optimize == OptLevel::Aggressive)
+                && sess.opts.incremental.is_none()
+        },
+        _ => true,
+    }
 }

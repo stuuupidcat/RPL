@@ -9,7 +9,7 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::{Span, Symbol};
 
-use crate::lints::{LENGTHLESS_BUFFER_PASSED_TO_EXTERN_FUNCTION, RUST_STRING_POINTER_AS_C_STRING_POINTER};
+use crate::lints::RUST_STRING_POINTER_AS_C_STRING_POINTER;
 
 #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
@@ -55,20 +55,6 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             && self.tcx.is_mir_available(def_id)
         {
             let body = self.tcx.optimized_mir(def_id);
-            let pattern_cast = pattern_rust_str_as_c_str(self.pcx);
-            for matches in
-                CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
-            {
-                let cast_from = matches[pattern_cast.cast_from].span_no_inline(body);
-                let cast_to = matches[pattern_cast.cast_to].span_no_inline(body);
-                debug!(?cast_from, ?cast_to);
-                self.tcx.emit_node_span_lint(
-                    RUST_STRING_POINTER_AS_C_STRING_POINTER,
-                    self.tcx.local_def_id_to_hir_id(def_id),
-                    cast_from,
-                    crate::errors::RustStrAsCStr { cast_from, cast_to },
-                );
-            }
             let pattern_cast = pattern_rust_str_as_c_str_inlined(self.pcx);
             for matches in
                 CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_cast.pattern, pattern_cast.fn_pat).check()
@@ -84,18 +70,6 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     crate::errors::RustStrAsCStr { cast_from, cast_to },
                 );
             }
-            let pattern_ptr = pattern_pass_a_pointer_to_c(self.pcx);
-            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_ptr.pattern, pattern_ptr.fn_pat).check()
-            {
-                let ptr = matches[pattern_ptr.ptr].span_no_inline(body);
-                debug!(?ptr);
-                self.tcx.emit_node_span_lint(
-                    LENGTHLESS_BUFFER_PASSED_TO_EXTERN_FUNCTION,
-                    self.tcx.local_def_id_to_hir_id(def_id),
-                    ptr,
-                    crate::errors::LengthlessBufferPassedToExternFunction { ptr },
-                );
-            }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
     }
@@ -106,37 +80,6 @@ struct PatternCast<'pcx> {
     fn_pat: &'pcx pat::Fn<'pcx>,
     cast_from: pat::Location,
     cast_to: pat::Location,
-}
-
-// FIXME: this should work for functions other than `crate::ll::instr`.
-// FIXME: this should work when `inline-mir` is on.
-#[rpl_macros::pattern_def]
-fn pattern_rust_str_as_c_str(pcx: PatCtxt<'_>) -> PatternCast<'_> {
-    let cast_from;
-    let cast_to;
-    let pattern = rpl! {
-        #[meta($T:ty)]
-        fn $pattern (..) -> _ = mir! {
-
-            type c_char = libc::c_char;
-
-            #[export(cast_from)]
-            let src: &alloc::string::String = _;
-            let bytes: &[u8] = alloc::string::String::as_bytes(move src);
-            let ptr: *const u8 = slice::as_ptr(copy bytes);
-            #[export(cast_to)]
-            let dst: *const c_char = copy ptr as *const c_char (Transmute);
-            let ret: $T = $crate::ll::instr(move dst);
-        }
-    };
-    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
-
-    PatternCast {
-        pattern,
-        fn_pat,
-        cast_from,
-        cast_to,
-    }
 }
 
 // FIXME: this should work for functions other than `crate::ll::instr`.
@@ -178,35 +121,5 @@ fn pattern_rust_str_as_c_str_inlined(pcx: PatCtxt<'_>) -> PatternCast<'_> {
         fn_pat,
         cast_from,
         cast_to,
-    }
-}
-
-struct PatternPointer<'pcx> {
-    pattern: &'pcx pat::Pattern<'pcx>,
-    fn_pat: &'pcx pat::Fn<'pcx>,
-    ptr: pat::Location,
-}
-
-// FIXME: this should work for functions other than `crate::ll::instr`.
-#[rpl_macros::pattern_def]
-fn pattern_pass_a_pointer_to_c(pcx: PatCtxt<'_>) -> PatternPointer<'_> {
-    let ptr;
-    let pattern = rpl! {
-        fn $pattern (..) -> _ = mir! {
-            type c_char = libc::c_char;
-
-            #[export(ptr)]
-            let ptr: *const c_char = _;
-            _ = $crate::ll::instr(move ptr);
-        }
-    };
-    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
-
-    PatternPointer {
-        pattern,
-        fn_pat,
-
-        ptr,
-        // ty_var: c_char_ty,
     }
 }

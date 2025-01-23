@@ -61,15 +61,6 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     .dcx()
                     .emit_err(crate::errors::UnvalidatedSliceFromRawParts { src, ptr, slice });
             }
-            let pattern = pattern_from_raw_parts_iter_inlined(self.pcx);
-            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
-                let slice = matches[pattern.slice].span_no_inline(body);
-                let src = matches[pattern.src].span_no_inline(body);
-                let ptr = matches[pattern.ptr].span_no_inline(body);
-                self.tcx
-                    .dcx()
-                    .emit_err(crate::errors::UnvalidatedSliceFromRawParts { src, ptr, slice });
-            }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
     }
@@ -99,66 +90,6 @@ fn pattern_from_raw_parts_iter(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
             let ptr: *const T = std::option::Option::unwrap(move next);
             #[export(slice)]
             let slice: &[T] = std::slice::from_raw_parts::<'_, $T>(copy ptr, _);
-        }
-    };
-    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
-
-    PatternFromRawParts {
-        pattern,
-        fn_pat,
-
-        src,
-        ptr,
-        slice,
-    }
-}
-
-#[rpl_macros::pattern_def]
-fn pattern_from_raw_parts_iter_inlined(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
-    let src;
-    let ptr;
-    let slice;
-    let pattern = rpl! {
-        #[meta($I:ty, $T:ty)]
-        fn $pattern (..) -> _ = mir! {
-            #[export(src)]
-            let src: $I = _;
-
-            let src_ref: &mut $I = &mut src;
-
-            let next: std::option::Option<*const T> = std::iter::Iterator::next(move src_ref);
-
-            // #[export(ptr)]
-            // let ptr: *const T = std::option::Option::unwrap(move next);
-            #[export(ptr)]
-            let ptr: *const T = move (next as Some).0;
-
-            // #[export(slice)]
-            // let slice: &[T] = std::slice::from_raw_parts::<'_, $T>(copy ptr, _);
-            let slice_ptr: *const [$T] = *const [$T] from (copy ptr, _);
-            #[export(slice)]
-            let slice: &[$T] = &*slice_ptr;
-
-            // // Cannot use the above code because of an error:
-            // #[export(ptr)]
-            // let ptr: *const T;
-            // let slice_ptr: *const [$T];
-            // #[export(slice)]
-            // let slice: &[$T];
-
-            // let discriminant: isize = discriminant(next);
-            // switchInt(move discriminant) {
-            //     1isize => {
-            //         ptr = move (next as Some).0;
-            //         slice_ptr = *const [$T] from (copy ptr, _);
-            //         slice = &*slice_ptr;
-            //     }
-            //     _ => {
-            //         ptr = _;
-            //         slice = _;
-            //         slice_ptr = _;
-            //     }
-            // }
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

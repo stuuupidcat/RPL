@@ -62,3 +62,7 @@ rpl_patterns_from_raw_parts = it is unsound to trust pointers from passed-in ite
     .ptr_label = pointer created here
     .slice_label = used here to create a slice from the pointer
     .help = please mark the function as unsafe
+
+rpl_patterns_unsound_cast_between_u64_and_atomic_u64 = it is unsound to cast between `u64` and `AtomicU64`
+    .note = the alignment of `u64` is smaller than `AtomicU64` on many 32-bits platforms
+    .src_label = u64 created here
