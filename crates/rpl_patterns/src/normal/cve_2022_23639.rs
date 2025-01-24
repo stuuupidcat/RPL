@@ -74,9 +74,9 @@ fn pattern_unsound_cast_between_u64_and_atomic_u64(pcx: PatCtxt<'_>) -> UnsoundC
             type AtomicU64 = std::sync::atomic::AtomicU64;
 
             #[export(src)]
-            let src: *mut u64 = _;
+            let $src: *mut u64 = _;
             #[export(transmute)]
-            let dst: *const AtomicU64 = move src as *const AtomicU64 (PtrToPtr);
+            let $dst: *const AtomicU64 = move $src as *const AtomicU64 (PtrToPtr);
         }
     };
 

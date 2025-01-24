@@ -94,24 +94,24 @@ fn pattern_rust_str_as_c_str_inlined(pcx: PatCtxt<'_>) -> PatternCast<'_> {
             type c_char = libc::c_char;
 
             #[export(cast_from)]
-            let src: &std::string::String = _;
+            let $src: &std::string::String = _;
 
             // let bytes: &[u8] = std::string::String::as_bytes(move src);
-            let vec: &std::vec::Vec<u8> = &((*src).vec);
-            let vec_non_null: std::ptr::NonNull<u8> = copy (*vec).buf.inner.ptr.pointer;
-            let vec_ptr: *const u8 = copy vec_non_null.pointer;
-            let vec_len: usize = copy ((*vec).len);
-            let bytes_ptr: *const [u8] = *const [u8] from (copy vec_ptr, copy vec_len);
-            let bytes: &[u8] = &(*bytes_ptr);
+            let $vec: &std::vec::Vec<u8> = &((*$src).vec);
+            let $vec_non_null: std::ptr::NonNull<u8> = copy (*$vec).buf.inner.ptr.pointer;
+            let $vec_ptr: *const u8 = copy $vec_non_null.pointer;
+            let $vec_len: usize = copy ((*$vec).len);
+            let $bytes_ptr: *const [u8] = *const [u8] from (copy $vec_ptr, copy $vec_len);
+            let $bytes: &[u8] = &(*$bytes_ptr);
 
             // let ptr: *const u8 = slice::as_ptr(copy bytes);
-            let bytes_ptr_2: *const [u8] = &raw const (*bytes); // Duplicate with bytes_ptr.
-            let ptr: *const u8 = move bytes_ptr_2 as *const u8 (PtrToPtr);
+            let $bytes_ptr_2: *const [u8] = &raw const (*$bytes); // Duplicate with bytes_ptr.
+            let $ptr: *const u8 = move $bytes_ptr_2 as *const u8 (PtrToPtr);
 
             #[export(cast_to)]
-            let dst: *const c_char = copy ptr as *const c_char (Transmute);
+            let $dst: *const c_char = copy $ptr as *const c_char (Transmute);
 
-            let ret: $T = $crate::ll::instr(move dst);
+            let $ret: $T = $crate::ll::instr(move $dst);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

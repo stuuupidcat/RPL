@@ -66,8 +66,9 @@ fn pattern(pcx: PatCtxt<'_>) -> Pattern<'_> {
     let cstring_drop;
     let ptr_usage;
     let pattern = rpl! {
-        #[meta($SessT:ty)]
         // TODO: match the ABI of the function
+
+        #[meta($SessT:ty)]
         fn $ffi_call(*mut $SessT, *const std::ffi::c_char) -> i32;
 
         #[meta($SessT:ty)]
@@ -76,23 +77,23 @@ fn pattern(pcx: PatCtxt<'_>) -> Pattern<'_> {
             type CStr = core::ffi::c_str::CStr;
             type NonNullU8 = core::ptr::non_null::NonNull<[u8]>;
 
-            let cstring: CString = _;
-            let cstring_ref: &CString = &cstring;
-            let non_null: NonNullU8 = copy ((((*cstring_ref).inner).0).pointer);
-            let uslice_ptr: *const [u8] = copy non_null.pointer;
-            let cstr_ptr: *const CStr = copy uslice_ptr as *const CStr (PtrToPtr);
-            let cstr: &CStr = &(*cstr_ptr);
-            let islice: *const [i8] = &raw const ((*cstr).inner);
-            let iptr: *const i8 = move islice as *const i8 (PtrToPtr);
-            let iptr_arg: *const i8;
-            let s: *mut $SessT;
+            let $cstring: CString = _;
+            let $cstring_ref: &CString = &$cstring;
+            let $non_null: NonNullU8 = copy ((((*$cstring_ref).inner).0).pointer);
+            let $uslice_ptr: *const [u8] = copy $non_null.pointer;
+            let $cstr_ptr: *const CStr = copy $uslice_ptr as *const CStr (PtrToPtr);
+            let $cstr: &CStr = &(*$cstr_ptr);
+            let $islice: *const [i8] = &raw const ((*$cstr).inner);
+            let $iptr: *const i8 = move $islice as *const i8 (PtrToPtr);
+            let $iptr_arg: *const i8;
+            let $s: *mut $SessT;
             #[export(cstring_drop)]
-            drop(cstring);
+            drop($cstring);
 
-            s = _;
-            iptr_arg = copy iptr;
+            $s = _;
+            $iptr_arg = copy $iptr;
             #[export(ptr_usage)]
-            _ = $ffi_call(move s, move iptr_arg);
+            _ = $ffi_call(move $s, move $iptr_arg);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

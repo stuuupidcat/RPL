@@ -94,11 +94,11 @@ fn pattern_thread_local_static(pcx: PatCtxt<'_>) -> PatternThreadLocalStatic<'_>
         // FIXME: the return type is not actually checked to be matched
         fn $pattern(..) -> &'static $T = mir! {
             #[export(thread_local)]
-            let local_key: &std::thread::LocalKey::<std::cell::UnsafeCell<$T>> = _;
-            let result: core::result::Result<&$T, _> =
-                std::thread::LocalKey::<std::cell::UnsafeCell<$T>>::try_with::<_, _>(move local_key, _);
+            let $local_key: &std::thread::LocalKey::<std::cell::UnsafeCell<$T>> = _;
+            let $result: core::result::Result<&$T, _> =
+                std::thread::LocalKey::<std::cell::UnsafeCell<$T>>::try_with::<_, _>(move $local_key, _);
             #[export(ret)]
-            let RET: &$T = core::result::Result::expect(move result, _);
+            let $RET: &$T = core::result::Result::expect(move $result, _);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

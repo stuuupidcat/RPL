@@ -192,10 +192,15 @@ impl ExpandIdent for Ident {
 }
 impl ExpandIdent for PlaceLocal {
     fn with_suffix(&self, suffix: impl std::fmt::Display) -> Ident {
+        self.kind.with_suffix(suffix)
+    }
+}
+impl ExpandIdent for PlaceLocalKind {
+    fn with_suffix(&self, suffix: impl std::fmt::Display) -> Ident {
         match self {
-            PlaceLocal::Return(return_value) => format_ident!("RET{suffix}", span = return_value.span),
-            PlaceLocal::Local(ident) => ident.with_suffix(suffix),
-            PlaceLocal::SelfValue(self_value) => self_value.with_suffix(suffix),
+            PlaceLocalKind::Return(return_value) => format_ident!("RET{suffix}", span = return_value.span),
+            PlaceLocalKind::Local(ident) => ident.with_suffix(suffix),
+            PlaceLocalKind::SelfValue(self_value) => self_value.with_suffix(suffix),
         }
     }
 }
@@ -779,10 +784,10 @@ impl ToTokens for ExpandPat<'_, &LocalDecl> {
         } = self.value;
         let ty = self.ecx.expand(ty);
         let ident = local.as_local();
-        let mk_local_or_self = match local {
-            PlaceLocal::Return(_) => format_ident!("mk_return"),
-            PlaceLocal::Local(_) => format_ident!("mk_local"),
-            PlaceLocal::SelfValue(_) => format_ident!("mk_self"),
+        let mk_local_or_self = match local.kind {
+            PlaceLocalKind::Return(_) => format_ident!("mk_return"),
+            PlaceLocalKind::Local(_) => format_ident!("mk_local"),
+            PlaceLocalKind::SelfValue(_) => format_ident!("mk_self"),
         };
         quote_each_token!(tokens let #ident = #mir_pat.#mk_local_or_self(#ty); );
         if let Some(PunctAnd {

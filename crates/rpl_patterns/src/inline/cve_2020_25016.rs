@@ -112,16 +112,16 @@ fn pattern_cast(pcx: PatCtxt<'_>) -> PatternCast<'_> {
         #[meta( #[export(ty_var)] $T:ty = is_all_safe_trait)]
         fn $pattern (..) -> _ = mir! {
             #[export(cast_from)]
-            let from_slice: &[$T] = _;
-            let from_raw: *const [$T] = &raw const *from_slice;
-            let from_len: usize = PtrMetadata(copy from_slice);
-            let ty_size: usize = SizeOf($T);
-            let to_ptr_t: *const T = move from_raw as *const $T (PtrToPtr);
-            let to_ptr: *const u8 = move to_ptr_t as *const u8 (PtrToPtr);
-            let to_len: usize = Mul(move from_len, move ty_size);
-            let to_raw: *const [u8] = *const [u8] from (copy to_ptr, copy to_len);
+            let $from_slice: &[$T] = _;
+            let $from_raw: *const [$T] = &raw const *$from_slice;
+            let $from_len: usize = PtrMetadata(copy $from_slice);
+            let $ty_size: usize = SizeOf($T);
+            let $to_ptr_t: *const T = move $from_raw as *const $T (PtrToPtr);
+            let $to_ptr: *const u8 = move $to_ptr_t as *const u8 (PtrToPtr);
+            let $to_len: usize = Mul(move $from_len, move $ty_size);
+            let $to_raw: *const [u8] = *const [u8] from (copy $to_ptr, copy $to_len);
             #[export(cast_to)]
-            let to_slice: &[u8] = &*to_raw;
+            let $to_slice: &[u8] = &*$to_raw;
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
@@ -146,17 +146,17 @@ fn pattern_cast_mut(pcx: PatCtxt<'_>) -> PatternCast<'_> {
         fn $pattern (..) -> _ = mir! {
 
             #[export(cast_from)]
-            let from_slice_mut: &mut [$T] = _;
-            let from_slice_ref: &[$T] = &*from_slice_mut;
-            let from_raw_mut: *mut [$T] = &raw mut *from_slice_mut;
-            let from_len_mut: usize = PtrMetadata(move from_slice_ref);
-            let ty_size_mut: usize = SizeOf($T);
-            let to_ptr_mut_t: *mut $T = move from_raw_mut as *mut $T (PtrToPtr);
-            let to_ptr_mut: *mut u8 = move to_ptr_mut_t as *mut u8 (PtrToPtr);
-            let to_len_mut: usize = Mul(move from_len_mut, move ty_size_mut);
-            let to_raw_mut: *mut [u8] = *mut [u8] from (copy to_ptr_mut, copy to_len_mut);
+            let $from_slice_mut: &mut [$T] = _;
+            let $from_slice_ref: &[$T] = &*$from_slice_mut;
+            let $from_raw_mut: *mut [$T] = &raw mut *$from_slice_mut;
+            let $from_len_mut: usize = PtrMetadata(move $from_slice_ref);
+            let $ty_size_mut: usize = SizeOf($T);
+            let $to_ptr_mut_t: *mut $T = move $from_raw_mut as *mut $T (PtrToPtr);
+            let $to_ptr_mut: *mut u8 = move $to_ptr_mut_t as *mut u8 (PtrToPtr);
+            let $to_len_mut: usize = Mul(move $from_len_mut, move $ty_size_mut);
+            let $to_raw_mut: *mut [u8] = *mut [u8] from (copy $to_ptr_mut, copy $to_len_mut);
             #[export(cast_to)]
-            let to_slice_mut: &mut [u8] = &mut *to_raw_mut;
+            let $to_slice_mut: &mut [u8] = &mut *$to_raw_mut;
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

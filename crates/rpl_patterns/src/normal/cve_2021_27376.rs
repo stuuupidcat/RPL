@@ -97,9 +97,9 @@ fn pattern_cast_socket_addr_v6(pcx: PatCtxt<'_>) -> PatternCast<'_> {
     let pattern = rpl! {
         fn $pattern (..) -> _ = mir! {
             #[export(cast_from)]
-            let src: *const std::net::SocketAddrV6 = _;
+            let $src: *const std::net::SocketAddrV6 = _;
             #[export(cast_to)]
-            let dst: *const libc::sockaddr = move src as *const libc::sockaddr (PtrToPtr);
+            let $dst: *const libc::sockaddr = move $src as *const libc::sockaddr (PtrToPtr);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
@@ -122,9 +122,9 @@ fn pattern_cast_socket_addr_v4(pcx: PatCtxt<'_>) -> PatternCast<'_> {
     let pattern = rpl! {
         fn $pattern (..) -> _ = mir! {
             #[export(cast_from)]
-            let src: *const std::net::SocketAddrV4 = _;
+            let $src: *const std::net::SocketAddrV4 = _;
             #[export(cast_to)]
-            let dst: *const libc::sockaddr = move src as *const libc::sockaddr (PtrToPtr);
+            let $dst: *const libc::sockaddr = move $src as *const libc::sockaddr (PtrToPtr);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

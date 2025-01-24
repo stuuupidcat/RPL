@@ -106,12 +106,12 @@ fn pattern_rust_str_as_c_str(pcx: PatCtxt<'_>) -> PatternCast<'_> {
             type c_char = libc::c_char;
 
             #[export(cast_from)]
-            let src: &alloc::string::String = _;
-            let bytes: &[u8] = alloc::string::String::as_bytes(move src);
-            let ptr: *const u8 = slice::as_ptr(copy bytes);
+            let $src: &alloc::string::String = _;
+            let $bytes: &[u8] = alloc::string::String::as_bytes(move $src);
+            let $ptr: *const u8 = slice::as_ptr(copy $bytes);
             #[export(cast_to)]
-            let dst: *const c_char = copy ptr as *const c_char (Transmute);
-            let ret: $T = $crate::ll::instr(move dst);
+            let $dst: *const c_char = copy $ptr as *const c_char (Transmute);
+            let $ret: $T = $crate::ll::instr(move $dst);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
@@ -139,8 +139,8 @@ fn pattern_pass_a_pointer_to_c(pcx: PatCtxt<'_>) -> PatternPointer<'_> {
             type c_char = libc::c_char;
 
             #[export(ptr)]
-            let ptr: *const c_char = _;
-            _ = $crate::ll::instr(move ptr);
+            let $ptr: *const c_char = _;
+            _ = $crate::ll::instr(move $ptr);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

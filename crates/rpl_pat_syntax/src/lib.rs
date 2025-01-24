@@ -369,7 +369,14 @@ pub enum Type {
 }
 
 #[derive(ToTokens, Parse, From, Display)]
-pub enum PlaceLocal {
+#[display("${kind}")]
+pub struct PlaceLocal {
+    tk_dollar: Token![$],
+    pub kind: PlaceLocalKind,
+}
+
+#[derive(ToTokens, Parse, From, Display)]
+pub enum PlaceLocalKind {
     #[parse(peek = kw::RET)]
     #[display("RET")]
     Return(kw::RET),
@@ -381,12 +388,12 @@ pub enum PlaceLocal {
     SelfValue(Token![self]),
 }
 
-impl PlaceLocal {
+impl PlaceLocalKind {
     pub fn span(&self) -> Span {
         match self {
-            PlaceLocal::Return(ret) => ret.span,
-            PlaceLocal::Local(ident) => ident.span(),
-            PlaceLocal::SelfValue(self_value) => self_value.span,
+            PlaceLocalKind::Return(ret) => ret.span,
+            PlaceLocalKind::Local(ident) => ident.span(),
+            PlaceLocalKind::SelfValue(self_value) => self_value.span,
         }
     }
 }
@@ -426,7 +433,7 @@ pub struct PlaceIndex {
     #[syn(bracketed)]
     bracket: token::Bracket,
     #[syn(in = bracket)]
-    pub index: Ident,
+    pub index: PlaceLocal,
 }
 
 #[derive(ToTokens)]

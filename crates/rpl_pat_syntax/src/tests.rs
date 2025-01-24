@@ -103,61 +103,61 @@ fn test_type() {
 
 #[test]
 fn test_place() {
-    pass!(Place!(x));
-    pass!(Place!(x.0));
-    pass!(Place!((*x.0)));
-    pass!(Place!((*x.0)[2 of 3]));
-    pass!(Place!((*x.0)[y]));
-    pass!(Place!((*x.0)[-3 of 4]));
-    pass!(Place!((*x.0)[1:3]));
-    pass!(Place!((*x.0)[1:-3]));
-    pass!(Place!((*self).mem));
+    pass!(Place!($x));
+    pass!(Place!($x.0));
+    pass!(Place!((*$x.0)));
+    pass!(Place!((*$x.0)[2 of 3]));
+    pass!(Place!((*$x.0)[$y]));
+    pass!(Place!((*$x.0)[-3 of 4]));
+    pass!(Place!((*$x.0)[1:3]));
+    pass!(Place!((*$x.0)[1:-3]));
+    pass!(Place!((*$self).mem));
 
-    fail!(Place!(from_ptr as), "unexpected token");
+    fail!(Place!($from_ptr as), "unexpected token");
 }
 
 #[test]
 fn test_operand() {
     pass!(Operand!(const std::mem::take));
-    pass!(Operand!(move y));
-    fail!(Operand!(copy from_ptr as), "unexpected token");
+    pass!(Operand!(move $y));
+    fail!(Operand!(copy $from_ptr as), "unexpected token");
 }
 
 #[test]
 fn test_fn_operand() {
     pass!(FnOperand!(std::mem::take));
-    pass!(FnOperand!((move y)));
-    pass!(FnOperand!((copy from_ptr)));
+    pass!(FnOperand!((move $y)));
+    pass!(FnOperand!((copy $from_ptr)));
 }
 
 #[test]
 fn test_rvalue() {
     pass!(CastKind!(PtrToPtr));
-    pass!(RvalueCast!(copy from_ptr as *const u8(PtrToPtr)));
+    pass!(RvalueCast!(copy $from_ptr as *const u8(PtrToPtr)));
 
-    pass!(RvalueOrCall!(&x));
-    pass!(RvalueOrCall!(&mut y));
-    pass!(RvalueOrCall!(&raw const *x));
-    pass!(RvalueOrCall!(&raw mut *y));
+    pass!(RvalueOrCall!(&$x));
+    pass!(RvalueOrCall!(&mut $y));
+    pass!(RvalueOrCall!(&raw const *$x));
+    pass!(RvalueOrCall!(&raw mut *$y));
     pass!(RvalueOrCall!([const 0; 5]));
     pass!(RvalueOrCall!([const 0, const 1, const 2, const 3, const 4]));
     pass!(RvalueOrCall!((const 0, const 1, const 2, const 3, const 4)));
     pass!(RvalueOrCall!(Test { x: const 0 }));
-    pass!(RvalueOrCall!(*const [i32] from (copy ptr, copy meta)));
+    pass!(RvalueOrCall!(*const [i32] from (copy $ptr, copy $meta)));
 
     pass!(RvalueOrCall!(
         alloc::raw_vec::RawVec::<$T, Global> {
-            inner: move to_raw_vec_inner,
+            inner: move $to_raw_vec_inner,
             _marker: const core::marker::PhantomData::<$T>,
         }
     ));
 
     fail!(
-        RvalueCast!(from_ptr as *const u8),
+        RvalueCast!($from_ptr as *const u8),
         "expected one of: `_`, `..`, `move`, `copy`, `const`"
     );
     fail!(
-        RvalueCast!(copy from_ptr as *const u8),
+        RvalueCast!(copy $from_ptr as *const u8),
         "unexpected end of input, expected parentheses"
     );
 }
@@ -165,28 +165,28 @@ fn test_rvalue() {
 #[test]
 fn test_aggregate_adt_struct() {
     pass!(
-        AggregateAdtStruct!(alloc::raw_vec::RawVec { inner: move raw_vec_inner, _marker: const std::marker::PhantomData::<$T> })
+        AggregateAdtStruct!(alloc::raw_vec::RawVec { inner: move $raw_vec_inner, _marker: const std::marker::PhantomData::<$T> })
     );
 }
 
 #[test]
 fn test_call() {
-    pass!(Call!( std::mem::take(move y) ));
-    pass!(RvalueOrCall!( std::mem::take(move y) ));
+    pass!(Call!( std::mem::take(move $y) ));
+    pass!(RvalueOrCall!( std::mem::take(move $y) ));
     #[rustfmt::skip]
-    pass!(Call!( < <core::ffi::c_str::CStr>::from_bytes_with_nul_unchecked>::___rt_impl(move uslice) ));
+    pass!(Call!( < <core::ffi::c_str::CStr>::from_bytes_with_nul_unchecked>::___rt_impl(move $uslice) ));
     #[rustfmt::skip]
-    pass!(RvalueOrCall!( < <core::ffi::c_str::CStr>::from_bytes_with_nul_unchecked>::___rt_impl(move uslice) ));
+    pass!(RvalueOrCall!( < <core::ffi::c_str::CStr>::from_bytes_with_nul_unchecked>::___rt_impl(move $uslice) ));
 
-    pass!(Call!( $crate::ffi::sqlite3session_attach(move s, move iptr) ));
-    pass!(RvalueOrCall!( $crate::ffi::sqlite3session_attach(move s, move iptr) ));
-    pass!(RvalueOrCall!( $ffi_call(move s, move iptr) ));
+    pass!(Call!( $crate::ffi::sqlite3session_attach(move $s, move $iptr) ));
+    pass!(RvalueOrCall!( $crate::ffi::sqlite3session_attach(move $s, move $iptr) ));
+    pass!(RvalueOrCall!( $ffi_call(move $s, move $iptr) ));
 }
 
 #[test]
 fn test_assign() {
-    pass!(Assign!( *x = std::mem::take(move y) ));
-    pass!(Assign!( opt = #[lang = "None"] ));
+    pass!(Assign!( *$x = std::mem::take(move $y) ));
+    pass!(Assign!( $opt = #[lang = "None"] ));
 }
 
 #[test]
@@ -201,40 +201,40 @@ fn test_meta() {
 fn test_declaration() {
     #[rustfmt::skip]
     pass!(Declaration!( type SliceT = [$T]; ));
-    pass!(Declaration!( let x: u32 = const 0_usize; ));
-    pass!(Declaration!( let to_ptr: *const u8 = copy from_ptr as *const u8 (PtrToPtr); ));
+    pass!(Declaration!( let $x: u32 = const 0_usize; ));
+    pass!(Declaration!( let $to_ptr: *const u8 = copy $from_ptr as *const u8 (PtrToPtr); ));
 }
 
 #[test]
 fn test_block() {
     pass!(Block!({
-        x1 = copy x0;
-        x2 = <usize as Step>::forward_unchecked(copy x1, const 1_usize);
-        x0 = move x2;
-        x3 = Some(copy x1);
-        x = copy (x3 as Some).0;
-        base = copy (*self).mem;
-        offset = copy x as isize (IntToInt);
-        elem_ptr = Offset(copy base, copy offset);
-        _ = drop_in_place(copy elem_ptr);
+        $x1 = copy $x0;
+        $x2 = <usize as Step>::forward_unchecked(copy $x1, const 1_usize);
+        $x0 = move $x2;
+        $x3 = Some(copy $x1);
+        $x = copy ($x3 as Some).0;
+        $base = copy (*$self).mem;
+        $offset = copy $x as isize (IntToInt);
+        $elem_ptr = Offset(copy $base, copy $offset);
+        _ = drop_in_place(copy $elem_ptr);
     }));
 }
 
 #[test]
 fn test_switch_int() {
     pass!(SwitchInt!(
-        switchInt(move cmp) {
+        switchInt(move $cmp) {
             false => break,
             _ => {
-                x1 = copy x0;
-                x2 = <usize as Step>::forward_unchecked(copy x1, const 1_usize);
-                x0 = move x2;
-                x3 = Some(copy x1);
-                x = copy (x3 as Some).0;
-                base = copy (*self).mem;
-                offset = copy x as isize (IntToInt);
-                elem_ptr = Offset(copy base, copy offset);
-                _ = drop_in_place(copy elem_ptr);
+                $x1 = copy $x0;
+                $x2 = <usize as Step>::forward_unchecked(copy $x1, const 1_usize);
+                $x0 = move $x2;
+                $x3 = Some(copy $x1);
+                $x = copy ($x3 as Some).0;
+                $base = copy (*$self).mem;
+                $offset = copy $x as isize (IntToInt);
+                $elem_ptr = Offset(copy $base, copy $offset);
+                _ = drop_in_place(copy $elem_ptr);
             }
         }
     ));
@@ -245,20 +245,20 @@ fn test_loop() {
     pass!(Loop!(loop {}));
     pass!(Loop!(
         loop {
-            x_cmp = copy x0;
-            cmp = Lt(move x_cmp, copy len);
-            switchInt(move cmp) {
+            $x_cmp = copy $x0;
+            $cmp = Lt(move $x_cmp, copy $len);
+            switchInt(move $cmp) {
                 false => break,
                 _ => {
-                    x1 = copy x0;
-                    x2 = <usize as Step>::forward_unchecked(copy x1, const 1_usize);
-                    x0 = move x2;
-                    x3 = Some(copy x1);
-                    x = copy (x3 as Some).0;
-                    base = copy (*self).mem;
-                    offset = copy x as isize (IntToInt);
-                    elem_ptr = Offset(copy base, copy offset);
-                    _ = drop_in_place(copy elem_ptr);
+                    $x1 = copy $x0;
+                    $x2 = <usize as Step>::forward_unchecked(copy $x1, const 1_usize);
+                    $x0 = move $x2;
+                    $x3 = Some(copy $x1);
+                    $x = copy ($x3 as Some).0;
+                    $base = copy (*$self).mem;
+                    $offset = copy $x as isize (IntToInt);
+                    $elem_ptr = Offset(copy $base, copy $offset);
+                    _ = drop_in_place(copy $elem_ptr);
                 }
             }
         }
@@ -267,35 +267,35 @@ fn test_loop() {
 
 #[test]
 fn test_local_decl() {
-    pass!(LocalDecl!( let from_slice: SliceT = _; ));
-    pass!(LocalDecl!( let from_raw_slice: PtrSliceT = &raw const *from_slice; ));
-    pass!(LocalDecl!( let from_len: usize = Len(from_slice); ));
-    pass!(LocalDecl!( let ty_size: usize = SizeOf($T); ));
-    pass!(LocalDecl!( let to_ptr: PtrU8 = copy from_ptr as PtrU8 (PtrToPtr); ));
-    pass!(LocalDecl!( let to_len: usize = Mul(copy from_len, copy ty_size); ));
-    pass!(LocalDecl!( let to_raw_slice: PtrSliceU8 = *const SliceU8 from (copy to_ptr, copy t_len); ));
-    pass!(LocalDecl!( let to_slice: RefSliceU8 = &*to_raw_slice; ));
+    pass!(LocalDecl!( let $from_slice: SliceT = _; ));
+    pass!(LocalDecl!( let $from_raw_slice: PtrSliceT = &raw const *$from_slice; ));
+    pass!(LocalDecl!( let $from_len: usize = Len($from_slice); ));
+    pass!(LocalDecl!( let $ty_size: usize = SizeOf($T); ));
+    pass!(LocalDecl!( let $to_ptr: PtrU8 = copy $from_ptr as PtrU8 (PtrToPtr); ));
+    pass!(LocalDecl!( let $to_len: usize = Mul(copy $from_len, copy $ty_size); ));
+    pass!(LocalDecl!( let $to_raw_slice: PtrSliceU8 = *const SliceU8 from (copy $to_ptr, copy $t_len); ));
+    pass!(LocalDecl!( let $to_slice: RefSliceU8 = &*$to_raw_slice; ));
 }
 
 #[test]
 fn test_statement() {
     #[rustfmt::skip]
-    pass!(Statement!( *x = copy y.0; ));
-    pass!(Statement!( cmp = Lt(move x_cmp, copy len); ));
-    pass!(Statement!( x1 = copy x0; ));
-    pass!(Statement!( x2 = <usize as Step>::forward_unchecked(copy x1, const 1_usize); ));
-    pass!(Statement!( x0 = move x2; ));
-    pass!(Statement!( x3 = Some(copy x1); ));
-    pass!(Statement!( x = copy (x3 as Some).0; ));
-    pass!(Statement!( base = copy (*self).mem; ));
-    pass!(Statement!( offset = copy x as isize (IntToInt); ));
-    pass!(Statement!( elem_ptr = Offset(copy base, copy offset); ));
-    pass!(Statement!( _ = drop_in_place(copy elem_ptr); ));
-    pass!(Statement!( *x = std::mem::take(move y); ));
-    pass!(Statement!(drop(y[x]);));
+    pass!(Statement!( *$x = copy $y.0; ));
+    pass!(Statement!( $cmp = Lt(move $x_cmp, copy $len); ));
+    pass!(Statement!( $x1 = copy $x0; ));
+    pass!(Statement!( $x2 = <usize as Step>::forward_unchecked(copy $x1, const 1_usize); ));
+    pass!(Statement!( $x0 = move $x2; ));
+    pass!(Statement!( $x3 = Some(copy $x1); ));
+    pass!(Statement!( $x = copy ($x3 as Some).0; ));
+    pass!(Statement!( $base = copy (*$self).mem; ));
+    pass!(Statement!( $offset = copy $x as isize (IntToInt); ));
+    pass!(Statement!( $elem_ptr = Offset(copy $base, copy $offset); ));
+    pass!(Statement!( _ = drop_in_place(copy $elem_ptr); ));
+    pass!(Statement!( *$x = std::mem::take(move $y); ));
+    pass!(Statement!(drop($y[$x]);));
     pass!(Statement!(
-        from_vec_unique_ptr = core::ptr::unique::Unique::<u8> {
-            pointer: copy from_vec_ptr,
+        $from_vec_unique_ptr = core::ptr::unique::Unique::<u8> {
+            pointer: copy $from_vec_ptr,
             _marker: const core::marker::PhantomData::<u8>,
         };
     ));
@@ -313,14 +313,14 @@ fn test_mir_pattern() {
         type PtrSliceU8 = *const SliceU8;
         type RefSliceU8 = &SliceU8;
 
-        let from_slice: SliceT = _;
-        let from_raw_slice: PtrSliceT = &raw const *from_slice;
-        let from_len: usize = Len(from_slice);
-        let ty_size: usize = SizeOf($T);
-        let to_ptr: PtrU8 = copy from_ptr as PtrU8 (PtrToPtr);
-        let to_len: usize = Mul(copy from_len, copy ty_size);
-        let to_raw_slice: PtrSliceU8 = *const SliceU8 from (copy to_ptr, copy t_len);
-        let to_slice: RefSliceU8 = &*to_raw_slice;
+        let $from_slice: SliceT = _;
+        let $from_raw_slice: PtrSliceT = &raw const *$from_slice;
+        let $from_len: usize = Len($from_slice);
+        let $ty_size: usize = SizeOf($T);
+        let $to_ptr: PtrU8 = copy $from_ptr as PtrU8 (PtrToPtr);
+        let $to_len: usize = Mul(copy $from_len, copy $ty_size);
+        let $to_raw_slice: PtrSliceU8 = *const SliceU8 from (copy $to_ptr, copy $t_len);
+        let $to_slice: RefSliceU8 = &*$to_raw_slice;
     });
     pass!(Mir! {
         use core::ffi::c_str::CString;
@@ -336,30 +336,30 @@ fn test_mir_pattern() {
         type PtrSliceI8 = *const [i8];
         type PtrI8 = *const i8;
 
-        let cstring: CString = _;
-        let non_null: NonNullSliceU8 = copy (((cstring.inner).0).pointer);
-        let uslice_ptr: PtrSliceU8 = copy (non_null.pointer);
-        let cstr: PtrCStr = copy uslice_ptr as PtrCStr (PtrToPtr);
+        let $cstring: CString = _;
+        let $non_null: NonNullSliceU8 = copy ((($cstring.inner).0).pointer);
+        let $uslice_ptr: PtrSliceU8 = copy ($non_null.pointer);
+        let $cstr: PtrCStr = copy $uslice_ptr as PtrCStr (PtrToPtr);
         // /*
-        let uslice: RefSliceU8 = &(*uslice_ptr);
-        let cstr: RefCStr = < <CStr>::from_bytes_with_nul_unchecked>::___rt_impl(move uslice);
+        let $uslice: RefSliceU8 = &(*$uslice_ptr);
+        let $cstr: RefCStr = < <CStr>::from_bytes_with_nul_unchecked>::___rt_impl(move $uslice);
         // */
-        let islice: PtrSliceI8 = &raw const ((*cstr).inner);
-        let iptr: PtrI8 = move islice as PtrI8 (PtrToPtr);
-        let s: i32;
-        let ret: i32;
-        drop(cstring);
-        s = _;
-        ret = sqlite3session_attach(move s, move iptr);
+        let $islice: PtrSliceI8 = &raw const ((*$cstr).inner);
+        let $iptr: PtrI8 = move $islice as PtrI8 (PtrToPtr);
+        let $s: i32;
+        let $ret: i32;
+        drop($cstring);
+        $s = _;
+        $ret = sqlite3session_attach(move $s, move $iptr);
     });
     pass!(Mir! {
-        let _0: [u32; 3];
-        let _1: isize;
+        let $_0: [u32; 3];
+        let $_1: isize;
 
-        switchInt(copy _1) {
-            0_isize => _0 = [const 3_u32, const 4_u32, const 5_u32],
-            1_isize => _0 = [const 6_u32, const 7_u32, const 8_u32],
-            _ => _0 = [const 9_u32, const 10_u32, const 11_u32],
+        switchInt(copy $_1) {
+            0_isize => $_0 = [const 3_u32, const 4_u32, const 5_u32],
+            1_isize => $_0 = [const 6_u32, const 7_u32, const 8_u32],
+            _ => $_0 = [const 9_u32, const 10_u32, const 11_u32],
         }
     });
 }
@@ -386,17 +386,17 @@ fn test_parse_cve_2018_21000() {
             type PtrT1 = *mut $T1;
             type PtrT3 = *mut $T3;
 
-            let from_vec: VecT1 = _;
-            let size: usize = SizeOf($T2);
-            let from_cap: usize = Vec::capacity(move from_vec);
-            let to_cap: usize = Mul(copy from_cap, copy size);
-            let from_len: usize = Len(from_vec);
-            let to_len: usize = Mul(copy from_len, copy size);
-            let from_vec_ptr: PtrT1 = Vec::as_mut_ptr(move from_vec);
-            let to_vec_ptr: PtrT3 = copy from_vec_ptr as PtrT3 (PtrToPtr);
+            let $from_vec: VecT1 = _;
+            let $size: usize = SizeOf($T2);
+            let $from_cap: usize = Vec::capacity(move $from_vec);
+            let $to_cap: usize = Mul(copy $from_cap, copy $size);
+            let $from_len: usize = Len($from_vec);
+            let $to_len: usize = Mul(copy $from_len, copy $size);
+            let $from_vec_ptr: PtrT1 = Vec::as_mut_ptr(move $from_vec);
+            let $to_vec_ptr: PtrT3 = copy $from_vec_ptr as PtrT3 (PtrToPtr);
             // tuple: not implemented yet
             // let tmp: () = std::mem::forget(move from_vec);
-            let res: VecT3 = Vec::from_raw_parts(copy to_vec_ptr, copy to_cap, copy to_len);
+            let $res: VecT3 = Vec::from_raw_parts(copy $to_vec_ptr, copy $to_cap, copy $to_len);
         }
     });
 }
@@ -415,11 +415,11 @@ fn test_parse_cve_2020_35881_const() {
             type PtrT2 = *const ();
             type PtrPtrT2 = *const *const ();
 
-            let ptr_to_data: PtrT1 = _;
-            let data: DerefPtrT1 = &ptr_to_data;
-            let ptr_to_ptr_to_data: PtrPtrT1 = &raw const (*data);
-            let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *const *const () (Transmute);
-            let ptr_to_res: PtrT2 = copy* ptr_to_ptr_to_res;
+            let $ptr_to_data: PtrT1 = _;
+            let $data: DerefPtrT1 = &$ptr_to_data;
+            let $ptr_to_ptr_to_data: PtrPtrT1 = &raw const (*$data);
+            let $ptr_to_ptr_to_res: PtrPtrT2 = move $ptr_to_ptr_to_data as *const *const () (Transmute);
+            let $ptr_to_res: PtrT2 = copy* $ptr_to_ptr_to_res;
         }
     });
 }
@@ -435,11 +435,11 @@ fn test_parse_cve_2020_35881_mut() {
             type PtrT2 = *mut ();
             type PtrPtrT2 = *mut *mut ();
 
-            let ptr_to_data: PtrT1 = _;
-            let data: DerefPtrT1 = &mut ptr_to_data;
-            let ptr_to_ptr_to_data: PtrPtrT1 = &raw mut (*data);
-            let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *mut *mut () (Transmute);
-            let ptr_to_res: PtrT2 = copy *ptr_to_ptr_to_res;
+            let $ptr_to_data: PtrT1 = _;
+            let $data: DerefPtrT1 = &mut $ptr_to_data;
+            let $ptr_to_ptr_to_data: PtrPtrT1 = &raw mut (*$data);
+            let $ptr_to_ptr_to_res: PtrPtrT2 = move $ptr_to_ptr_to_data as *mut *mut () (Transmute);
+            let $ptr_to_res: PtrT2 = copy *$ptr_to_ptr_to_res;
         }
     });
 }
@@ -460,43 +460,43 @@ fn test_parse_cve_2021_29941_2() {
             type RefMutEnumerateRangeT = &mut std::iter::Enumerate<RangeT>;
             type OptionUsizeT = Option<(usize, $T)>;
 
-            let iter: range = _;
+            let $iter: RangeT = _;
             // let len: usize = <RangeT as std::iter::ExactSizeIterator>::len(move iter);
-            let len: usize = RangeT::len(move iter);
-            let mut vec: Vec<T> = std::vec::Vec::with_capacity(copy len);
-            let mut ref_to_vec: RefMutVecT = &mut vec;
-            let mut ptr_to_vec: PtrMutT = Vec::as_mut_ptr(move ref_to_vec);
-            let mut slice: RefMutSliceT = std::slice::from_raw_parts_mut(copy ptr_to_vec, copy len);
+            let $len: usize = RangeT::len(move $iter);
+            let mut $vec: Vec<T> = std::vec::Vec::with_capacity(copy $len);
+            let mut $ref_to_vec: RefMutVecT = &mut $vec;
+            let mut $ptr_to_vec: PtrMutT = Vec::as_mut_ptr(move $ref_to_vec);
+            let mut $slice: RefMutSliceT = std::slice::from_raw_parts_mut(copy $ptr_to_vec, copy $len);
             // let mut enumerate: EnumerateRangeT = <RangeT as std::iter::Iterator>::enumerate(move iter);
-            let mut enumerate: EnumerateRangeT = RangeT::enumerate(move iter);
-            let mut enumerate: RefMutEnumerateRangeT = &mut enumerate;
-            let next: OptionUsizeT;
-            let cmp: isize;
-            let first: usize;
-            let second_t: $T;
-            let second_usize: usize;
-            let _tmp: ();
+            let mut $enumerate: EnumerateRangeT = RangeT::enumerate(move $iter);
+            let mut $enumerate: RefMutEnumerateRangeT = &mut $enumerate;
+            let $next: OptionUsizeT;
+            let $cmp: isize;
+            let $first: usize;
+            let $second_t: $T;
+            let $second_usize: usize;
+            let $_tmp: ();
             loop {
                 // next = <EnumerateRangeT as std::iter::Iterator>::next(move enumerate);
-                next = EnumerateRangeT::next(move enumerate);
+                $next = EnumerateRangeT::next(move $enumerate);
                 // in `cmp = discriminant(copy next);`
                 // which discriminant should be used?
-                cmp = balabala::discriminant(copy next);
-                switchInt(move cmp) {
+                $cmp = balabala::discriminant(copy $next);
+                switchInt(move $cmp) {
                     // true or 1 here?
                     true => {
-                        first = copy (next as Some).0;
-                        second_t = copy (next as Some).1;
-                        second_usize = copy second_t as usize (IntToInt);
-                        (*slice)[second_usize] = copy first as $T (IntToInt);
+                        $first = copy ($next as Some).0;
+                        $second_t = copy ($next as Some).1;
+                        $second_usize = copy $second_t as usize (IntToInt);
+                        (*$slice)[$second_usize] = copy $first as $T (IntToInt);
                     }
                     _ => break,
                 }
             }
             // variable shadowing?
             // There cannnot be two mutable references to `vec` in the same scope
-            ref_to_vec = &mut vec;
-            _tmp = Vec::set_len(move ref_to_vec, copy len);
+            $ref_to_vec = &mut $vec;
+            $_tmp = Vec::set_len(move $ref_to_vec, copy $len);
         }
     });
 }
@@ -506,53 +506,53 @@ fn test_cve_2020_35892_revised() {
     pass!(Item! {
         #[meta($T:ty, $SlabT:ty)]
         fn _ (..) -> _ = mir! {
-            let self: &mut $SlabT;
-            let len: usize;
-            let x1: usize;
-            let x2: usize;
-            let opt: #[lang = "Option"]<usize>;
-            let discr: isize;
-            let x: usize;
-            let start_ref: &usize;
-            let end_ref: &usize;
-            let start: usize;
-            let end: usize;
-            let range: core::ops::range::Range<usize>;
-            let mut iter: core::ops::range::Range<usize>;
-            let mut iter_mut: &mut core::ops::range::Range<usize>;
-            let mut base: *mut $T;
-            let offset: isize;
-            let elem_ptr: *mut $T;
-            let cmp: bool;
+            let $self: &mut $SlabT;
+            let $len: usize;
+            let $x1: usize;
+            let $x2: usize;
+            let $opt: #[lang = "Option"]<usize>;
+            let $discr: isize;
+            let $x: usize;
+            let $start_ref: &usize;
+            let $end_ref: &usize;
+            let $start: usize;
+            let $end: usize;
+            let $range: core::ops::range::Range<usize>;
+            let mut $iter: core::ops::range::Range<usize>;
+            let mut $iter_mut: &mut core::ops::range::Range<usize>;
+            let mut $base: *mut $T;
+            let $offset: isize;
+            let $elem_ptr: *mut $T;
+            let $cmp: bool;
 
-            len = copy (*self).len;
-            range = core::ops::range::Range { start: const 0_usize, end: move len };
-            iter = move range;
+            $len = copy (*$self).len;
+            $range = core::ops::range::Range { start: const 0_usize, end: move $len };
+            $iter = move $range;
             loop {
-                iter_mut = &mut iter;
-                start_ref = &(*iter_mut).start;
-                start = copy *start_ref;
-                end_ref = &(*iter_mut).end;
-                end = copy *end;
-                cmp = Lt(move start, copy end);
-                switchInt(move cmp) {
-                    false => opt = #[lang = "None"],
+                $iter_mut = &mut $iter;
+                $start_ref = &(*$iter_mut).start;
+                $start = copy *$start_ref;
+                $end_ref = &(*$iter_mut).end;
+                $end = copy *$end;
+                $cmp = Lt(move $start, copy $end);
+                switchInt(move $cmp) {
+                    false => $opt = #[lang = "None"],
                     _ => {
-                        x1 = copy (*iter_mut).start;
-                        x2 = core::iter::range::Step::forward_unchecked(copy x1, const 1_usize);
-                        (*iter_mut).start = copy x2;
-                        opt = #[lang = "Some"](copy x1);
+                        $x1 = copy (*$iter_mut).start;
+                        $x2 = core::iter::range::Step::forward_unchecked(copy $x1, const 1_usize);
+                        (*$iter_mut).start = copy $x2;
+                        $opt = #[lang = "Some"](copy $x1);
                     }
                 }
-                discr = discriminant(opt);
-                switchInt(move discr) {
+                $discr = discriminant($opt);
+                switchInt(move $discr) {
                     0_isize => break,
                     1_isize => {
-                        x = copy (opt as Some).0;
-                        base = copy (*self).mem;
-                        offset = copy x as isize (IntToInt);
-                        elem_ptr = Offset(copy base, copy offset);
-                        _ = core::ptr::drop_in_place(copy elem_ptr);
+                        $x = copy ($opt as Some).0;
+                        $base = copy (*$self).mem;
+                        $offset = copy $x as isize (IntToInt);
+                        $elem_ptr = Offset(copy $base, copy $offset);
+                        _ = core::ptr::drop_in_place(copy $elem_ptr);
                     }
                 }
             }

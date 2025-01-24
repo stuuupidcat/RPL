@@ -91,28 +91,28 @@ test_case! {
     fn cve_2020_25016() {
         meta!($T:ty);
 
-        let from_slice: &[$T] = _;
-        let from_slice_mut: &mut [$T] = _;
+        let $from_slice: &[$T] = _;
+        let $from_slice_mut: &mut [$T] = _;
 
-        let from_raw: *const [$T] = &raw const *from_slice;
-        let from_raw_mut: *mut [$T] = &raw mut *from_slice_mut;
+        let $from_raw: *const [$T] = &raw const *$from_slice;
+        let $from_raw_mut: *mut [$T] = &raw mut *$from_slice_mut;
 
-        let to_ptr: *const u8 = copy from_raw as *const u8 (PtrToPtr);
-        let to_ptr_mut: *mut u8 = copy from_raw_mut as *mut u8 (PtrToPtr);
+        let $to_ptr: *const u8 = copy $from_raw as *const u8 (PtrToPtr);
+        let $to_ptr_mut: *mut u8 = copy $from_raw_mut as *mut u8 (PtrToPtr);
 
-        let from_len: usize = Len(*from_slice);
-        let from_mut_len: usize = Len(*from_slice_mut);
+        let $from_len: usize = Len(*$from_slice);
+        let $from_mut_len: usize = Len(*$from_slice_mut);
 
-        let ty_size: usize = SizeOf($T);
+        let $ty_size: usize = SizeOf($T);
 
-        let to_len: usize = Mul(move from_len, move ty_size);
-        let to_mut_len: usize = Mul(move from_mut_len, move ty_size);
+        let $to_len: usize = Mul(move $from_len, move $ty_size);
+        let $to_mut_len: usize = Mul(move $from_mut_len, move $ty_size);
 
-        let to_raw: *const [u8] = *const [u8] from (copy to_ptr, copy to_len);
-        let to_raw_mut: *mut [u8] = *mut [u8] from (copy to_ptr_mut, copy to_mut_len);
+        let $to_raw: *const [u8] = *const [u8] from (copy $to_ptr, copy $to_len);
+        let $to_raw_mut: *mut [u8] = *mut [u8] from (copy $to_ptr_mut, copy $to_mut_len);
 
-        let to_slice: &[u8] = &*to_raw;
-        let to_slice_mut: &mut [u8] = &mut *to_raw_mut;
+        let $to_slice: &[u8] = &*$to_raw;
+        let $to_slice_mut: &mut [u8] = &mut *$to_raw_mut;
     } => {
         ?bb0: {
             IN  -> [],
@@ -145,36 +145,36 @@ test_case! {
     fn cve_2020_35892_3_loop() {
         meta!($T:ty, $SlabT:ty);
 
-        let self: &mut $SlabT;
-        let len: usize; // _2
-        let mut x0: usize; // _17
-        let x1: usize; // _14
-        let x2: usize; // _15
-        let x3: #[lang = "Option"]<usize>; // _3
-        let x: usize; // _4
-        let mut base: *mut $T; // _6
-        let offset: isize; // _7
-        let elem_ptr: *mut $T; // _5
-        let x_cmp: usize; // _16
-        let cmp: bool; // _13
+        let $self: &mut $SlabT;
+        let $len: usize; // _2
+        let mut $x0: usize; // _17
+        let $x1: usize; // _14
+        let $x2: usize; // _15
+        let $x3: #[lang = "Option"]<usize>; // _3
+        let $x: usize; // _4
+        let mut $base: *mut $T; // _6
+        let $offset: isize; // _7
+        let $elem_ptr: *mut $T; // _5
+        let $x_cmp: usize; // _16
+        let $cmp: bool; // _13
 
-        len = copy (*self).len;
-        x0 = const 0_usize;
+        $len = copy (*$self).len;
+        $x0 = const 0_usize;
         loop {
-            x_cmp = copy x0;
-            cmp = Lt(move x_cmp, copy len);
-            switchInt(move cmp) {
+            $x_cmp = copy $x0;
+            $cmp = Lt(move $x_cmp, copy $len);
+            switchInt(move $cmp) {
                 false => break,
                 _ => {
-                    x1 = copy x0;
-                    x2 = core::iter::Step::forward_unchecked(copy x1, const 1_usize);
-                    x0 = move x2;
-                    x3 = #[lang = "Some"](copy x1);
-                    x = copy (x3 as Some).0;
-                    base = copy (*self).mem;
-                    offset = copy x as isize (IntToInt);
-                    elem_ptr = Offset(copy base, copy offset);
-                    _ = core::ptr::drop_in_place(copy elem_ptr);
+                    $x1 = copy $x0;
+                    $x2 = core::iter::Step::forward_unchecked(copy $x1, const 1_usize);
+                    $x0 = move $x2;
+                    $x3 = #[lang = "Some"](copy $x1);
+                    $x = copy ($x3 as Some).0;
+                    $base = copy (*$self).mem;
+                    $offset = copy $x as isize (IntToInt);
+                    $elem_ptr = Offset(copy $base, copy $offset);
+                    _ = core::ptr::drop_in_place(copy $elem_ptr);
                 }
             }
         }
@@ -223,13 +223,13 @@ test_case! {
 test_case! {
     fn cve_2020_35892_3_offset_by_one() {
         meta!($T:ty, $SlabT:ty);
-        let self: &mut $SlabT;
-        let len: usize = copy (*self).len;
-        let len_isize: isize = move len as isize (IntToInt);
-        let base: *mut $T = copy (*self).mem;
-        let ptr_mut: *mut $T = Offset(copy base, copy len_isize);
-        let ptr: *const $T = copy ptr_mut as *const $T (PtrToPtr);
-        let elem: $T = copy (*ptr);
+        let $self: &mut $SlabT;
+        let $len: usize = copy (*$self).len;
+        let $len_isize: isize = move $len as isize (IntToInt);
+        let $base: *mut $T = copy (*$self).mem;
+        let $ptr_mut: *mut $T = Offset(copy $base, copy $len_isize);
+        let $ptr: *const $T = copy $ptr_mut as *const $T (PtrToPtr);
+        let $elem: $T = copy (*$ptr);
     } => {
         ?bb0: {
             IN -> [0/_?0, 2/_?0],
