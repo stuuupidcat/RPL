@@ -21,7 +21,7 @@ fn format_tracker<'i>(
     }
     let (pos, rules) = value.finish();
     let pos = replacer(pos);
-    let mut msg = format!("{}", PositionWrapper::new(pos, path.to_owned()));
+    let mut msg = format!("{}", PositionWrapper::new(pos, path));
     let log10 = {
         let mut n = pos.line_col().0;
         let mut i = 1;
