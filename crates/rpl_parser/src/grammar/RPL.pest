@@ -288,8 +288,7 @@ Pathcrate = {
 }
 
 PathLeading = {
-    Colon2
-  | Pathcrate ~ Colon2
+    Pathcrate? ~ Colon2
 }
 
 PathSegment = {

@@ -2129,31 +2129,14 @@ pub mod rules_impl {
                 }
             }
         }
-        :: pest_typed :: rule ! (r#PathLeading , "Corresponds to expression: `(Colon2 | (Pathcrate ~ Colon2))`. Normal rule." "" , super :: super :: Rule , super :: super :: Rule :: r#PathLeading , super :: super :: generics :: Choice2 :: < super :: super :: rules :: r#Colon2 :: < 'i , INHERITED > , super :: super :: generics :: Seq2 :: < (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#Pathcrate :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#Colon2 :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , > , > , super :: super :: generics :: Skipped :: < 'i > , INHERITED , Both , true);
+        :: pest_typed :: rule ! (r#PathLeading , "Corresponds to expression: `(Pathcrate? ~ Colon2)`. Normal rule." "" , super :: super :: Rule , super :: super :: Rule :: r#PathLeading , super :: super :: generics :: Seq2 :: < (:: pest_typed :: predefined_node :: Skipped < :: pest_typed :: re_exported :: Option :: < super :: super :: rules :: r#Pathcrate :: < 'i , INHERITED > > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#Colon2 :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , > , super :: super :: generics :: Skipped :: < 'i > , INHERITED , Both , true);
         impl<'i, const INHERITED: ::core::primitive::usize> r#PathLeading<'i, INHERITED> {
             #[doc = "A helper function to access [`Colon2`]."]
             #[allow(non_snake_case)]
-            pub fn r#Colon2<'s>(
-                &'s self,
-            ) -> (
-                ::pest_typed::re_exported::Option<&'s super::super::rules::r#Colon2<'i, INHERITED>>,
-                ::pest_typed::re_exported::Option<&'s super::super::rules::r#Colon2<'i, INHERITED>>,
-            ) {
+            pub fn r#Colon2<'s>(&'s self) -> &'s super::super::rules::r#Colon2<'i, INHERITED> {
                 let res = &*self.content;
                 {
-                    let res = (
-                        {
-                            let res = res._0().map(|res| res);
-                            res
-                        },
-                        {
-                            let res = res._1().map(|res| {
-                                let res = &res.content.1.matched;
-                                res
-                            });
-                            res
-                        },
-                    );
+                    let res = &res.content.1.matched;
                     res
                 }
             }
@@ -2164,11 +2147,11 @@ pub mod rules_impl {
             ) -> ::pest_typed::re_exported::Option<&'s super::super::rules::r#Pathcrate<'i, INHERITED>> {
                 let res = &*self.content;
                 {
-                    let res = res._1().map(|res| {
-                        let res = &res.content.0.matched;
+                    let res = &res.content.0.matched;
+                    {
+                        let res = res.as_ref().map(|res| res);
                         res
-                    });
-                    res
+                    }
                 }
             }
         }
