@@ -215,7 +215,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                 },
                 num_blocks,
             ),
-            locals: IndexVec::from_fn_n(|_| LocalMatches::new(num_locals), num_locals),
+            locals: IndexVec::from_fn_n(|_| LocalMatches::new(cx.body.local_decls.len()), num_locals),
             ty_vars: IndexVec::from_fn_n(|_| TyVarMatches::new(), cx.fn_pat.meta.ty_vars.len()),
         }
     }
@@ -243,15 +243,16 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                         pat::Rvalue::Any,
                     ) = block_pat.statements[loc_pat.statement_index]
                 {
-                    if self.cx.mir_pat.self_idx == Some(local_pat)
-                        && let self_value = mir::Local::from_u32(1)
-                        && self.cx.match_local(local_pat, self_value)
-                    {
-                        info!(
-                            "candidate matched: {loc_pat:?} {pat:?} <-> {self_value:?}",
-                            pat = self.cx.mir_pat[bb_pat].debug_stmt_at(stmt_pat),
-                        );
-                        matches.candidates.push(StatementMatch::Arg(self_value));
+                    if self.cx.mir_pat.self_idx == Some(local_pat) {
+                        let self_value = mir::Local::from_u32(1);
+                        if self.cx.match_local(local_pat, self_value) {
+                            info!(
+                                "candidate matched: {loc_pat:?} (self) {pat:?} <-> {self_value:?}",
+                                pat = self.cx.mir_pat[bb_pat].debug_stmt_at(stmt_pat),
+                            );
+
+                            matches.candidates.push(StatementMatch::Arg(self_value));
+                        }
                     } else {
                         for arg in self.cx.body.args_iter() {
                             let _span = debug_span!("build_candidates", arg = ?StatementMatch::Arg(arg).debug_with(self.cx.body))
@@ -285,11 +286,30 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                 }
             }
         }
-        for (candidates, matches) in core::iter::zip(&self.cx.locals, &mut self.matching.locals) {
+        for ((local_pat, candidates), matches) in
+            core::iter::zip(self.cx.locals.iter_enumerated(), &mut self.matching.locals)
+        {
             matches.candidates = std::mem::replace(
                 &mut *candidates.borrow_mut(),
-                HybridBitSet::new_empty(self.cx.locals.len()),
+                HybridBitSet::new_empty(self.cx.body.local_decls.len()),
             );
+            if matches.candidates.is_empty() {
+                continue;
+            }
+            // If the local variable is the `self` parameter or the `RET` place, we only need to match the
+            // corresponding local variable in the MIR graph.
+            let only_candidate = if self.cx.mir_pat.self_idx == Some(local_pat) {
+                mir::Local::from_u32(1)
+            } else if self.cx.mir_pat.return_idx == Some(local_pat) {
+                mir::RETURN_PLACE
+            } else {
+                continue;
+            };
+            let has_only_candidate = matches.candidates.remove(only_candidate);
+            matches.candidates.clear();
+            if has_only_candidate {
+                matches.candidates.insert(only_candidate);
+            }
         }
         for (candidates, matches) in core::iter::zip(&self.cx.ty.ty_vars, &mut self.matching.ty_vars) {
             matches.candidates = std::mem::take(&mut *candidates.borrow_mut());

@@ -49,6 +49,8 @@ pub(crate) enum CheckError<'a> {
     MethodNotDeclared(String, &'a Ident),
     #[error("`self` is not declared")]
     SelfNotDeclared,
+    #[error("`RET` is not declared")]
+    RetNotDeclared,
     #[error("`self` is already declared")]
     SelfAlreadyDeclared,
     #[error("using `self` value outside of an `impl` item")]
@@ -178,6 +180,7 @@ pub(crate) struct FnInner<'a> {
     self_value: Option<(syn::Token![self], &'a Type)>,
     self_param: Option<&'a SelfParam>,
     self_ty: Option<&'a Type>,
+    return_value: Option<(Span, &'a Type)>,
     params: FxHashMap<&'a Ident, &'a Type>,
     locals: FxHashMap<&'a Ident, Vec<&'a Type>>,
 }
@@ -190,6 +193,7 @@ impl<'a> FnInner<'a> {
             self_value: None,
             self_param: None,
             self_ty,
+            return_value: None,
             params: FxHashMap::default(),
             locals: FxHashMap::default(),
         }
@@ -348,6 +352,10 @@ impl<'a> FnInner<'a> {
     }
     pub fn add_place_local(&mut self, local: &'a PlaceLocal, ty: &'a Type) -> syn::Result<()> {
         match local {
+            PlaceLocal::Return(return_value) => {
+                self.return_value = Some((return_value.span, ty));
+                Ok(())
+            },
             PlaceLocal::Local(ident) => self.add_local(ident, ty),
             &PlaceLocal::SelfValue(self_value) => {
                 self.self_value = Some((self_value, ty));
@@ -368,6 +376,10 @@ impl<'a> FnInner<'a> {
     }
     pub fn get_place_local(&self, local: &PlaceLocal) -> syn::Result<&'a Type> {
         match local {
+            PlaceLocal::Return(return_value) => self
+                .return_value
+                .map(|(_, ty)| ty)
+                .ok_or_else(|| syn::Error::new(return_value.span, CheckError::RetNotDeclared)),
             PlaceLocal::Local(ident) => self.get_local(ident),
             PlaceLocal::SelfValue(self_value) if self.self_value.is_none() && self.self_param.is_none() => {
                 Err(syn::Error::new(self_value.span, CheckError::SelfNotDeclared))

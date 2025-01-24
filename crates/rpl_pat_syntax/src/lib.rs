@@ -40,6 +40,7 @@ pub(crate) mod kw {
 
     // place
     syn::custom_keyword!(of);
+    syn::custom_keyword!(RET);
 
     // Rvalue
     syn::custom_keyword!(Len);
@@ -369,6 +370,9 @@ pub enum Type {
 
 #[derive(ToTokens, Parse, From, Display)]
 pub enum PlaceLocal {
+    #[parse(peek = kw::RET)]
+    #[display("RET")]
+    Return(kw::RET),
     #[parse(peek = Ident)]
     #[display("{_0}")]
     Local(Ident),
@@ -380,6 +384,7 @@ pub enum PlaceLocal {
 impl PlaceLocal {
     pub fn span(&self) -> Span {
         match self {
+            PlaceLocal::Return(ret) => ret.span,
             PlaceLocal::Local(ident) => ident.span(),
             PlaceLocal::SelfValue(self_value) => self_value.span,
         }

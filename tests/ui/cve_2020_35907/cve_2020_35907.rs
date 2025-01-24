@@ -26,3 +26,12 @@ pub fn noop_waker_ref() -> &'static Waker {
     }
     NOOP_WAKER_INSTANCE.with(|l| unsafe { &*l.get() })
 }
+
+pub fn static_ref() -> &'static i32 {
+    thread_local! {
+        static THREAD_LOCAL: UnsafeCell<i32> = UnsafeCell::new(0);
+    }
+    // OK because it is not a return value
+    let _ret = THREAD_LOCAL.with(|l| unsafe { &*l.get() });
+    &0
+}

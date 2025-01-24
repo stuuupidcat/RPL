@@ -193,6 +193,7 @@ impl ExpandIdent for Ident {
 impl ExpandIdent for PlaceLocal {
     fn with_suffix(&self, suffix: impl std::fmt::Display) -> Ident {
         match self {
+            PlaceLocal::Return(return_value) => format_ident!("RET{suffix}", span = return_value.span),
             PlaceLocal::Local(ident) => ident.with_suffix(suffix),
             PlaceLocal::SelfValue(self_value) => self_value.with_suffix(suffix),
         }
@@ -779,6 +780,7 @@ impl ToTokens for ExpandPat<'_, &LocalDecl> {
         let ty = self.ecx.expand(ty);
         let ident = local.as_local();
         let mk_local_or_self = match local {
+            PlaceLocal::Return(_) => format_ident!("mk_return"),
             PlaceLocal::Local(_) => format_ident!("mk_local"),
             PlaceLocal::SelfValue(_) => format_ident!("mk_self"),
         };

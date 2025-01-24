@@ -2177,7 +2177,7 @@ fn test_cve_2020_35907() {
                 let result: core::result::Result<&'static $T, _> =
                     std::thread::LocalKey::<std::cell::UnsafeCell<std::task::Waker>>::try_with::<_, _>(_, _);
                 #[export(ret)]
-                let ret: &'static $T = core::result::Result::expect(move result, _);
+                let RET: &'static $T = core::result::Result::expect(move result, _);
             }
         } => quote! {
             let pattern_fn = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("pattern"));
@@ -2229,7 +2229,7 @@ fn test_cve_2020_35907() {
                 mir_pat.mk_list([::rpl_context::pat::Operand::Any, ::rpl_context::pat::Operand::Any]),
                 Some(result_local.into_place())
             );
-            let ret_local = mir_pat.mk_local(pcx.mk_ref_ty(
+            let RET_local = mir_pat.mk_return(pcx.mk_ref_ty(
                 ::rpl_context::pat::RegionKind::ReStatic,
                 T_ty,
                 ::rustc_middle::mir::Mutability::Not
@@ -2242,7 +2242,7 @@ fn test_cve_2020_35907() {
                     ::rpl_context::pat::Operand::Move(result_local.into_place()),
                     ::rpl_context::pat::Operand::Any
                 ]),
-                Some(ret_local.into_place())
+                Some(RET_local.into_place())
             );
             let mir_pat = mir_pat.build();
             let mir_pat = pcx.mk_mir_pattern(mir_pat);
