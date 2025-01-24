@@ -116,53 +116,53 @@ fn pattern_loop(pcx: PatCtxt<'_>) -> (&pat::Pattern<'_>, &pat::Fn<'_>) {
 
         #[meta($T:ty)]
         fn $pattern (..) -> _ = mir! {
-            let self: &mut $SlabT;
-            let len: usize;
-            let x1: usize;
-            let x2: usize;
-            let opt: #[lang = "Option"]<usize>;
-            let discr: isize;
-            let x: usize;
-            let start_ref: &usize;
-            let end_ref: &usize;
-            let start: usize;
-            let end: usize;
-            let range: core::ops::range::Range<usize>;
-            let mut iter: core::ops::range::Range<usize>;
-            let mut iter_mut: &mut core::ops::range::Range<usize>;
-            let mut base: *mut $T;
-            let offset: isize;
-            let elem_ptr: *mut $T;
-            let cmp: bool;
+            let $self: &mut $SlabT;
+            let $len: usize;
+            let $x1: usize;
+            let $x2: usize;
+            let $opt: #[lang = "Option"]<usize>;
+            let $discr: isize;
+            let $x: usize;
+            let $start_ref: &usize;
+            let $end_ref: &usize;
+            let $start: usize;
+            let $end: usize;
+            let $range: core::ops::range::Range<usize>;
+            let mut $iter: core::ops::range::Range<usize>;
+            let mut $iter_mut: &mut core::ops::range::Range<usize>;
+            let mut $base: *mut $T;
+            let $offset: isize;
+            let $elem_ptr: *mut $T;
+            let $cmp: bool;
 
-            len = copy (*self).$len;
-            range = core::ops::range::Range { start: const 0_usize, end: move len };
-            iter = move range;
+            $len = copy (*$self).$len;
+            $range = core::ops::range::Range { start: const 0_usize, end: move $len };
+            $iter = move $range;
             loop {
-                iter_mut = &mut iter;
-                start_ref = &(*iter_mut).start;
-                start = copy *start_ref;
-                end_ref = &(*iter_mut).end;
-                end = copy *end_ref;
-                cmp = Lt(move start, move end);
-                switchInt(move cmp) {
-                    false => opt = #[lang = "None"],
+                $iter_mut = &mut $iter;
+                $start_ref = &(*$iter_mut).start;
+                $start = copy *$start_ref;
+                $end_ref = &(*$iter_mut).end;
+                $end = copy *$end_ref;
+                $cmp = Lt(move $start, move $end);
+                switchInt(move $cmp) {
+                    false => $opt = #[lang = "None"],
                     _ => {
-                        x1 = copy (*iter_mut).start;
-                        x2 = core::iter::range::Step::forward_unchecked(copy x1, const 1_usize);
-                        (*iter_mut).start = move x2;
-                        opt = #[lang = "Some"](copy x1);
+                        $x1 = copy (*$iter_mut).start;
+                        $x2 = core::iter::range::Step::forward_unchecked(copy $x1, const 1_usize);
+                        (*$iter_mut).start = move $x2;
+                        $opt = #[lang = "Some"](copy $x1);
                     }
                 }
-                discr = discriminant(opt);
-                switchInt(move discr) {
+                $discr = discriminant($opt);
+                switchInt(move $discr) {
                     0_isize => break,
                     1_isize => {
-                        x = copy (opt as Some).0;
-                        base = copy (*self).$mem;
-                        offset = copy x as isize (IntToInt);
-                        elem_ptr = Offset(copy base, copy offset);
-                        _ = core::ptr::drop_in_place(copy elem_ptr);
+                        $x = copy ($opt as Some).0;
+                        $base = copy (*$self).$mem;
+                        $offset = copy $x as isize (IntToInt);
+                        $elem_ptr = Offset(copy $base, copy $offset);
+                        _ = core::ptr::drop_in_place(copy $elem_ptr);
                     }
                 }
             }
@@ -194,16 +194,16 @@ fn pattern_offset_by_len(pcx: PatCtxt<'_>) -> PatternOffsetByLen<'_> {
 
         #[meta($T:ty)]
         fn $pattern(..) -> _ = mir! {
-            let self: &mut $SlabT;
+            let $self: &mut $SlabT;
             #[export(len)]
-            let len: usize = copy (*self).$len;
-            let len_isize: isize = move len as isize (IntToInt);
-            let base: *mut $T = copy (*self).$mem;
+            let $len: usize = copy (*$self).$len;
+            let $len_isize: isize = move $len as isize (IntToInt);
+            let $base: *mut $T = copy (*$self).$mem;
             #[export(ptr)]
-            let ptr_mut: *mut $T = Offset(copy base, copy len_isize);
-            let ptr: *const $T = copy ptr_mut as *const $T (PtrToPtr);
+            let $ptr_mut: *mut $T = Offset(copy $base, copy $len_isize);
+            let $ptr: *const $T = copy $ptr_mut as *const $T (PtrToPtr);
             #[export(read)]
-            let elem: $T = copy (*ptr);
+            let $elem: $T = copy (*$ptr);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

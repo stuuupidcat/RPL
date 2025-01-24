@@ -83,13 +83,13 @@ fn pattern_from_raw_parts_iter(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
         #[meta($I:ty, $T:ty)]
         fn $pattern (..) -> _ = mir! {
             #[export(src)]
-            let src: $I = _;
-            let src_ref: &mut $I = &mut src;
-            let next: std::option::Option<*const T> = std::iter::Iterator::next(move src_ref);
+            let $src: $I = _;
+            let $src_ref: &mut $I = &mut $src;
+            let $next: std::option::Option<*const T> = std::iter::Iterator::next(move $src_ref);
             #[export(ptr)]
-            let ptr: *const T = std::option::Option::unwrap(move next);
+            let $ptr: *const T = std::option::Option::unwrap(move $next);
             #[export(slice)]
-            let slice: &[T] = std::slice::from_raw_parts::<'_, $T>(copy ptr, _);
+            let $slice: &[T] = std::slice::from_raw_parts::<'_, $T>(copy $ptr, _);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

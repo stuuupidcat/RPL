@@ -361,7 +361,7 @@ impl Place {
             } else if input.peek(token::Bracket) {
                 let content;
                 let bracket = syn::bracketed!(content in input);
-                if content.peek(Ident) {
+                if content.peek(Token![$]) && content.peek2(Ident) {
                     place.parse_index(bracket, &content)?
                 } else if content.peek(Token![:]) || content.peek2(Token![:]) {
                     place.parse_subslice(bracket, &content)?

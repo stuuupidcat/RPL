@@ -79,24 +79,24 @@ pub mod extend {
                 type VecTMutRef = &mut alloc::vec::Vec::<$T>;
 
 
-                let vec: VecT;   // _1;
+                let $vec: VecT;   // _1;
                 // let vec_ref: VecTRef; // _5;
-                let new_len: usize; // _2;
+                let $new_len: usize; // _2;
                 // let old_len: usize; // _4; ..unused
-                let vec_mut_ref: VecTMutRef; // _10;
+                let $vec_mut_ref: VecTMutRef; // _10;
 
-                new_len = _;
+                $new_len = _;
                 #[export(vec)]
-                vec = _;
+                $vec = _;
                 // _5 = &_1;
                 // vec_ref = &vec;
                 // _4 = copy ((*_5).1: usize);
                 // old_len = copy ((*vec_ref).len);
                 // _10 = &mut _1;
-                vec_mut_ref = &mut vec;
+                $vec_mut_ref = &mut $vec;
                 // ((*10).1: usize) = _2;
                 #[export(set_len_use)]
-                (*vec_mut_ref).len = copy new_len;
+                (*$vec_mut_ref).len = copy $new_len;
             }
         };
         // FIXME
@@ -217,24 +217,24 @@ pub mod truncate {
                 type VecTRef = &alloc::vec::Vec::<$T>;
                 type VecTMutRef = &mut alloc::vec::Vec::<$T>;
 
-                let vec: VecT;
-                let new_len: usize;
-                let vec_ref: VecTRef;
-                let old_len: usize;
-                let vec_mut_ref: VecTMutRef;
-                let cmp: bool;
+                let $vec: VecT;
+                let $new_len: usize;
+                let $vec_ref: VecTRef;
+                let $old_len: usize;
+                let $vec_mut_ref: VecTMutRef;
+                let $cmp: bool;
 
-                vec = _;
-                new_len = _;
-                vec_ref = &vec;
-                old_len = copy ((*vec_ref).len);
-                cmp = Ge(move old_len, copy new_len);
+                $vec = _;
+                $new_len = _;
+                $vec_ref = &$vec;
+                $old_len = copy ((*$vec_ref).len);
+                $cmp = Ge(move $old_len, copy $new_len);
                 #[export(set_len_use)]
-                switchInt(move cmp) {
+                switchInt(move $cmp) {
                     0_usize => {}
                     _ => {
-                        vec_mut_ref = &mut vec;
-                        (*vec_mut_ref).len = copy new_len;
+                        $vec_mut_ref = &mut $vec;
+                        (*$vec_mut_ref).len = copy $new_len;
                     }
                 }
             }

@@ -79,11 +79,11 @@ fn pattern_drop_unit_value(pcx: PatCtxt<'_>) -> Pattern<'_> {
 
         #[meta($T:ty)]
         fn $pattern (..) -> _ = mir! {
-            let raw_ptr: *mut $T = _;
-            let value: $T = _;
+            let $raw_ptr: *mut $T = _;
+            let $value: $T = _;
             #[export(drop)]
-            drop((*raw_ptr));
-            (*raw_ptr) = move value;
+            drop((*$raw_ptr));
+            (*$raw_ptr) = move $value;
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

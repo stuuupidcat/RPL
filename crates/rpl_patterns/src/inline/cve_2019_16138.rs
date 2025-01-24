@@ -79,19 +79,19 @@ fn pattern_set_len_uninitialized_inlined(pcx: PatCtxt<'_>) -> Pattern<'_> {
         #[meta($T:ty)]
         fn $pattern (..) -> _ = mir! {
             // let vec: std::vec::Vec<$T> = std::vec::Vec::with_capacity(_);
-            let raw_vec_inner: alloc::raw_vec::RawVecInner = alloc::raw_vec::RawVecInner::with_capacity_in(_, _, _);
-            let raw_vec: alloc::raw_vec::RawVec<$T> = alloc::raw_vec::RawVec::<$T> {
-                inner: move raw_vec_inner,
+            let $raw_vec_inner: alloc::raw_vec::RawVecInner = alloc::raw_vec::RawVecInner::with_capacity_in(_, _, _);
+            let $raw_vec: alloc::raw_vec::RawVec<$T> = alloc::raw_vec::RawVec::<$T> {
+                inner: move $raw_vec_inner,
                 _marker: const std::marker::PhantomData::<$T>
             };
             #[export(vec)]
-            let vec: std::vec::Vec<$T> = std::vec::Vec::<$T> { buf: move raw_vec, len: const 0_usize };
+            let $vec: std::vec::Vec<$T> = std::vec::Vec::<$T> { buf: move $raw_vec, len: const 0_usize };
 
-            let vec_ref: &mut std::vec::Vec<$T> = &mut vec;
+            let $vec_ref: &mut std::vec::Vec<$T> = &mut $vec;
 
             #[export(set_len)]
             // _ = std::vec::Vec::set_len(move vec_ref, _);
-            ((*vec_ref).len) = _;
+            ((*$vec_ref).len) = _;
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

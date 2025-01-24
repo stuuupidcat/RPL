@@ -423,7 +423,7 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
             | Place::DownCast(PlaceDowncast { place, .. }) => self.check_place(place),
             Place::Index(PlaceIndex { place, index, .. }) => {
                 self.check_place(place)?;
-                self.check_local(index)?;
+                self.check_place_local(index)?;
                 Ok(())
             },
             Place::ConstIndex(PlaceConstIndex {
@@ -442,11 +442,6 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
                 Ok(())
             },
         }
-    }
-
-    fn check_local(&self, ident: &Ident) -> syn::Result<()> {
-        self.fn_def.get_local(ident)?;
-        Ok(())
     }
 
     fn check_place_local(&self, local: &PlaceLocal) -> syn::Result<()> {

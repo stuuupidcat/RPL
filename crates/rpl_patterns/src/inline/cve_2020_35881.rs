@@ -78,17 +78,17 @@ pub mod const_const_Transmute_ver {
             #[meta($T:ty)]
             fn $pattern(..) -> _ = mir! {
 
-                let ptr: *const $T = _;
+                let $ptr: *const $T = _;
                 // _4 = &_1;
-                let ref_to_ptr: &*const $T = &ptr;
+                let $ref_to_ptr: &*const $T = &$ptr;
                 // _3 = &raw const (*_4);
-                let ptr_to_ptr_t: *const *const $T = &raw const (*ref_to_ptr);
+                let $ptr_to_ptr_t: *const *const $T = &raw const (*$ref_to_ptr);
                 // _2 = move _3 as *const *const () (Transmute);
                 #[export(ptr_transmute)]
-                let ptr_to_ptr: *const *const() = move ptr_to_ptr_t as *const *const () (Transmute);
+                let $ptr_to_ptr: *const *const() = move $ptr_to_ptr_t as *const *const () (Transmute);
                 // _0 = copy (*_2);
                 #[export(data_ptr_get)]
-                let data_ptr: *const () = _;
+                let $data_ptr: *const () = _;
             }
         };
         let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
@@ -182,17 +182,17 @@ pub mod mut_mut_Transmute_ver {
             #[meta($T:ty)]
             fn $pattern (..) -> _ = mir! {
 
-                let ptr: *mut $T = _;
+                let $ptr: *mut $T = _;
                 // _4 = &mut _1;
-                let ref_to_ptr: &mut *mut $T = &mut ptr;
+                let $ref_to_ptr: &mut *mut $T = &mut $ptr;
                 // _3 = &raw mut (*_4);
-                let ptr_to_ptr_t: *mut *mut $T = &raw mut (*ref_to_ptr);
+                let $ptr_to_ptr_t: *mut *mut $T = &raw mut (*$ref_to_ptr);
                 // _2 = move _3 as *mut *mut () (Transmute);
                 #[export(ptr_transmute)]
-                let ptr_to_ptr: *mut *mut() = move ptr_to_ptr_t as *mut *mut () (Transmute);
+                let $ptr_to_ptr: *mut *mut() = move $ptr_to_ptr_t as *mut *mut () (Transmute);
                 // _0 = copy (*_2);
                 #[export(data_ptr_get)]
-                let data_ptr: *mut () = _;
+                let $data_ptr: *mut () = _;
 
             }
         };
@@ -287,14 +287,14 @@ pub mod mut_const_PtrToPtr_ver {
             #[meta($T:ty)]
             fn $pattern (..) -> _ = mir! {
 
-                let ptr: *const $T = _;
-                let ref_to_ptr: &mut *const $T = &mut ptr;
-                let ptr_to_ptr_t: *mut *const $T = &raw mut (*ref_to_ptr);
+                let $ptr: *const $T = _;
+                let $ref_to_ptr: &mut *const $T = &mut $ptr;
+                let $ptr_to_ptr_t: *mut *const $T = &raw mut (*$ref_to_ptr);
                 #[export(ptr_transmute)]
-                let ptr_to_ptr: *mut *mut () = move ptr_to_ptr_t as *mut *mut () (PtrToPtr);
+                let $ptr_to_ptr: *mut *mut () = move $ptr_to_ptr_t as *mut *mut () (PtrToPtr);
                 // _0 = copy (*_2);
                 #[export(data_ptr_get)]
-                let data_ptr: *mut () = _;
+                let $data_ptr: *mut () = _;
             }
         };
         let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

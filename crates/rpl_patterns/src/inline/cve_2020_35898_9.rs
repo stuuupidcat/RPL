@@ -87,15 +87,15 @@ fn pattern_rc_unsafe_cell_get_mut(pcx: PatCtxt<'_>) -> PatternRcUnsafeCellGetMut
             type NonNullRcInnerUnsafeCellT = core::ptr::NonNull::<alloc::rc::RcInner::<core::cell::UnsafeCell::<$T>>>;
             type RcInnerUnsafeCellT = alloc::rc::RcInner::<core::cell::UnsafeCell::<$T>>;
 
-            let self: &mut $CellT;
-            let inner_ref: &RcUnsafeCellT = &((*self).$inner);
-            let inner_ptr: NonNullRcInnerUnsafeCellT = copy ((*inner_ref).ptr);
-            let const_ptr: *const RcInnerUnsafeCellT = copy(inner_ptr.pointer);
-            let unsafe_cell: &UnsafeCellT = &((*const_ptr).value);
-            let unsafe_cell_ptr: *const UnsafeCellT = &raw const (*unsafe_cell);
-            let value_ptr: *mut $T = copy unsafe_cell_ptr as *mut $T (PtrToPtr);
+            let $self: &mut $CellT;
+            let $inner_ref: &RcUnsafeCellT = &((*$self).$inner);
+            let $inner_ptr: NonNullRcInnerUnsafeCellT = copy ((*$inner_ref).ptr);
+            let $const_ptr: *const RcInnerUnsafeCellT = copy($inner_ptr.pointer);
+            let $unsafe_cell: &UnsafeCellT = &((*$const_ptr).value);
+            let $unsafe_cell_ptr: *const UnsafeCellT = &raw const (*$unsafe_cell);
+            let $value_ptr: *mut $T = copy $unsafe_cell_ptr as *mut $T (PtrToPtr);
             #[export(get_mut)]
-            let value_mut_ref: &mut $T = &mut (*value_ptr);
+            let $value_mut_ref: &mut $T = &mut (*$value_ptr);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

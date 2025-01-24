@@ -55,24 +55,24 @@ test_case! {
     fn cve_2020_25016() {
         meta!($T:ty);
 
-        let from_slice: &[$T] = _;
-        let from_slice_mut: &mut [$T] = _;
+        let $from_slice: &[$T] = _;
+        let $from_slice_mut: &mut [$T] = _;
 
-        let from_raw: *const [$T] = &raw const *from_slice;
-        let from_raw_mut: *mut [$T] = &raw mut *from_slice_mut;
+        let $from_raw: *const [$T] = &raw const *$from_slice;
+        let $from_raw_mut: *mut [$T] = &raw mut *$from_slice_mut;
 
-        let to_ptr: *const u8 = copy from_raw as *const u8 (PtrToPtr);
-        let to_ptr_mut: *mut u8 = copy from_raw_mut as *mut u8 (PtrToPtr);
+        let $to_ptr: *const u8 = copy $from_raw as *const u8 (PtrToPtr);
+        let $to_ptr_mut: *mut u8 = copy $from_raw_mut as *mut u8 (PtrToPtr);
 
-        let from_len: usize = Len(*from_slice);
-        let ty_size: usize = SizeOf($T);
-        let to_len: usize = Mul(move from_len, move ty_size);
+        let $from_len: usize = Len(*$from_slice);
+        let $ty_size: usize = SizeOf($T);
+        let $to_len: usize = Mul(move $from_len, move $ty_size);
 
-        let to_raw: *const [u8] = *const [u8] from (copy to_ptr, copy to_len);
-        let to_raw_mut: *mut [u8] = *mut [u8] from (copy to_ptr_mut, copy to_len);
+        let $to_raw: *const [u8] = *const [u8] from (copy $to_ptr, copy $to_len);
+        let $to_raw_mut: *mut [u8] = *mut [u8] from (copy $to_ptr_mut, copy $to_len);
 
-        let to_slice: &[u8] = &*to_raw;
-        let to_slice_mut: &mut [u8] = &mut *to_raw_mut;
+        let $to_slice: &[u8] = &*$to_raw;
+        let $to_slice_mut: &mut [u8] = &mut *$to_raw_mut;
     } => {
         let _?0: &[?T0];
         let _?1: &mut [?T0];
@@ -110,36 +110,36 @@ test_case! {
     fn cve_2020_35892() {
         meta!($T:ty, $SlabT:ty);
 
-        let self: &mut $SlabT;
-        let len: usize; // _2
-        let mut x0: usize; // _17
-        let x1: usize; // _14
-        let x2: usize; // _15
-        let x3: #[lang = "Option"]<usize>; // _3
-        let x: usize; // _4
-        let mut base: *mut $T; // _6
-        let offset: isize; // _7
-        let elem_ptr: *mut $T; // _5
-        let x_cmp: usize; // _16
-        let cmp: bool; // _13
+        let $self: &mut $SlabT;
+        let $len: usize; // _2
+        let mut $x0: usize; // _17
+        let $x1: usize; // _14
+        let $x2: usize; // _15
+        let $x3: #[lang = "Option"]<usize>; // _3
+        let $x: usize; // _4
+        let mut $base: *mut $T; // _6
+        let $offset: isize; // _7
+        let $elem_ptr: *mut $T; // _5
+        let $x_cmp: usize; // _16
+        let $cmp: bool; // _13
 
-        len = copy (*self).len;
-        x0 = const 0_usize;
+        $len = copy (*$self).len;
+        $x0 = const 0_usize;
         loop {
-            x_cmp = copy x0;
-            cmp = Lt(move x_cmp, copy len);
-            switchInt(move cmp) {
+            $x_cmp = copy $x0;
+            $cmp = Lt(move $x_cmp, copy $len);
+            switchInt(move $cmp) {
                 false => break,
                 _ => {
-                    x1 = copy x0;
-                    x2 = core::iter::Step::forward_unchecked(copy x1, const 1_usize);
-                    x0 = move x2;
-                    x3 = #[lang = "Some"](copy x1);
-                    x = copy (x3 as Some).0;
-                    base = copy (*self).mem;
-                    offset = copy x as isize (IntToInt);
-                    elem_ptr = Offset(copy base, copy offset);
-                    _ = core::ptr::drop_in_place(copy elem_ptr);
+                    $x1 = copy $x0;
+                    $x2 = core::iter::Step::forward_unchecked(copy $x1, const 1_usize);
+                    $x0 = move $x2;
+                    $x3 = #[lang = "Some"](copy $x1);
+                    $x = copy ($x3 as Some).0;
+                    $base = copy (*$self).mem;
+                    $offset = copy $x as isize (IntToInt);
+                    $elem_ptr = Offset(copy $base, copy $offset);
+                    _ = core::ptr::drop_in_place(copy $elem_ptr);
                 }
             }
         }
@@ -195,16 +195,16 @@ test_case! {
         type PtrT1 = *mut $T1;
         type PtrT3 = *mut $T3;
 
-        let from_vec: VecT1 = _;
-        let size: usize = SizeOf($T2);
-        let from_cap: usize = Vec::capacity(move from_vec);
-        let to_cap: usize = Mul(copy from_cap, copy size);
-        let from_len: usize = Len(from_vec);
-        let to_len: usize = Mul(copy from_len, copy size);
-        let from_vec_ptr: PtrT1 = Vec::as_mut_ptr(move from_vec);
-        let to_vec_ptr: PtrT3 = copy from_vec_ptr as PtrT3 (PtrToPtr);
-        let _tmp: () = std::mem::forget(move from_vec);
-        let res: VecT3 = Vec::from_raw_parts(copy to_vec_ptr, copy to_cap, copy to_len);
+        let $from_vec: VecT1 = _;
+        let $size: usize = SizeOf($T2);
+        let $from_cap: usize = Vec::capacity(move $from_vec);
+        let $to_cap: usize = Mul(copy $from_cap, copy $size);
+        let $from_len: usize = Len($from_vec);
+        let $to_len: usize = Mul(copy $from_len, copy $size);
+        let $from_vec_ptr: PtrT1 = Vec::as_mut_ptr(move $from_vec);
+        let $to_vec_ptr: PtrT3 = copy $from_vec_ptr as PtrT3 (PtrToPtr);
+        let $_tmp: () = std::mem::forget(move $from_vec);
+        let $res: VecT3 = Vec::from_raw_parts(copy $to_vec_ptr, copy $to_cap, copy $to_len);
     } => {
         let _?0: std::vec::Vec<?T0>;
         let _?1: usize;
@@ -242,42 +242,42 @@ test_case! {
     fn cve_2018_21000_inlined() {
         meta!($T:ty);
 
-        let to_vec: alloc::vec::Vec<$T, alloc::alloc::Global>;
-        let from_vec: alloc::vec::Vec<u8, alloc::alloc::Global> = _;
-        let to_vec_cap: usize;
-        let mut from_vec_cap: usize;
-        let mut tsize: usize;
-        let to_vec_len: usize;
-        let mut from_vec_len: usize;
-        let mut from_vec_ptr: core::ptr::non_null::NonNull<u8>;
-        let mut to_raw_vec: alloc::raw_vec::RawVec<$T, alloc::alloc::Global>;
-        let mut to_raw_vec_inner: alloc::raw_vec::RawVecInner<alloc::alloc::Global>;
-        let mut to_vec_wrapped_len: alloc::raw_vec::Cap = _;
-        let mut from_vec_unique_ptr: core::ptr::unique::Unique<u8>;
+        let $to_vec: alloc::vec::Vec<$T, alloc::alloc::Global>;
+        let $from_vec: alloc::vec::Vec<u8, alloc::alloc::Global> = _;
+        let $to_vec_cap: usize;
+        let mut $from_vec_cap: usize;
+        let mut $tsize: usize;
+        let $to_vec_len: usize;
+        let mut $from_vec_len: usize;
+        let mut $from_vec_ptr: core::ptr::non_null::NonNull<u8>;
+        let mut $to_raw_vec: alloc::raw_vec::RawVec<$T, alloc::alloc::Global>;
+        let mut $to_raw_vec_inner: alloc::raw_vec::RawVecInner<alloc::alloc::Global>;
+        let mut $to_vec_wrapped_len: alloc::raw_vec::Cap = _;
+        let mut $from_vec_unique_ptr: core::ptr::unique::Unique<u8>;
 
-        from_vec_ptr = copy from_vec.buf.inner.ptr.pointer;
-        from_vec_cap = copy from_vec.buf.inner.cap.0;
-        tsize = SizeOf($T);
-        to_vec_cap = Div(move from_vec_cap, copy tsize);
-        from_vec_len = copy from_vec.len;
-        to_vec_len = Div(move from_vec_len, copy tsize);
-        to_vec_wrapped_len = #[ctor] alloc::raw_vec::Cap(copy to_vec_len);
-        from_vec_unique_ptr = core::ptr::unique::Unique::<u8> {
-            pointer: copy from_vec_ptr,
+        $from_vec_ptr = copy $from_vec.buf.inner.ptr.pointer;
+        $from_vec_cap = copy $from_vec.buf.inner.cap.0;
+        $tsize = SizeOf($T);
+        $to_vec_cap = Div(move $from_vec_cap, copy $tsize);
+        $from_vec_len = copy $from_vec.len;
+        $to_vec_len = Div(move $from_vec_len, copy $tsize);
+        $to_vec_wrapped_len = #[ctor] alloc::raw_vec::Cap(copy $to_vec_len);
+        $from_vec_unique_ptr = core::ptr::unique::Unique::<u8> {
+            pointer: copy $from_vec_ptr,
             _marker: const core::marker::PhantomData::<u8>,
         };
-        to_raw_vec_inner = alloc::raw_vec::RawVecInner::<alloc::alloc::Global> {
-            ptr: move from_vec_unique_ptr,
-            cap: copy to_vec_wrapped_len,
+        $to_raw_vec_inner = alloc::raw_vec::RawVecInner::<alloc::alloc::Global> {
+            ptr: move $from_vec_unique_ptr,
+            cap: copy $to_vec_wrapped_len,
             alloc: const alloc::alloc::Global,
         };
-        to_raw_vec = alloc::raw_vec::RawVec::<$T, alloc::alloc::Global> {
-            inner: move to_raw_vec_inner,
+        $to_raw_vec = alloc::raw_vec::RawVec::<$T, alloc::alloc::Global> {
+            inner: move $to_raw_vec_inner,
             _marker: const core::marker::PhantomData::<$T>,
         };
-        to_vec = alloc::vec::Vec::<$T, alloc::alloc::Global> {
-            buf: move to_raw_vec,
-            len: copy to_vec_cap,
+        $to_vec = alloc::vec::Vec::<$T, alloc::alloc::Global> {
+            buf: move $to_raw_vec,
+            len: copy $to_vec_cap,
         };
     } => {
         let _?0: alloc::vec::Vec<?T0, alloc::alloc::Global>;
@@ -334,11 +334,11 @@ test_case! {
         type PtrT2 = *const ();
         type PtrPtrT2 = *const *const ();
 
-        let ptr_to_data: PtrT1 = _;
-        let data: DerefPtrT1 = &ptr_to_data;
-        let ptr_to_ptr_to_data: PtrPtrT1 = &raw const (*data);
-        let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *const *const () (Transmute);
-        let ptr_to_res: PtrT2 = copy* ptr_to_ptr_to_res;
+        let $ptr_to_data: PtrT1 = _;
+        let $data: DerefPtrT1 = &$ptr_to_data;
+        let $ptr_to_ptr_to_data: PtrPtrT1 = &raw const (*$data);
+        let $ptr_to_ptr_to_res: PtrPtrT2 = move $ptr_to_ptr_to_data as *const *const () (Transmute);
+        let $ptr_to_res: PtrT2 = copy* $ptr_to_ptr_to_res;
         // neglected the type-size-equivalence check
     } => {
         let _?0: *const ?T0;
@@ -367,11 +367,11 @@ test_case! {
         type PtrT2 = *mut ();
         type PtrPtrT2 = *mut *mut ();
 
-        let ptr_to_data: PtrT1 = _;
-        let data: DerefPtrT1 = &mut ptr_to_data;
-        let ptr_to_ptr_to_data: PtrPtrT1 = &raw mut (*data);
-        let ptr_to_ptr_to_res: PtrPtrT2 = move ptr_to_ptr_to_data as *mut *mut () (Transmute);
-        let ptr_to_res: PtrT2 = copy *ptr_to_ptr_to_res;
+        let $ptr_to_data: PtrT1 = _;
+        let $data: DerefPtrT1 = &mut $ptr_to_data;
+        let $ptr_to_ptr_to_data: PtrPtrT1 = &raw mut (*$data);
+        let $ptr_to_ptr_to_res: PtrPtrT2 = move $ptr_to_ptr_to_data as *mut *mut () (Transmute);
+        let $ptr_to_res: PtrT2 = copy *$ptr_to_ptr_to_res;
     } => {
         let _?0: *mut ?T0;
         let _?1: &mut *mut ?T0; // the blank space here cannot pass the test
@@ -404,43 +404,43 @@ test_case! {
         type RefMutEnumerateRangeT = &mut std::iter::Enumerate<RangeT>;
         type OptionUsizeT = std::option::Option<(usize, $T)>;
 
-        let iter: RangeT = _;
+        let $iter: RangeT = _;
         // let len: usize = <RangeT as std::iter::ExactSizeIterator>::len(move iter);
-        let len: usize = RangeT::len(move iter);
-        let mut vec: VecT = std::vec::Vec::with_capacity(copy len);
-        let mut ref_to_vec: RefMutVecT = &mut vec;
-        let mut ptr_to_vec: PtrMutT = Vec::as_mut_ptr(move ref_to_vec);
-        let mut slice: RefMutSliceT = std::slice::from_raw_parts_mut(copy ptr_to_vec, copy len);
+        let $len: usize = RangeT::len(move $iter);
+        let mut $vec: VecT = std::vec::Vec::with_capacity(copy $len);
+        let mut $ref_to_vec: RefMutVecT = &mut $vec;
+        let mut $ptr_to_vec: PtrMutT = Vec::as_mut_ptr(move $ref_to_vec);
+        let mut $slice: RefMutSliceT = std::slice::from_raw_parts_mut(copy $ptr_to_vec, copy $len);
         // let mut enumerate: EnumerateRangeT = <RangeT as std::iter::Iterator>::enumerate(move iter);
-        let mut enumerate: EnumerateRangeT = RangeT::enumerate(move iter);
-        let mut enumerate: RefMutEnumerateRangeT = &mut enumerate;
-        let next: OptionUsizeT;
-        let cmp: isize;
-        let first: usize;
-        let second_t: $T;
-        let second_usize: usize;
-        let _tmp: ();
+        let mut $enumerate: EnumerateRangeT = RangeT::enumerate(move $iter);
+        let mut $enumerate: RefMutEnumerateRangeT = &mut $enumerate;
+        let $next: OptionUsizeT;
+        let $cmp: isize;
+        let $first: usize;
+        let $second_t: $T;
+        let $second_usize: usize;
+        let $_tmp: ();
         loop {
             // next = <EnumerateRangeT as std::iter::Iterator>::next(move enumerate);
-            next = EnumerateRangeT::next(move enumerate);
+            $next = EnumerateRangeT::next(move $enumerate);
             // in `cmp = discriminant(copy next);`
             // which discriminant should be used?
-            cmp = balabala::discriminant(copy next);
-            switchInt(move cmp) {
+            $cmp = balabala::discriminant(copy $next);
+            switchInt(move $cmp) {
                 // true or 1 here?
                 true => {
-                    first = copy (next as Some).0;
-                    second_t = copy (next as Some).1;
-                    second_usize = copy second_t as usize (IntToInt);
-                    (*slice)[second_usize] = copy first as $T (IntToInt);
+                    $first = copy ($next as Some).0;
+                    $second_t = copy ($next as Some).1;
+                    $second_usize = copy $second_t as usize (IntToInt);
+                    (*$slice)[$second_usize] = copy $first as $T (IntToInt);
                 }
                 _ => break,
             }
         }
         // variable shadowing?
         // There cannnot be two mutable references to `vec` in the same scope
-        ref_to_vec = &mut vec;
-        _tmp = Vec::set_len(move ref_to_vec, copy len);
+        $ref_to_vec = &mut $vec;
+        $_tmp = Vec::set_len(move $ref_to_vec, copy $len);
     } => {
         let _?0: std::ops::Range<?T0>;
         let _?1: usize;

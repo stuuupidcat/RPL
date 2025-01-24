@@ -3,7 +3,7 @@ use proc_macro2::Span;
 use rustc_hash::FxHashMap;
 use syn::Ident;
 use syn_derive::ToTokens;
-use syntax::{Path, PlaceLocal, SelfParam, TyVar, Type};
+use syntax::{Path, PlaceLocal, PlaceLocalKind, SelfParam, TyVar, Type};
 
 #[derive(Debug, Display)]
 pub(crate) enum SymbolKind {
@@ -351,13 +351,13 @@ impl<'a> FnInner<'a> {
         Ok(())
     }
     pub fn add_place_local(&mut self, local: &'a PlaceLocal, ty: &'a Type) -> syn::Result<()> {
-        match local {
-            PlaceLocal::Return(return_value) => {
+        match &local.kind {
+            PlaceLocalKind::Return(return_value) => {
                 self.return_value = Some((return_value.span, ty));
                 Ok(())
             },
-            PlaceLocal::Local(ident) => self.add_local(ident, ty),
-            &PlaceLocal::SelfValue(self_value) => {
+            PlaceLocalKind::Local(ident) => self.add_local(ident, ty),
+            &PlaceLocalKind::SelfValue(self_value) => {
                 self.self_value = Some((self_value, ty));
                 Ok(())
             },
@@ -375,16 +375,16 @@ impl<'a> FnInner<'a> {
             .ok_or_else(|| syn::Error::new(ident.span(), CheckError::SymbolNotDeclared(SymbolKind::Local, ident)))
     }
     pub fn get_place_local(&self, local: &PlaceLocal) -> syn::Result<&'a Type> {
-        match local {
-            PlaceLocal::Return(return_value) => self
+        match &local.kind {
+            PlaceLocalKind::Return(return_value) => self
                 .return_value
                 .map(|(_, ty)| ty)
                 .ok_or_else(|| syn::Error::new(return_value.span, CheckError::RetNotDeclared)),
-            PlaceLocal::Local(ident) => self.get_local(ident),
-            PlaceLocal::SelfValue(self_value) if self.self_value.is_none() && self.self_param.is_none() => {
+            PlaceLocalKind::Local(ident) => self.get_local(ident),
+            PlaceLocalKind::SelfValue(self_value) if self.self_value.is_none() && self.self_param.is_none() => {
                 Err(syn::Error::new(self_value.span, CheckError::SelfNotDeclared))
             },
-            PlaceLocal::SelfValue(self_value) => self
+            PlaceLocalKind::SelfValue(self_value) => self
                 .self_value
                 .map(|(_, ty)| ty)
                 .or(self.self_ty)

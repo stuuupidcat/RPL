@@ -111,12 +111,12 @@ fn pattern_trust_len(pcx: PatCtxt<'_>) -> PatternTrustLen<'_> {
     let pattern = rpl! {
         #[meta($T:ty, $I:ty)]
         fn $pattern (..) -> _ = mir! {
-            let iter: $I = _;
+            let $iter: $I = _;
             #[export(len)]
-            let len: usize = std::iter::ExactSizeIterator::len(move iter);
-            let vec: &mut alloc::vec::Vec<$T> = _;
+            let $len: usize = std::iter::ExactSizeIterator::len(move $iter);
+            let $vec: &mut alloc::vec::Vec<$T> = _;
             #[export(set_len)]
-            let set_len: () = alloc::vec::Vec::set_len(move vec, copy len);
+            let $set_len: () = alloc::vec::Vec::set_len(move $vec, copy $len);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
@@ -148,14 +148,14 @@ fn pattern_uninitialized_slice(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
         #[meta($T:ty)]
         fn $pattern (..) -> _ = mir! {
             #[export(len)]
-            let len: usize = _;
+            let $len: usize = _;
             #[export(vec)]
-            let vec: alloc::vec::Vec<$T> = alloc::vec::Vec::with_capacity(_);
-            let vec_ref: &alloc::vec::Vec<$T> = &vec;
+            let $vec: alloc::vec::Vec<$T> = alloc::vec::Vec::with_capacity(_);
+            let $vec_ref: &alloc::vec::Vec<$T> = &$vec;
             #[export(ptr)]
-            let ptr: *const $T = alloc::vec::Vec::as_ptr(move vec_ref);
+            let $ptr: *const $T = alloc::vec::Vec::as_ptr(move $vec_ref);
             #[export(slice)]
-            let slice: &[$T] = std::slice::from_raw_parts::<'_, $T>(move ptr, copy len);
+            let $slice: &[$T] = std::slice::from_raw_parts::<'_, $T>(move $ptr, copy $len);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
@@ -182,17 +182,17 @@ fn pattern_uninitialized_slice_mut(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> 
             // #[export(len)]
             // let len: usize = _;
             #[export(vec)]
-            let vec: alloc::vec::Vec<$T> = alloc::vec::Vec::with_capacity(_);
-            let vec_ref: &mut alloc::vec::Vec<$T> = &mut vec;
+            let $vec: alloc::vec::Vec<$T> = alloc::vec::Vec::with_capacity(_);
+            let $vec_ref: &mut alloc::vec::Vec<$T> = &mut $vec;
             #[export(ptr)]
-            let ptr: *mut $T = alloc::vec::Vec::as_mut_ptr(move vec_ref);
+            let $ptr: *mut $T = alloc::vec::Vec::as_mut_ptr(move $vec_ref);
             // FIXME: if this statement is put in the beginning, it may fail to match the cdoe where
             // `Vec::with_capacity` is called in advance of `ExactSizeIterator::len`.
             // See `rpl_mir::matches::match_block_ends_with` for more details.
             #[export(len)]
-            let len: usize = _;
+            let $len: usize = _;
             #[export(slice)]
-            let slice: &mut [$T] = std::slice::from_raw_parts_mut::<'_, $T>(move ptr, move len);
+            let $slice: &mut [$T] = std::slice::from_raw_parts_mut::<'_, $T>(move $ptr, move $len);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
