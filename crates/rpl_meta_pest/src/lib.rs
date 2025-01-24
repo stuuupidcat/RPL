@@ -10,6 +10,10 @@ extern crate rpl_parser as parser;
 extern crate rustc_data_structures;
 extern crate rustc_driver;
 extern crate rustc_hash;
+extern crate rustc_span;
 
 pub mod error;
 pub mod symbol_table;
+pub(crate) mod utils;
+
+pub use error::RPLMetaError;
