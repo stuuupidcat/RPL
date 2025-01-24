@@ -1,27 +1,27 @@
 use colored::Colorize;
 use std::fmt::{Debug, Display};
-use std::path::PathBuf;
+use std::path::Path;
 
 /// Colored wrapper of [Position](pest_typed::Position).
 #[derive(Clone)]
-pub struct PositionWrapper<'i> {
-    inner: pest_typed::Position<'i>,
-    path: PathBuf,
+pub struct PositionWrapper<'a> {
+    inner: pest_typed::Position<'a>,
+    path: &'a Path,
 }
 
-impl<'i> PositionWrapper<'i> {
-    pub fn new(value: pest_typed::Position<'i>, path: PathBuf) -> Self {
+impl<'a> PositionWrapper<'a> {
+    pub fn new(value: pest_typed::Position<'a>, path: &'a Path) -> Self {
         Self { inner: value, path }
     }
 }
 
-impl<'i> Debug for PositionWrapper<'i> {
+impl<'a> Debug for PositionWrapper<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&self.inner, f)
     }
 }
 
-impl<'i> Display for PositionWrapper<'i> {
+impl<'a> Display for PositionWrapper<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let path = self.path.to_string_lossy();
         let (line, col) = self.inner.line_col();
