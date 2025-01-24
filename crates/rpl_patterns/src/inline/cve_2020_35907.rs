@@ -88,6 +88,7 @@ fn pattern_thread_local_static(pcx: PatCtxt<'_>) -> PatternThreadLocalStatic<'_>
     let ty_var;
     let thread_local;
     let ret;
+    #[allow(non_snake_case)]
     let pattern = rpl! {
         #[meta(#[export(ty_var)] $T:ty = is_sync)]
         // FIXME: the return type is not actually checked to be matched
@@ -96,9 +97,8 @@ fn pattern_thread_local_static(pcx: PatCtxt<'_>) -> PatternThreadLocalStatic<'_>
             let local_key: &std::thread::LocalKey::<std::cell::UnsafeCell<$T>> = _;
             let result: core::result::Result<&$T, _> =
                 std::thread::LocalKey::<std::cell::UnsafeCell<$T>>::try_with::<_, _>(move local_key, _);
-            // FIXME: the return value is not actually checked to be matched
             #[export(ret)]
-            let ret: &$T = core::result::Result::expect(move result, _);
+            let RET: &$T = core::result::Result::expect(move result, _);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

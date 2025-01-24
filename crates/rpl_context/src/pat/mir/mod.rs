@@ -38,6 +38,7 @@ impl From<(BasicBlock, usize)> for Location {
 
 pub struct MirPattern<'pcx> {
     pub self_idx: Option<Local>,
+    pub return_idx: Option<Local>,
     pub locals: IndexVec<Local, Ty<'pcx>>,
     pub basic_blocks: IndexVec<BasicBlock, BasicBlockData<'pcx>>,
 }
@@ -359,6 +360,7 @@ impl<'pcx> MirPatternBuilder<'pcx> {
     fn new() -> Self {
         let mut pattern = MirPattern {
             locals: IndexVec::new(),
+            return_idx: None,
             self_idx: None,
             basic_blocks: IndexVec::new(),
         };
@@ -377,6 +379,9 @@ impl<'pcx> MirPatternBuilder<'pcx> {
 
     pub fn mk_local(&mut self, ty: Ty<'pcx>) -> Local {
         self.pattern.locals.push(ty)
+    }
+    pub fn mk_return(&mut self, ty: Ty<'pcx>) -> Local {
+        *self.pattern.return_idx.insert(self.pattern.locals.push(ty))
     }
     pub fn mk_self(&mut self, ty: Ty<'pcx>) -> Local {
         *self.pattern.self_idx.insert(self.pattern.locals.push(ty))
