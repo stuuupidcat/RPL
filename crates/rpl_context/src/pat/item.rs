@@ -45,7 +45,7 @@ pub struct Fn<'pcx> {
     pub name: Symbol,
     pub meta: MetaVars<'pcx>,
     pub params: Params<'pcx>,
-    pub ret: Ty<'pcx>,
+    pub ret: Option<Ty<'pcx>>,
     pub body: Option<FnBody<'pcx>>,
 }
 
@@ -154,27 +154,30 @@ impl<'pcx> Fns<'pcx> {
     pub fn get_fn_pat(&self, name: Symbol) -> Option<&Fn<'pcx>> {
         self.fn_pats.get(&name)
     }
-    pub fn new_fn(&mut self, name: Symbol, ret: Ty<'pcx>) -> &mut Fn<'pcx> {
-        self.fns.entry(name).or_insert_with(|| Fn::new(name, ret))
+    pub fn new_fn(&mut self, name: Symbol) -> &mut Fn<'pcx> {
+        self.fns.entry(name).or_insert_with(|| Fn::new(name))
     }
-    pub fn new_fn_pat(&mut self, name: Symbol, ret: Ty<'pcx>) -> &mut Fn<'pcx> {
-        self.fn_pats.entry(name).or_insert_with(|| Fn::new(name, ret))
+    pub fn new_fn_pat(&mut self, name: Symbol) -> &mut Fn<'pcx> {
+        self.fn_pats.entry(name).or_insert_with(|| Fn::new(name))
     }
-    pub fn new_unnamed(&mut self, ret: Ty<'pcx>) -> &mut Fn<'pcx> {
-        self.unnamed_fns.push(Fn::new(kw::Underscore, ret));
+    pub fn new_unnamed(&mut self) -> &mut Fn<'pcx> {
+        self.unnamed_fns.push(Fn::new(kw::Underscore));
         self.unnamed_fns.last_mut().unwrap()
     }
 }
 
 impl<'pcx> Fn<'pcx> {
-    pub(crate) fn new(name: Symbol, ret: Ty<'pcx>) -> Self {
+    pub(crate) fn new(name: Symbol) -> Self {
         Self {
             name,
             meta: MetaVars::default(),
             params: Params::default(),
-            ret,
+            ret: None,
             body: None,
         }
+    }
+    pub fn set_ret_ty(&mut self, ty: Ty<'pcx>) {
+        self.ret = Some(ty);
     }
     pub fn set_body(&mut self, body: FnBody<'pcx>) {
         self.body = Some(body);

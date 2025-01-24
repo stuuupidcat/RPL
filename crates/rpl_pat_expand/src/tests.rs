@@ -25,8 +25,9 @@ macro_rules! mir_test_case {
                 }
             }, quote!{{
                 let pattern = pcx.new_pattern();
-                let pattern_fn = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("pattern"), pcx.mk_any_ty());
+                let pattern_fn = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("pattern"));
                 $($meta_output)*
+                pattern_fn.set_ret_ty(pcx.mk_any_ty());
                 let mut mir_pat = ::rpl_context::pat::MirPattern::builder();
                 $($output)*
                 let mir_pat = mir_pat.build();
@@ -297,17 +298,17 @@ fn test_cve_2020_35892_revised() {
             let end_local = mir_pat.mk_local(pcx.primitive_types.usize);
             let range_local = mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["core", "ops", "range", "Range",]),
-                &[pcx.primitive_types.usize.into()]
+                &[pcx.primitive_types.usize.into(),]
             )));
             let iter_local = mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["core", "ops", "range", "Range",]),
-                &[pcx.primitive_types.usize.into()]
+                &[pcx.primitive_types.usize.into(),]
             )));
             let iter_mut_local = mir_pat.mk_local(pcx.mk_ref_ty(
                 ::rpl_context::pat::RegionKind::ReAny,
                 pcx.mk_path_ty(pcx.mk_path_with_args(
                     pcx.mk_item_path(&["core", "ops", "range", "Range",]),
-                    &[pcx.primitive_types.usize.into()]
+                    &[pcx.primitive_types.usize.into(),]
                 )),
                 ::rustc_middle::mir::Mutability::Mut
             ));
@@ -816,17 +817,17 @@ fn test_cve_2018_21000() {
             #[allow(non_snake_case)]
             let VecT1_ty = pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["std", "vec", "Vec",]),
-                &[T1_ty.into()]
+                &[T1_ty.into(),]
             ));
             #[allow(non_snake_case)]
             let VecT2_ty = pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["std", "vec", "Vec",]),
-                &[T2_ty.into()]
+                &[T2_ty.into(),]
             ));
             #[allow(non_snake_case)]
             let VecT3_ty = pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["std", "vec", "Vec",]),
-                &[T3_ty.into()]
+                &[T3_ty.into(),]
             ));
             #[allow(non_snake_case)]
             let PtrT1_ty = pcx.mk_raw_ptr_ty(T1_ty, ::rustc_middle::mir::Mutability::Mut);
@@ -1229,19 +1230,19 @@ fn test_cve_2021_29941_2() {
             #[allow(non_snake_case)]
             let RangeT_ty = pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["std", "ops", "Range",]),
-                &[T_ty.into()]
+                &[T_ty.into(),]
             ));
             #[allow(non_snake_case)]
             let VecT_ty = pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["std", "vec", "Vec",]),
-                &[T_ty.into()]
+                &[T_ty.into(),]
             ));
             #[allow(non_snake_case)]
             let RefMutVecT_ty = pcx.mk_ref_ty(
                 ::rpl_context::pat::RegionKind::ReAny,
                 pcx.mk_path_ty(pcx.mk_path_with_args(
                     pcx.mk_item_path(&["std", "vec", "Vec",]),
-                    &[T_ty.into()]
+                    &[T_ty.into(),]
                 )),
                 ::rustc_middle::mir::Mutability::Mut
             );
@@ -1258,21 +1259,21 @@ fn test_cve_2021_29941_2() {
             #[allow(non_snake_case)]
             let EnumerateRangeT_ty = pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["std", "iter", "Enumerate",]),
-                &[RangeT_ty.into()]
+                &[RangeT_ty.into(),]
             ));
             #[allow(non_snake_case)]
             let RefMutEnumerateRangeT_ty = pcx.mk_ref_ty(
                 ::rpl_context::pat::RegionKind::ReAny,
                 pcx.mk_path_ty(pcx.mk_path_with_args(
                     pcx.mk_item_path(&["std", "iter", "Enumerate",]),
-                    &[RangeT_ty.into()]
+                    &[RangeT_ty.into(),]
                 )),
                 ::rustc_middle::mir::Mutability::Mut
             );
             #[allow(non_snake_case)]
             let OptionUsizeT_ty = pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["std", "option", "Option",]),
-                &[pcx.mk_tuple_ty(&[pcx.primitive_types.usize, T_ty]).into()]
+                &[pcx.mk_tuple_ty(&[pcx.primitive_types.usize, T_ty]).into(),]
             ));
             let iter_local = mir_pat.mk_local(RangeT_ty);
             mir_pat.mk_assign(iter_local.into_place(), ::rpl_context::pat::Rvalue::Any);
@@ -1554,13 +1555,13 @@ fn test_cve_2018_21000_inlined() {
             let from_vec_local = mir_pat.mk_local(pcx.mk_path_ty(
                 pcx.mk_path_with_args(
                     pcx.mk_item_path(&["alloc", "vec", "Vec",]),
-                    &[pcx.primitive_types.u8.into(), Global_ty.into()]
+                    &[pcx.primitive_types.u8.into(), Global_ty.into(),]
                 )
             ));
             mir_pat.mk_assign(from_vec_local.into_place(), ::rpl_context::pat::Rvalue::Any);
             let to_vec_local = mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["alloc", "vec", "Vec",]),
-                &[T_ty.into(), Global_ty.into()]
+                &[T_ty.into(), Global_ty.into(),]
             )));
             let to_vec_cap_local = mir_pat.mk_local(pcx.primitive_types.usize);
             let from_vec_cap_local = mir_pat.mk_local(pcx.primitive_types.usize);
@@ -1569,22 +1570,22 @@ fn test_cve_2018_21000_inlined() {
             let from_vec_len_local = mir_pat.mk_local(pcx.primitive_types.usize);
             let from_vec_ptr_local = mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["core", "ptr", "non_null", "NonNull",]),
-                &[pcx.primitive_types.u8.into()]
+                &[pcx.primitive_types.u8.into(),]
             )));
             let to_raw_vec_local = mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["alloc", "raw_vec", "RawVec",]),
-                &[T_ty.into(), Global_ty.into()]
+                &[T_ty.into(), Global_ty.into(),]
             )));
             let to_raw_vec_inner_local = mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["alloc", "raw_vec", "RawVecInner",]),
-                &[Global_ty.into()]
+                &[Global_ty.into(),]
             )));
             let to_vec_wrapped_len_local = mir_pat.mk_local(pcx.mk_path_ty(
                 pcx.mk_path_with_args(pcx.mk_item_path(&["alloc", "raw_vec", "Cap",]), &[])
             ));
             let from_vec_unique_ptr_local = mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(
                 pcx.mk_item_path(&["core", "ptr", "unique", "Unique",]),
-                &[pcx.primitive_types.u8.into()]
+                &[pcx.primitive_types.u8.into(),]
             )));
             mir_pat.mk_assign(
                 from_vec_ptr_local.into_place(),
@@ -1658,7 +1659,7 @@ fn test_cve_2018_21000_inlined() {
                     ::rpl_context::pat::AggKind::Adt(
                         pcx.mk_path_with_args(
                             pcx.mk_item_path(&["core", "ptr", "unique", "Unique",]),
-                            &[pcx.primitive_types.u8.into()]
+                            &[pcx.primitive_types.u8.into(),]
                         ),
                         mir_pat.mk_list([
                             ::rustc_span::Symbol::intern("pointer"),
@@ -1670,7 +1671,7 @@ fn test_cve_2018_21000_inlined() {
                         ::rpl_context::pat::Operand::Copy(from_vec_ptr_local.into_place()),
                         ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(pcx.mk_path_with_args(
                             pcx.mk_item_path(&["core", "marker", "PhantomData",]),
-                            &[pcx.primitive_types.u8.into()]
+                            &[pcx.primitive_types.u8.into(),]
                         ))),
                     ]),
                 )
@@ -1681,7 +1682,7 @@ fn test_cve_2018_21000_inlined() {
                     ::rpl_context::pat::AggKind::Adt(
                         pcx.mk_path_with_args(
                             pcx.mk_item_path(&["alloc", "raw_vec", "RawVecInner",]),
-                            &[Global_ty.into()]
+                            &[Global_ty.into(),]
                         ),
                         mir_pat.mk_list([
                             ::rustc_span::Symbol::intern("ptr"),
@@ -1705,7 +1706,7 @@ fn test_cve_2018_21000_inlined() {
                     ::rpl_context::pat::AggKind::Adt(
                         pcx.mk_path_with_args(
                             pcx.mk_item_path(&["alloc", "raw_vec", "RawVec",]),
-                            &[T_ty.into(), Global_ty.into()]
+                            &[T_ty.into(), Global_ty.into(),]
                         ),
                         mir_pat.mk_list([
                             ::rustc_span::Symbol::intern("inner"),
@@ -1716,7 +1717,7 @@ fn test_cve_2018_21000_inlined() {
                         ::rpl_context::pat::Operand::Move(to_raw_vec_inner_local.into_place()),
                         ::rpl_context::pat::Operand::Constant(mir_pat.mk_zeroed(pcx.mk_path_with_args(
                             pcx.mk_item_path(&["core", "marker", "PhantomData",]),
-                            &[T_ty.into()]
+                            &[T_ty.into(),]
                         ))),
                     ]),
                 )
@@ -1727,7 +1728,7 @@ fn test_cve_2018_21000_inlined() {
                     ::rpl_context::pat::AggKind::Adt(
                         pcx.mk_path_with_args(
                             pcx.mk_item_path(&["alloc", "vec", "Vec",]),
-                            &[T_ty.into(), Global_ty.into()]
+                            &[T_ty.into(), Global_ty.into(),]
                         ),
                         mir_pat.mk_list([
                             ::rustc_span::Symbol::intern("buf"),
@@ -1990,8 +1991,8 @@ fn test_cve_2020_35873() {
         pat! {
             fn $pattern(i32, *const std::ffi::CStr) -> i32;
         } => quote! {
-            let pattern_fn = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("pattern"), pcx.primitive_types.i32);
-
+            let pattern_fn = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("pattern"));
+            pattern_fn.set_ret_ty(pcx.primitive_types.i32);
             pattern_fn.params.add_param(
                 ::rustc_span::symbol::kw::Empty,
                 ::rustc_middle::mir::Mutability::Not,
@@ -2015,11 +2016,12 @@ fn test_cve_2020_35873() {
             #[meta($SessT:ty)]
             fn $ffi_call(*mut $SessT, *const std::ffi::c_char) -> i32;
         } => quote! {
-            let ffi_call_fn = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("ffi_call"), pcx.primitive_types.i32);
+            let ffi_call_fn = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("ffi_call"));
             #[allow(non_snake_case)]
             let SessT_ty_var = ffi_call_fn.meta.new_ty_var(None);
             #[allow(non_snake_case)]
             let SessT_ty = pcx.mk_var_ty(SessT_ty_var );
+            ffi_call_fn.set_ret_ty(pcx.primitive_types.i32);
 
             ffi_call_fn.params.add_param(
                 ::rustc_span::symbol::kw::Empty,
@@ -2164,4 +2166,87 @@ fn test_cve_2020_35892_3() {
             );
         }
     );
+}
+
+#[test]
+fn test_cve_2020_35907() {
+    test_case! {
+        pat! {
+            #[meta($T:ty = is_sync)]
+            fn $pattern(..) -> &'static $T = mir! {
+                let result: core::result::Result<&'static $T, _> =
+                    std::thread::LocalKey::<std::cell::UnsafeCell<std::task::Waker>>::try_with::<_, _>(_, _);
+                #[export(ret)]
+                let ret: &'static $T = core::result::Result::expect(move result, _);
+            }
+        } => quote! {
+            let pattern_fn = pattern.fns.new_fn_pat(::rustc_span::Symbol::intern("pattern"));
+            #[allow(non_snake_case)]
+            let T_ty_var = pattern_fn.meta.new_ty_var(Some(is_sync));
+            #[allow(non_snake_case)]
+            let T_ty = pcx.mk_var_ty(T_ty_var);
+            pattern_fn.set_ret_ty(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReStatic,
+                T_ty,
+                ::rustc_middle::mir::Mutability::Not
+            ));
+            let mut mir_pat = ::rpl_context::pat::MirPattern::builder();
+            let result_local = mir_pat.mk_local(
+                pcx.mk_path_ty(
+                    pcx.mk_path_with_args(
+                        pcx.mk_item_path(&["core", "result", "Result",]),
+                        &[
+                            pcx.mk_ref_ty(
+                                ::rpl_context::pat::RegionKind::ReStatic,
+                                T_ty,
+                                ::rustc_middle::mir::Mutability::Not
+                            )
+                            .into(),
+                            pcx.mk_any_ty().into(),
+                        ]
+                    )
+                )
+            );
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(
+                    mir_pat.mk_zeroed(
+                        pcx.mk_path_with_args(
+                            pcx.mk_item_path(&["std", "thread", "LocalKey", "try_with",]),
+                            &[
+                                pcx.mk_path_ty(
+                                    pcx.mk_path_with_args(
+                                        pcx.mk_item_path(&["std", "cell", "UnsafeCell",]),
+                                        &[pcx.mk_path_ty(pcx.mk_path_with_args(pcx.mk_item_path(&["std", "task", "Waker",]), &[])).into(),]
+                                    )
+                                )
+                                .into(),
+                                pcx.mk_any_ty().into(),
+                                pcx.mk_any_ty().into(),
+                            ]
+                        )
+                    )
+                ),
+                mir_pat.mk_list([::rpl_context::pat::Operand::Any, ::rpl_context::pat::Operand::Any]),
+                Some(result_local.into_place())
+            );
+            let ret_local = mir_pat.mk_local(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReStatic,
+                T_ty,
+                ::rustc_middle::mir::Mutability::Not
+            ));
+            ret = mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(
+                    mir_pat.mk_zeroed(pcx.mk_path_with_args(pcx.mk_item_path(&["core", "result", "Result", "expect",]), &[]))
+                ),
+                mir_pat.mk_list([
+                    ::rpl_context::pat::Operand::Move(result_local.into_place()),
+                    ::rpl_context::pat::Operand::Any
+                ]),
+                Some(ret_local.into_place())
+            );
+            let mir_pat = mir_pat.build();
+            let mir_pat = pcx.mk_mir_pattern(mir_pat);
+            pattern_fn.set_body(::rpl_context::pat::FnBody::Mir(mir_pat));
+        }
+    }
 }

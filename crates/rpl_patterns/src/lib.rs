@@ -7,11 +7,13 @@ extern crate rustc_driver;
 extern crate rustc_errors;
 extern crate rustc_fluent_macro;
 extern crate rustc_hir;
+extern crate rustc_infer;
 extern crate rustc_lint_defs;
 extern crate rustc_macros;
 extern crate rustc_middle;
 extern crate rustc_session;
 extern crate rustc_span;
+extern crate rustc_trait_selection;
 #[macro_use]
 extern crate tracing;
 extern crate rpl_macros;
@@ -46,6 +48,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     inline::cve_2020_35888::check_item,
     inline::cve_2020_35892_3::check_item,
     inline::cve_2020_35898_9::check_item,
+    inline::cve_2020_35907::check_item,
     normal::cve_2021_25904::check_item,
     inline::cve_2021_25904::check_item,
     normal::cve_2021_27376::check_item,

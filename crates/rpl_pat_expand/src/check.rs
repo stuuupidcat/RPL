@@ -518,7 +518,7 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
                 // FIXME: error here when `impl` pattern is implemented
                 // Err(syn::Error::new_spanned(ty, CheckError::SelfTypeOutsideImpl))
             },
-            Type::SelfType(_) => Ok(()),
+            Type::SelfType(_) | Type::Any(_) => Ok(()),
         }
     }
 

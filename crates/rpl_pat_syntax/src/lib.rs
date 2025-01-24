@@ -362,6 +362,9 @@ pub enum Type {
 
     /// The `Self` type
     SelfType(Token![Self]),
+
+    /// any type
+    Any(Token![_]),
 }
 
 #[derive(ToTokens, Parse, From, Display)]

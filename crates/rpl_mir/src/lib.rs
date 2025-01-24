@@ -909,7 +909,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             (pat::AggAdtKind::Unit | pat::AggAdtKind::Tuple | pat::AggAdtKind::Struct(_), ..) => false,
         };
         let generics = self.ty.tcx.generics_of(def_id);
-        let gargs_matched = self.ty.match_generic_args(gargs_pat, gargs, generics);
+        let gargs_matched = self.ty.match_generic_args(&gargs_pat, gargs, generics);
         let matched = variant_matched && fields_matched && gargs_matched;
         debug!(
             ?path,
