@@ -76,10 +76,10 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
             (pat::TyKind::Def(def_id_pat, args_pat), ty::Adt(adt, args)) => {
                 let def_id = adt.did();
                 // trace!(?def_id_pat, ?def_id, ?args_pat, ?args, "match_ty def");
-                self.match_generic_args(args_pat, args, self.tcx.generics_of(def_id)) && def_id_pat == def_id
+                self.match_generic_args(&args_pat, args, self.tcx.generics_of(def_id)) && def_id_pat == def_id
             },
             (pat::TyKind::Def(def_id_pat, args_pat), ty::FnDef(def_id, args)) => {
-                self.match_generic_args(args_pat, args, self.tcx.generics_of(def_id)) && def_id_pat == def_id
+                self.match_generic_args(&args_pat, args, self.tcx.generics_of(def_id)) && def_id_pat == def_id
             },
             (pat::TyKind::Path(path_with_args), _) => {
                 //FIXME: generics args are ignored.
@@ -109,6 +109,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
             //         && self.match_generic_args(args, alias.args)
             // },
             (pat::TyKind::Bool, ty::Bool) => true,
+            (pat::TyKind::Any, _) => true,
             (
                 pat::TyKind::TyVar(_)
                 | pat::TyKind::AdtPat(_)
@@ -123,8 +124,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
                 | pat::TyKind::Def(_, _)
                 | pat::TyKind::Bool
                 | pat::TyKind::Str
-                | pat::TyKind::Char
-                | pat::TyKind::Any,
+                | pat::TyKind::Char,
                 ty::Bool
                 | ty::Char
                 | ty::Int(_)
@@ -209,7 +209,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
         args: ty::GenericArgsRef<'tcx>,
     ) -> bool {
         let generics = self.tcx.generics_of(def_id);
-        self.match_path(path_with_args.path, def_id) && self.match_generic_args(path_with_args.args, args, generics)
+        self.match_path(path_with_args.path, def_id) && self.match_generic_args(&path_with_args.args, args, generics)
     }
 
     #[instrument(level = "trace", skip(self), ret)]
@@ -280,15 +280,30 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
         matched.then_some(pat_iter.as_slice())
     }
 
+    #[instrument(level = "trace", skip(self), ret)]
     pub fn match_generic_args(
         &self,
-        args_pat: pat::GenericArgsRef<'pcx>,
-        args: ty::GenericArgsRef<'tcx>,
+        mut args_pat: &[pat::GenericArgKind<'pcx>],
+        args: &'tcx [ty::GenericArg<'tcx>],
         generics: &'tcx ty::Generics,
     ) -> bool {
+        if let Some(parent) = generics.parent
+            && let Some((parent_args_pat, pat)) = args_pat.split_at_checked(generics.parent_count)
+        {
+            args_pat = pat;
+            let args = &args[..generics.parent_count];
+            let generics = self.tcx.generics_of(parent);
+
+            if !self.match_generic_args(parent_args_pat, args, generics) {
+                return false;
+            }
+        }
+        trace!(?args_pat);
         // Is it necessary to call this function?
         let args_all = generics.own_args(args);
+        trace!(?args_all);
         let args_no_default = generics.own_args_no_defaults(self.tcx, args);
+        trace!(?args_no_default);
         if args_pat.len() < args_no_default.len() || args_pat.len() > args_all.len() {
             false
         } else {
@@ -305,6 +320,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
         }
     }
 
+    #[instrument(level = "trace", skip(self), ret)]
     fn match_generic_arg(&self, arg_pat: pat::GenericArgKind<'pcx>, arg: ty::GenericArg<'tcx>) -> bool {
         match (arg_pat, arg.unpack()) {
             (pat::GenericArgKind::Lifetime(region_pat), ty::GenericArgKind::Lifetime(region)) => {

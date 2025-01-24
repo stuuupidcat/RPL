@@ -428,23 +428,24 @@ impl ToTokens for ExpandPat<'_, &FnSig> {
         let pattern = self.ecx.get_pattern().unwrap();
         let FnSig { ident, params, ret, .. } = self.value;
         quote_each_token!(tokens let #fn_pat = #pattern.fns.);
-        let ret = self.ecx.expand(ret);
         match ident {
             IdentPat::Underscore(_) => {
-                quote_each_token!(tokens new_unnamed(#ret););
+                quote_each_token!(tokens new_unnamed(););
             },
             IdentPat::Pat(_, ident) => {
                 let name = self.ecx.expand(ident.to_symbol());
-                quote_each_token!(tokens new_fn_pat(#name, #ret););
+                quote_each_token!(tokens new_fn_pat(#name););
             },
             IdentPat::Ident(ident) => {
                 let name = self.ecx.expand(ident.to_symbol());
-                quote_each_token!(tokens new_fn(#name, #ret););
+                quote_each_token!(tokens new_fn(#name););
             },
         }
         if let Some(meta) = meta {
             self.ecx.expand(meta).to_tokens(tokens);
         }
+        let ret = self.ecx.expand(ret);
+        quote_each_token!(tokens #fn_pat.set_ret_ty(#ret););
         for param in params.punctuated.iter() {
             self.ecx.expand(param).to_tokens(tokens);
         }
@@ -880,8 +881,12 @@ impl ToTokens for Expand<'_, &Path> {
             let ident = segment.ident.to_string();
             quote_each_token!(path #ident,);
             if let PathArguments::AngleBracketed(AngleBracketedGenericArguments { args, .. }) = &segment.arguments {
+                let trailing_punct = args.trailing_punct();
                 let args = self.ecx.expand_punctuated(args);
                 quote_each_token!(gen_args #args);
+                if !trailing_punct {
+                    quote_token!(, gen_args);
+                }
             }
         }
         quote_each_token!(tokens #pcx.mk_path_with_args(
@@ -964,6 +969,9 @@ impl ToTokens for Expand<'_, &Type> {
                 quote_each_token!(tokens #pcx.mk_adt_ty(#lang_item));
             },
             Type::SelfType(_) => todo!(),
+            Type::Any(_) => {
+                quote_each_token!(tokens #pcx.mk_any_ty());
+            },
         }
     }
 }

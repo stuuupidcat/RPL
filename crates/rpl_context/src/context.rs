@@ -131,6 +131,9 @@ impl<'pcx> PatCtxt<'pcx> {
     pub fn mk_slice_ty(self, ty: Ty<'pcx>) -> Ty<'pcx> {
         self.mk_ty(TyKind::Slice(ty))
     }
+    pub fn mk_unit_ty(self) -> Ty<'pcx> {
+        self.mk_ty(TyKind::Tuple(&[]))
+    }
     pub fn mk_tuple_ty(self, ty: &[Ty<'pcx>]) -> Ty<'pcx> {
         self.mk_ty(TyKind::Tuple(self.mk_slice(ty)))
     }

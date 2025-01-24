@@ -185,6 +185,21 @@ pub struct DropUninitValue {
     pub drop: Span,
 }
 
+// for cve_2020_35907
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_thread_local_static_ref)]
+#[help(rpl_patterns_sync_help)]
+#[help]
+pub struct ThreadLocalStaticRef<'tcx> {
+    #[primary_span]
+    pub span: Span,
+    #[label]
+    pub thread_local: Span,
+    #[label(rpl_patterns_ret_label)]
+    pub ret: Span,
+    pub ty: Ty<'tcx>,
+}
+
 // for cve_2021_25904
 // FIXME: add a span for `#[help]` containing the function header
 #[derive(Diagnostic)]

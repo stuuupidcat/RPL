@@ -1,5 +1,3 @@
-//@ ignore-on-host
-
 use core::task::{RawWaker, RawWakerVTable, Waker};
 use std::cell::UnsafeCell;
 
@@ -19,7 +17,9 @@ fn noop_waker() -> Waker {
     unsafe { Waker::from_raw(RawWaker::new(std::ptr::null(), &NOOP_WAKER_VTABLE)) }
 }
 
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
 pub fn noop_waker_ref() -> &'static Waker {
+    //~^ ERROR: it is unsound to expose a `&'static std::task::Waker` from a thread-local where `std::task::Waker` is `Sync`
     thread_local! {
         static NOOP_WAKER_INSTANCE: UnsafeCell<Waker> =
             UnsafeCell::new(noop_waker());

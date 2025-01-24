@@ -66,3 +66,9 @@ rpl_patterns_from_raw_parts = it is unsound to trust pointers from passed-in ite
 rpl_patterns_unsound_cast_between_u64_and_atomic_u64 = it is unsound to cast between `u64` and `AtomicU64`
     .note = the alignment of `u64` is smaller than `AtomicU64` on many 32-bits platforms
     .src_label = u64 created here
+
+rpl_patterns_thread_local_static_ref = it is unsound to expose a `&'static {$ty}` from a thread-local where `{$ty}` is `Sync`
+    .sync_help = `{$ty}` is `Sync` so that it can shared among threads
+    .help = the thread local is destroyed after the thread has been destroyed, and the exposed `&'static {$ty}` may outlive the thread it is exposed to
+    .label = thread local used here
+    .ret_label = `&'static {$ty}` returned here

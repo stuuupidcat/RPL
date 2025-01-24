@@ -35,7 +35,9 @@ impl<'a, 'pcx, 'tcx> MatchFnCtxt<'a, 'pcx, 'tcx> {
         (self.fn_pat.params.len() <= fn_sig.inputs().len() || self.fn_pat.params.non_exhaustive)
             && zip(self.fn_pat.params.iter(), fn_sig.inputs())
                 .all(|(param_pat, &param_ty)| self.match_param(param_pat, param_ty))
-            && self.ty.match_ty(self.fn_pat.ret, fn_sig.output())
+            && self
+                .ty
+                .match_ty(self.fn_pat.ret.unwrap_or(self.ty.pcx.mk_unit_ty()), fn_sig.output())
     }
 
     fn match_param(&self, param_pat: &pat::Param<'pcx>, ty: ty::Ty<'tcx>) -> bool {

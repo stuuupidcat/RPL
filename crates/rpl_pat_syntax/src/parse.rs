@@ -249,6 +249,8 @@ impl Parse for Type {
             input.call(Type::parse_tuple_or_paren)
         } else if input.peek(token::Bracket) {
             input.call(Type::parse_array_or_slice)
+        } else if input.peek(Token![_]) {
+            Ok(Type::Any(input.parse()?))
         } else if input.peek(Token![*]) {
             Ok(Type::Ptr(input.parse()?))
         } else if input.peek(Token![&]) {
