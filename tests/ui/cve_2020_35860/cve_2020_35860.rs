@@ -1,5 +1,4 @@
-//@ ignore-on-host
-
+//@compile-flags: -Z inline-mir=false
 use std::{ffi::CStr, ops::Deref};
 use libc::c_char;
 
@@ -50,6 +49,7 @@ where
 
 impl<'a> Deref for CBox<str> {
     type Target = str;
+    #[rpl::dump_mir(dump_cfg, dump_ddg)]
     fn deref(&self) -> &str {
         unsafe {
             let text = CStr::from_ptr(self.ptr);
