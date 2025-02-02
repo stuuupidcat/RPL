@@ -19,7 +19,7 @@ extern crate byte_slice_cast;
 extern crate futures;
 extern crate if_chain;
 extern crate itertools;
-// extern crate libc;
+extern crate libc;
 extern crate num_derive;
 extern crate num_rational;
 extern crate parking_lot;

@@ -1,6 +1,5 @@
 use rpl_context::PatCtxt;
 use rpl_mir::{pat, CheckMirCtxt};
-use rustc_errors::MultiSpan;
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_hir::{self as hir};
@@ -48,29 +47,20 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         kind: intravisit::FnKind<'tcx>,
         decl: &'tcx hir::FnDecl<'tcx>,
         body_id: hir::BodyId,
-        span: Span,
+        _span: Span,
         def_id: LocalDefId,
     ) -> Self::Result {
         if self.tcx.is_mir_available(def_id) {
             let body = self.tcx.optimized_mir(def_id);
 
-            let pattern = pattern_offset_by_len(self.pcx);
+            let pattern = pattern_deref_null_pointer(self.pcx);
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
-                let read = matches[pattern.read].span_no_inline(body);
                 let ptr = matches[pattern.ptr].span_no_inline(body);
-                let len = matches[pattern.len].span_no_inline(body);
-                debug!(?ptr, ?read, ?len);
-                let len_local = self
-                    .tcx
-                    .sess
-                    .source_map()
-                    .span_to_snippet(len)
-                    .unwrap_or_else(|_| "{expr}".to_string());
-                self.tcx.dcx().emit_err(crate::errors::OffsetByOne {
-                    read,
+                let from_ptr_func_call = matches[pattern.from_ptr_func_call].span_no_inline(body);
+                debug!(?ptr, ?from_ptr_func_call);
+                self.tcx.dcx().emit_err(crate::errors::DerefNullPointer {
                     ptr,
-                    len,
-                    len_local,
+                    deref: from_ptr_func_call,
                 });
             }
         }
@@ -81,16 +71,14 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 struct PatternDerefNullPointer<'pcx> {
     pattern: &'pcx pat::Pattern<'pcx>,
     fn_pat: &'pcx pat::Fn<'pcx>,
-    len: pat::Location,
     ptr: pat::Location,
-    read: pat::Location,
+    from_ptr_func_call: pat::Location,
 }
 
 #[rpl_macros::pattern_def]
-fn pattern_offset_by_len(pcx: PatCtxt<'_>) -> PatternOffsetByLen<'_> {
-    let len;
+fn pattern_deref_null_pointer(pcx: PatCtxt<'_>) -> PatternDerefNullPointer<'_> {
     let ptr;
-    let read;
+    let from_ptr_func_call;
     let pattern = rpl! {
         #[meta($T:ty)]
         struct $CBox {
@@ -99,25 +87,20 @@ fn pattern_offset_by_len(pcx: PatCtxt<'_>) -> PatternOffsetByLen<'_> {
 
         #[meta($T:ty)]
         fn $pattern(..) -> _ = mir! {
-            let self: & $CBox;
-            #[export(len)]
-            let ptr: *mut $T = copy (*self).$ptr;
-            let len_isize: isize = move len as isize (IntToInt);
-            let base: *mut $T = copy (*self).$mem;
+            let $self: &$CBox;
             #[export(ptr)]
-            let ptr_mut: *mut $T = Offset(copy base, copy len_isize);
-            let ptr: *const $T = copy ptr_mut as *const $T (PtrToPtr);
-            #[export(read)]
-            let elem: $T = copy (*ptr);
+            let $self_ptr: *mut $T = copy (*$self).$ptr;
+            let $ptr: *const i8 = move $self_ptr as *const i8 (PtrToPtr);
+            #[export(from_ptr_func_call)]
+            _ = std::ffi::CStr::from_ptr::<'_>(move $ptr);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-    PatternOffsetByLen {
+    PatternDerefNullPointer {
         pattern,
         fn_pat,
-        len,
         ptr,
-        read,
+        from_ptr_func_call,
     }
 }

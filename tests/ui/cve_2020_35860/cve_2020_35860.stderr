@@ -1,84 +1,13 @@
-note: MIR of `<CBox<str> as std::ops::Deref>::deref`
-  --> tests/ui/cve_2020_35860/cve_2020_35860.rs:53:5
-   |
-LL |       #[rpl::dump_mir(dump_cfg, dump_ddg)]
-   |       ------------------------------------ MIR dumpped because of this attribute
-LL | /     fn deref(&self) -> &str {
-LL | |         unsafe {
-LL | |             let text = CStr::from_ptr(self.ptr);
-LL | |             std::str::from_utf8_unchecked(text.to_bytes())
-LL | |         }
-LL | |     }
-   | |_____^
-   |
-   = note: see `/Users/stuuupidcat/home/code/projects/RPL/mir_dump/cve_2020_35860.{impl#2}-deref.-------.dump_mir..mir` for dumpped MIR
-   = note: see `/Users/stuuupidcat/home/code/projects/RPL/mir_dump/cve_2020_35860.{impl#2}-deref.-------.dump_mir..mir.cfg.dot` for dumpped control flow graph
-   = note: see `/Users/stuuupidcat/home/code/projects/RPL/mir_dump/cve_2020_35860.{impl#2}-deref.-------.dump_mir..mir.ddg.dot` for dumpped data dependency graph
-note: locals and scopes in this MIR
-  --> tests/ui/cve_2020_35860/cve_2020_35860.rs:53:5
-   |
-LL |        fn deref(&self) -> &str {
-   |        ^        -----     ---- _0: &str; // scope[0]
-   |        |        |
-   |  ______|        _1: &CBox<str>; // scope[0]
-   | |
-LL | |          unsafe {
-LL | |              let text = CStr::from_ptr(self.ptr);
-   | |              -   ----                  --------
-   | |              |   |                     |
-   | |              |   |                     _3: *const i8; // scope[0]
-   | |              |   |                     _4: *mut i8; // scope[0]
-   | | _____________|   _2: &std::ffi::CStr; // scope[0]
-   | ||
-LL | ||             std::str::from_utf8_unchecked(text.to_bytes())
-   | ||                                           --------------- _5: &[u8]; // scope[0]
-LL | ||         }
-   | ||_________- scope[1]
-LL | |      }
-   | |______^ scope[0]
-note: bb0: {
-          _4 = copy ((*_1).0: *mut i8); // scope[0]
-          _3 = move _4 as *const i8 (PtrToPtr); // scope[0]
-          _2 = std::ffi::CStr::from_ptr::<'_>(move _3) -> [return: bb1, unwind continue]; // scope[0]
-      }
-  --> tests/ui/cve_2020_35860/cve_2020_35860.rs:55:24
+error: Dereference of a possibly null pointer
+  --> tests/ui/cve_2020_35860/cve_2020_35860.rs:54:24
    |
 LL |             let text = CStr::from_ptr(self.ptr);
    |                        ^^^^^^^^^^^^^^^--------^
    |                        |              |
-   |                        |              _4 = copy ((*_1).0: *mut i8); // scope[0]
-   |                        |              _3 = move _4 as *const i8 (PtrToPtr); // scope[0]
-   |                        _2 = std::ffi::CStr::from_ptr::<'_>(move _3) -> [return: bb1, unwind continue]; // scope[0]
-note: bb1: {
-          _5 = std::ffi::CStr::to_bytes(copy _2) -> [return: bb2, unwind continue]; // scope[1]
-      }
-  --> tests/ui/cve_2020_35860/cve_2020_35860.rs:56:43
+   |                        |              pointer created here
+   |                        dereference here
    |
-LL |             std::str::from_utf8_unchecked(text.to_bytes())
-   |                                           ^^^^^^^^^^^^^^^ _5 = std::ffi::CStr::to_bytes(copy _2) -> [return: bb2, unwind continue]; // scope[1]
-note: bb2: {
-          _0 = std::str::from_utf8_unchecked(copy _5) -> [return: bb3, unwind continue]; // scope[1]
-      }
-  --> tests/ui/cve_2020_35860/cve_2020_35860.rs:56:13
-   |
-LL |             std::str::from_utf8_unchecked(text.to_bytes())
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ _0 = std::str::from_utf8_unchecked(copy _5) -> [return: bb3, unwind continue]; // scope[1]
-note: bb3: {
-          return; // scope[0]
-      }
-  --> tests/ui/cve_2020_35860/cve_2020_35860.rs:58:6
-   |
-LL |     }
-   |      ^ return; // scope[0]
-
-error: abort due to debugging
-  --> tests/ui/cve_2020_35860/cve_2020_35860.rs:52:5
-   |
-LL |     #[rpl::dump_mir(dump_cfg, dump_ddg)]
-   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: remove this attribute
-   |
-   = note: `#[rpl::dump_hir]`, `#[rpl::print_hir]` and `#[rpl::dump_mir]` are only used for debugging
-   = note: this error is to remind you removing these attributes
+   = note: this is because the pointer may be null
 
 error: aborting due to 1 previous error
 
