@@ -224,3 +224,15 @@ pub struct UnsoundCastBetweenU64AndAtomicU64 {
     #[label(rpl_patterns_src_label)]
     pub src: Span,
 }
+
+// for cve_2020_35860
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_deref_null_pointer)]
+#[note]
+pub struct DerefNullPointer {
+    #[primary_span]
+    #[label(rpl_patterns_deref_label)]
+    pub deref: Span,
+    #[label(rpl_patterns_ptr_label)]
+    pub ptr: Span,
+}

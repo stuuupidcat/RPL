@@ -72,3 +72,8 @@ rpl_patterns_thread_local_static_ref = it is unsound to expose a `&'static {$ty}
     .help = the thread local is destroyed after the thread has been destroyed, and the exposed `&'static {$ty}` may outlive the thread it is exposed to
     .label = thread local used here
     .ret_label = `&'static {$ty}` returned here
+
+rpl_patterns_deref_null_pointer = Dereference of a possibly null pointer
+    .ptr_label = pointer created here
+    .deref_label = dereference here
+    .note = this is because the pointer may be null

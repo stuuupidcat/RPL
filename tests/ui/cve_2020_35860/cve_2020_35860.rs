@@ -1,7 +1,6 @@
-//@ ignore-on-host
-
+//@compile-flags: -Z inline-mir=false
+// use libc::{c_char, c_void, free};
 use std::{ffi::CStr, ops::Deref};
-use libc::c_char;
 
 pub trait DisposeRef {
     /// What a reference to this type represents as a C pointer.
@@ -15,7 +14,7 @@ pub trait DisposeRef {
 }
 
 impl DisposeRef for str {
-    type RefTo = c_char;
+    type RefTo = i8;
 }
 
 pub struct CBox<D: ?Sized>
@@ -53,6 +52,8 @@ impl<'a> Deref for CBox<str> {
     fn deref(&self) -> &str {
         unsafe {
             let text = CStr::from_ptr(self.ptr);
+                     //~^ ERROR: Dereference of a possibly null pointer
+
             std::str::from_utf8_unchecked(text.to_bytes())
         }
     }

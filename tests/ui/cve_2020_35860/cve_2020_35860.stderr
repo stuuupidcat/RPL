@@ -1,0 +1,13 @@
+error: Dereference of a possibly null pointer
+  --> tests/ui/cve_2020_35860/cve_2020_35860.rs:54:24
+   |
+LL |             let text = CStr::from_ptr(self.ptr);
+   |                        ^^^^^^^^^^^^^^^--------^
+   |                        |              |
+   |                        |              pointer created here
+   |                        dereference here
+   |
+   = note: this is because the pointer may be null
+
+error: aborting due to 1 previous error
+
