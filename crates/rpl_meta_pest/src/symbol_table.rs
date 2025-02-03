@@ -4,10 +4,9 @@ use crate::error::{RPLMetaError, RPLMetaResult};
 use crate::utils::{Ident, Path};
 use derive_more::derive::From;
 use parser::generics::Choice3;
-use parser::{generics, pairs, rules, Grammar, PositionWrapper as Position, Rule, SpanWrapper};
+use parser::pairs;
 use pest_typed::Span;
 use rustc_hash::FxHashMap;
-use rustc_span::Symbol;
 
 #[derive(Clone, Copy, From)]
 pub(crate) enum TypeOrPath<'a> {
