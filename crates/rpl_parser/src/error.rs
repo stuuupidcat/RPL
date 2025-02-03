@@ -31,19 +31,19 @@ fn format_tracker<'i>(
         }
         i
     };
-    write!(msg, "\n{} {}", " ".repeat(log10), "= Parse error.".blue())?;
-    if cfg!(debug_assertions) {
-        write!(msg, "{}", "Possible rules".blue())?;
-        let mut iter = rules.keys().cloned();
-        if let Some(rule) = iter.next() {
-            format_rule(rule, &mut msg)?;
-        }
-        for rule in iter {
-            write!(msg, ",")?;
-            format_rule(rule, &mut msg)?;
-        }
-        write!(msg, ".")?;
+
+    write!(msg, "\n{} {}", " ".repeat(log10), "Possible RPL grammar rules: ".blue())?;
+    write!(msg, "[")?;
+    let mut iter = rules.keys().cloned();
+    if let Some(rule) = iter.next() {
+        format_rule(rule, &mut msg)?;
     }
+    for rule in iter {
+        write!(msg, ",")?;
+        format_rule(rule, &mut msg)?;
+    }
+    write!(msg, "]")?;
+
     Ok(ParseError { msg })
 }
 
@@ -57,14 +57,6 @@ impl ParseError {
     /// Create a [ParseError].
     pub fn new(tracker: Tracker<'_, Rule>, path: &Path) -> Self {
         format_tracker(tracker, path, |pos| pos).unwrap()
-    }
-    /// Create a [ParseError].
-    pub fn new_with<'i>(
-        tracker: Tracker<'i, Rule>,
-        path: &Path,
-        replacer: impl FnOnce(pest_typed::Position<'i>) -> pest_typed::Position<'i>,
-    ) -> Self {
-        format_tracker(tracker, path, replacer).unwrap()
     }
 }
 
