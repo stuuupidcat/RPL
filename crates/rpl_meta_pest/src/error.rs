@@ -13,20 +13,20 @@ error_type!(
     pub RPLMetaError<'a>
         #[color = "red"]
         #[bold]
-        Error "错误。" {
-            0 ParseError {
+        Error "Error" {
+            000 ParseError {
                 /// Wrapped error.
                 error: ParseError,
             }
-                "{error}",
-            1 CanonicalizationError {
+                "Parse error.\n {error}",
+            100 CanonicalizationError {
                 /// Referencing file.
                 path: PathBuf,
                 /// Cause.
                 error: Arc<std::io::Error>,
             }
                 "Cannot locate RPL pattern file `{path:?}`. Caused by:\n{error}",
-            2 ImportError {
+            200 ImportError {
                 /// Referencing position.
                 span: Span<'a>,
                 /// Referencing file.

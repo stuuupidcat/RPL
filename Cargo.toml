@@ -59,6 +59,7 @@ pest_typed_generator = { version = "0.17.1", features = ["grammar-extras"] }
 pest_typed_derive = { version = "0.17.1", features = ["grammar-extras"] }
 colored = "3.0.0"
 error-enum = "0.4.1"
+schemars = "0.8.21"
 memmap = "0.5.0"
 
 [package]
