@@ -262,31 +262,38 @@ patt {
         let $len: usize = copy (*$self).len;
         let $range: Range<usize> = Range { start: const 0_usize, end: move $len };
         let $iter: Range<usize> = move $range;
+        let $iter_mut: &mut Range<usize> = &mut $iter;
+        let $start_ref: &usize = &(*$iter_mut).start;
+        let $start: usize = copy *$start_ref;
+        let $end_ref: &usize = &(*$iter_mut).end;
+        let $end: usize = copy *$end_ref;
+        let $cmp: bool = Lt(move $start, move $end);
+        let $opt: Option<usize>;
+        let $x1: usize;
+        let $x2: usize;
+        let $x: usize;
+        let $base: *mut $T;
+        let $offset: isize;
+        let $elem_ptr: *mut $T;
+        let $discr: isize;
         loop {
-            let $iter_mut: &mut Range<usize> = &mut $iter;
-            let $start_ref: &usize = &(*$iter_mut).start;
-            let $start: usize = copy *$start_ref;
-            let $end_ref: &usize = &(*$iter_mut).end;
-            let $end: usize = copy *$end_ref;
-            let $cmp: bool = Lt(move $start, move $end);
-            let $opt: Option<usize>;
             switchInt(move $cmp) {
                 false => $opt = #[lang = "None"],
                 _ => {
-                    let $x1: usize = copy (*$iter_mut).start;
-                    let $x2: usize = core::iter::range::Step::forward_unchecked(copy $x1, const 1_usize);
+                    $x1 = copy (*$iter_mut).start;
+                    $x2 = core::iter::range::Step::forward_unchecked(copy $x1, const 1_usize);
                     (*$iter_mut).start = move $x2;
                     $opt = #[lang = "Some"](copy $x1);
                 }
             }
-            let $discr: isize = discriminant($opt);
+            $discr = discriminant($opt);
             switchInt(move $discr) {
                 0_isize => break,
                 1_isize => {
-                    let $x: usize = copy ($opt as Some).0;
-                    let $base: *mut $T = copy (*$self).mem;
-                    let $offset: isize = copy $x as isize (IntToInt);
-                    let $elem_ptr: *mut $T = Offset(copy $base, copy $offset);
+                    $x = copy ($opt as Some).0;
+                    $base = copy (*$self).mem;
+                    $offset = copy $x as isize (IntToInt);
+                    $elem_ptr = Offset(copy $base, copy $offset);
                     _ = core::ptr::drop_in_place(copy $elem_ptr);
                 }
             }
@@ -411,16 +418,42 @@ patt {
             let $mut_iter: *mut CassIterator = _;
             let $next_res: cass_bool_t = case_iterator_next(copy $mut_iter);
             let $discr: u32 = discriminant($next_res);
+            let $const_iter: *const CassIterator;
+            let $item: $Item;
             switchInt(move $discr) {
                 1 => {
-                    let $const_iter: *const CassIterator = move $mut_iter as *const CassIterator(PtrToPtr);
-                    let $item: $Item = cass_iterator_get_row(move $const_iter);
+                    $const_iter = move $mut_iter as *const CassIterator(PtrToPtr);
+                    $item = cass_iterator_get_row(move $const_iter);
                 }
                 _ => {
                     // how to express I don't care about the statements in this block?
                 }
             }
         }
+    }
+}
+"#
+    );
+}
+
+#[test]
+fn cve_2020_35860() {
+    full_test!(
+        main,
+        r#"
+pattern CVE-2020-35860
+
+diag {
+    p_deref = {
+        " 
+            The public struct $CBox contains a raw pointer ($ptr) to a type $T. 
+            Its `Deref` implementation dereferences the pointer without null checks.
+          
+            Specifically, the `Deref` implementation calls `CStr::from_ptr(self.$ptr)`,
+            whose safety requirements include that the pointer must be non-null.
+        ",
+        $CBox: "$CBox is defined here",
+        $ptr: "$ptr is defined here",
     }
 }
 "#
