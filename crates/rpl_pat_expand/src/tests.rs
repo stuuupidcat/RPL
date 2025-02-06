@@ -2040,7 +2040,9 @@ fn test_cve_2020_35877() {
                     ::rustc_middle::mir::BinOp::Gt,
                     Box::new([
                         ::rpl_context::pat::Operand::Move(offset_2_local.into_place()),
-                        ::rpl_context::pat::Operand::Constant(::rpl_context::pat::ConstOperand::ScalarInt(0usize.into()))
+                        ::rpl_context::pat::Operand::Constant(
+                            ::rpl_context::pat::ConstOperand::ScalarInt(0usize.into())
+                        )
                     ])
                 )
             );
@@ -2062,7 +2064,9 @@ fn test_cve_2020_35877() {
                         ::rustc_middle::mir::BinOp::Gt,
                         Box::new([
                             ::rpl_context::pat::Operand::Move(offset_2_local.into_place()),
-                            ::rpl_context::pat::Operand::Constant(::rpl_context::pat::ConstOperand::ScalarInt(0usize.into()))
+                            ::rpl_context::pat::Operand::Constant(
+                                ::rpl_context::pat::ConstOperand::ScalarInt(0usize.into())
+                            )
                         ])
                     )
                 );
@@ -2090,15 +2094,19 @@ fn test_cve_2020_35877() {
                                     ::rustc_middle::mir::BinOp::Sub,
                                     Box::new([
                                         ::rpl_context::pat::Operand::Copy(offset_1_local.into_place()),
-                                        ::rpl_context::pat::Operand::Constant(::rpl_context::pat::ConstOperand::ScalarInt(
-                                            1usize.into()
-                                        ))
+                                        ::rpl_context::pat::Operand::Constant(
+                                            ::rpl_context::pat::ConstOperand::ScalarInt(
+                                                1usize.into()
+                                            )
+                                        )
                                     ])
                                 )
                             );
                             mir_pat.mk_assign(
                                 ptr_4_local.into_place(),
-                                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(ptr_1_local.into_place()))
+                                ::rpl_context::pat::Rvalue::Use(
+                                    ::rpl_context::pat::Operand::Copy(ptr_1_local.into_place())
+                                )
                             );
                             mir_pat.mk_assign(
                                 ptr_3_local.into_place(),
@@ -2112,7 +2120,9 @@ fn test_cve_2020_35877() {
                             );
                             mir_pat.mk_assign(
                                 ptr_1_local.into_place(),
-                                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Move(ptr_3_local.into_place()))
+                                ::rpl_context::pat::Rvalue::Use(
+                                    ::rpl_context::pat::Operand::Move(ptr_3_local.into_place())
+                                )
                             );
                         });
                     }

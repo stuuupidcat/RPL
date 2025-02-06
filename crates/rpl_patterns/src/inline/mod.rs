@@ -4,6 +4,7 @@ pub(crate) mod cve_2019_15548;
 pub(crate) mod cve_2019_16138;
 pub(crate) mod cve_2020_25016;
 pub(crate) mod cve_2020_35873;
+pub(crate) mod cve_2020_35877;
 pub(crate) mod cve_2020_35881;
 pub(crate) mod cve_2020_35888;
 pub(crate) mod cve_2020_35892_3;

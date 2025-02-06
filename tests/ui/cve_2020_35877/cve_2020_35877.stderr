@@ -1,0 +1,26 @@
+error: it is unsound to dereference a pointer that is offset using an unchecked integer
+  --> tests/ui/cve_2020_35877/cve_2020_35877.rs:48:13
+   |
+LL |     fn index(&self, idx: usize) -> &Self::Output {
+   |                     --- offset passed in here
+...
+LL |             let mut p: *const T = self.data.lock().unwrap().ptr() as *const T;
+   |                                   ------------------------------------------- pointer created here
+...
+LL |             &*p
+   |             ^^^ dereferenced here
+
+error: it is unsound to dereference a pointer that is offset using an unchecked integer
+  --> tests/ui/cve_2020_35877/cve_2020_35877.rs:48:13
+   |
+LL |     fn index(&self, idx: usize) -> &Self::Output {
+   |                     --- offset passed in here
+...
+LL |                 p = p.offset(1);
+   |                 --------------- pointer created here
+LL |             }
+LL |             &*p
+   |             ^^^ dereferenced here
+
+error: aborting due to 2 previous errors
+

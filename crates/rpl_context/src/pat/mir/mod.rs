@@ -36,6 +36,27 @@ impl From<(BasicBlock, usize)> for Location {
     }
 }
 
+impl Location {
+    /// Create a new `Location` that is out of bound.
+    ///
+    /// Must be assigned to before use.
+    ///
+    /// # Note
+    ///
+    /// The return value is actually initialized to an invalid location
+    /// `Location { block: 0xFFFF_FF00u32, statement_index: usize::MAX }`.
+    /// And the `unsafe` here does not mean that the value is unsafe to use,
+    /// but rather that the value should not be used without being properly
+    /// initialized.
+    pub fn uninitialized() -> Self {
+        Self {
+            // block: BasicBlock::from(u32::MAX),
+            block: BasicBlock::from(0xFFFF_FF00u32),
+            statement_index: usize::MAX,
+        }
+    }
+}
+
 pub struct MirPattern<'pcx> {
     pub self_idx: Option<Local>,
     pub return_idx: Option<Local>,

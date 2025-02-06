@@ -46,6 +46,8 @@ where
                 p = p.offset(1);
             }
             &*p
+            //~^ERROR: it is unsound to dereference a pointer that is offset using an unchecked integer
+            //~|ERROR: it is unsound to dereference a pointer that is offset using an unchecked integer
         }
     }
 }
