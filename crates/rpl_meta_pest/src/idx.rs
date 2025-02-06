@@ -60,20 +60,6 @@ index! {
     RPLCounter
 }
 
-index! {
-    "ID of a RPL item in patt block."
-    PattIdx
-    "Counter for [PattID]."
-    PattCounter
-}
-
-index! {
-    "ID of a RPL item in util block."
-    UtilIdx
-    "Counter for [UtilID]."
-    UtilCounter
-}
-
 /// A counter that supports only incrementation.
 #[derive(Clone, Debug)]
 pub struct Counter<T> {
