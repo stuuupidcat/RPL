@@ -9,7 +9,6 @@ edition.workspace = true
 
 [dependencies]
 rpl_context.workspace = true
-rpl_mir_transform.workspace = true
 rpl_patterns.workspace = true
 rpl_utils.workspace = true
 

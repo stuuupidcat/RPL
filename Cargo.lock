@@ -1070,7 +1070,6 @@ name = "rpl_driver"
 version = "0.1.0"
 dependencies = [
  "rpl_context",
- "rpl_mir_transform",
  "rpl_patterns",
  "rpl_utils",
 ]

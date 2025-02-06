@@ -17,7 +17,6 @@ use rustc_middle::util::Providers;
 use rustc_span::symbol::Ident;
 
 pub fn provide(providers: &mut Providers) {
-    rpl_mir_transform::provide(providers);
     providers.registered_tools = registered_tools;
 }
 
