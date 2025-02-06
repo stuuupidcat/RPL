@@ -45,9 +45,6 @@ impl Location {
     ///
     /// The return value is actually initialized to an invalid location
     /// `Location { block: 0xFFFF_FF00u32, statement_index: usize::MAX }`.
-    /// And the `unsafe` here does not mean that the value is unsafe to use,
-    /// but rather that the value should not be used without being properly
-    /// initialized.
     pub fn uninitialized() -> Self {
         Self {
             // block: BasicBlock::from(u32::MAX),
