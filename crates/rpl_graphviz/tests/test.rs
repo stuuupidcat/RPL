@@ -179,7 +179,7 @@ test_case! {
     }
 }
 
-test_case!{
+test_case! {
     fn cve_2020_35877() {
         meta!($T:ty);
 
