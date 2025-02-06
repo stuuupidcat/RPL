@@ -1,49 +1,37 @@
 use std::ffi::{OsStr, OsString};
 use std::fmt::Debug;
-use std::io::{self, Read, Write};
+use std::io::{self};
 use std::path::{Path, PathBuf};
-
-/// Unwrap with [Display](std::fmt::Display).
-#[macro_export]
-macro_rules! unwrap {
-    ($res:expr) => {{
-        match $res {
-            Ok(res) => res,
-            Err(err) => ::std::panic!("{}", err),
-        }
-    }};
-}
 
 /// For debugging purposes.
 /// Run command line interface in pipeline/command mode.
 ///
 /// - Pipeline mode: Read source file content from [std::io::Stdin].
 /// - Command mode: Read source file path from [std::env::Args].
-pub fn cli(mut f: impl FnMut(&String, &Path) -> String) {
+pub fn collect_file_cli() -> Vec<(&'static str, &'static Path)> {
     let args = std::env::args();
     let args = args.skip(1);
     if args.len() == 0 {
-        // Read from stdin.
-        // Terminate with EOF.
-        let mut buf = String::new();
-        let stdin = std::io::stdin();
-        let stdout = std::io::stdout();
-
-        let mut h_stdin = stdin.lock();
-        unwrap!(h_stdin.read_to_string(&mut buf));
-        let res = f(&buf, &PathBuf::new());
-        let mut h_stdout = stdout.lock();
-        unwrap!(writeln!(h_stdout, "{}", res));
+        eprintln!("Usage: cargo run --package rpl_meta_pest --example meta-collector <file1> <file2> ...");
+        vec![]
     } else {
+        let mut res = vec![];
         for arg in args {
-            let stdout = std::io::stdout();
-            let mut h_stdout = stdout.lock();
             traverse_rpl(arg.into(), |path| {
-                let buf = unwrap!(read_file_from_path_buf(&path));
-                let res = f(&buf, &path);
-                unwrap!(writeln!(h_stdout, "{res}"));
+                let buf = read_file_from_path_buf(&path);
+                let buf = match buf {
+                    Ok(buf) => buf,
+                    Err(err) => {
+                        eprintln!("Can't read {:?} because of:\n{}", path, err);
+                        return;
+                    },
+                };
+                let buf: &'static str = Box::leak(buf.into_boxed_str());
+                let path: &'static Path = Box::leak(path.into_boxed_path());
+                res.push((buf, path));
             });
         }
+        res
     }
 }
 
@@ -115,18 +103,17 @@ pub fn traverse_rpl(root: PathBuf, mut f: impl FnMut(PathBuf)) {
             if let Some(dir) = read_dir(&full) {
                 traverse_dir(&mut stack, dir, &full);
             } else if is_rpl(&file) {
-                eprintln!("{:?} is a normal file which ends with `.rpl`.", full,);
-                f(full);
+                let res = std::fs::canonicalize(&full);
+                match res {
+                    Ok(full) => {
+                        eprintln!("{:?} is a normal file which ends with `.rpl`.", full,);
+                        f(full);
+                    },
+                    Err(err) => eprintln!("Can't canonicalize {:?} because of:\n{}", full, err),
+                }
             } else {
                 eprintln!("Skipped {:?}.", full);
             }
         }
     }
-}
-
-/// Collect all `.rpl` files under a repository.
-pub fn collect_rpl(root: PathBuf) -> Vec<PathBuf> {
-    let mut res = Vec::new();
-    traverse_rpl(root, |p| res.push(p));
-    res
 }
