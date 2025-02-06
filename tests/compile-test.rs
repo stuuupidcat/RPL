@@ -20,6 +20,7 @@ extern crate futures;
 extern crate if_chain;
 extern crate itertools;
 extern crate libc;
+extern crate memmap;
 extern crate num_derive;
 extern crate num_rational;
 extern crate parking_lot;
@@ -40,6 +41,7 @@ static TEST_DEPENDENCIES: &[&str] = &[
     "itertools",
     "libc",
     "log",
+    "memmap",
     "num_derive",
     "num_rational",
     "num_traits",
