@@ -112,6 +112,7 @@ fn pattern_unchecked_ptr_offset(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffset<'
                         $offset_1 = Sub(copy $offset_1, const 1usize); // ?bb5[0] <-> bb5[0]
                         $ptr_4 = copy $ptr_1; // ?bb5[1] <-> bb5[1]
                         $ptr_3 = Offset(copy $ptr_4, _); // ?bb5[2] <-> bb5[3]
+                        // FIXME: we can't distinguish between the two assignments to `$ptr_1`, so we get two errors
                         $ptr_1 = move $ptr_3; // ?bb5[3] <-> bb5[4]
                         // FIXME: without this, a basic block, where there is only one goto statement, is generated
                         continue; // ?bb5[4] <-> bb5[5]
