@@ -17,7 +17,6 @@ extern crate tracing;
 
 use rustc_middle::ty::TyCtxt;
 
-pub mod cli;
 mod errors;
 mod utils;
 

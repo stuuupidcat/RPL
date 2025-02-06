@@ -10,16 +10,15 @@ use std::sync::Arc;
 // TODO: 排版
 error_type!(
     #[derive(Clone, Debug)]
-    pub RPLMetaError<'a>
+    pub RPLMetaError<'i>
         #[color = "red"]
         #[bold]
         Error "Error" {
             000 ParseError {
-                /// Wrapped error.
                 error: ParseError,
             }
                 "Parse error.\n {error}",
-            100 CanonicalizationError {
+            100 FileError {
                 /// Referencing file.
                 path: PathBuf,
                 /// Cause.
@@ -28,7 +27,7 @@ error_type!(
                 "Cannot locate RPL pattern file `{path:?}`. Caused by:\n{error}",
             200 ImportError {
                 /// Referencing position.
-                span: Span<'a>,
+                span: Span<'i>,
                 /// Referencing file.
                 path: PathBuf,
                 /// Cause.
@@ -36,69 +35,83 @@ error_type!(
             }
                 "Cannot locate RPL pattern file `{path:?}` at {span}. Caused by:\n{error}",
             301 SymbolAlreadyDeclared {
-                span: Span<'a>,
+                ident: &'i str,
+                span: SpanWrapper<'i>,
             }
-                "Symbol is already declared.",
+                "Symbol `{ident}` is already declared. \n{span}",
             302 SymbolNotDeclared {
-                span: Span<'a>,
+                ident: &'i str,
+                span: SpanWrapper<'i>,
             }
-                "Symbol is not declared.",
-            303 TypeVarAlreadyDeclared {
-                span: Span<'a>,
+                "Symbol `{ident}` is not declared. \n{span}",
+            303 TypeMetaVariableAlreadyDeclared {
+                meta_var: &'i str,
+                span: SpanWrapper<'i>,
             }
-                "Type variable is already declared.",
-            304 TypeVarNotDeclared {
-                span: Span<'a>,
+                "Type meta variable `{meta_var}` is already declared. \n{span}",
+            304 TypeMetaVariableNotDeclared {
+                meta_var: &'i str,
+                span: SpanWrapper<'i>,
             }
-                "Type variable is not declared.",
+                "Type variable `{meta_var}` is not declared. \n{span}",
             305 ExportAlreadyDeclared {
-                span: Span<'a>,
+                _span: Span<'i>,
             }
                 "Export is already declared.",
             306 TypeOrPathAlreadyDeclared {
-                span: Span<'a>,
+                type_or_path: &'i str,
+                span: SpanWrapper<'i>,
             }
-                "Type or path is already declared.",
+                "Type or path `{type_or_path}` is already declared. \n{span}",
             307 TypeOrPathNotDeclared {
-                span: Span<'a>,
+                type_or_path: &'i str,
+                span: SpanWrapper<'i>,
             }
-                "Type or path is not declared.",
-            308 FnIdentMissingDollar {
-                span: Span<'a>,
-            }
-                "Missing `$` in before function identifier.",
-            309 MethodAlreadyDeclared {
-                span: Span<'a>,
+                "Type or path `{type_or_path}` is not declared. \n{span}",
+            308 MethodAlreadyDeclared {
+                _span: Span<'i>,
             }
                 "Method is already declared.",
-            310 MethodNotDeclared {
+            309 MethodNotDeclared {
             }
                 "Method is not declared.",
-            311 SelfNotDeclared {
+            310 SelfNotDeclared {
+                span: SpanWrapper<'i>,
             }
-                "`self` is not declared.",
-            312 SelfAlreadyDeclared {
-                span: Span<'a>,
+                "`self` is not declared. \n{span}",
+            311 SelfAlreadyDeclared {
+                span: SpanWrapper<'i>,
             }
-                "`self` is already declared.",
-            313 SelfValueOutsideImpl {
+                "`self` is already declared. \n{span}",
+            312 SelfValueOutsideImpl {
             }
                 "Using `self` value outside of an `impl` item.",
-            314 SelfTypeOutsideImpl {
+            313 SelfTypeOutsideImpl {
+                span: SpanWrapper<'i>,
             }
-                "Using `Self` type outside of an `impl` item.",
-            315 ConstantIndexOutOfBound {
+                "Using `Self` type outside of an `impl` item. \n{span}",
+            314 ConstantIndexOutOfBound {
+                index: SpanWrapper<'i>,
+                min_length: SpanWrapper<'i>,
             }
-                "Constant index out of bound for minimum length.",
-            316 MultipleOtherwiseInSwitchInt {
+                "Constant index out of bound for minimum length. \n Index: {index} \n Minimum length: {min_length}",
+            315 MultipleOtherwiseInSwitchInt {
+                span: SpanWrapper<'i>,
             }
-                "Multiple otherwise (`_`) branches in switchInt statement.",
-            317 MissingSuffixInSwitchInt {
+                "Multiple otherwise (`_`) branches in switchInt statement. \n{span}",
+            316 MissingSuffixInSwitchInt {
+                span: SpanWrapper<'i>,
             }
-                "Missing integer suffix in switchInt statement.",
-            318 UnknownLangItem {
+                "Missing integer suffix in switchInt statement. \n{span}",
+            317 UnknownLangItem {
+                value: &'i str,
+                span: SpanWrapper<'i>,
             }
-                "Unknown language item.",
+                "Unknown lang item `{value}`. \n{span}",
+            318 RetNotDeclared {
+                span: SpanWrapper<'i>,
+            }
+                "The return value `RET` in MIR pattern is not declared. \n{span}",
         }
 );
 
@@ -114,7 +127,7 @@ impl<'a> RPLMetaError<'a> {
         if let Some(span) = span {
             Self::ImportError { path, error, span }
         } else {
-            Self::CanonicalizationError { path, error }
+            Self::FileError { path, error }
         }
     }
 }

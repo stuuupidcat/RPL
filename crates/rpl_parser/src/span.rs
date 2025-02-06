@@ -13,7 +13,7 @@ pub struct SpanWrapper<'a> {
 
 impl<'a> SpanWrapper<'a> {
     /// Create a new span
-    fn new(value: pest_typed::Span<'a>, path: &'a Path) -> Self {
+    pub fn new(value: pest_typed::Span<'a>, path: &'a Path) -> Self {
         Self { inner: value, path }
     }
 
