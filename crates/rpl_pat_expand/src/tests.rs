@@ -1984,6 +1984,155 @@ fn test_cve_2021_27376() {
 }
 
 #[test]
+fn test_cve_2020_35877() {
+    mir_test_case! {
+        #[meta($T:ty)]
+        pat! {
+            let $offset: usize = _; // _?0 <-> _2
+            let $offset_1: usize = copy $offset; // _?1 <-> _3
+            let $ptr_1: *const $T = _; // _?2 <-> _4
+            let $offset_2: usize = copy $offset_1; // _?3 <-> _13
+            let $flag: bool = Gt(move $offset_2, const 0usize); // _?4 <-> _12
+            let $ptr_3: *const $T; // _?5 <-> _14
+            let $ptr_4: *const $T; // _?6 <-> _15
+            let $reference: &$T; // _?7 <-> _0
+            loop {
+                $offset_2 = copy $offset_1; // _13
+                $flag = Gt(move $offset_2, const 0usize); // _12
+                switchInt(move $flag) {
+                    0usize => {
+                        $reference = &(*$ptr_1);
+                        break;
+                    }
+                    _ => {
+                        $offset_1 = Sub(copy $offset_1, const 1usize);
+                        $ptr_4 = copy $ptr_1;
+                        $ptr_3 = Offset(copy $ptr_4, _);
+                        $ptr_1 = move $ptr_3;
+                    }
+                }
+            }
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T_ty_var = pattern_fn.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T_ty = pcx.mk_var_ty(T_ty_var);
+            }
+            let offset_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            mir_pat.mk_assign(offset_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            let offset_1_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            mir_pat.mk_assign(
+                offset_1_local.into_place(),
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(offset_local.into_place()))
+            );
+            let ptr_1_local = mir_pat.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Not));
+            mir_pat.mk_assign(ptr_1_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            let offset_2_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            mir_pat.mk_assign(
+                offset_2_local.into_place(),
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(offset_1_local.into_place()))
+            );
+            let flag_local = mir_pat.mk_local(pcx.primitive_types.bool);
+            mir_pat.mk_assign(
+                flag_local.into_place(),
+                ::rpl_context::pat::Rvalue::BinaryOp(
+                    ::rustc_middle::mir::BinOp::Gt,
+                    Box::new([
+                        ::rpl_context::pat::Operand::Move(offset_2_local.into_place()),
+                        ::rpl_context::pat::Operand::Constant(
+                            ::rpl_context::pat::ConstOperand::ScalarInt(0usize.into())
+                        )
+                    ])
+                )
+            );
+            let ptr_3_local = mir_pat.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Not));
+            let ptr_4_local = mir_pat.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Not));
+            let reference_local = mir_pat.mk_local(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReAny,
+                T_ty,
+                ::rustc_middle::mir::Mutability::Not
+            ));
+            mir_pat.mk_loop(|mir_pat| {
+                mir_pat.mk_assign(
+                    offset_2_local.into_place(),
+                    ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Copy(offset_1_local.into_place()))
+                );
+                mir_pat.mk_assign(
+                    flag_local.into_place(),
+                    ::rpl_context::pat::Rvalue::BinaryOp(
+                        ::rustc_middle::mir::BinOp::Gt,
+                        Box::new([
+                            ::rpl_context::pat::Operand::Move(offset_2_local.into_place()),
+                            ::rpl_context::pat::Operand::Constant(
+                                ::rpl_context::pat::ConstOperand::ScalarInt(0usize.into())
+                            )
+                        ])
+                    )
+                );
+                mir_pat.mk_switch_int(
+                    ::rpl_context::pat::Operand::Move(flag_local.into_place()),
+                    |mut mir_pat| {
+                        mir_pat.mk_switch_target(0usize, |mir_pat| {
+                            mir_pat.mk_assign(
+                                reference_local.into_place(),
+                                ::rpl_context::pat::Rvalue::Ref(
+                                    ::rpl_context::pat::RegionKind::ReAny,
+                                    ::rustc_middle::mir::BorrowKind::Shared,
+                                    ::rpl_context::pat::Place::new(
+                                        ptr_1_local,
+                                        pcx.mk_slice(&[::rpl_context::pat::PlaceElem::Deref, ])
+                                    )
+                                )
+                            );
+                            mir_pat.mk_break();
+                        });
+                        mir_pat.mk_otherwise(|mir_pat| {
+                            mir_pat.mk_assign(
+                                offset_1_local.into_place(),
+                                ::rpl_context::pat::Rvalue::BinaryOp(
+                                    ::rustc_middle::mir::BinOp::Sub,
+                                    Box::new([
+                                        ::rpl_context::pat::Operand::Copy(offset_1_local.into_place()),
+                                        ::rpl_context::pat::Operand::Constant(
+                                            ::rpl_context::pat::ConstOperand::ScalarInt(
+                                                1usize.into()
+                                            )
+                                        )
+                                    ])
+                                )
+                            );
+                            mir_pat.mk_assign(
+                                ptr_4_local.into_place(),
+                                ::rpl_context::pat::Rvalue::Use(
+                                    ::rpl_context::pat::Operand::Copy(ptr_1_local.into_place())
+                                )
+                            );
+                            mir_pat.mk_assign(
+                                ptr_3_local.into_place(),
+                                ::rpl_context::pat::Rvalue::BinaryOp(
+                                    ::rustc_middle::mir::BinOp::Offset,
+                                    Box::new([
+                                        ::rpl_context::pat::Operand::Copy(ptr_4_local.into_place()),
+                                        ::rpl_context::pat::Operand::Any
+                                    ])
+                                )
+                            );
+                            mir_pat.mk_assign(
+                                ptr_1_local.into_place(),
+                                ::rpl_context::pat::Rvalue::Use(
+                                    ::rpl_context::pat::Operand::Move(ptr_3_local.into_place())
+                                )
+                            );
+                        });
+                    }
+                );
+            });
+        }
+    }
+}
+
+#[test]
 fn test_cve_2020_35873() {
     test_case! {
         pat! {

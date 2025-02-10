@@ -518,7 +518,8 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             || matching.end.get().is_none()
                 // FIXME: handle move of return value
                 && self.match_stmt_deps(self.cx.pat_ddg.dep_end(bb_pat), |dep_loc, local| {
-                    self.cx.mir_ddg.get_dep_end(bb, dep_loc.block, dep_loc.statement_index) == Some(local)
+                    self.cx.mir_ddg.get_dep_end(bb, dep_loc.block, dep_loc.statement_index)
+                        .map(|dep_end| dep_end == local).unwrap_or(true)
                 })
                 && {
                     matching.end.set(Some(bb));
@@ -535,11 +536,11 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     /// function).
     ///
     /// We iterate over all data dependencies of a statement (i.e. the iterator
-    /// `pat_deps`), and for each depeedency `dep_loc_pat` we try to test whether dependency
+    /// `pat_deps`), and for each dependency `dep_loc_pat` we try to test whether dependency
     /// edge (`local_pat`) of the pattern DDG matches that of the MIR DDG (`local`).
     ///
     /// ```text
-    /// 1. depeencies of a statement
+    /// 1. dependencies of a statement
     /// dep_loc_pat -----> dep_loc
     ///   ^                   ^
     ///   | local_pat         | local
@@ -680,7 +681,9 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     fn match_local_ty(&self, ty_pat: pat::Ty<'pcx>, ty: Ty<'tcx>) -> bool {
         self.cx.ty.match_ty(ty_pat, ty)
             && self.cx.ty.ty_vars.iter_enumerated().all(|(ty_var, tys)| {
-                let ty = match core::mem::take(&mut *tys.borrow_mut()) {
+                let tys = core::mem::take(&mut *tys.borrow_mut());
+                trace!("type variable {ty_var:?} candidates: {tys:?}",);
+                let ty = match tys {
                     tys if tys.is_empty() => return true,
                     tys if tys.len() == 1 => tys.iter().copied().next().unwrap(),
                     tys => {
@@ -688,6 +691,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                         return false;
                     },
                 };
+                trace!("type variable {ty_var:?} matched: {ty:?}",);
                 // self.match_ty_var(ty_var, ty)
                 self.matching[ty_var].force_get_matched() == ty
             })
