@@ -239,8 +239,9 @@ pub struct DerefNullPointer {
 
 // for cve_2020_35877
 #[derive(Diagnostic)]
-#[diag(rpl_patterns_unchecked_ptr_offset)]
-pub struct UncheckedPtrOffset {
+#[diag(rpl_patterns_deref_unchecked_ptr_offset)]
+#[help]
+pub struct DerefUncheckedPtrOffset {
     #[primary_span]
     #[label(rpl_patterns_reference_label)]
     pub reference: Span,
@@ -260,4 +261,17 @@ pub struct UnsoundPinNewUnchecked<'tcx> {
     #[label]
     pub mut_self: Span,
     pub ty: Ty<'tcx>,
+}
+
+// for cve_2020_35877
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_unchecked_ptr_offset)]
+#[help]
+#[note]
+pub struct UncheckedPtrOffset {
+    #[primary_span]
+    #[label(rpl_patterns_offset_label)]
+    pub offset: Span,
+    #[label(rpl_patterns_ptr_label)]
+    pub ptr: Span,
 }

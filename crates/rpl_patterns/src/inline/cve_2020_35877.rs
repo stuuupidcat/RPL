@@ -7,6 +7,7 @@ use rustc_hir::{self as hir};
 use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::{Span, Symbol};
+use std::collections::BTreeSet;
 use std::ops::Not;
 
 #[instrument(level = "info", skip_all)]
@@ -66,7 +67,55 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 debug!(?ptr, ?offset, ?reference);
                 self.tcx
                     .dcx()
-                    .emit_err(crate::errors::UncheckedPtrOffset { ptr, offset, reference });
+                    .emit_err(crate::errors::DerefUncheckedPtrOffset { ptr, offset, reference });
+            }
+
+            let pattern_1 = pattern_unchecked_ptr_offset_(self.pcx);
+            // let matches_1 = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_1.pattern,
+            // pattern_1.fn_pat).check();
+            let pattern_2 = pattern_checked_ptr_offset_lt(self.pcx);
+            let matches_2 = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_2.pattern, pattern_2.fn_pat).check();
+            let pattern_3 = pattern_checked_ptr_offset_le(self.pcx);
+            let matches_3 = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_3.pattern, pattern_3.fn_pat).check();
+
+            // let locations_1: BTreeSet<_> = matches_1
+            //     .iter()
+            //     .map(|matches| {
+            //         (
+            //             matches[pattern_1.ptr].span_no_inline(body),
+            //             matches[pattern_1.offset].span_no_inline(body),
+            //         )
+            //     })
+            //     .collect();
+            let locations_2: BTreeSet<_> = matches_2
+                .iter()
+                .map(|matches| {
+                    (
+                        matches[pattern_2.ptr].span_no_inline(body),
+                        matches[pattern_2.offset].span_no_inline(body),
+                    )
+                })
+                .collect();
+            let locations_3: BTreeSet<_> = matches_3
+                .iter()
+                .map(|matches| {
+                    (
+                        matches[pattern_3.ptr].span_no_inline(body),
+                        matches[pattern_3.offset].span_no_inline(body),
+                    )
+                })
+                .collect();
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_1.pattern, pattern_1.fn_pat).check() {
+                let ptr = matches[pattern_1.ptr].span_no_inline(body);
+                let offset = matches[pattern_1.offset].span_no_inline(body);
+                if locations_2.contains(&(ptr, offset)) || locations_3.contains(&(ptr, offset)) {
+                    // The offset is checked, so don't emit an error
+                    // continue;
+                }
+                debug!(?ptr, ?offset);
+                self.tcx
+                    .dcx()
+                    .emit_err(crate::errors::UncheckedPtrOffset { ptr, offset });
             }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
@@ -129,5 +178,86 @@ fn pattern_unchecked_ptr_offset(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffset<'
         ptr,
         offset,
         reference,
+    }
+}
+
+struct PatternUncheckedPtrOffsetGeneral<'pcx> {
+    pattern: &'pcx pat::Pattern<'pcx>,
+    fn_pat: &'pcx pat::Fn<'pcx>,
+    ptr: pat::Location,
+    offset: pat::Location,
+}
+
+#[rpl_macros::pattern_def]
+fn pattern_unchecked_ptr_offset_(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffsetGeneral<'_> {
+    let ptr;
+    let offset;
+    let pattern = rpl! {
+        #[meta($T:ty)]
+        fn $pattern(..) -> _ = mir! {
+            #[export(ptr)]
+            let $ptr: *const $T = _;
+            let $ptr_1: *const $T = _;
+            #[export(offset)]
+            $ptr_1 = Offset(copy $ptr, _);
+        }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
+
+    PatternUncheckedPtrOffsetGeneral {
+        pattern,
+        fn_pat,
+        ptr,
+        offset,
+    }
+}
+
+#[rpl_macros::pattern_def]
+fn pattern_checked_ptr_offset_lt(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffsetGeneral<'_> {
+    let ptr;
+    let offset;
+    let pattern = rpl! {
+        #[meta($T:ty)]
+        fn $pattern(..) -> _ = mir! {
+            let $index: usize = _;
+            #[export(ptr)]
+            let $ptr: *const $T = _;
+            let $cmp: bool = Lt(move $index, _);
+            #[export(offset)]
+            $ptr = Offset(copy $ptr, _);
+        }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
+
+    PatternUncheckedPtrOffsetGeneral {
+        pattern,
+        fn_pat,
+        ptr,
+        offset,
+    }
+}
+
+#[rpl_macros::pattern_def]
+fn pattern_checked_ptr_offset_le(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffsetGeneral<'_> {
+    let ptr;
+    let offset;
+    let pattern = rpl! {
+        #[meta($T:ty)]
+        fn $pattern(..) -> _ = mir! {
+            let $index: usize = _;
+            #[export(ptr)]
+            let $ptr: *const $T = _;
+            let $cmp: bool = Le(move $index, _);
+            #[export(offset)]
+            $ptr = Offset(copy $ptr, _);
+        }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
+
+    PatternUncheckedPtrOffsetGeneral {
+        pattern,
+        fn_pat,
+        ptr,
+        offset,
     }
 }
