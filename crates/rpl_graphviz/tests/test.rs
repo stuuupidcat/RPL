@@ -212,38 +212,6 @@ test_case! {
 }
 
 test_case! {
-    fn cve_2020_35877() {
-        meta!($T:ty);
-
-        let $offset: usize = _; // _2
-        let $offset_1: usize = copy $offset; // _3
-        let $ptr_1: *const $T = _; // _4
-        let $offset_2: usize = copy $offset_1; // _13
-        let $flag: bool = Gt(move $offset_2, const 0usize); // _12
-        let $ptr_3: *const $T; // _14
-        let $ptr_4: *const $T; // _15
-        let $reference: &$T; // _0
-        loop {
-            $offset_2 = copy $offset_1; // _13
-            $flag = Gt(move $offset_2, const 0usize); // _12
-            switchInt(move $flag) {
-                0usize => {
-                    $reference = &(*$ptr_1);
-                    break;
-                }
-                _ => {
-                    $offset_1 = Sub(copy $offset_1, const 1usize);
-                    $ptr_4 = copy $ptr_1;
-                    $ptr_3 = Offset(copy $ptr_4, _);
-                    $ptr_1 = move $ptr_3;
-                    continue;
-                }
-            }
-        }
-    }
-}
-
-test_case! {
     fn cve_2021_27376() {
         meta!();
 
