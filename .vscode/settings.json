@@ -9,4 +9,22 @@
     "lldb.showDisassembly": "auto",
     "lldb.dereferencePointers": true,
     "lldb.consoleMode": "commands",
+    "cSpell.words": [
+        "ctxt",
+        "graphviz",
+        "impls",
+        "libc",
+        "metavar",
+        "rustc",
+        "rustlib",
+        "rustup",
+        "rvalue",
+        "sockaddr",
+        "thir",
+        "TyKind",
+        "uibless",
+        "uitest",
+        "uninit",
+        "UnsafeCell"
+    ],
 }
