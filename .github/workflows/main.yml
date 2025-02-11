@@ -13,6 +13,8 @@ on:
     paths-ignore:
       - 'docs/**'
       - 'README.md'
+      - 'CONTRIBUTING.md'
+      - '.vscode/**'
 
 jobs:
   build:
