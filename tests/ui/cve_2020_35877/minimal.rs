@@ -31,12 +31,9 @@ fn checked_lt<T>(slice: &[T], index: usize) -> &T {
 fn checked_le<T>(ptr: *const T, index: usize, length: usize) -> *const T {
     unsafe {
         let mut p = ptr;
-        // Unlike other functions, the MIR isn't using `copy`, so the pattern fails to match
-        // _5 = Le(move _6, copy _3);
+        // Though `index + 1` is moved in MIR, the negative pattern is still detected, so no false positive here
         assert!(index + 1 <= length);
         p = p.add(index);
-        //~^ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
-        //FIXME: the error above is a false positive
         p
     }
 }

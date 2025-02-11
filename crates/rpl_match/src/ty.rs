@@ -18,7 +18,7 @@ pub struct MatchTyCtxt<'pcx, 'tcx> {
     pub tcx: TyCtxt<'tcx>,
     pub pcx: PatCtxt<'pcx>,
     pub pat: &'pcx pat::Pattern<'pcx>,
-    param_env: ty::ParamEnv<'tcx>,
+    pub param_env: ty::ParamEnv<'tcx>,
     pub ty_vars: IndexVec<pat::TyVarIdx, RefCell<FxIndexSet<ty::Ty<'tcx>>>>,
     pub adt_matches: RefCell<FxHashMap<Symbol, FxHashMap<DefId, AdtMatch<'tcx>>>>,
 }
