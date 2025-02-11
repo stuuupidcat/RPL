@@ -1,10 +1,11 @@
 use rpl_context::PatCtxt;
 use rpl_mir::pat::Location;
-use rpl_mir::{pat, CheckMirCtxt};
+use rpl_mir::{pat, CheckMirCtxt, Matched};
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_hir::{self as hir};
 use rustc_middle::hir::nested_filter::All;
+use rustc_middle::mir::Body;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::{Span, Symbol};
 use std::collections::BTreeSet;
@@ -53,10 +54,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         _span: Span,
         def_id: LocalDefId,
     ) -> Self::Result {
-        if self.tcx.visibility(def_id).is_public()
-            && kind.header().is_none_or(|header| header.is_unsafe().not())
-            && self.tcx.is_mir_available(def_id)
-        {
+        if kind.header().is_none_or(|header| header.is_unsafe().not()) && self.tcx.is_mir_available(def_id) {
             let body = self.tcx.optimized_mir(def_id);
 
             let pattern = pattern_unchecked_ptr_offset(self.pcx);
@@ -78,6 +76,17 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let pattern_3 = pattern_checked_ptr_offset_le(self.pcx);
             let matches_3 = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_3.pattern, pattern_3.fn_pat).check();
 
+            fn collect_matched(
+                matched: &Matched<'_>,
+                ptr: Location,
+                offset: Location,
+                body: &Body<'_>,
+            ) -> (Span, Span) {
+                let span_ptr = matched[ptr].span_no_inline(body);
+                let span_offset = matched[offset].span_no_inline(body);
+                trace!(?span_ptr, ?span_offset, "checked offset found");
+                (span_ptr, span_offset)
+            }
             // let locations_1: BTreeSet<_> = matches_1
             //     .iter()
             //     .map(|matches| {
@@ -89,28 +98,19 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             //     .collect();
             let locations_2: BTreeSet<_> = matches_2
                 .iter()
-                .map(|matches| {
-                    (
-                        matches[pattern_2.ptr].span_no_inline(body),
-                        matches[pattern_2.offset].span_no_inline(body),
-                    )
-                })
+                .map(|matches| collect_matched(matches, pattern_2.ptr, pattern_2.offset, body))
                 .collect();
             let locations_3: BTreeSet<_> = matches_3
                 .iter()
-                .map(|matches| {
-                    (
-                        matches[pattern_3.ptr].span_no_inline(body),
-                        matches[pattern_3.offset].span_no_inline(body),
-                    )
-                })
+                .map(|matches| collect_matched(matches, pattern_3.ptr, pattern_3.offset, body))
                 .collect();
+
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_1.pattern, pattern_1.fn_pat).check() {
                 let ptr = matches[pattern_1.ptr].span_no_inline(body);
                 let offset = matches[pattern_1.offset].span_no_inline(body);
                 if locations_2.contains(&(ptr, offset)) || locations_3.contains(&(ptr, offset)) {
                     // The offset is checked, so don't emit an error
-                    // continue;
+                    continue;
                 }
                 debug!(?ptr, ?offset);
                 self.tcx
@@ -217,14 +217,14 @@ fn pattern_checked_ptr_offset_lt(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffsetG
     let ptr;
     let offset;
     let pattern = rpl! {
-        #[meta($T:ty)]
+        #[meta($T:ty, $U:ty)]
         fn $pattern(..) -> _ = mir! {
-            let $index: usize = _;
+            let $index: $U = _; // _?0 <-> _2 ?bb0[0] <-> _2
             #[export(ptr)]
-            let $ptr: *const $T = _;
-            let $cmp: bool = Lt(move $index, _);
+            let $ptr: *const $T = _; // _?1 <-> _3 ?bb0[1] <-> bb1[0]
+            let $cmp: bool = Lt(copy $index, _); // _?2 <-> _5 ?bb0[2] <-> bb0[3]
             #[export(offset)]
-            $ptr = Offset(copy $ptr, _);
+            let $ptr_1: *const $T = Offset(copy $ptr, _); // // _?3 <-> _7 ?bb0[3] <-> bb1[1]
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
@@ -242,14 +242,14 @@ fn pattern_checked_ptr_offset_le(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffsetG
     let ptr;
     let offset;
     let pattern = rpl! {
-        #[meta($T:ty)]
+        #[meta($T:ty, $U:ty)]
         fn $pattern(..) -> _ = mir! {
-            let $index: usize = _;
+            let $index: $U = _; // _?0 <-> _2 ?bb0[0] <-> _2
             #[export(ptr)]
-            let $ptr: *const $T = _;
-            let $cmp: bool = Le(move $index, _);
+            let $ptr: *const $T = _; // _?1 <-> _3 ?bb0[1] <-> bb1[0]
+            let $cmp: bool = Le(copy $index, _); // _?2 <-> _5 ?bb0[2] <-> bb0[3]
             #[export(offset)]
-            $ptr = Offset(copy $ptr, _);
+            let $ptr_1: *const $T = Offset(copy $ptr, _); // // _?3 <-> _7 ?bb0[3] <-> bb1[1]
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

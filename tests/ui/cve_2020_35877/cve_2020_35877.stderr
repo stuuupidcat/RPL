@@ -32,7 +32,7 @@ error: it is an undefined behavior to offset a pointer using an unchecked intege
 LL |                 p = p.offset(1);
    |                     - ^^^^^^^^^ offset here
    |                     |
-   |                     pointer created here
+   |                     pointer used here
    |
    = help: check whether it's in bound before offsetting
    = note: See the safety section in https://doc.rust-lang.org/std/primitive.pointer.html#method.offset

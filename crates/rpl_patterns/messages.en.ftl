@@ -90,6 +90,6 @@ rpl_patterns_unsound_pin_project = it is unsound to call `Pin::new_unchecked` on
 
 rpl_patterns_unchecked_ptr_offset = it is an undefined behavior to offset a pointer using an unchecked integer
     .offset_label = offset here
-    .ptr_label = pointer created here
+    .ptr_label = pointer used here
     .help = check whether it's in bound before offsetting
     .note = See the safety section in https://doc.rust-lang.org/std/primitive.pointer.html#method.offset
