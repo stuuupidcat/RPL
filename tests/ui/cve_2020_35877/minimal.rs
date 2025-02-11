@@ -54,6 +54,28 @@ fn safe_unchecked<T>(slice: &[T; 2]) -> &T {
     //FIXME: this is a false positive
 }
 
+fn safe_unchecked_2_const<T, const N: usize>(slice: &[T; N], index: usize) -> &T {
+    let ptr = slice.as_ptr();
+    unsafe { &*ptr.add(index % N) }
+    //~^ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
+    //FIXME: this is a false positive
+}
+
+fn safe_unchecked_2_const_literal_2<T>(slice: &[T; 2], index: usize) -> &T {
+    let ptr = slice.as_ptr();
+    unsafe { &*ptr.add(index % 2) }
+    //~^ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
+    //FIXME: this is a false positive
+}
+
+fn safe_unchecked_2<T>(slice: &[T], index: usize) -> &T {
+    let ptr = slice.as_ptr();
+    let length = slice.len();
+    unsafe { &*ptr.add(index % length) }
+    //~^ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
+    //FIXME: this is a false positive
+}
+
 fn safe_unchecked_without_offset<T>(slice: &[T; 2]) -> &T {
     &slice[1]
 }

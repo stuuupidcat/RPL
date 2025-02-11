@@ -31,5 +31,39 @@ LL |     unsafe { &*ptr.add(1) }
    = help: check whether it's in bound before offsetting
    = note: See the safety section in https://doc.rust-lang.org/std/primitive.pointer.html#method.offset
 
-error: aborting due to 3 previous errors
+error: it is an undefined behavior to offset a pointer using an unchecked integer
+  --> tests/ui/cve_2020_35877/minimal.rs:59:20
+   |
+LL |     let ptr = slice.as_ptr();
+   |                     -------- pointer used here
+LL |     unsafe { &*ptr.add(index % N) }
+   |                    ^^^^^^^^^^^^^^ offset here
+   |
+   = help: check whether it's in bound before offsetting
+   = note: See the safety section in https://doc.rust-lang.org/std/primitive.pointer.html#method.offset
+
+error: it is an undefined behavior to offset a pointer using an unchecked integer
+  --> tests/ui/cve_2020_35877/minimal.rs:66:20
+   |
+LL |     let ptr = slice.as_ptr();
+   |                     -------- pointer used here
+LL |     unsafe { &*ptr.add(index % 2) }
+   |                    ^^^^^^^^^^^^^^ offset here
+   |
+   = help: check whether it's in bound before offsetting
+   = note: See the safety section in https://doc.rust-lang.org/std/primitive.pointer.html#method.offset
+
+error: it is an undefined behavior to offset a pointer using an unchecked integer
+  --> tests/ui/cve_2020_35877/minimal.rs:74:20
+   |
+LL |     let ptr = slice.as_ptr();
+   |                     -------- pointer used here
+LL |     let length = slice.len();
+LL |     unsafe { &*ptr.add(index % length) }
+   |                    ^^^^^^^^^^^^^^^^^^^ offset here
+   |
+   = help: check whether it's in bound before offsetting
+   = note: See the safety section in https://doc.rust-lang.org/std/primitive.pointer.html#method.offset
+
+error: aborting due to 6 previous errors
 
