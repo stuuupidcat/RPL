@@ -1,6 +1,7 @@
 use std::num::NonZero;
 use std::ops::Deref;
 
+use rpl_parser::pairs;
 use rustc_arena::DroplessArena;
 use rustc_data_structures::sync::{Registry, WorkerLocal};
 use rustc_hir as hir;
@@ -163,5 +164,8 @@ impl<'pcx> PatCtxt<'pcx> {
     }
     pub fn mk_mir_pattern(self, pattern: pat::MirPattern<'pcx>) -> &'pcx pat::MirPattern<'pcx> {
         self.arena.alloc(pattern)
+    }
+    pub fn new_pattern_from_parsed(self, pattern: &pairs::pattBlockItem<'_>) -> &'pcx pat::Pattern<'pcx> {
+        self.arena.alloc(pat::Pattern::from_parsed(self, pattern))
     }
 }
