@@ -8,6 +8,8 @@ keywords.workspace = true
 edition.workspace = true
 
 [dependencies]
+rpl_meta_pest.workspace = true
+rpl_parser.workspace = true
 
 [features]
 
