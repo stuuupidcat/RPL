@@ -1190,6 +1190,10 @@ dependencies = [
 [[package]]
 name = "rpl_context"
 version = "0.1.0"
+dependencies = [
+ "rpl_meta_pest",
+ "rpl_parser",
+]
 
 [[package]]
 name = "rpl_driver"
@@ -1254,7 +1258,6 @@ dependencies = [
  "pest_typed_generator",
  "pretty_assertions",
  "rpl_parser",
- "rpl_utils",
  "schemars",
  "serde",
  "serde_json",
