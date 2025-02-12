@@ -8095,7 +8095,7 @@ pub mod generics {
     pub type Skipped<'i> = predefined_node::AtomicRepeat<
         ::pest_typed::choices::Choice2<super::rules::WHITESPACE<'i, 0>, super::rules::COMMENT<'i, 0>>,
     >;
-    pub use pest_typed::choices::{Choice10, Choice2, Choice3, Choice4, Choice5, Choice6};
+    pub use pest_typed::choices::{Choice2, Choice3, Choice4, Choice5, Choice6, Choice10};
     pub use pest_typed::sequence::{Seq2, Seq3, Seq4, Seq5, Seq6, Seq7, Seq8};
     pub use predefined_node::{CharRange, Insens, Negative, PeekSlice1, PeekSlice2, Positive, Push, Skip, Str};
     pest_typed::choices!(
