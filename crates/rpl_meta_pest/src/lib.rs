@@ -23,4 +23,28 @@ pub mod meta;
 pub mod symbol_table;
 pub(crate) mod utils;
 
+use context::RPLMetaContext;
 pub use error::RPLMetaError;
+use meta::RPLMeta;
+
+pub fn parse<'mctx>() -> RPLMetaContext<'mctx> {
+    let mut mctx = RPLMetaContext::default();
+    // FIXME: cli arguments should be compatible with rustc
+    // let vec = collect_file_cli();
+    let vec = Vec::new();
+    for (buf, path) in vec {
+        let meta = RPLMeta::parse_and_collect(path, buf, &mut mctx);
+        match meta {
+            Ok(meta) => {
+                meta.show_error(&mut std::io::stderr());
+                mctx.add_meta(meta.idx, meta);
+            },
+            Err(err) => {
+                // display error
+                eprintln!("{}", err);
+                std::process::exit(err.get_number().parse().unwrap_or(-1));
+            },
+        }
+    }
+    mctx
+}
