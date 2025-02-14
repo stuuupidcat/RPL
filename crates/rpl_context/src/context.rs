@@ -3,7 +3,8 @@ use std::ops::Deref;
 
 use rpl_parser::pairs;
 use rustc_arena::DroplessArena;
-use rustc_data_structures::sync::{Registry, WorkerLocal};
+use rustc_data_structures::fx::FxHashMap;
+use rustc_data_structures::sync::{Lock, Registry, WorkerLocal};
 use rustc_hir as hir;
 use rustc_middle::{mir, ty};
 use rustc_span::Symbol;
@@ -64,6 +65,7 @@ impl<'pcx> Deref for PatCtxt<'pcx> {
 
 pub struct PatternCtxt<'pcx> {
     arena: &'pcx WorkerLocal<crate::Arena<'pcx>>,
+    patterns: Lock<FxHashMap<Symbol, &'pcx pat::Pattern<'pcx>>>,
     pub primitive_types: PrimitiveTypes<'pcx>,
 }
 
@@ -72,6 +74,7 @@ impl PatternCtxt<'_> {
         let arena = &WorkerLocal::<crate::Arena<'_>>::default();
         let pcx = &PatternCtxt {
             arena,
+            patterns: Default::default(),
             primitive_types: PrimitiveTypes::new(&arena.dropless),
         };
         f(PatCtxt { pcx })
@@ -165,7 +168,16 @@ impl<'pcx> PatCtxt<'pcx> {
     pub fn mk_mir_pattern(self, pattern: pat::MirPattern<'pcx>) -> &'pcx pat::MirPattern<'pcx> {
         self.arena.alloc(pattern)
     }
-    pub fn new_pattern_from_parsed(self, pattern: &pairs::pattBlockItem<'_>) -> &'pcx pat::Pattern<'pcx> {
-        self.arena.alloc(pat::Pattern::from_parsed(self, pattern))
+    pub fn add_parsed_patterns(self, _mctx: &rpl_meta_pest::context::RPLMetaContext<'_>) {
+        todo!()
+    }
+    pub fn for_each_pattern(self, mut f: impl FnMut(Symbol, &'pcx pat::Pattern<'pcx>)) {
+        for (&name, pattern) in self.patterns.lock().iter() {
+            f(name, *pattern);
+        }
+    }
+    pub fn add_parsed_pattern(self, name: Symbol, pattern: &pairs::pattBlockItem<'_>) {
+        let pattern = self.arena.alloc(pat::Pattern::from_parsed(self, pattern));
+        self.patterns.lock().insert(name, pattern);
     }
 }
