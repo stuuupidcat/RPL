@@ -10,6 +10,7 @@ edition.workspace = true
 [dependencies]
 rpl_context.workspace = true
 rpl_driver.workspace = true
+rpl_meta_pest.workspace = true
 rpl_patterns.workspace = true
 rpl_utils.workspace = true
 

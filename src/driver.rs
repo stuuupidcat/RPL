@@ -95,6 +95,8 @@ fn logger_config() -> rustc_log::LoggerConfig {
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::ignored_unit_patterns)]
 pub fn main() {
+    let mctx = rpl_meta_pest::parse();
+
     let early_dcx = EarlyDiagCtxt::new(ErrorOutputType::default());
 
     rustc_driver::init_logger(&early_dcx, logger_config());
@@ -210,7 +212,7 @@ pub fn main() {
         let rpl_enabled = !cap_lints_allow && (!no_deps || in_primary_package);
         if rpl_enabled {
             args.extend(rpl_args);
-            rustc_driver::RunCompiler::new(&args, &mut RplCallbacks::new(rpl_args_var))
+            rustc_driver::RunCompiler::new(&args, &mut RplCallbacks::new(rpl_args_var, mctx))
                 .set_using_internal_features(using_internal_features)
                 .run()
         } else {
