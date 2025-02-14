@@ -95,6 +95,8 @@ fn logger_config() -> rustc_log::LoggerConfig {
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::ignored_unit_patterns)]
 pub fn main() {
+    let mctx = rpl_meta_pest::parse();
+
     let early_dcx = EarlyDiagCtxt::new(ErrorOutputType::default());
 
     rustc_driver::init_logger(&early_dcx, logger_config());

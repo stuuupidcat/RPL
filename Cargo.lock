@@ -1196,6 +1196,7 @@ dependencies = [
  "radium",
  "regex",
  "rpl_interface",
+ "rpl_meta_pest",
  "rustc_tools_util",
  "scoped_threadpool",
  "serde",
@@ -1227,6 +1228,7 @@ name = "rpl_driver"
 version = "0.1.0"
 dependencies = [
  "rpl_context",
+ "rpl_meta_pest",
  "rpl_patterns",
  "rpl_utils",
 ]
@@ -1249,6 +1251,7 @@ version = "0.1.0"
 dependencies = [
  "rpl_context",
  "rpl_driver",
+ "rpl_meta_pest",
  "rpl_patterns",
  "rpl_utils",
 ]

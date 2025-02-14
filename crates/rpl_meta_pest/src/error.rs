@@ -14,7 +14,7 @@ error_type!(
         #[color = "red"]
         #[bold]
         Error "Error" {
-            000 ParseError {
+            001 ParseError {
                 error: ParseError,
             }
                 "Parse error.\n {error}",

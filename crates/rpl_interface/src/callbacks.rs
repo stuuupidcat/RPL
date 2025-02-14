@@ -1,4 +1,5 @@
 use rpl_context::PatternCtxt;
+use rpl_meta_pest::context::RPLMetaContext;
 // use rpl_middle::ty::RplConfig;
 use rustc_interface::interface;
 use rustc_middle::ty::TyCtxt;
@@ -56,17 +57,18 @@ impl rustc_driver::Callbacks for RustcCallbacks {
 pub struct DefaultCallbacks;
 impl rustc_driver::Callbacks for DefaultCallbacks {}
 
-pub struct RplCallbacks {
+pub struct RplCallbacks<'mctx> {
     rpl_args_var: Option<String>,
+    mctx: RPLMetaContext<'mctx>,
 }
 
-impl RplCallbacks {
-    pub fn new(rpl_args_var: Option<String>) -> Self {
-        Self { rpl_args_var }
+impl<'mctx> RplCallbacks<'mctx> {
+    pub fn new(rpl_args_var: Option<String>, mctx: RPLMetaContext<'mctx>) -> Self {
+        Self { rpl_args_var, mctx }
     }
 }
 
-impl rustc_driver::Callbacks for RplCallbacks {
+impl rustc_driver::Callbacks for RplCallbacks<'_> {
     // JUSTIFICATION: necessary in RPL driver to set `mir_opt_level`
     #[allow(rustc::bad_opt_access)]
     fn config(&mut self, config: &mut interface::Config) {
