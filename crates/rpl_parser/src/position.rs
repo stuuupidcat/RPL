@@ -15,13 +15,13 @@ impl<'a> PositionWrapper<'a> {
     }
 }
 
-impl<'a> Debug for PositionWrapper<'a> {
+impl Debug for PositionWrapper<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&self.inner, f)
     }
 }
 
-impl<'a> Display for PositionWrapper<'a> {
+impl Display for PositionWrapper<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let path = self.path.to_string_lossy();
         let (line, col) = self.inner.line_col();
