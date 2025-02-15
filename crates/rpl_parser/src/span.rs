@@ -27,13 +27,13 @@ impl<'a> SpanWrapper<'a> {
     }
 }
 
-impl<'a> Debug for SpanWrapper<'a> {
+impl Debug for SpanWrapper<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&self.inner, f)
     }
 }
 
-impl<'a> Serialize for SpanWrapper<'a> {
+impl Serialize for SpanWrapper<'_> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
@@ -51,7 +51,7 @@ impl<'a> Serialize for SpanWrapper<'a> {
     }
 }
 
-impl<'a> Display for SpanWrapper<'a> {
+impl Display for SpanWrapper<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let path = self.path.to_string_lossy();
         let start = self.inner.start_pos().line_col();

@@ -10,7 +10,6 @@ use pest_typed::Span;
 use rustc_data_structures::sync::Lrc;
 use rustc_hash::FxHashMap;
 use std::ops::Deref;
-use std::rc::Rc;
 
 #[derive(Clone, Copy, From)]
 pub(crate) enum TypeOrPath<'i> {
@@ -43,7 +42,7 @@ impl<'i> MetaVarTable<'i> {
     ) {
         let _ = self.meta_vars.try_insert(meta_var, meta_var_ty).map_err(|entry| {
             let err = RPLMetaError::TypeMetaVariableAlreadyDeclared {
-                meta_var: &meta_var.name,
+                meta_var: meta_var.name,
                 span: SpanWrapper::new(entry.entry.key().span, mctx.get_active_path()),
             };
             errors.push(err);
@@ -57,7 +56,7 @@ impl<'i> MetaVarTable<'i> {
     ) -> Option<Ident<'i>> {
         self.meta_vars.get(&ident).copied().or_else(|| {
             let err = RPLMetaError::TypeMetaVariableNotDeclared {
-                meta_var: &ident.name,
+                meta_var: ident.name,
                 span: SpanWrapper::new(ident.span, mctx.get_active_path()),
             };
             errors.push(err);
@@ -505,10 +504,7 @@ pub(crate) struct ImplInner<'i> {
 impl<'i> ImplInner<'i> {
     pub fn new(impl_pat: &'i pairs::Impl<'i>) -> Self {
         let impl_pat = impl_pat.get_matched();
-        let trait_ = match impl_pat.1 {
-            Some(trait_) => Some(trait_.get_matched().0),
-            None => None,
-        };
+        let trait_ = impl_pat.1.as_ref().map(|trait_| trait_.get_matched().0);
         Self {
             trait_,
             ty: impl_pat.2,

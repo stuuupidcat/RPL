@@ -10,30 +10,18 @@
 #![feature(iterator_try_collect)]
 #![feature(cell_update)]
 
+extern crate rustc_data_structures;
 extern crate rustc_span;
 
-use std::io::stderr;
-
-use rpl_meta_pest::cli::collect_file_cli;
-use rpl_meta_pest::context::RPLMetaContext;
-use rpl_meta_pest::meta::RPLMeta;
+use rpl_meta_pest::cli::collect_file_from_args_for_test;
+use rustc_data_structures::sync::{Registry, WorkerLocal};
+use std::num::NonZero;
 
 fn main() {
+    // Only for testing purposes
+    Registry::new(NonZero::new(1).unwrap()).register();
     rustc_span::create_session_if_not_set_then(rustc_span::edition::LATEST_STABLE_EDITION, |_| {
-        let mut mctx = RPLMetaContext::default();
-        let vec = collect_file_cli();
-        for (buf, path) in vec {
-            let meta = RPLMeta::parse_and_collect(path, buf, &mut mctx);
-            match meta {
-                Ok(meta) => {
-                    meta.show_error(&mut stderr());
-                    mctx.add_meta(meta.idx, meta);
-                },
-                Err(meta) => {
-                    // display error
-                    eprintln!("{}", meta);
-                },
-            }
-        }
+        let mctx_arena = WorkerLocal::<rpl_meta_pest::arena::Arena<'_>>::default();
+        let _mctx = rpl_meta_pest::parse_and_collect(&mctx_arena, &collect_file_from_args_for_test());
     });
 }

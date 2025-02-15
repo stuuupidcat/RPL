@@ -9,6 +9,7 @@
 
 // FIXME: switch to something more ergonomic here, once available.
 // (Currently there is no way to opt into sysroot crates without `extern crate`.)
+extern crate rustc_data_structures;
 extern crate rustc_driver;
 extern crate rustc_log;
 extern crate rustc_session;
@@ -17,6 +18,7 @@ extern crate tracing;
 
 use rpl_interface::{DefaultCallbacks, RplCallbacks, RustcCallbacks};
 use rustc_session::EarlyDiagCtxt;
+use rustc_data_structures::sync::WorkerLocal;
 use rustc_session::config::ErrorOutputType;
 
 use std::env;
@@ -95,7 +97,9 @@ fn logger_config() -> rustc_log::LoggerConfig {
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::ignored_unit_patterns)]
 pub fn main() {
-    let mctx = rpl_meta_pest::parse();
+    let mctx_arena = WorkerLocal::<rpl_meta_pest::arena::Arena<'_>>::default();
+    let patterns_and_paths = Vec::new();
+    let mctx = rpl_meta_pest::parse_and_collect(&mctx_arena, &patterns_and_paths);
 
     let early_dcx = EarlyDiagCtxt::new(ErrorOutputType::default());
 
