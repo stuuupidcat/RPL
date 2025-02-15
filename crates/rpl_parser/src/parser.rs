@@ -2955,7 +2955,7 @@ pub mod rules_impl {
                 res
             }
         }
-        :: pest_typed :: rule ! (r#Type , "Corresponds to expression: `(TypeArray | TypeGroup | TypeNever | TypeParen | TypePath | TypePtr | TypeReference | TypeSlice | TypeTuple | TypeMetaVariable | LangItemWithArgs | kw_Self | IntegerSuffix | PlaceHolder)`. Normal rule." "" , super :: super :: Rule , super :: super :: Rule :: r#Type , super :: super :: generics :: Choice14 :: < super :: super :: rules :: r#TypeArray :: < 'i , INHERITED > , super :: super :: rules :: r#TypeGroup :: < 'i , INHERITED > , super :: super :: rules :: r#TypeNever :: < 'i , INHERITED > , super :: super :: rules :: r#TypeParen :: < 'i , INHERITED > , super :: super :: rules :: r#TypePath :: < 'i , INHERITED > , super :: super :: rules :: r#TypePtr :: < 'i , INHERITED > , super :: super :: rules :: r#TypeReference :: < 'i , INHERITED > , super :: super :: rules :: r#TypeSlice :: < 'i , INHERITED > , super :: super :: rules :: r#TypeTuple :: < 'i , INHERITED > , super :: super :: rules :: r#TypeMetaVariable :: < 'i , INHERITED > , super :: super :: rules :: r#LangItemWithArgs :: < 'i , INHERITED > , super :: super :: rules :: r#kw_Self :: < 'i , INHERITED > , super :: super :: rules :: r#IntegerSuffix :: < 'i , INHERITED > , super :: super :: rules :: r#PlaceHolder :: < 'i , INHERITED > , > , super :: super :: generics :: Skipped :: < 'i > , INHERITED , Both , true);
+        :: pest_typed :: rule ! (r#Type , "Corresponds to expression: `(TypeArray | TypeGroup | TypeNever | TypeParen | TypeMetaVariable | TypePtr | TypeReference | TypeSlice | TypeTuple | TypePath | LangItemWithArgs | kw_Self | IntegerSuffix | PlaceHolder)`. Normal rule." "" , super :: super :: Rule , super :: super :: Rule :: r#Type , super :: super :: generics :: Choice14 :: < super :: super :: rules :: r#TypeArray :: < 'i , INHERITED > , super :: super :: rules :: r#TypeGroup :: < 'i , INHERITED > , super :: super :: rules :: r#TypeNever :: < 'i , INHERITED > , super :: super :: rules :: r#TypeParen :: < 'i , INHERITED > , super :: super :: rules :: r#TypeMetaVariable :: < 'i , INHERITED > , super :: super :: rules :: r#TypePtr :: < 'i , INHERITED > , super :: super :: rules :: r#TypeReference :: < 'i , INHERITED > , super :: super :: rules :: r#TypeSlice :: < 'i , INHERITED > , super :: super :: rules :: r#TypeTuple :: < 'i , INHERITED > , super :: super :: rules :: r#TypePath :: < 'i , INHERITED > , super :: super :: rules :: r#LangItemWithArgs :: < 'i , INHERITED > , super :: super :: rules :: r#kw_Self :: < 'i , INHERITED > , super :: super :: rules :: r#IntegerSuffix :: < 'i , INHERITED > , super :: super :: rules :: r#PlaceHolder :: < 'i , INHERITED > , > , super :: super :: generics :: Skipped :: < 'i > , INHERITED , Both , true);
         impl<'i, const INHERITED: ::core::primitive::usize> r#Type<'i, INHERITED> {
             #[doc = "A helper function to access [`IntegerSuffix`]."]
             #[allow(non_snake_case)]
@@ -3022,7 +3022,7 @@ pub mod rules_impl {
             {
                 let res = &*self.content;
                 {
-                    let res = res._9().map(|res| res);
+                    let res = res._4().map(|res| res);
                     res
                 }
             }
@@ -3055,7 +3055,7 @@ pub mod rules_impl {
             ) -> ::pest_typed::re_exported::Option<&'s super::super::rules::r#TypePath<'i, INHERITED>> {
                 let res = &*self.content;
                 {
-                    let res = res._4().map(|res| res);
+                    let res = res._9().map(|res| res);
                     res
                 }
             }
