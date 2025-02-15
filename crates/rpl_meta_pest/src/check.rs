@@ -340,6 +340,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
         let (_, _, local, _, ty, rvalue_or_call, _) = local_decl.get_matched();
         // FIXME: export
         self.fn_def.add_place_local(local, ty);
+        self.check_type(mctx, ty);
         if let Some(rvalue_or_call) = rvalue_or_call {
             self.check_mir_rvalue_or_call(mctx, rvalue_or_call.get_matched().1);
         }
@@ -531,7 +532,10 @@ impl<'i> CheckFnCtxt<'i, '_> {
             Choice14::_1(ty_group) => self.check_type(mctx, ty_group.Type()),
             Choice14::_2(_ty_never) => {},
             Choice14::_3(ty_paren) => self.check_type(mctx, ty_paren.Type()),
-            Choice14::_4(ty_path) => self.check_type_path(mctx, ty_path),
+            Choice14::_4(ty_meta_var) => {
+                let ident = ty_meta_var.MetaVariable().into();
+                _ = self.meta_vars.get_ty_var(mctx, ident, self.errors)
+            },
             Choice14::_5(ty_ptr) => self.check_type(mctx, ty_ptr.Type()),
             Choice14::_6(ty_ref) => {
                 if let Some(region) = ty_ref.Region() {
@@ -549,10 +553,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
                     }
                 }
             },
-            Choice14::_9(ty_meta_var) => {
-                let ident = ty_meta_var.MetaVariable().into();
-                _ = self.meta_vars.get_ty_var(mctx, ident, self.errors)
-            },
+            Choice14::_9(ty_path) => self.check_type_path(mctx, ty_path),
             Choice14::_10(lang_item) => {
                 self.check_lang_item_with_args(mctx, lang_item);
             },

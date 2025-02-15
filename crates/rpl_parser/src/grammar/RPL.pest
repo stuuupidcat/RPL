@@ -382,12 +382,12 @@ Type = {
   | TypeGroup
   | TypeNever
   | TypeParen
-  | TypePath
+  | TypeMetaVariable
   | TypePtr
   | TypeReference
   | TypeSlice
   | TypeTuple
-  | TypeMetaVariable
+  | TypePath
   | LangItemWithArgs
   | kw_Self
   | IntegerSuffix
