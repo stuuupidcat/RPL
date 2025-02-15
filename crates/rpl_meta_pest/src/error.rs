@@ -24,7 +24,7 @@ error_type!(
                 /// Cause.
                 error: Arc<std::io::Error>,
             }
-                "Cannot locate RPL pattern file `{path:?}`. Caused by:\n{error}",
+                "Cannot locate RPL pattern file `{path:?}`. Caused by: {error}",
             200 ImportError {
                 /// Referencing position.
                 span: Span<'i>,
@@ -115,7 +115,7 @@ error_type!(
         }
 );
 
-impl<'a> From<ParseError> for RPLMetaError<'a> {
+impl From<ParseError> for RPLMetaError<'_> {
     fn from(value: ParseError) -> Self {
         Self::ParseError { error: value }
     }
@@ -132,6 +132,6 @@ impl<'a> RPLMetaError<'a> {
     }
 }
 
-impl<'a> std::error::Error for RPLMetaError<'a> {}
+impl std::error::Error for RPLMetaError<'_> {}
 
 pub(crate) type RPLMetaResult<'a, T> = Result<T, RPLMetaError<'a>>;
