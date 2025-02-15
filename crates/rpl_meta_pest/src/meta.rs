@@ -1,59 +1,43 @@
-use crate::collect_elems_separated_by_comma;
 use crate::context::RPLMetaContext;
-use crate::error::{RPLMetaError, RPLMetaResult};
+use crate::error::RPLMetaError;
 use crate::idx::RPLIdx;
 use crate::symbol_table::{DiagSymbolTable, SymbolTable};
-use crate::utils::Ident;
 use colored::Colorize;
-use parser::{pairs, parse_main};
+use parser::pairs;
 use rustc_data_structures::fx::FxHashMap;
 use std::path::Path;
 
 /// Meta data of a single rpl file.
-pub struct RPLMeta<'i> {
+pub struct RPLMeta<'mctx> {
     /// Absolute path to the rpl file
-    pub path: &'i Path,
+    pub path: &'mctx Path,
     /// RPL Idx
     pub idx: RPLIdx,
     /// The name of the rpl file
-    pub name: &'i str,
+    pub name: &'mctx str,
     /// The symbol table of the util block
-    util_symbol_tables: FxHashMap<&'i str, SymbolTable<'i>>,
+    util_symbol_tables: FxHashMap<&'mctx str, SymbolTable<'mctx>>,
     /// The symbol table of the patt block
-    patt_symbol_tables: FxHashMap<&'i str, SymbolTable<'i>>,
+    patt_symbol_tables: FxHashMap<&'mctx str, SymbolTable<'mctx>>,
     /// The symbol table of the diag block
-    diag_symbol_tables: FxHashMap<&'i str, DiagSymbolTable<'i>>,
+    diag_symbol_tables: FxHashMap<&'mctx str, DiagSymbolTable<'mctx>>,
     /// errors
-    pub errors: Vec<RPLMetaError<'i>>,
+    pub errors: Vec<RPLMetaError<'mctx>>,
 }
 
-impl<'i> RPLMeta<'i> {
-    // the input in the arg has already been leaked by Box::leak
-    pub fn parse_and_collect<'r>(
-        path: &'i Path,
-        input: &'i str,
-        mctx: &'r mut RPLMetaContext<'i>,
-    ) -> RPLMetaResult<'i, Self> {
-        mctx.set_active_path(&path);
-
-        let rpl_idx = mctx.request_rpl_idx(path);
-        mctx.contents.insert(rpl_idx, input);
-
-        let main = parse_main(input, &path).map_err(|error| RPLMetaError::ParseError { error })?;
-        let main: &mut pairs::main<'i> = Box::leak(Box::new(main));
-        let res = Self::collect(path, main, rpl_idx, mctx);
-
-        mctx.clear_active_path();
-        Ok(res)
-    }
-
+impl<'mctx> RPLMeta<'mctx> {
     /// Collect the meta data of a parsed rpl file
-    pub fn collect(path: &'i Path, main: &'i pairs::main<'i>, idx: RPLIdx, mctx: &RPLMetaContext<'i>) -> Self {
+    pub fn collect(
+        path: &'mctx Path,
+        main: &'mctx pairs::main<'mctx>,
+        idx: RPLIdx,
+        mctx: &RPLMetaContext<'mctx>,
+    ) -> Self {
         let mut errors = Vec::new();
         // Collect the pattern name of the rpl file.
-        let name = Self::collect_rpl_pattern_name(&main);
+        let name = Self::collect_rpl_pattern_name(main);
         // Collect the blocks.
-        let (utils, patts, diags) = collect_blocks(&main);
+        let (utils, patts, diags) = collect_blocks(main);
         // Collect the symbol table of the util blocks.
         let util_items = utils.iter().flat_map(|util| util.get_matched().3.iter_matched());
         let util_symbol_tables = SymbolTable::collect_symbol_tables(mctx, util_items, &mut errors);
@@ -73,7 +57,7 @@ impl<'i> RPLMeta<'i> {
         }
     }
 
-    fn collect_rpl_pattern_name(main: &pairs::main<'i>) -> &'i str {
+    fn collect_rpl_pattern_name(main: &pairs::main<'mctx>) -> &'mctx str {
         let rpl_pattern = main.get_matched().1;
         let rpl_header = rpl_pattern.get_matched().0;
         let name = rpl_header.get_matched().1.span.as_str();

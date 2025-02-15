@@ -7,6 +7,7 @@
 #![feature(macro_metavar_expr_concat)]
 
 extern crate rpl_parser as parser;
+extern crate rustc_arena;
 extern crate rustc_data_structures;
 extern crate rustc_driver;
 extern crate rustc_hash;
@@ -14,6 +15,7 @@ extern crate rustc_hir;
 extern crate rustc_index;
 extern crate rustc_span;
 
+pub mod arena;
 pub mod check;
 pub mod cli;
 pub mod context;
@@ -26,25 +28,42 @@ pub(crate) mod utils;
 use context::RPLMetaContext;
 pub use error::RPLMetaError;
 use meta::RPLMeta;
+use rustc_data_structures::sync::WorkerLocal;
+use std::path::PathBuf;
 
-pub fn parse<'mctx>() -> RPLMetaContext<'mctx> {
-    let mut mctx = RPLMetaContext::default();
-    // FIXME: cli arguments should be compatible with rustc
-    // let vec = collect_file_cli();
-    let vec = Vec::new();
-    for (buf, path) in vec {
-        let meta = RPLMeta::parse_and_collect(path, buf, &mut mctx);
-        match meta {
-            Ok(meta) => {
+pub fn parse_and_collect<'mctx>(
+    arena: &'mctx WorkerLocal<crate::arena::Arena<'mctx>>,
+    path_and_content: &'mctx Vec<(PathBuf, String)>,
+) -> RPLMetaContext<'mctx> {
+    let mut mctx = RPLMetaContext::new(arena);
+
+    for (path, content) in path_and_content {
+        let idx = mctx.request_rpl_idx(path);
+        let content = mctx.arena.alloc_str(content);
+        mctx.contents.insert(idx, content);
+    }
+
+    for (idx, content) in &mctx.contents {
+        let path = mctx.id2path.get(idx).unwrap(); // safe unwrap
+        mctx.set_active_path(Some(path));
+        let parse_res = parser::parse_main(content, path);
+        match parse_res {
+            Ok(main) => {
+                // Cache the syntax tree
+                let main = mctx.arena.alloc(main);
+                mctx.syntax_trees.insert(*idx, main);
+                // Perform meta collection
+                let meta = RPLMeta::collect(path, main, *idx, &mctx);
                 meta.show_error(&mut std::io::stderr());
-                mctx.add_meta(meta.idx, meta);
+                mctx.metas.insert(*idx, meta);
             },
             Err(err) => {
-                // display error
-                eprintln!("{}", err);
-                std::process::exit(err.get_number().parse().unwrap_or(-1));
+                eprintln!("{}", RPLMetaError::from(err));
+                continue;
             },
         }
+        // Seems unnecessary.
+        // mctx.set_active_path(None);
     }
     mctx
 }
