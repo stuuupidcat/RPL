@@ -267,7 +267,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
                 let mut missing_suffix = false;
                 if let Some(last_underscore) = last_underscore {
                     let suffix = &int_str[last_underscore + 1..];
-                    if !crate::symbol_table::str_is_primitive(suffix.into()) {
+                    if !crate::symbol_table::str_is_primitive(suffix) {
                         missing_suffix = true;
                     }
                 } else {
@@ -441,16 +441,13 @@ impl<'i> CheckFnCtxt<'i, '_> {
                 let (_, _, index, _, min_length, _) = const_index.get_matched();
                 let a = index.span.as_str().parse::<i32>();
                 let b = min_length.span.as_str().parse::<i32>();
-                match (a, b) {
-                    (Ok(a), Ok(b)) => {
-                        if a >= b {
-                            self.errors.push(RPLMetaError::ConstantIndexOutOfBound {
-                                index: SpanWrapper::new(index.span, mctx.get_active_path()),
-                                min_length: SpanWrapper::new(min_length.span, mctx.get_active_path()),
-                            });
-                        }
-                    },
-                    _ => {},
+                if let (Ok(a), Ok(b)) = (a, b) {
+                    if a >= b {
+                        self.errors.push(RPLMetaError::ConstantIndexOutOfBound {
+                            index: SpanWrapper::new(index.span, mctx.get_active_path()),
+                            min_length: SpanWrapper::new(min_length.span, mctx.get_active_path()),
+                        });
+                    }
                 }
             },
             Choice5::_3(_subslice) => {},
@@ -710,11 +707,13 @@ impl<'i> CheckEnumCtxt<'i, '_> {
                     Choice3::_2(ident) => (Ident::from(ident), None),
                 };
                 let variant_def = self.enum_def.add_variant(mctx, ident, self.errors);
-                if variant_def.is_some() && fields.is_some() {
+                if let Some(variant_def) = variant_def
+                    && fields.is_some()
+                {
                     CheckVariantCtxt {
                         _meta_vars: self.meta_vars.clone(),
                         _exports: self.exports,
-                        variant_def: variant_def.unwrap(),
+                        variant_def,
                         errors: self.errors,
                     }
                     .check_fields(mctx, fields.into_iter().flatten());

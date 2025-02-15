@@ -1,14 +1,11 @@
+use crate::RPLMetaError;
 use std::ffi::{OsStr, OsString};
 use std::fmt::Debug;
-use std::io::{self};
+use std::io;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
-/// For debugging purposes.
-/// Run command line interface in pipeline/command mode.
-///
-/// - Pipeline mode: Read source file content from [std::io::Stdin].
-/// - Command mode: Read source file path from [std::env::Args].
-pub fn collect_file_cli() -> Vec<(&'static str, &'static Path)> {
+pub fn collect_file_from_args_for_test() -> Vec<(PathBuf, String)> {
     let args = std::env::args();
     let args = args.skip(1);
     if args.len() == 0 {
@@ -22,13 +19,17 @@ pub fn collect_file_cli() -> Vec<(&'static str, &'static Path)> {
                 let buf = match buf {
                     Ok(buf) => buf,
                     Err(err) => {
-                        eprintln!("Can't read {:?} because of:\n{}", path, err);
+                        eprintln!(
+                            "{}",
+                            RPLMetaError::FileError {
+                                path,
+                                error: Arc::new(err)
+                            }
+                        );
                         return;
                     },
                 };
-                let buf: &'static str = Box::leak(buf.into_boxed_str());
-                let path: &'static Path = Box::leak(path.into_boxed_path());
-                res.push((buf, path));
+                res.push((path, buf));
             });
         }
         res
@@ -40,7 +41,7 @@ fn is_rpl(path: &OsStr) -> bool {
     PathBuf::from(path)
         .extension()
         .and_then(|ext| ext.to_str())
-        .map(|ext| ext == "rpl")
+        .map(|ext| ext == "rpl" || ext == "RPL")
         .unwrap_or(false)
 }
 
@@ -49,21 +50,11 @@ fn is_hidden(path: &OsStr) -> bool {
     path.to_str().map(|name| name.starts_with('.')).unwrap_or(true)
 }
 
-/// Convert [`String`] to [`PathBuf`].
-pub fn into_mounted(path: String) -> PathBuf {
-    PathBuf::from(path.replace('\\', "/"))
-}
-
 /// Read file from path buffer to string.
 pub fn read_file_from_path_buf(file: impl AsRef<Path> + Debug) -> io::Result<String> {
-    eprintln!("Reading {:?}", file);
+    // eprintln!("Reading {:?}", file);
     let content = { std::fs::read_to_string(file)? };
     Ok(content)
-}
-
-/// Read file from string to string.
-pub fn read_file_from_string(file: String) -> io::Result<String> {
-    read_file_from_path_buf(into_mounted(file))
 }
 
 fn read_dir(dir: &PathBuf) -> Option<impl Iterator<Item = io::Result<(PathBuf, OsString)>>> {
