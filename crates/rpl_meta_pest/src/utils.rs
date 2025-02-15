@@ -8,17 +8,17 @@ pub struct Ident<'i> {
     pub span: Span<'i>,
 }
 
-impl<'i> PartialEq for Ident<'i> {
+impl<> PartialEq for Ident<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
     }
 }
 
-impl<'i> Eq for Ident<'i> {}
+impl Eq for Ident<'_> {}
 
 use std::hash::{Hash, Hasher};
 
-impl<'i> Hash for Ident<'i> {
+impl Hash for Ident<'_> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.name.hash(state);
     }
