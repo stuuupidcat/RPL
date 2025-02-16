@@ -17,7 +17,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         derive_typed_parser(input.clone(), false, true)
     };
 
-    let child = Command::new("rustfmt")
+    let rustfmt = find_rustfmt_path()?;
+
+    let child = Command::new(rustfmt)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;
@@ -30,4 +32,25 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     File::create("src/parser.rs")?.write_all(&output.stdout)?;
 
     Ok(())
+}
+
+fn find_rustfmt_path() -> Result<String, Box<dyn std::error::Error>> {
+    let rustup_home = std::env::var("RUSTUP_HOME")?;
+
+    let toolchains_dir = format!("{}/toolchains", rustup_home);
+    let toolchains = std::fs::read_dir(toolchains_dir)?
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
+        .map(|entry| entry.path())
+        .collect::<Vec<_>>();
+
+    for toolchain in toolchains {
+        let rustfmt_candidate = toolchain.join("bin/rustfmt");
+        if rustfmt_candidate.exists() {
+            return Ok(rustfmt_candidate.to_str().unwrap().to_string());
+        }
+    }
+
+    let err = "Could not find rustfmt in any toolchain";
+    Err(err.into())
 }

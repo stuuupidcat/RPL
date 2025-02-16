@@ -97,6 +97,8 @@ fn logger_config() -> rustc_log::LoggerConfig {
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::ignored_unit_patterns)]
 pub fn main() {
+    // FIXME: why this work?
+    rustc_data_structures::sync::Registry::new(std::num::NonZero::new(1).unwrap()).register();
     let mctx_arena = WorkerLocal::<rpl_meta_pest::arena::Arena<'_>>::default();
     let patterns_and_paths = Vec::new();
     let mctx = rpl_meta_pest::parse_and_collect(&mctx_arena, &patterns_and_paths);
