@@ -8,7 +8,7 @@ pub struct Ident<'i> {
     pub span: Span<'i>,
 }
 
-impl<> PartialEq for Ident<'_> {
+impl PartialEq for Ident<'_> {
     fn eq(&self, other: &Self) -> bool {
         self.name == other.name
     }
