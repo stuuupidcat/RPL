@@ -801,6 +801,11 @@ impl ToTokens for ExpandPat<'_, &LocalDecl> {
                     rvalue_or_call,
                 })
                 .to_tokens(tokens);
+        } else if let PlaceLocalKind::SelfValue(_) = local.kind
+            && let Some(Export { inner, .. }) = export
+        {
+            let stmt = &inner.ident;
+            quote_each_token!(tokens #stmt = #ident;);
         }
     }
 }
