@@ -154,7 +154,8 @@ pub fn main() {
             let mut args: Vec<String> = orig_args.clone();
             pass_sysroot_env_if_given(&mut args, sys_root_env);
 
-            return rustc_driver::RunCompiler::new(&args, &mut DefaultCallbacks).run();
+            // return rustc_driver::RunCompiler::new(&args, &mut DefaultCallbacks).run();
+            return rustc_driver::run_compiler(&args, &mut DefaultCallbacks);
         }
 
         if orig_args.iter().any(|a| a == "--version" || a == "-V") {
@@ -210,13 +211,15 @@ pub fn main() {
         let rpl_enabled = !cap_lints_allow && (!no_deps || in_primary_package);
         if rpl_enabled {
             args.extend(rpl_args);
-            rustc_driver::RunCompiler::new(&args, &mut RplCallbacks::new(rpl_args_var))
+            /* rustc_driver::RunCompiler::new(&args, &mut RplCallbacks::new(rpl_args_var))
                 .set_using_internal_features(using_internal_features)
-                .run()
+                .run() */
+            rustc_driver::run_compiler(&args, &mut RplCallbacks::new(rpl_args_var))
         } else {
-            rustc_driver::RunCompiler::new(&args, &mut RustcCallbacks::new(rpl_args_var))
+            /* rustc_driver::RunCompiler::new(&args, &mut RustcCallbacks::new(rpl_args_var))
                 .set_using_internal_features(using_internal_features)
-                .run()
+                .run() */
+            rustc_driver::run_compiler(&args, &mut RustcCallbacks::new(rpl_args_var))
         }
     }))
 }

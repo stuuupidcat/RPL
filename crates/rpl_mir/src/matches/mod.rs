@@ -6,7 +6,7 @@ use rpl_match::CountedMatch;
 use rpl_mir_graph::TerminatorEdges;
 use rustc_data_structures::fx::FxIndexSet;
 use rustc_data_structures::stack::ensure_sufficient_stack;
-use rustc_index::bit_set::HybridBitSet;
+use rustc_index::bit_set::MixedBitSet;
 use rustc_index::{Idx, IndexVec};
 use rustc_middle::mir::visit::{MutatingUseContext, PlaceContext};
 use rustc_middle::mir::{self};
@@ -291,7 +291,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         {
             matches.candidates = std::mem::replace(
                 &mut *candidates.borrow_mut(),
-                HybridBitSet::new_empty(self.cx.body.local_decls.len()),
+                MixedBitSet::new_empty(self.cx.body.local_decls.len()),
             );
             if matches.candidates.is_empty() {
                 continue;
@@ -950,14 +950,14 @@ impl StatementMatches {
 #[derive(Debug)]
 struct LocalMatches {
     matched: CountedMatch<mir::Local>,
-    candidates: HybridBitSet<mir::Local>,
+    candidates: MixedBitSet<mir::Local>,
 }
 
 impl LocalMatches {
     fn new(num_locals: usize) -> Self {
         Self {
             matched: CountedMatch::default(),
-            candidates: HybridBitSet::new_empty(num_locals),
+            candidates: MixedBitSet::new_empty(num_locals),
         }
     }
 

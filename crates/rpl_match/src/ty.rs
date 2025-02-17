@@ -7,7 +7,7 @@ use rustc_hir::def::Res;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::definitions::DefPathData;
 use rustc_index::IndexVec;
-use rustc_middle::ty::{self, TyCtxt};
+use rustc_middle::ty::{self, TyCtxt, ValTreeKind};
 use rustc_span::symbol::kw;
 use rustc_span::Symbol;
 
@@ -152,7 +152,8 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
                 | ty::Bound(..)
                 | ty::Placeholder(_)
                 | ty::Infer(_)
-                | ty::Error(_),
+                | ty::Error(_)
+                | ty::UnsafeBinder(_),
             ) => false,
         };
         debug!(?ty_pat, ?ty, matched, "match_ty");
@@ -166,7 +167,16 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
     pub fn match_const(&self, konst_pat: pat::Const<'pcx>, konst: ty::Const<'tcx>) -> bool {
         match (konst_pat, konst.kind()) {
             (pat::Const::ConstVar(const_var), _) => self.match_const_var(const_var, konst),
-            (pat::Const::Value(_value_pat), ty::Value(_ty, ty::ValTree::Leaf(_value))) => todo!(),
+            //(pat::Const::Value(_value_pat), ty::Value(_ty, ty::ValTree::Leaf(_value))) => todo!(),
+            (
+                pat::Const::Value(_value_pat),
+                ty::ConstKind::Value(ty::Value {
+                    ty: _ty,
+                    valtree: _valtree,
+                }),
+            ) if matches!(*_valtree, ValTreeKind::Leaf(_val)) => {
+                todo!()
+            },
             (
                 // pat::Const::ConstVar(_)
                 pat::Const::Value(_),
@@ -183,8 +193,8 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
     }
 
     pub fn match_const_var(&self, const_var: pat::ConstVar<'pcx>, konst: ty::Const<'tcx>) -> bool {
-        if let ty::ConstKind::Value(ty, _) = konst.kind()
-            && self.match_ty(const_var.ty, ty)
+        if let ty::ConstKind::Value(value) = konst.kind()
+            && self.match_ty(const_var.ty, value.ty)
         {
             // self.const_vars[const_var].borrow_mut().push(konst);
             return true;

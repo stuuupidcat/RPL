@@ -5,16 +5,16 @@ use std::path::{Path, PathBuf};
 
 use rpl_graphviz::{mir_cfg_to_graphviz, mir_ddg_to_graphviz};
 use rustc_ast::token::{Token, TokenKind};
-use rustc_ast::tokenstream::{RefTokenTreeCursor, TokenTree};
+use rustc_ast::tokenstream::{TokenStreamIter, TokenTree};
 use rustc_errors::{DiagArgValue, IntoDiagArg, MultiSpan};
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
+use rustc_hir::{self as hir, def};
 use rustc_middle::hir::nested_filter::All;
-use rustc_middle::ty::TyCtxt;
+use rustc_middle::ty::{TyCtxt, TypingEnv};
 use rustc_middle::{mir, ty};
 use rustc_span::symbol::kw;
 use rustc_span::{ErrorGuaranteed, Span, Symbol};
-use {rustc_ast as ast, rustc_hir as hir};
 
 pub fn visit_crate(tcx: TyCtxt<'_>) {
     let mut visitor = DebugVisitor::new(tcx);
@@ -150,24 +150,23 @@ impl<'tcx> Visitor<'tcx> for DebugVisitor<'tcx> {
 
 struct DumpMirAllowed(bool);
 
-fn find_attr<'a>(attrs: &'a [ast::Attribute], expected_attr: &str) -> Option<(&'a ast::AttrItem, Span)> {
+fn find_attr<'a>(attrs: &'a [hir::Attribute], expected_attr: &str) -> Option<(&'a hir::AttrItem, Span)> {
     attrs.iter().find_map(|attr| {
-        if let ast::AttrKind::Normal(normal_attr) = &attr.kind
+        if let hir::AttrKind::Normal(normal_attr) = &attr.kind
             && normal_attr
-                .item
                 .path
                 .segments
                 .iter()
-                .map(|path| path.ident.as_str())
+                .map(|ident| ident.as_str())
                 .eq(expected_attr.split("::"))
         {
-            return Some((&normal_attr.item, attr.span));
+            return Some((normal_attr.as_ref(), attr.span));
         }
         None
     })
 }
 
-fn contains_attr(attrs: &[ast::Attribute], expected_attr: &str) -> Option<Span> {
+fn contains_attr(attrs: &[hir::Attribute], expected_attr: &str) -> Option<Span> {
     find_attr(attrs, expected_attr).map(|(_, span)| span)
 }
 
@@ -205,14 +204,14 @@ struct DumpMirAttr {
     options: DumpMirOptions,
 }
 
-fn contains_dump_mir(attrs: &[ast::Attribute]) -> Option<DumpMirAttr> {
+fn contains_dump_mir(attrs: &[hir::Attribute]) -> Option<DumpMirAttr> {
     find_attr(attrs, DUMP_MIR).map(|(attr, span)| {
         let mut options = DumpMirOptions::default();
         match &attr.args {
-            ast::AttrArgs::Empty => {},
-            ast::AttrArgs::Delimited(delim_args) => {
-                let mut trees = delim_args.tokens.trees();
-                fn eat_ident(trees: &mut RefTokenTreeCursor<'_>) -> Option<Symbol> {
+            hir::AttrArgs::Empty => {},
+            hir::AttrArgs::Delimited(delim_args) => {
+                let mut trees = delim_args.tokens.iter();
+                fn eat_ident(trees: &mut TokenStreamIter<'_>) -> Option<Symbol> {
                     match trees.next() {
                         Some(TokenTree::Token(token, _)) => token.ident().map(|(ident, _)| ident.name),
                         _ => None,
@@ -224,11 +223,11 @@ fn contains_dump_mir(attrs: &[ast::Attribute]) -> Option<DumpMirAttr> {
                 fn matches_token_kind(token: Option<&TokenTree>, kind: &TokenKind) -> bool {
                     matches_token(token, |token| &token.kind == kind)
                 }
-                fn eat_token_kind(trees: &mut RefTokenTreeCursor<'_>, kind: TokenKind) -> Option<TokenKind> {
+                fn eat_token_kind(trees: &mut TokenStreamIter<'_>, kind: TokenKind) -> Option<TokenKind> {
                     matches_token_kind(trees.next(), &kind).then_some(kind)
                 }
-                fn eat_eq_bool(trees: &mut RefTokenTreeCursor<'_>) -> Option<bool> {
-                    if !matches_token_kind(trees.look_ahead(0), &TokenKind::Eq) {
+                fn eat_eq_bool(trees: &mut TokenStreamIter<'_>) -> Option<bool> {
+                    if !matches_token_kind(trees.peek(), &TokenKind::Eq) {
                         return None;
                     }
                     match trees.nth(1) {
@@ -248,7 +247,7 @@ fn contains_dump_mir(attrs: &[ast::Attribute]) -> Option<DumpMirAttr> {
                     eat_token_kind(&mut trees, TokenKind::Comma)?;
                 } {}
             },
-            ast::AttrArgs::Eq(_, _attr_args_eq) => {},
+            hir::AttrArgs::Eq { .. } => {},
         };
         DumpMirAttr { span, options }
     })
@@ -297,7 +296,7 @@ impl DebugVisitor<'_> {
                     kind: hir::ImplItemKind::Fn(..),
                     ..
                 }) | hir::Node::Item(hir::Item {
-                    kind: hir::ItemKind::Fn(..),
+                    kind: hir::ItemKind::Fn { .. },
                     ..
                 }),
             );
@@ -331,7 +330,8 @@ impl DebugVisitor<'_> {
         let args = args.unwrap_or_else(|| ty::GenericArgs::identity_for_item(self.tcx, def_id));
         if let Ok(Some(instance)) = ty::Instance::try_resolve(
             self.tcx,
-            self.tcx.param_env_reveal_all_normalized(expr.hir_id.owner.def_id),
+            // self.tcx.param_env_reveal_all_normalized(expr.hir_id.owner.def_id),
+            ty::TypingEnv::post_analysis(self.tcx, expr.hir_id.owner.def_id),
             def_id,
             args,
         ) {

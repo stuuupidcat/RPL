@@ -122,6 +122,7 @@ impl<'pcx> TyKind<'pcx> {
             ty::TyKind::Placeholder(_) => None?,         //FIXME
             ty::TyKind::Infer(_) => None?,               //FIXME
             ty::TyKind::Error(_) => None?,
+            ty::TyKind::UnsafeBinder(_) => None?,
         })
     }
 }

@@ -7,7 +7,7 @@ use rustc_hir::Target;
 use rustc_index::IndexVec;
 use rustc_middle::mir;
 use rustc_span::Symbol;
-use rustc_target::abi::FieldIdx;
+use rustc_abi::FieldIdx;
 
 mod pretty;
 pub mod visitor;

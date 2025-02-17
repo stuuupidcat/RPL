@@ -2,7 +2,7 @@ use rpl_context::pat::{self};
 use rpl_context::PatCtxt;
 use rustc_abi::FieldIdx;
 use rustc_data_structures::fx::FxIndexMap;
-use rustc_index::bit_set::HybridBitSet;
+use rustc_index::bit_set::MixedBitSet;
 use rustc_index::{Idx, IndexSlice, IndexVec};
 use rustc_middle::ty::{self, TyCtxt};
 use rustc_span::Symbol;
@@ -21,7 +21,7 @@ impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
         pat: &'pcx pat::Pattern<'pcx>,
         adt_pat: &'a pat::Adt<'pcx>,
     ) -> Self {
-        let ty = MatchTyCtxt::new(tcx, pcx, ty::ParamEnv::reveal_all(), pat, &adt_pat.meta);
+        let ty = MatchTyCtxt::new(tcx, pcx, ty::ParamEnv::empty(), pat, &adt_pat.meta);
         Self { ty, adt_pat }
     }
 
@@ -129,7 +129,7 @@ impl<'tcx> AdtMatch<'tcx> {
 }
 
 pub struct Candidates<I: Idx> {
-    pub candidates: FxIndexMap<Symbol, HybridBitSet<I>>,
+    pub candidates: FxIndexMap<Symbol, MixedBitSet<I>>,
     matches: FxIndexMap<Symbol, CountedMatch<I>>,
     lookup: IndexVec<I, CountedMatch<Symbol>>,
 }
@@ -139,7 +139,7 @@ impl<I: Idx> Candidates<I> {
         Self {
             candidates: pats
                 .keys()
-                .map(|&name| (name, HybridBitSet::new_empty(elems.len())))
+                .map(|&name| (name, MixedBitSet::new_empty(elems.len())))
                 .collect(),
             matches: pats.keys().map(|&name| (name, CountedMatch::new())).collect(),
             lookup: IndexVec::from_elem(CountedMatch::new(), elems),

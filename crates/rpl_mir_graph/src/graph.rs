@@ -4,7 +4,7 @@ use std::ops::Index;
 use crate::rwstate::RWCStates;
 use rustc_data_structures::fx::{FxHashMap, FxIndexMap};
 use rustc_data_structures::packed::Pu128;
-use rustc_index::bit_set::HybridBitSet;
+use rustc_index::bit_set::MixedBitSet;
 use rustc_index::{Idx, IndexSlice, IndexVec};
 use rustc_middle::mir::visit::{MutatingUseContext, NonMutatingUseContext, PlaceContext};
 
@@ -531,7 +531,7 @@ impl<BasicBlock: Idx, Local: Idx> InterblockEdgesEntry<BasicBlock, Local> {
         &mut self,
         loc: Location<BasicBlock>,
         local: Local,
-        locals_succ: &HybridBitSet<Local>,
+        locals_succ: &MixedBitSet<Local>,
     ) -> bool {
         if locals_succ.contains(local) {
             let old = self.entry.insert(loc, local);
@@ -548,9 +548,9 @@ impl<BasicBlock: Idx, Local: Idx> InterblockEdgesEntry<BasicBlock, Local> {
 pub struct BlockDataDepGraph<Local: Idx> {
     deps: Vec<FxIndexMap<usize, Local>>,
     rdeps: Vec<FxIndexMap<usize, Local>>,
-    rdep_start: FxIndexMap<usize, HybridBitSet<Local>>,
+    rdep_start: FxIndexMap<usize, MixedBitSet<Local>>,
     dep_end: FxIndexMap<usize, Local>,
-    rdep_start_end: HybridBitSet<Local>,
+    rdep_start_end: MixedBitSet<Local>,
     rw_states: RWCStates<Local>,
     accesses: Vec<Vec<(Local, PlaceContext)>>,
 }
@@ -561,7 +561,7 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
     }
     #[instrument(level = "debug", skip(self))]
     pub fn get_rdep_start(&self, statement: usize) -> impl Iterator<Item = Local> + '_ {
-        self.rdep_start.get(&statement).into_iter().flat_map(HybridBitSet::iter)
+        self.rdep_start.get(&statement).into_iter().flat_map(MixedBitSet::iter)
     }
     #[instrument(level = "debug", skip(self))]
     pub fn is_rdep_start(&self, statement: usize, local: Local) -> bool {
@@ -613,7 +613,7 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
             rdeps: vec![FxIndexMap::default(); statements],
             rdep_start: FxIndexMap::default(),
             dep_end: FxIndexMap::default(),
-            rdep_start_end: HybridBitSet::new_empty(locals),
+            rdep_start_end: MixedBitSet::new_empty(locals),
             rw_states: RWCStates::new(statements, locals),
             accesses: vec![Vec::new(); statements],
         }
@@ -631,7 +631,7 @@ impl<Local: Idx> BlockDataDepGraph<Local> {
                 None => {
                     self.rdep_start
                         .entry(stmt)
-                        .or_insert_with(|| HybridBitSet::new_empty(self.rw_states.num_locals()))
+                        .or_insert_with(|| MixedBitSet::new_empty(self.rw_states.num_locals()))
                         .insert(local);
                 },
             }

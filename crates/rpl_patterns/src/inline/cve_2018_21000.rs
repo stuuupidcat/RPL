@@ -30,7 +30,7 @@ pub mod u8_to_t {
 
         fn visit_item(&mut self, i: &'tcx rustc_hir::Item<'tcx>) -> Self::Result {
             match i.kind {
-                hir::ItemKind::Fn(..) => {},
+                hir::ItemKind::Fn{..} => {},
                 _ => return,
             }
             intravisit::walk_item(self, i);
@@ -204,7 +204,7 @@ pub mod t_to_u8 {
 
         fn visit_item(&mut self, i: &'tcx rustc_hir::Item<'tcx>) -> Self::Result {
             match i.kind {
-                hir::ItemKind::Fn(..) => {},
+                hir::ItemKind::Fn{..} => {},
                 _ => return,
             }
             intravisit::walk_item(self, i);

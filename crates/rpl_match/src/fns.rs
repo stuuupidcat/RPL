@@ -18,7 +18,7 @@ impl<'a, 'pcx, 'tcx> MatchFnCtxt<'a, 'pcx, 'tcx> {
         pat: &'pcx pat::Pattern<'pcx>,
         fn_pat: &'a pat::Fn<'pcx>,
     ) -> Self {
-        let ty = MatchTyCtxt::new(tcx, pcx, ty::ParamEnv::reveal_all(), pat, &fn_pat.meta);
+        let ty = MatchTyCtxt::new(tcx, pcx, ty::ParamEnv::empty(), pat, &fn_pat.meta); // FIXME
         Self { ty, fn_pat }
     }
 
