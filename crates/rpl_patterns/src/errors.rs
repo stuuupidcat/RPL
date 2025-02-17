@@ -249,3 +249,15 @@ pub struct UncheckedPtrOffset {
     #[label(rpl_patterns_offset_label)]
     pub offset: Span,
 }
+
+// for cve_2020_35901
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_unsound_pin_project)]
+#[note]
+pub struct UnsoundPinProject<'tcx> {
+    #[primary_span]
+    pub span: Span,
+    #[label]
+    pub mut_self: Span,
+    pub ty: Ty<'tcx>,
+}

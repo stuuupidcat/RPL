@@ -30,6 +30,7 @@ extern crate serde;
 extern crate serde_json;
 extern crate syn;
 // extern crate tokio;
+extern crate pin_project;
 
 mod test_utils;
 
@@ -56,6 +57,7 @@ static TEST_DEPENDENCIES: &[&str] = &[
     "thiserror",
     "tracing",
     // "tokio",
+    "pin_project",
 ];
 
 /// Produces a string with an `--extern` flag for all UI test crate
