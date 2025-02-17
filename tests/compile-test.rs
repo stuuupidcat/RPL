@@ -16,6 +16,7 @@ use std::sync::LazyLock;
 // extern crate clippy_utils;
 
 extern crate byte_slice_cast;
+extern crate bytes;
 extern crate futures;
 extern crate if_chain;
 extern crate itertools;
@@ -24,19 +25,21 @@ extern crate memmap;
 extern crate num_derive;
 extern crate num_rational;
 extern crate parking_lot;
+extern crate pin_project;
 extern crate quote;
 extern crate scoped_threadpool;
 extern crate serde;
 extern crate serde_json;
 extern crate syn;
-// extern crate tokio;
-extern crate pin_project;
+extern crate tokio;
+extern crate tokio_util;
 
 mod test_utils;
 
 /// All crates used in UI tests are listed here
 static TEST_DEPENDENCIES: &[&str] = &[
     "byte_slice_cast",
+    "bytes",
     "futures",
     "if_chain",
     "itertools",
@@ -47,6 +50,7 @@ static TEST_DEPENDENCIES: &[&str] = &[
     "num_rational",
     "num_traits",
     "parking_lot",
+    "pin_project",
     "quote",
     "regex",
     "serde",
@@ -56,8 +60,8 @@ static TEST_DEPENDENCIES: &[&str] = &[
     "scoped_threadpool",
     "thiserror",
     "tracing",
-    // "tokio",
-    "pin_project",
+    "tokio",
+    "tokio_util",
 ];
 
 /// Produces a string with an `--extern` flag for all UI test crate

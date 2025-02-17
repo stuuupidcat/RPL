@@ -85,5 +85,5 @@ rpl_patterns_unchecked_ptr_offset = it is unsound to dereference a pointer that 
     .help = check whether it's in bound before dereferencing
 
 rpl_patterns_unsound_pin_project = it is unsound to call `Pin::new_unchecked` on a mutable reference that can be freely moved
-    .label = mutable reference here
+    .label = mutable reference passed into a public function here
     .note = type `{$ty}` doesn't implement `Unpin`
