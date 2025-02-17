@@ -35,7 +35,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     #[instrument(level = "debug", skip_all, fields(?item.owner_id))]
     fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
         match item.kind {
-            hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn{..} => {},
+            hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn { .. } => {},
             _ => return,
         }
         intravisit::walk_item(self, item);
@@ -113,9 +113,9 @@ fn pattern_thread_local_static(pcx: PatCtxt<'_>) -> PatternThreadLocalStatic<'_>
 }
 
 #[instrument(level = "debug", skip(tcx), ret)]
-fn is_sync<'tcx>(tcx: TyCtxt<'tcx>, param_env: ty::ParamEnv<'tcx>, ty: Ty<'tcx>) -> bool {
+fn is_sync<'tcx>(tcx: TyCtxt<'tcx>, typing_env: ty::TypingEnv<'tcx>, ty: Ty<'tcx>) -> bool {
     use rustc_infer::infer::TyCtxtInferExt;
     let infcx = tcx.infer_ctxt().build(TypingMode::PostAnalysis);
     let trait_def_id = tcx.require_lang_item(hir::LangItem::Sync, None);
-    rustc_trait_selection::traits::type_known_to_meet_bound_modulo_regions(&infcx, param_env, ty, trait_def_id)
+    rustc_trait_selection::traits::type_known_to_meet_bound_modulo_regions(&infcx, typing_env.param_env, ty, trait_def_id)
 }

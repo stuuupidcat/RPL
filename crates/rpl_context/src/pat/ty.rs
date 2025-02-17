@@ -281,7 +281,7 @@ impl From<bool> for IntValue {
     }
 }
 
-pub type TyPred = for<'tcx> fn(TyCtxt<'tcx>, ty::ParamEnv<'tcx>, ty::Ty<'tcx>) -> bool;
+pub type TyPred = for<'tcx> fn(TyCtxt<'tcx>, ty::TypingEnv<'tcx>, ty::Ty<'tcx>) -> bool;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Const<'pcx> {

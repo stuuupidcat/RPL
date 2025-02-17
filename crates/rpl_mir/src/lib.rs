@@ -54,7 +54,6 @@ use rustc_span::Symbol;
 
 pub use matches::{Matched, StatementMatch};
 pub use rpl_context::pat;
-use rustc_type_ir::TyKind::UnsafeBinder;
 
 pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     ty: MatchTyCtxt<'pcx, 'tcx>,
@@ -78,8 +77,8 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
         pat: &'pcx pat::Pattern<'pcx>,
         fn_pat: &'a pat::Fn<'pcx>,
     ) -> Self {
-        let param_env = tcx.param_env_normalized_for_post_analysis(body.source.def_id()); // FIXME.
-        let ty = MatchTyCtxt::new(tcx, pcx, param_env, pat, &fn_pat.meta);
+        let typing_env = ty::TypingEnv::post_analysis(tcx, body.source.def_id());
+        let ty = MatchTyCtxt::new(tcx, pcx, typing_env, pat, &fn_pat.meta);
         let mir_pat = fn_pat.expect_mir_body();
         // let pat_pdg = crate::graph::pat_program_dep_graph(&patterns, tcx.pointer_size().bytes_usize());
         // let mir_pdg = crate::graph::mir_program_dep_graph(body);
