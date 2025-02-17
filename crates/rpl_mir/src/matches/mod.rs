@@ -691,9 +691,10 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                         return false;
                     },
                 };
-                trace!("type variable {ty_var:?} matched: {ty:?}",);
+                let ty_var_matched = self.matching[ty_var].force_get_matched();
+                trace!("type variable {ty_var:?} matched: {ty_var_matched:?} matching: {ty:?}",);
                 // self.match_ty_var(ty_var, ty)
-                self.matching[ty_var].force_get_matched() == ty
+                ty_var_matched == ty
             })
     }
     #[instrument(level = "debug", skip(self), ret)]

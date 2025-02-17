@@ -805,12 +805,23 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         matched
     }
 
+    /// Match operands in [`pat::Operand`] and [`mir::Operand`].
+    ///
+    /// If `is_copy` is `true`, the `Copy` and `Move` variants of [`mir::Operand`] are considered
+    /// the same.
     #[instrument(level = "trace", skip(self), ret)]
     fn match_operand(&self, pat: &pat::Operand<'pcx>, operand: &mir::Operand<'tcx>) -> bool {
         let matched = match (pat, operand) {
             (&pat::Operand::Copy(place_pat), &mir::Operand::Copy(place))
             | (&pat::Operand::Move(place_pat), &mir::Operand::Move(place)) => {
                 self.match_place_ref(place_pat, place.as_ref())
+            },
+            (&pat::Operand::Copy(place_pat), &mir::Operand::Move(place))
+            | (&pat::Operand::Move(place_pat), &mir::Operand::Copy(place)) => {
+                let ty = place.ty(self.body, self.ty.tcx).ty;
+                let is_copy = ty.is_copy_modulo_regions(self.ty.tcx, self.ty.param_env);
+                trace!(?is_copy, ?ty, "match_operand is_copy");
+                is_copy && self.match_place_ref(place_pat, place.as_ref())
             },
             (pat::Operand::Constant(konst_pat), mir::Operand::Constant(box konst)) => {
                 self.match_const_operand(konst_pat, konst.const_)
