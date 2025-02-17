@@ -264,12 +264,11 @@ pub struct UnsoundPinNewUnchecked<'tcx> {
 }
 
 // for cve_2020_35877
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_unchecked_ptr_offset)]
 #[help]
 #[note]
 pub struct UncheckedPtrOffset {
-    #[primary_span]
     #[label(rpl_patterns_offset_label)]
     pub offset: Span,
     #[label(rpl_patterns_ptr_label)]

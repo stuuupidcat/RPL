@@ -68,3 +68,33 @@ declare_lint! {
     Deny,
     "detects a Rust string pointer used as a C string pointer directly"
 }
+
+declare_lint! {
+    /// The `unchecked_pointer_offset` lint detects a pointer that is offset using an unchecked integer.
+    /// This is a common source of undefined behavior.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(unchecked_pointer_offset)]
+    ///
+    /// fn index(p: *const u8, index: usize) -> *const u8 {
+    ///     unsafe {
+    ///         p.add(index)
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// The `add` method is used to offset a pointer by a given number of elements.
+    /// However, if the index is not checked, it can lead to undefined behavior.
+    /// To avoid this, you should always check the index before offsetting the pointer,
+    /// unless both the pointer and the index are guaranteed to be valid, for example,
+    /// when the index is calculated from the length of the slice, or both are constants.
+    pub UNCHECKED_POINTER_OFFSET,
+    Deny,
+    "detects a pointer that is offset using an unchecked integer"
+}
