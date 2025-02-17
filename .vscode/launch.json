@@ -25,8 +25,8 @@
                 "tests/ui/cve_2020_35888_simplified/cve_2020_35888_simplified.rs"
             ],
             "env": {
-                "DYLD_LIBRARY_PATH": "${env:HOME}/.rustup/toolchains/nightly-2024-10-23-aarch64-apple-darwin/lib",
-                "LD_LIBRARY_PATH": "${env:HOME}/.rustup/toolchains/nightly-2024-10-23-aarch64-unknown-linux-gnu/lib"
+                "DYLD_LIBRARY_PATH": "${env:HOME}/.rustup/toolchains/nightly-2025-02-14-aarch64-apple-darwin/lib",
+                "LD_LIBRARY_PATH": "${env:HOME}/.rustup/toolchains/nightly-2025-02-14-aarch64-unknown-linux-gnu/lib"
             },
             "cwd": "${workspaceFolder}"
         }

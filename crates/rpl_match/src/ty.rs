@@ -18,7 +18,7 @@ pub struct MatchTyCtxt<'pcx, 'tcx> {
     pub tcx: TyCtxt<'tcx>,
     pub pcx: PatCtxt<'pcx>,
     pub pat: &'pcx pat::Pattern<'pcx>,
-    pub param_env: ty::ParamEnv<'tcx>,
+    typing_env: ty::TypingEnv<'tcx>,
     pub ty_vars: IndexVec<pat::TyVarIdx, RefCell<FxIndexSet<ty::Ty<'tcx>>>>,
     pub adt_matches: RefCell<FxHashMap<Symbol, FxHashMap<DefId, AdtMatch<'tcx>>>>,
 }
@@ -27,7 +27,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
     pub fn new(
         tcx: TyCtxt<'tcx>,
         pcx: PatCtxt<'pcx>,
-        param_env: ty::ParamEnv<'tcx>,
+        typing_env: ty::TypingEnv<'tcx>,
         pat: &'pcx pat::Pattern<'pcx>,
         meta: &pat::MetaVars<'pcx>,
     ) -> Self {
@@ -35,7 +35,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
             tcx,
             pcx,
             pat,
-            param_env,
+            typing_env,
             ty_vars: IndexVec::from_elem(RefCell::new(FxIndexSet::default()), &meta.ty_vars),
             adt_matches: Default::default(),
         }
@@ -46,7 +46,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
         let ty_kind = *ty.kind();
         let matched = match (ty_pat_kind, ty_kind) {
             (pat::TyKind::TyVar(ty_var), _)
-                if ty_var.pred.is_none_or(|ty_pred| ty_pred(self.tcx, self.param_env, ty)) =>
+                if ty_var.pred.is_none_or(|ty_pred| ty_pred(self.tcx, self.typing_env, ty)) =>
             {
                 self.ty_vars[ty_var.idx].borrow_mut().insert(ty);
                 true

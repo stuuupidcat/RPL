@@ -2,7 +2,7 @@
 
 First, use `cargo install --path .` in current directory to install RPL as a cargo subcommand.
 
-Then, use `cargo rpl +nightly-2024-10-23` to run RPL in your own repository to detect errors, where `+nightly-2024-10-23` is the current toolchain RPL is using. You may upate this argument if RPL is switched into a new toolchain.
+Then, use `cargo rpl +nightly-2025-02-14` to run RPL in your own repository to detect errors, where `+nightly-2025-02-14` is the current toolchain RPL is using. You may upate this argument if RPL is switched into a new toolchain.
 
 # Tests
 
@@ -31,19 +31,21 @@ For `debug` and `trace` level logs, unfortunately you cannot use the nightly rus
 The recommended workflow to setup a custom rustc is:
 
 -   Get the latest nightly rust toolchain by running `rustup toolchain install nightly`/`rustup update nightly`;
--   Type `rustc -V` in the RPL repository to show the current toolchain it is using (currently, it is `rustc 1.84.0-nightly (86d69c705 2024-10-22)`), and remember the revision `86d69c705` in it;
+-   Type `rustc -V` in the RPL repository to show the current toolchain it is using (currently, it is `rustc 1.86.0-nightly (a567209da 2025-02-13)`), and remember the revision `a567209da` in it;
 -   Change your directory where you would like to put the rust source code, and clone the rust repository using `git clone https://github.com/rust-lang/rust.git && cd rust`;
--   Checkout to the given commit, and it is recommended to use `git worktree add ../rust-nightly 86d69c705 && cd ../rust-nightly`;
+-   Checkout to the given commit, and it is recommended to use `git worktree add ../rust-nightly-2025-02-13 a567209da && cd ../rust-nightly-2025-02-13`;
 -   Run `git log` to make sure that the first commit is the same as that produced by `rustc -V` in the RPL repository;
 -   Run `./x setup` and choose `b) compiler: Contribute to the compiler itself` when it asks you `What do you want to do with x.py?` (the `compiler` profile will enable debugging by default), and choose the default options for other settings;
--   Run `./x dist --stage 1` to build a custom toolchain from source, it might take minutes or hours to finish; Here `--stage 1` means you only need to build a compiler from a nightly rustc (called the bootstrap compiler) instead of your own buildings;
--   Run `rustup toolchain link nightly-stage1 build/host/stage1` to link your custom stage1 compiler to a new toolchain named `nightly-stage1`;
--   Now go back to the RPL repository, you will be able to run `RPL_LOG=debug cargo +nightly-stage1 run -b rpl-driver` to build and run RPL using your custom rustc with the debug log level;
+-   Run `./x dist --stage 1` to build a custom toolchain from source, it might take minutes or hours to finish(On a MacBookPro M1, it takes about 22 minutes); Here `--stage 1` means you only need to build a compiler from a nightly rustc (called the bootstrap compiler) instead of your own buildings;
+-   Run `rustup toolchain link nightly-2025-02-13-stage1 build/host/stage1` to link your custom stage1 compiler to a new toolchain named `nightly-2025-02-13-stage1`;
+-   Now go back to the RPL repository, you will be able to run `RPL_LOG=debug cargo +nightly-2025-02-13-stage1 run --bin rpl-driver` to build and run RPL using your custom rustc with the debug log level;
 
-But it might not work, and you will probably see this error:
+### Troubleshooting: dylib not found
+
+`RPL_LOG=debug cargo +nightly-2025-02-13-stage1 run --bin rpl-driver` might not work, and you will probably see an error like this:
 
 ```
-   Compiling rpl_patterns v0.1.0 (/home/whjpji/PKU/Rust/RPL/crates/rpl_patterns)
+   Compiling rpl_patterns v0.1.0
 error: ./target/debug/deps/librpl_macros-735c931c29d05061.so: librustc_driver-649529b68e4c03de.so: cannot open shared object file: No such file or directory
   --> crates/rpl_patterns/src/lib.rs:16:1
    |
@@ -53,19 +55,32 @@ error: ./target/debug/deps/librpl_macros-735c931c29d05061.so: librustc_driver-64
 
 I haven't found a good solution but here is the hacks:
 
--   Go to the directory where your `rust-nightly` locates and run `ln -sf build/host/stage1 ~/.rustup/toolchains/nightly-stage1` to link your custom toolchain to directory that is easy to find;
+-   Go to the directory where your `rust-nightly-2025-02-13` locates and run `ln -sf build/host/stage1 ~/.rustup/toolchains/nightly-2025-02-13-stage1` to link your custom toolchain to directory that is easy to find;
 -   Add
-    -   `export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.rustup/toolchains/nightly-stage1/lib/rustlib/x86_64-unknown-linux-gnu/lib`(for Linux) or
-    -   `export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$HOME/.rustup/toolchains/nightly-stage1/lib/rustlib/x86_64-apple-darwin/lib`(for MacOS)
+    -   `export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$HOME/.rustup/toolchains/nightly-2025-02-13-stage1/lib/rustlib/x86_64-unknown-linux-gnu/lib`(for Linux) or
+    -   `export DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH:$HOME/.rustup/toolchains/nightly-2025-02-13-stage1/lib/rustlib/aarch64-apple-darwin/lib`(for MacOS)
         to the end of the `~/.bashrc` file (or `~/.zshrc` if you use ZSH)
 -   Run `source ~/.bashrc` (or `source ~/.zshrc` if you use ZSH);
--   Now return to the RPL repository and you may succeed to run `RPL_LOG=debug cargo +nightly-stage1 run -b rpl-driver` and you will see the debugging logs printed on the screen;
+-   Now return to the RPL repository and you may succeed to run `RPL_LOG=debug cargo +nightly-2025-02-13-stage1 run -b rpl-driver` and you will see the debugging logs printed on the screen;
+
+### Troubleshooting: `'iostream' file not found`
+
+When you run `./x dist --stage 1`, you may encounter an error like this:
+
+```
+/rust-nightly-2025-02-13/src/tools/libcxx-version/main.cpp:8:10: fatal error: 'iostream' file not found
+```
+
+Here is a related PR: https://github.com/rust-lang/rust/pull/125411
+
+To fix this(on MacOS), run `sudo rm -rf /Library/Developer/CommandLineTools` and then run `xcode-select --install` to reinstall the command line tools.
 
 ### View logs
 
 The rustc logs are scope trees with indentations, it is helpful if your code editor support folding by indentations.
 
 In Vim, you can set fold method to `indent` and use `za` to toggle the folds on and off.
+
 ```vim
 set shiftwidth=2
 set foldenable
@@ -88,7 +103,7 @@ To fix this, you can add the following to your `launch.json`(There may be some s
 
 ```json
 "env": {
-    "DYLD_LIBRARY_PATH": "${env:HOME}/.rustup/toolchains/nightly-2024-10-23-aarch64-apple-darwin/lib",
-    "LD_LIBRARY_PATH": "${env:HOME}/.rustup/toolchains/nightly-2024-10-23-aarch64-unknown-linux-gnu/lib"
+    "DYLD_LIBRARY_PATH": "${env:HOME}/.rustup/toolchains/nightly-2025-02-14-aarch64-apple-darwin/lib",
+    "LD_LIBRARY_PATH": "${env:HOME}/.rustup/toolchains/nightly-2025-02-14-aarch64-unknown-linux-gnu/lib"
 },
 ```

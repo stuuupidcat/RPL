@@ -33,7 +33,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         match item.kind {
             hir::ItemKind::Trait(hir::IsAuto::No, hir::Safety::Safe, ..)
             | hir::ItemKind::Impl(_)
-            | hir::ItemKind::Fn{..} => {},
+            | hir::ItemKind::Fn { .. } => {},
             _ => return,
         }
         intravisit::walk_item(self, item);
@@ -171,12 +171,13 @@ fn pattern_cast_mut(pcx: PatCtxt<'_>) -> PatternCast<'_> {
 }
 
 #[instrument(level = "debug", skip(tcx), ret)]
-fn is_all_safe_trait<'tcx>(tcx: TyCtxt<'tcx>, param_env: ty::ParamEnv<'tcx>, self_ty: Ty<'tcx>) -> bool {
+fn is_all_safe_trait<'tcx>(tcx: TyCtxt<'tcx>, typing_env: ty::TypingEnv<'tcx>, self_ty: Ty<'tcx>) -> bool {
     if self_ty.is_primitive() {
         return false;
     }
     const EXCLUDED_DIAG_ITEMS: &[Symbol] = &[sym::Send, sym::Sync];
-    param_env
+    typing_env
+        .param_env
         .caller_bounds()
         .iter()
         .filter_map(|clause| clause.as_trait_clause())

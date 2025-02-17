@@ -35,7 +35,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     #[instrument(level = "debug", skip_all, fields(?item.owner_id))]
     fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
         match item.kind {
-            hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn(..) => {},
+            hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn { .. } => {},
             _ => return,
         }
         intravisit::walk_item(self, item);
@@ -157,6 +157,6 @@ fn pattern_pin_field(pcx: PatCtxt<'_>) -> PatternPin<'_> {
 }
 
 #[instrument(level = "debug", skip(tcx), ret)]
-fn is_not_unpin<'tcx>(tcx: TyCtxt<'tcx>, param_env: ty::ParamEnv<'tcx>, ty: Ty<'tcx>) -> bool {
-    !ty.is_unpin(tcx, param_env)
+fn is_not_unpin<'tcx>(tcx: TyCtxt<'tcx>, typing_env: ty::TypingEnv<'tcx>, ty: Ty<'tcx>) -> bool {
+    !ty.is_unpin(tcx, typing_env)
 }

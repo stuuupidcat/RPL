@@ -21,7 +21,7 @@ impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
         pat: &'pcx pat::Pattern<'pcx>,
         adt_pat: &'a pat::Adt<'pcx>,
     ) -> Self {
-        let ty = MatchTyCtxt::new(tcx, pcx, ty::ParamEnv::empty(), pat, &adt_pat.meta);
+        let ty = MatchTyCtxt::new(tcx, pcx, ty::TypingEnv::fully_monomorphized(), pat, &adt_pat.meta);
         Self { ty, adt_pat }
     }
 

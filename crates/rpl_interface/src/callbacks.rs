@@ -116,11 +116,9 @@ impl rustc_driver::Callbacks for RplCallbacks {
     fn after_analysis<'tcx>(
         &mut self,
         _compiler: &interface::Compiler,
-        _tcx: TyCtxt<'tcx>,
+        tcx: TyCtxt<'tcx>,
     ) -> rustc_driver::Compilation {
-        _tcx.enter(|tcx| {
-            PatternCtxt::entered(|pcx| rpl_driver::check_crate(tcx, pcx));
-        });
+        PatternCtxt::entered(|pcx| rpl_driver::check_crate(tcx, pcx));
         /*
         queries.global_ctxt().unwrap().enter(|tcx| {
             let mut lint_store = LaterLintStore::new();
