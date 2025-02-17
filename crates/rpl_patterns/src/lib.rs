@@ -50,7 +50,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     inline::cve_2020_35888::check_item,
     inline::cve_2020_35892_3::check_item,
     inline::cve_2020_35898_9::check_item,
-    inline::cve_2020_35901::check_item,
+    inline::cve_2020_35901_2::check_item,
     inline::cve_2020_35907::check_item,
     normal::cve_2021_25904::check_item,
     inline::cve_2021_25904::check_item,

@@ -2,7 +2,7 @@ error: it is unsound to call `Pin::new_unchecked` on a mutable reference that ca
   --> tests/ui/cve_2020_35901_2/cve_2020_35901.rs:52:35
    |
 LL |     fn poll_next(&mut self, cx: &mut Context<'_>) -> Poll<Option<Result<Bytes, Error>>> {
-   |                  --------- mutable reference here
+   |                  --------- mutable reference passed into a public function here
 LL |         let mut stream = unsafe { Pin::new_unchecked(self) }.project().stream;
    |                                   ^^^^^^^^^^^^^^^^^^^^^^^^
    |

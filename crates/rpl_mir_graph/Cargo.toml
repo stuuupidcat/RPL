@@ -10,7 +10,6 @@ keywords.workspace = true
 edition = "2024"
 
 [dependencies]
-bitflags.workspace = true
 
 [dev-dependencies]
 rpl_macros.workspace = true

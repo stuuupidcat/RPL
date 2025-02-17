@@ -57,34 +57,44 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         {
             let body = self.tcx.optimized_mir(def_id);
 
-            let pattern = pattern_pin_project(self.pcx);
+            let pattern = pattern_pin(self.pcx);
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
-                let span = matches[pattern.pin_mut_struct].span_no_inline(body);
+                let span = matches[pattern.pin_new].span_no_inline(body);
                 let mut_self = body.local_decls[matches[pattern.mut_self]].source_info.span;
                 let ty = matches[pattern.ty_var.idx];
                 debug!(?span, ?mut_self, ?ty);
                 self.tcx
                     .dcx()
-                    .emit_err(crate::errors::UnsoundPinProject { span, mut_self, ty });
+                    .emit_err(crate::errors::UnsoundPinNewUnchecked { span, mut_self, ty });
+            }
+            let pattern = pattern_pin_field(self.pcx);
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let span = matches[pattern.pin_new].span_no_inline(body);
+                let mut_self = body.local_decls[matches[pattern.mut_self]].source_info.span;
+                let ty = matches[pattern.ty_var.idx];
+                debug!(?span, ?mut_self, ?ty);
+                self.tcx
+                    .dcx()
+                    .emit_err(crate::errors::UnsoundPinNewUnchecked { span, mut_self, ty });
             }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
     }
 }
 
-struct PatternPinProject<'pcx> {
+struct PatternPin<'pcx> {
     pattern: &'pcx pat::Pattern<'pcx>,
     fn_pat: &'pcx pat::Fn<'pcx>,
     mut_self: pat::Local,
-    pin_mut_struct: pat::Location,
+    pin_new: pat::Location,
     ty_var: pat::TyVar,
 }
 
 #[rpl_macros::pattern_def]
-fn pattern_pin_project(pcx: PatCtxt<'_>) -> PatternPinProject<'_> {
+fn pattern_pin(pcx: PatCtxt<'_>) -> PatternPin<'_> {
     let ty_var;
     let mut_self;
-    let pin_mut_struct;
+    let pin_new;
     #[allow(non_snake_case)]
     let pattern = rpl! {
         #[meta($S:ty)]
@@ -96,7 +106,7 @@ fn pattern_pin_project(pcx: PatCtxt<'_>) -> PatternPinProject<'_> {
         fn $pattern(..) -> _ = mir! {
             #[export(mut_self)]
             let $self: &mut $SizedStream;
-            #[export(pin_mut_struct)]
+            #[export(pin_new)]
             let mut $pin_mut_struct: std::pin::Pin<&mut $SizedStream> = std::pin::Pin::<_> { __pointer: copy $self };
             let mut $mut_struct: &mut $SizedStream = copy ($pin_mut_struct.__pointer);
             let $mut_field: &mut $S = &mut ((*$mut_struct).$field);
@@ -105,11 +115,43 @@ fn pattern_pin_project(pcx: PatCtxt<'_>) -> PatternPinProject<'_> {
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-    PatternPinProject {
+    PatternPin {
         pattern,
         fn_pat,
         mut_self,
-        pin_mut_struct,
+        pin_new,
+        ty_var,
+    }
+}
+
+#[rpl_macros::pattern_def]
+fn pattern_pin_field(pcx: PatCtxt<'_>) -> PatternPin<'_> {
+    let ty_var;
+    let mut_self;
+    let pin_new;
+    #[allow(non_snake_case)]
+    let pattern = rpl! {
+        #[meta($T:ty)]
+        struct $Framed {
+            $field: $T,
+        }
+
+        #[meta(#[export(ty_var)] $T:ty = is_not_unpin)]
+        fn $pattern(..) -> _ = mir! {
+            #[export(mut_self)]
+            let $self: &mut $Framed;
+            let mut $self_field: &mut $T = &mut (*$self).$field;
+            #[export(pin_new)]
+            let mut $pin_mut_struct: std::pin::Pin<&mut $T> = std::pin::Pin::<_> { __pointer: copy $self_field };
+        }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
+
+    PatternPin {
+        pattern,
+        fn_pat,
+        mut_self,
+        pin_new,
         ty_var,
     }
 }

@@ -254,7 +254,7 @@ pub struct UncheckedPtrOffset {
 #[derive(Diagnostic)]
 #[diag(rpl_patterns_unsound_pin_project)]
 #[note]
-pub struct UnsoundPinProject<'tcx> {
+pub struct UnsoundPinNewUnchecked<'tcx> {
     #[primary_span]
     pub span: Span,
     #[label]
