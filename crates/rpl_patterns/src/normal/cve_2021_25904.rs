@@ -32,7 +32,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         match item.kind {
             hir::ItemKind::Trait(hir::IsAuto::No, hir::Safety::Safe, ..)
             | hir::ItemKind::Impl(_)
-            | hir::ItemKind::Fn(..) => {},
+            | hir::ItemKind::Fn{..} => {},
             _ => return,
         }
         intravisit::walk_item(self, item);

@@ -1,6 +1,7 @@
 use rpl_context::PatternCtxt;
 // use rpl_middle::ty::RplConfig;
 use rustc_interface::interface;
+use rustc_middle::ty::TyCtxt;
 use rustc_session::parse::ParseSess;
 use rustc_span::Symbol;
 
@@ -115,9 +116,9 @@ impl rustc_driver::Callbacks for RplCallbacks {
     fn after_analysis<'tcx>(
         &mut self,
         _compiler: &interface::Compiler,
-        queries: &'tcx rustc_interface::Queries<'tcx>,
+        _tcx: TyCtxt<'tcx>,
     ) -> rustc_driver::Compilation {
-        queries.global_ctxt().unwrap().enter(|tcx| {
+        _tcx.enter(|tcx| {
             PatternCtxt::entered(|pcx| rpl_driver::check_crate(tcx, pcx));
         });
         /*

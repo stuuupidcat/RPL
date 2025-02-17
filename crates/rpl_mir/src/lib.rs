@@ -41,20 +41,20 @@ use crate::graph::{MirControlFlowGraph, MirDataDepGraph, PatControlFlowGraph, Pa
 use rpl_context::PatCtxt;
 use rpl_match::{Candidates, MatchFnCtxt, MatchTyCtxt};
 use rpl_mir_graph::TerminatorEdges;
-use rustc_abi::VariantIdx;
+use rustc_abi::{FieldIdx, VariantIdx};
 use rustc_hash::FxHashMap;
 use rustc_hir::def::CtorKind;
 use rustc_hir::def_id::DefId;
-use rustc_index::bit_set::HybridBitSet;
+use rustc_index::bit_set::MixedBitSet;
 use rustc_index::{IndexSlice, IndexVec};
 use rustc_middle::mir::interpret::PointerArithmetic;
 use rustc_middle::ty::{GenericArgsRef, TyCtxt};
 use rustc_middle::{mir, ty};
 use rustc_span::Symbol;
-use rustc_target::abi::FieldIdx;
 
 pub use matches::{Matched, StatementMatch};
 pub use rpl_context::pat;
+use rustc_type_ir::TyKind::UnsafeBinder;
 
 pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     ty: MatchTyCtxt<'pcx, 'tcx>,
@@ -67,7 +67,7 @@ pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     mir_ddg: MirDataDepGraph,
     // pat_pdg: PatProgramDepGraph,
     // mir_pdg: MirProgramDepGraph,
-    locals: IndexVec<pat::Local, RefCell<HybridBitSet<mir::Local>>>,
+    locals: IndexVec<pat::Local, RefCell<MixedBitSet<mir::Local>>>,
 }
 
 impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
@@ -78,7 +78,7 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
         pat: &'pcx pat::Pattern<'pcx>,
         fn_pat: &'a pat::Fn<'pcx>,
     ) -> Self {
-        let param_env = tcx.param_env_reveal_all_normalized(body.source.def_id());
+        let param_env = tcx.param_env_normalized_for_post_analysis(body.source.def_id()); // FIXME.
         let ty = MatchTyCtxt::new(tcx, pcx, param_env, pat, &fn_pat.meta);
         let mir_pat = fn_pat.expect_mir_body();
         // let pat_pdg = crate::graph::pat_program_dep_graph(&patterns, tcx.pointer_size().bytes_usize());
@@ -99,7 +99,7 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
             // pat_pdg,
             // mir_pdg,
             locals: IndexVec::from_elem_n(
-                RefCell::new(HybridBitSet::new_empty(body.local_decls.len())),
+                RefCell::new(MixedBitSet::new_empty(body.local_decls.len())),
                 mir_pat.locals.len(),
             ),
         }
@@ -402,7 +402,8 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                             | Subslice { .. }
                             | Downcast(..)
                             | OpaqueCast(_)
-                            | Subtype(_),
+                            | Subtype(_)
+                            | UnwrapUnsafeBinder(_),
                         ) => false,
                     }
                 });
@@ -455,7 +456,8 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                         | Subslice { .. }
                         | Downcast(..)
                         | OpaqueCast(_)
-                        | Subtype(_),
+                        | Subtype(_)
+                        | UnwrapUnsafeBinder(_),
                     ) => {},
                 }
             },
@@ -581,7 +583,8 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                 | mir::StatementKind::Coverage(..)
                 | mir::StatementKind::Intrinsic(..)
                 | mir::StatementKind::ConstEvalCounter
-                | mir::StatementKind::Nop,
+                | mir::StatementKind::Nop
+                | mir::StatementKind::BackwardIncompatibleDropHint { .. },
             ) => false,
         };
         if matched {
@@ -743,8 +746,8 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                 };
                 self.ty.match_region(region_pat, region) && is_borrow_kind_equal && self.match_place(place_pat, place)
             },
-            (&pat::Rvalue::RawPtr(mutability_pat, place_pat), &mir::Rvalue::RawPtr(mutability, place)) => {
-                mutability_pat == mutability && self.match_place(place_pat, place)
+            (&pat::Rvalue::RawPtr(mutability_pat, place_pat), &mir::Rvalue::RawPtr(ptr_mutability, place)) => {
+                mutability_pat == ptr_mutability.to_mutbl_lossy() && self.match_place(place_pat, place)
             },
             (&pat::Rvalue::Len(place_pat), &mir::Rvalue::Len(place))
             | (&pat::Rvalue::Discriminant(place_pat), &mir::Rvalue::Discriminant(place))
@@ -798,7 +801,8 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                 | mir::Rvalue::Discriminant(_)
                 | mir::Rvalue::Aggregate(..)
                 | mir::Rvalue::ShallowInitBox(..)
-                | mir::Rvalue::CopyForDeref(_),
+                | mir::Rvalue::CopyForDeref(_)
+                | mir::Rvalue::WrapUnsafeBinder(..),
             ) => return false,
         };
         debug!(?pat, ?rvalue, matched, "match_rvalue");
