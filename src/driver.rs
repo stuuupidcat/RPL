@@ -222,7 +222,7 @@ pub fn main() {
             /* rustc_driver::RunCompiler::new(&args, &mut RplCallbacks::new(rpl_args_var))
             .set_using_internal_features(using_internal_features)
             .run() */
-            rustc_driver::run_compiler(&args, &mut RplCallbacks::new(rpl_args_var))
+            rustc_driver::run_compiler(&args, &mut RplCallbacks::new(rpl_args_var, mctx))
         } else {
             /* rustc_driver::RunCompiler::new(&args, &mut RustcCallbacks::new(rpl_args_var))
             .set_using_internal_features(using_internal_features)
