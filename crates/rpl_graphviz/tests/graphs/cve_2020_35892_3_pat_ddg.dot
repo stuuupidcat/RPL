@@ -121,12 +121,12 @@ subgraph cluster_bb9 {
     bb8OUT -> bb2IN [label="goto"];
     bb9OUT -> bb7IN [label="return"];
     bb0stmt2 -> bb1stmt0 [label="_?12"];
-    bb6stmt1 -> bb3stmt0 [label="_?4"];
     bb4stmt0 -> bb3stmt0 [label="_?4"];
+    bb6stmt1 -> bb3stmt0 [label="_?4"];
     bb1stmt0 -> bb5stmt0 [label="_?13"];
-    bb5stmt1 -> bb6stmt0 [label="_?3"];
     bb1stmt0 -> bb6stmt0 [label="_?13"];
+    bb5stmt1 -> bb6stmt0 [label="_?3"];
     bb5stmt0 -> bb6stmt1 [label="_?2"];
-    bb6stmt1 -> bb9stmt0 [label="_?4"];
     bb4stmt0 -> bb9stmt0 [label="_?4"];
+    bb6stmt1 -> bb9stmt0 [label="_?4"];
 }

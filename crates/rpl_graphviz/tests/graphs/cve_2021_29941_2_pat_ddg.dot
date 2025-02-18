@@ -136,8 +136,8 @@ subgraph cluster_bb13 {
     bb12OUT -> bb7IN [label="goto"];
     bb0stmt1 -> bb1stmt0 [label="_?1"];
     bb1stmt0 -> bb2stmt0 [label="_?2"];
-    bb0stmt1 -> bb3stmt0 [label="_?1"];
     bb2stmt1 -> bb3stmt0 [label="_?4"];
+    bb0stmt1 -> bb3stmt0 [label="_?1"];
     bb5stmt0 -> bb6stmt0 [label="_?7"];
     bb1stmt0 -> bb7stmt0 [label="_?2"];
     bb0stmt1 -> bb7stmt1 [label="_?1"];
@@ -145,6 +145,6 @@ subgraph cluster_bb13 {
     bb8stmt0 -> bb9stmt0 [label="_?9"];
     bb6stmt0 -> bb11stmt0 [label="_?8"];
     bb6stmt0 -> bb11stmt1 [label="_?8"];
-    bb11stmt3 -> bb11stmt3 [label="_?5"];
     bb3stmt0 -> bb11stmt3 [label="_?5"];
+    bb11stmt3 -> bb11stmt3 [label="_?5"];
 }
