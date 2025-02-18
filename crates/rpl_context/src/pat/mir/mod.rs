@@ -2,12 +2,12 @@ use core::iter::IntoIterator;
 use std::ops::Index;
 
 use either::Either;
+use rustc_abi::FieldIdx;
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_hir::Target;
 use rustc_index::IndexVec;
 use rustc_middle::mir;
 use rustc_span::Symbol;
-use rustc_abi::FieldIdx;
 
 mod pretty;
 pub mod visitor;

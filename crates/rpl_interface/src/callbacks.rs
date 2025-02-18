@@ -113,11 +113,7 @@ impl rustc_driver::Callbacks for RplCallbacks {
         config.opts.unstable_opts.flatten_format_args = false;
     }
 
-    fn after_analysis<'tcx>(
-        &mut self,
-        _compiler: &interface::Compiler,
-        tcx: TyCtxt<'tcx>,
-    ) -> rustc_driver::Compilation {
+    fn after_analysis(&mut self, _compiler: &interface::Compiler, tcx: TyCtxt<'_>) -> rustc_driver::Compilation {
         PatternCtxt::entered(|pcx| rpl_driver::check_crate(tcx, pcx));
         /*
         queries.global_ctxt().unwrap().enter(|tcx| {

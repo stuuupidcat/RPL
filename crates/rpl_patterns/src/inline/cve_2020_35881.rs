@@ -32,7 +32,7 @@ pub mod const_const_Transmute_ver {
         #[instrument(level = "debug", skip_all, fields(?item.owner_id))]
         fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
             match item.kind {
-                hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn{..} => {},
+                hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn { .. } => {},
                 _ => return,
             }
             intravisit::walk_item(self, item);
@@ -136,7 +136,7 @@ pub mod mut_mut_Transmute_ver {
         #[instrument(level = "debug", skip_all, fields(?item.owner_id))]
         fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
             match item.kind {
-                hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn{..} => {},
+                hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn { .. } => {},
                 _ => return,
             }
             intravisit::walk_item(self, item);
@@ -241,7 +241,7 @@ pub mod mut_const_PtrToPtr_ver {
         #[instrument(level = "debug", skip_all, fields(?item.owner_id))]
         fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
             match item.kind {
-                hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn{..} => {},
+                hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn { .. } => {},
                 _ => return,
             }
             intravisit::walk_item(self, item);

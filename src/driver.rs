@@ -99,7 +99,7 @@ pub fn main() {
 
     rustc_driver::init_logger(&early_dcx, logger_config());
 
-    let using_internal_features = rustc_driver::install_ice_hook(BUG_REPORT_URL, |handler| {
+    rustc_driver::install_ice_hook(BUG_REPORT_URL, |handler| {
         // FIXME: this macro calls unwrap internally but is called in a panicking context!  It's not
         // as simple as moving the call from the hook to main, because `install_ice_hook` doesn't
         // accept a generic closure.
@@ -212,13 +212,13 @@ pub fn main() {
         if rpl_enabled {
             args.extend(rpl_args);
             /* rustc_driver::RunCompiler::new(&args, &mut RplCallbacks::new(rpl_args_var))
-                .set_using_internal_features(using_internal_features)
-                .run() */
+            .set_using_internal_features(using_internal_features)
+            .run() */
             rustc_driver::run_compiler(&args, &mut RplCallbacks::new(rpl_args_var))
         } else {
             /* rustc_driver::RunCompiler::new(&args, &mut RustcCallbacks::new(rpl_args_var))
-                .set_using_internal_features(using_internal_features)
-                .run() */
+            .set_using_internal_features(using_internal_features)
+            .run() */
             rustc_driver::run_compiler(&args, &mut RustcCallbacks::new(rpl_args_var))
         }
     }))
