@@ -30,7 +30,7 @@ pub mod u8_to_t {
 
         fn visit_item(&mut self, i: &'tcx rustc_hir::Item<'tcx>) -> Self::Result {
             match i.kind {
-                hir::ItemKind::Fn{..} => {},
+                hir::ItemKind::Fn { .. } => {},
                 _ => return,
             }
             intravisit::walk_item(self, i);
@@ -85,7 +85,8 @@ pub mod u8_to_t {
                 let $to_vec_len: usize = Div(move $from_vec_len, move $size_of_t2);
                 let $to_vec_ptr: *mut $T = copy $from_vec_mut_ptr as *mut $T (PtrToPtr);
                 #[export(from_raw_parts)]
-                let $ret: VecT = std::vec::Vec::from_raw_parts(move $to_vec_ptr, copy $to_vec_capacity, copy $to_vec_len);
+                let $ret: VecT =
+                    std::vec::Vec::from_raw_parts(move $to_vec_ptr, copy $to_vec_capacity, copy $to_vec_len);
             }
         };
         let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
@@ -130,7 +131,7 @@ pub mod t_to_u8 {
 
         fn visit_item(&mut self, i: &'tcx rustc_hir::Item<'tcx>) -> Self::Result {
             match i.kind {
-                hir::ItemKind::Fn{..} => {},
+                hir::ItemKind::Fn { .. } => {},
                 _ => return,
             }
             intravisit::walk_item(self, i);
@@ -168,7 +169,7 @@ pub mod t_to_u8 {
         let pattern = rpl! {
             #[meta($T:ty)]
             fn $pattern(..) -> _ = mir! {
-                
+
                 type VecT = std::vec::Vec::<$T>;
                 type VecU8 = std::vec::Vec::<u8>;
 
@@ -185,18 +186,19 @@ pub mod t_to_u8 {
                 let $from_vec_len: usize = std::vec::Vec::len(move $from_vec_borrow2);
                 let $size_of_t2: usize = std::mem::size_of::<$T>();
                 let $to_vec_len: usize = Mul(move $from_vec_len, move $size_of_t2);
-                
+
                 /* Part2 */
                 let $from_vec_borrow1: &VecT = &$from_vec;
                 let $from_vec_capacity: usize = std::vec::Vec::capacity(move $from_vec_borrow1);
                 let $size_of_t1: usize = std::mem::size_of::<$T>();
                 let $to_vec_capacity: usize = Mul(move $from_vec_capacity, move $size_of_t1);
 
-                
-                
+
+
                 let $to_vec_ptr: *mut u8 = copy $from_vec_mut_ptr as *mut u8 (PtrToPtr);
                 #[export(from_raw_parts)]
-                let $ret: VecU8 = std::vec::Vec::from_raw_parts(move $to_vec_ptr, copy $to_vec_capacity, copy $to_vec_len); 
+                let $ret: VecU8 =
+                    std::vec::Vec::from_raw_parts(move $to_vec_ptr, copy $to_vec_capacity, copy $to_vec_len);
             }
         };
         let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

@@ -822,7 +822,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             (&pat::Operand::Copy(place_pat), &mir::Operand::Move(place))
             | (&pat::Operand::Move(place_pat), &mir::Operand::Copy(place)) => {
                 let ty = place.ty(self.body, self.ty.tcx).ty;
-                let is_copy = ty.is_copy_modulo_regions(self.ty.tcx, self.ty.param_env);
+                let is_copy = self.ty.tcx.type_is_copy_modulo_regions(self.ty.typing_env, ty);
                 trace!(?is_copy, ?ty, "match_operand is_copy");
                 is_copy && self.match_place_ref(place_pat, place.as_ref())
             },

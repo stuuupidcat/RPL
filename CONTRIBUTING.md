@@ -4,6 +4,8 @@ First, use `cargo install --path .` in current directory to install RPL as a car
 
 Then, use `cargo rpl +nightly-2025-02-14` to run RPL in your own repository to detect errors, where `+nightly-2025-02-14` is the current toolchain RPL is using. You may upate this argument if RPL is switched into a new toolchain.
 
+> Every three months (or so), the toolchain will be updated to the latest nightly version. You can check the current toolchain by running `rustc -V` in the RPL repository.
+
 # Tests
 
 -   Use `cargo tests` (short for `cargo test --all`) to run all tests.
