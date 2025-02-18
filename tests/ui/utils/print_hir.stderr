@@ -1,4 +1,4 @@
-note: HirId(DefId(0:3 ~ print_hir[8100]::{use#1}).0) (`use std::sync::Arc;`)
+note: HirId(DefId(0:3 ~ print_hir[654a]::{use#1}).0) (`use std::sync::Arc;`)
   --> tests/ui/utils/print_hir.rs:7:5
    |
 LL | #[rpl::print_hir]
@@ -7,7 +7,7 @@ LL | #[rpl::print_hir]
 LL | use std::sync::Arc;
    |     ^^^^^^^^^^^^^^
 
-note: HirId(DefId(0:4 ~ print_hir[8100]::m).0) (`mod m {
+note: HirId(DefId(0:4 ~ print_hir[654a]::m).0) (`mod m {
           fn foo() { }
       }`)
   --> tests/ui/utils/print_hir.rs:10:1
@@ -17,7 +17,7 @@ LL | #[rpl::print_hir]
 LL | mod m {
    | ^^^^^
 
-note: HirId(DefId(0:6 ~ print_hir[8100]::Foo).0) (`trait Foo {
+note: HirId(DefId(0:6 ~ print_hir[654a]::Foo).0) (`trait Foo {
           const
           N:
           usize;
@@ -29,7 +29,7 @@ LL | #[rpl::print_hir]
 LL | trait Foo {
    | ^^^^^^^^^
 
-note: HirId(DefId(0:7 ~ print_hir[8100]::Foo::N).0) (`const N: usize;`)
+note: HirId(DefId(0:7 ~ print_hir[654a]::Foo::N).0) (`const N: usize;`)
   --> tests/ui/utils/print_hir.rs:19:5
    |
 LL |     #[rpl::print_hir]
@@ -37,7 +37,7 @@ LL |     #[rpl::print_hir]
 LL |     const N: usize;
    |     ^^^^^^^^^^^^^^
 
-note: HirId(DefId(0:8 ~ print_hir[8100]::{impl#0}).0) (`impl Foo for () {
+note: HirId(DefId(0:8 ~ print_hir[654a]::{impl#0}).0) (`impl Foo for () {
           const
           N:
           usize
@@ -51,7 +51,7 @@ LL | #[rpl::print_hir]
 LL | impl Foo for () {
    | ^^^^^^^^^^^^^^^
 
-note: HirId(DefId(0:9 ~ print_hir[8100]::{impl#0}::N).0) (`const N: usize = 0usize;`)
+note: HirId(DefId(0:9 ~ print_hir[654a]::{impl#0}::N).0) (`const N: usize = 0usize;`)
   --> tests/ui/utils/print_hir.rs:26:5
    |
 LL |     #[rpl::print_hir]
@@ -59,7 +59,7 @@ LL |     #[rpl::print_hir]
 LL |     const N: usize = 0_usize;
    |     ^^^^^^^^^^^^^^
 
-note: HirId(DefId(0:10 ~ print_hir[8100]::main).0) (`fn main() {
+note: HirId(DefId(0:10 ~ print_hir[654a]::main).0) (`fn main() {
           let x = Arc::new(0usize);
           fn foo() { { } }
           if true { } else { }
@@ -82,7 +82,7 @@ LL | #[rpl::print_hir]
 LL | fn main() {
    | ^^^^^^^^^
 
-note: HirId(DefId(0:10 ~ print_hir[8100]::main).1) (`let x = Arc::new(0usize);`)
+note: HirId(DefId(0:10 ~ print_hir[654a]::main).2) (`let x = Arc::new(0usize);`)
   --> tests/ui/utils/print_hir.rs:33:5
    |
 LL |     #[rpl::print_hir]
@@ -90,7 +90,7 @@ LL |     #[rpl::print_hir]
 LL |     let x = Arc::new(0_usize);
    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-note: HirId(DefId(0:11 ~ print_hir[8100]::main::foo).0) (`fn foo() { { } }`)
+note: HirId(DefId(0:11 ~ print_hir[654a]::main::foo).0) (`fn foo() { { } }`)
   --> tests/ui/utils/print_hir.rs:36:5
    |
 LL |     #[rpl::print_hir]
@@ -98,7 +98,7 @@ LL |     #[rpl::print_hir]
 LL |     fn foo() {
    |     ^^^^^^^^
 
-note: HirId(DefId(0:11 ~ print_hir[8100]::main::foo).1) (`{ }`)
+note: HirId(DefId(0:11 ~ print_hir[654a]::main::foo).2) (`{ }`)
   --> tests/ui/utils/print_hir.rs:39:9
    |
 LL |         #[rpl::print_hir]
@@ -106,7 +106,7 @@ LL |         #[rpl::print_hir]
 LL |         {}
    |         ^^
 
-note: HirId(DefId(0:10 ~ print_hir[8100]::main).11) (expr `if true {
+note: HirId(DefId(0:10 ~ print_hir[654a]::main).12) (expr `if true {
 
           } else {
           }`)
@@ -120,7 +120,7 @@ LL | |     } else {
 LL | |     }
    | |_____^
 
-note: HirId(DefId(0:10 ~ print_hir[8100]::main).19) (`std::thread::spawn(move ||
+note: HirId(DefId(0:10 ~ print_hir[654a]::main).20) (`std::thread::spawn(move ||
               {
                   {
                       ::std::io::_print(format_arguments::new_v1(&["", "\n"],
@@ -137,7 +137,7 @@ LL | |         println!("{x}");
 LL | |     });
    | |______^
 
-note: HirId(DefId(0:13 ~ print_hir[8100]::main::mac).0) (`macro_rules! mac { () => { #[rpl::print_hir] println!("test"); }; }`)
+note: HirId(DefId(0:13 ~ print_hir[654a]::main::mac).0) (`macro_rules! mac { () => { #[rpl::print_hir] println!("test"); }; }`)
   --> tests/ui/utils/print_hir.rs:55:5
    |
 LL |     #[rpl::print_hir]

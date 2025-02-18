@@ -31,7 +31,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         match item.kind {
             hir::ItemKind::Trait(hir::IsAuto::No, hir::Safety::Safe, ..)
             | hir::ItemKind::Impl(_)
-            | hir::ItemKind::Fn{..} => {},
+            | hir::ItemKind::Fn { .. } => {},
             _ => return,
         }
         intravisit::walk_item(self, item);
@@ -168,9 +168,8 @@ fn pattern_uninitialized_slice_inlined(pcx: PatCtxt<'_>) -> PatternFromRawParts<
             // #[export(ptr)]
             // let ptr: *const $T = alloc::vec::Vec::as_ptr(move vec_ref);
             let $vec_inner_non_null: alloc::raw_vec::RawVecInner = copy (*$vec_ref).buf.inner.ptr;
-            let $vec_inner_ptr: *const u8 = copy $vec_inner_non_null.ptr;
             #[export(ptr)]
-            let $ptr: *const $T = copy $vec_inner_ptr as *const $T (PtrToPtr); //FIXME: Maybe duplicate if `$T` is `u8`
+            let $ptr: *const $T = copy $vec_inner_non_null as *const $T (Transmute);
 
             // let slice: &[$T] = std::slice::from_raw_parts::<'_, $T>(move ptr, copy len);
             let $slice_ptr: *const [$T] = *const [$T] from (copy $ptr, copy $len);
@@ -216,9 +215,8 @@ fn pattern_uninitialized_slice_mut_inlined(pcx: PatCtxt<'_>) -> PatternFromRawPa
             // #[export(ptr)]
             // let ptr: *mut $T = alloc::vec::Vec::as_ptr(move vec_ref);
             let $vec_inner_non_null: std::ptr::NonNull<u8> = copy (*$vec_ref).buf.inner.ptr.pointer;
-            let $vec_inner_ptr: *const u8 = copy $vec_inner_non_null.pointer;
             #[export(ptr)]
-            let $ptr: *mut $T = copy $vec_inner_ptr as *mut $T (PtrToPtr);
+            let $ptr: *mut $T = copy $vec_inner_non_null as *mut $T (Transmute);
 
             // #[export(slice)]
             // let slice: &mut [$T] = std::slice::from_raw_parts_mut::<'_, $T>(move ptr, copy len);

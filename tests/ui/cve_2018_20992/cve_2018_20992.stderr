@@ -1,5 +1,17 @@
+error: Use `Vec::set_len` to truncate the length of a `Vec`
+  --> tests/ui/cve_2018_20992/cve_2018_20992.rs:3:8
+   |
+LL |     if buffer.len() < new_len {
+   |        ^^^^^^^^^^^^^^^^^^^^^^
+   |
+help: Consider using `Vec::truncate` instead
+  --> tests/ui/cve_2018_20992/cve_2018_20992.rs:3:8
+   |
+LL |     if buffer.len() < new_len {
+   |        ^^^^^^^^^^^^^^^^^^^^^^
+
 error: Use `Vec::set_len` to extend the length of a `Vec`, potentially including uninitialized elements
-  --> tests/ui/cve_2018_20992/cve_2018_20992.rs:7:20
+  --> tests/ui/cve_2018_20992/cve_2018_20992.rs:9:20
    |
 LL | pub fn ensure_buffer_len(mut buffer: Vec<i32>, new_len: usize) -> Vec<i32> {
    |                          ---------- `Vec` created here
@@ -10,7 +22,7 @@ LL |             buffer.set_len(new_len);
    = note: make sure all elements are initialized before using them
 
 error: Use `Vec::set_len` to extend the length of a `Vec`, potentially including uninitialized elements
-  --> tests/ui/cve_2018_20992/cve_2018_20992.rs:7:20
+  --> tests/ui/cve_2018_20992/cve_2018_20992.rs:9:20
    |
 LL |             buffer = Vec::with_capacity(new_len);
    |             ------ `Vec` created here
@@ -20,5 +32,16 @@ LL |             buffer.set_len(new_len);
    |
    = note: make sure all elements are initialized before using them
 
-error: aborting due to 2 previous errors
+error: Use `Vec::set_len` to extend the length of a `Vec`, potentially including uninitialized elements
+  --> tests/ui/cve_2018_20992/cve_2018_20992.rs:14:16
+   |
+LL | pub fn ensure_buffer_len(mut buffer: Vec<i32>, new_len: usize) -> Vec<i32> {
+   |                          ---------- `Vec` created here
+...
+LL |         buffer.truncate(new_len);
+   |                ^^^^^^^^^^^^^^^^^
+   |
+   = note: make sure all elements are initialized before using them
+
+error: aborting due to 4 previous errors
 

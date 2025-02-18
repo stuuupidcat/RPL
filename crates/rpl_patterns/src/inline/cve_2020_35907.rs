@@ -95,10 +95,9 @@ fn pattern_thread_local_static(pcx: PatCtxt<'_>) -> PatternThreadLocalStatic<'_>
         fn $pattern(..) -> &'static $T = mir! {
             #[export(thread_local)]
             let $local_key: &std::thread::LocalKey::<std::cell::UnsafeCell<$T>> = _;
-            let $result: core::result::Result<&$T, _> =
-                std::thread::LocalKey::<std::cell::UnsafeCell<$T>>::try_with::<_, _>(move $local_key, _);
             #[export(ret)]
-            let $RET: &$T = core::result::Result::expect(move $result, _);
+            let $RET: &T =
+                std::thread::LocalKey::<std::cell::UnsafeCell<$T>>::with::<_, _>(move $local_key, _);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
@@ -117,5 +116,10 @@ fn is_sync<'tcx>(tcx: TyCtxt<'tcx>, typing_env: ty::TypingEnv<'tcx>, ty: Ty<'tcx
     use rustc_infer::infer::TyCtxtInferExt;
     let infcx = tcx.infer_ctxt().build(TypingMode::PostAnalysis);
     let trait_def_id = tcx.require_lang_item(hir::LangItem::Sync, None);
-    rustc_trait_selection::traits::type_known_to_meet_bound_modulo_regions(&infcx, typing_env.param_env, ty, trait_def_id)
+    rustc_trait_selection::traits::type_known_to_meet_bound_modulo_regions(
+        &infcx,
+        typing_env.param_env,
+        ty,
+        trait_def_id,
+    )
 }

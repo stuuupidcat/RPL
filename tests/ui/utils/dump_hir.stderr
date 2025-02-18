@@ -134,6 +134,7 @@ note: TraitItem(
               kind: Const(
                   Ty {
                       hir_id: HirId(DefId(dump_hir::Foo::N).1),
+                      span: tests/ui/utils/dump_hir.rs:21:14: 21:19 (#0),
                       kind: Path(
                           Resolved(
                               None,
@@ -160,7 +161,6 @@ note: TraitItem(
                               },
                           ),
                       ),
-                      span: tests/ui/utils/dump_hir.rs:21:14: 21:19 (#0),
                   },
                   None,
               ),
@@ -221,10 +221,10 @@ note: Item(
                       ),
                       self_ty: Ty {
                           hir_id: HirId(DefId(dump_hir::{impl#0}).3),
+                          span: tests/ui/utils/dump_hir.rs:25:14: 25:16 (#0),
                           kind: Tup(
                               [],
                           ),
-                          span: tests/ui/utils/dump_hir.rs:25:14: 25:16 (#0),
                       },
                       items: [
                           ImplItemRef {
@@ -266,6 +266,7 @@ note: ImplItem(
               kind: Const(
                   Ty {
                       hir_id: HirId(DefId(dump_hir::{impl#0}::N).1),
+                      span: tests/ui/utils/dump_hir.rs:28:14: 28:19 (#0),
                       kind: Path(
                           Resolved(
                               None,
@@ -292,7 +293,6 @@ note: ImplItem(
                               },
                           ),
                       ),
-                      span: tests/ui/utils/dump_hir.rs:28:14: 28:19 (#0),
                   },
                   BodyId {
                       hir_id: HirId(DefId(dump_hir::{impl#0}::N).3),
@@ -314,10 +314,12 @@ note: Item(
           Item {
               ident: main#0,
               owner_id: DefId(dump_hir::main),
-              kind: Fn(
-                  FnSig {
+              kind: Fn {
+                  sig: FnSig {
                       header: FnHeader {
-                          safety: Safe,
+                          safety: Normal(
+                              Safe,
+                          ),
                           constness: NotConst,
                           asyncness: NotAsync,
                           abi: Rust,
@@ -333,17 +335,18 @@ note: Item(
                       },
                       span: tests/ui/utils/dump_hir.rs:32:1: 32:10 (#0),
                   },
-                  Generics {
+                  generics: Generics {
                       params: [],
                       predicates: [],
                       has_where_clause_predicates: false,
                       where_clause_span: tests/ui/utils/dump_hir.rs:32:10: 32:10 (#0),
                       span: tests/ui/utils/dump_hir.rs:32:8: 32:8 (#0),
                   },
-                  BodyId {
+                  body: BodyId {
                       hir_id: HirId(DefId(dump_hir::main).75),
                   },
-              ),
+                  has_body: true,
+              },
               span: tests/ui/utils/dump_hir.rs:32:1: 67:2 (#0),
               vis_span: tests/ui/utils/dump_hir.rs:32:1: 32:1 (#0),
           },
@@ -357,17 +360,17 @@ LL | fn main() {
 
 note: Stmt(
           Stmt {
-              hir_id: HirId(DefId(dump_hir::main).1),
+              hir_id: HirId(DefId(dump_hir::main).2),
               kind: Let(
                   LetStmt {
                       pat: Pat {
-                          hir_id: HirId(DefId(dump_hir::main).9),
+                          hir_id: HirId(DefId(dump_hir::main).10),
                           kind: Binding(
                               BindingMode(
                                   No,
                                   Not,
                               ),
-                              HirId(DefId(dump_hir::main).9),
+                              HirId(DefId(dump_hir::main).10),
                               x#0,
                               None,
                           ),
@@ -377,14 +380,15 @@ note: Stmt(
                       ty: None,
                       init: Some(
                           Expr {
-                              hir_id: HirId(DefId(dump_hir::main).2),
+                              hir_id: HirId(DefId(dump_hir::main).3),
                               kind: Call(
                                   Expr {
-                                      hir_id: HirId(DefId(dump_hir::main).3),
+                                      hir_id: HirId(DefId(dump_hir::main).4),
                                       kind: Path(
                                           TypeRelative(
                                               Ty {
-                                                  hir_id: HirId(DefId(dump_hir::main).5),
+                                                  hir_id: HirId(DefId(dump_hir::main).6),
+                                                  span: tests/ui/utils/dump_hir.rs:35:13: 35:16 (#0),
                                                   kind: Path(
                                                       Resolved(
                                                           None,
@@ -397,7 +401,7 @@ note: Stmt(
                                                               segments: [
                                                                   PathSegment {
                                                                       ident: Arc#0,
-                                                                      hir_id: HirId(DefId(dump_hir::main).4),
+                                                                      hir_id: HirId(DefId(dump_hir::main).5),
                                                                       res: Def(
                                                                           Struct,
                                                                           DefId(alloc::sync::Arc),
@@ -409,11 +413,10 @@ note: Stmt(
                                                           },
                                                       ),
                                                   ),
-                                                  span: tests/ui/utils/dump_hir.rs:35:13: 35:16 (#0),
                                               },
                                               PathSegment {
                                                   ident: new#0,
-                                                  hir_id: HirId(DefId(dump_hir::main).6),
+                                                  hir_id: HirId(DefId(dump_hir::main).7),
                                                   res: Err,
                                                   args: None,
                                                   infer_args: true,
@@ -424,7 +427,7 @@ note: Stmt(
                                   },
                                   [
                                       Expr {
-                                          hir_id: HirId(DefId(dump_hir::main).7),
+                                          hir_id: HirId(DefId(dump_hir::main).8),
                                           kind: Lit(
                                               Spanned {
                                                   node: Int(
@@ -446,7 +449,7 @@ note: Stmt(
                           },
                       ),
                       els: None,
-                      hir_id: HirId(DefId(dump_hir::main).8),
+                      hir_id: HirId(DefId(dump_hir::main).9),
                       span: tests/ui/utils/dump_hir.rs:35:5: 35:31 (#0),
                       source: Normal,
                   },
@@ -465,10 +468,12 @@ note: Item(
           Item {
               ident: foo#0,
               owner_id: DefId(dump_hir::main::foo),
-              kind: Fn(
-                  FnSig {
+              kind: Fn {
+                  sig: FnSig {
                       header: FnHeader {
-                          safety: Safe,
+                          safety: Normal(
+                              Safe,
+                          ),
                           constness: NotConst,
                           asyncness: NotAsync,
                           abi: Rust,
@@ -484,17 +489,18 @@ note: Item(
                       },
                       span: tests/ui/utils/dump_hir.rs:38:5: 38:13 (#0),
                   },
-                  Generics {
+                  generics: Generics {
                       params: [],
                       predicates: [],
                       has_where_clause_predicates: false,
                       where_clause_span: tests/ui/utils/dump_hir.rs:38:13: 38:13 (#0),
                       span: tests/ui/utils/dump_hir.rs:38:11: 38:11 (#0),
                   },
-                  BodyId {
+                  body: BodyId {
                       hir_id: HirId(DefId(dump_hir::main::foo).4),
                   },
-              ),
+                  has_body: true,
+              },
               span: tests/ui/utils/dump_hir.rs:38:5: 42:6 (#0),
               vis_span: tests/ui/utils/dump_hir.rs:38:5: 38:5 (#0),
           },
@@ -508,12 +514,12 @@ LL |     fn foo() {
 
 note: Expr(
           Expr {
-              hir_id: HirId(DefId(dump_hir::main::foo).1),
+              hir_id: HirId(DefId(dump_hir::main::foo).2),
               kind: Block(
                   Block {
                       stmts: [],
                       expr: None,
-                      hir_id: HirId(DefId(dump_hir::main::foo).2),
+                      hir_id: HirId(DefId(dump_hir::main::foo).3),
                       rules: DefaultBlock,
                       span: tests/ui/utils/dump_hir.rs:41:9: 41:11 (#0),
                       targeted_by_break: false,
@@ -532,13 +538,13 @@ LL |         {}
 
 note: Expr(
           Expr {
-              hir_id: HirId(DefId(dump_hir::main).11),
+              hir_id: HirId(DefId(dump_hir::main).12),
               kind: If(
                   Expr {
-                      hir_id: HirId(DefId(dump_hir::main).13),
+                      hir_id: HirId(DefId(dump_hir::main).14),
                       kind: DropTemps(
                           Expr {
-                              hir_id: HirId(DefId(dump_hir::main).12),
+                              hir_id: HirId(DefId(dump_hir::main).13),
                               kind: Lit(
                                   Spanned {
                                       node: Bool(
@@ -553,12 +559,12 @@ note: Expr(
                       span: tests/ui/utils/dump_hir.rs:45:8: 45:12 (#11),
                   },
                   Expr {
-                      hir_id: HirId(DefId(dump_hir::main).15),
+                      hir_id: HirId(DefId(dump_hir::main).16),
                       kind: Block(
                           Block {
                               stmts: [],
                               expr: None,
-                              hir_id: HirId(DefId(dump_hir::main).14),
+                              hir_id: HirId(DefId(dump_hir::main).15),
                               rules: DefaultBlock,
                               span: tests/ui/utils/dump_hir.rs:45:13: 47:6 (#0),
                               targeted_by_break: false,
@@ -569,12 +575,12 @@ note: Expr(
                   },
                   Some(
                       Expr {
-                          hir_id: HirId(DefId(dump_hir::main).16),
+                          hir_id: HirId(DefId(dump_hir::main).17),
                           kind: Block(
                               Block {
                                   stmts: [],
                                   expr: None,
-                                  hir_id: HirId(DefId(dump_hir::main).17),
+                                  hir_id: HirId(DefId(dump_hir::main).18),
                                   rules: DefaultBlock,
                                   span: tests/ui/utils/dump_hir.rs:47:12: 48:6 (#0),
                                   targeted_by_break: false,
@@ -600,10 +606,10 @@ LL | |     }
 
 note: Expr(
           Expr {
-              hir_id: HirId(DefId(dump_hir::main).19),
+              hir_id: HirId(DefId(dump_hir::main).20),
               kind: Call(
                   Expr {
-                      hir_id: HirId(DefId(dump_hir::main).20),
+                      hir_id: HirId(DefId(dump_hir::main).21),
                       kind: Path(
                           Resolved(
                               None,
@@ -616,7 +622,7 @@ note: Expr(
                                   segments: [
                                       PathSegment {
                                           ident: std#0,
-                                          hir_id: HirId(DefId(dump_hir::main).21),
+                                          hir_id: HirId(DefId(dump_hir::main).22),
                                           res: Def(
                                               Mod,
                                               DefId(std),
@@ -626,7 +632,7 @@ note: Expr(
                                       },
                                       PathSegment {
                                           ident: thread#0,
-                                          hir_id: HirId(DefId(dump_hir::main).22),
+                                          hir_id: HirId(DefId(dump_hir::main).23),
                                           res: Def(
                                               Mod,
                                               DefId(std::thread),
@@ -636,7 +642,7 @@ note: Expr(
                                       },
                                       PathSegment {
                                           ident: spawn#0,
-                                          hir_id: HirId(DefId(dump_hir::main).23),
+                                          hir_id: HirId(DefId(dump_hir::main).24),
                                           res: Def(
                                               Fn,
                                               DefId(std::thread::spawn),
@@ -652,7 +658,7 @@ note: Expr(
                   },
                   [
                       Expr {
-                          hir_id: HirId(DefId(dump_hir::main).24),
+                          hir_id: HirId(DefId(dump_hir::main).25),
                           kind: Closure(
                               Closure {
                                   def_id: DefId(dump_hir::main::{closure#0}),
@@ -672,7 +678,7 @@ note: Expr(
                                       lifetime_elision_allowed: false,
                                   },
                                   body: BodyId {
-                                      hir_id: HirId(DefId(dump_hir::main).25),
+                                      hir_id: HirId(DefId(dump_hir::main).26),
                                   },
                                   fn_decl_span: tests/ui/utils/dump_hir.rs:51:24: 51:31 (#0),
                                   fn_arg_span: Some(
