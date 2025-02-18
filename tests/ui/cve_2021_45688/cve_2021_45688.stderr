@@ -20,5 +20,19 @@ LL |         result.set_len(words);
    |
    = help: before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
 
-error: aborting due to 2 previous errors
+error: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
+  --> tests/ui/cve_2021_45688/cve_2021_45688.rs:29:21
+   |
+LL |     let mut result = Vec::<u32>::with_capacity(words);
+   |                      -------------------------------- `std::vec::Vec` created but not initialized
+...
+LL |         for word in &mut result {
+   |                     ^^^^^^^^^^^
+   |                     |
+   |                     slice created with this length
+   |                     slice created with this pointer
+   |
+   = help: See https://doc.rust-lang.org/std/slice/fn.std::slice::from_raw_parts_mut.html
+
+error: aborting due to 3 previous errors
 

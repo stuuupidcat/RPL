@@ -35,7 +35,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         match item.kind {
             hir::ItemKind::Trait(hir::IsAuto::No, hir::Safety::Safe, ..)
             | hir::ItemKind::Impl(_)
-            | hir::ItemKind::Fn{..} => {},
+            | hir::ItemKind::Fn { .. } => {},
             _ => return,
         }
         intravisit::walk_item(self, item);
@@ -99,7 +99,7 @@ fn pattern_rust_str_as_c_str_inlined(pcx: PatCtxt<'_>) -> PatternCast<'_> {
             // let bytes: &[u8] = std::string::String::as_bytes(move src);
             let $vec: &std::vec::Vec<u8> = &((*$src).vec);
             let $vec_non_null: std::ptr::NonNull<u8> = copy (*$vec).buf.inner.ptr.pointer;
-            let $vec_ptr: *const u8 = copy $vec_non_null.pointer;
+            let $vec_ptr: *const u8 = copy $vec_non_null as *const u8 (Transmute);
             let $vec_len: usize = copy ((*$vec).len);
             let $bytes_ptr: *const [u8] = *const [u8] from (copy $vec_ptr, copy $vec_len);
             let $bytes: &[u8] = &(*$bytes_ptr);

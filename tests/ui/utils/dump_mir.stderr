@@ -5,11 +5,7 @@ LL |   #[rpl::dump_mir(dump_cfg, dump_ddg)]
    |   ------------------------------------ MIR dumpped because of this attribute
 ...
 LL | / fn test() {
-LL | |
-LL | |
-LL | |
 ...  |
-LL | |     }
 LL | | }
    | |_^
    |
@@ -23,10 +19,7 @@ LL |        fn test() {
    |        ^        - _0: (); // scope[0]
    |  ______|
    | |
-LL | |
-LL | |
-LL | |
-LL | |
+...  |
 LL | |          let mut arr: [u8; 20] = [1; 20];
    | |          -   ------- _1: [u8; 20]; // scope[0]
    | | _________|
@@ -48,22 +41,17 @@ LL | |||        for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
    | |||  |     |   |    _9: &mut std::iter::Filter<std::iter::Map<std::ops::Range<usize>, {closure@tests/ui/utils/dump_mir.rs:18:26: 18:29}>, {closure@tests/ui/utils/dump_mir.rs:18:44: 18:48}>; // scope[0]
    | |||  |_____|   _11: usize; // scope[3]
    | ||| ||
-LL | ||| ||
-LL | ||| ||
-LL | ||| ||
 ...  ||| ||
 LL | ||| ||         arr[i] = arr[j];
    | ||| ||         ------   ------
    | ||| ||         |        |   |
    | ||| ||         |        |   _13: usize; // scope[0]
    | ||| ||         |        _12: u8; // scope[0]
-   | ||| ||         |        _14: usize; // scope[0]
-   | ||| ||         |        _15: bool; // scope[0]
-   | ||| ||         _16: usize; // scope[0]
-   | ||| ||         _17: bool; // scope[0]
+   | ||| ||         |        _14: bool; // scope[0]
+   | ||| ||         _15: bool; // scope[0]
 ...  ||| ||
 LL | ||| ||         j = j + 1;
-   | ||| ||             - _18: usize; // scope[0]
+   | ||| ||             - _16: usize; // scope[0]
 LL | ||| ||     }
    | ||| ||     -
    | ||| ||     |
@@ -118,9 +106,6 @@ LL |       for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
    |       ^        ------------------------------------------ _7 = move _3; // scope[2]
    |  _____|
    | |
-LL | |
-LL | |
-LL | |
 ...  |
 LL | |         j = j + 1;
 LL | |     }
@@ -157,9 +142,8 @@ LL |     for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
 note: bb7: {
           _11 = copy ((_8 as Some).0: usize); // scope[3]
           _13 = copy _2; // scope[4]
-          _14 = const 20_usize; // scope[4]
-          _15 = Lt(copy _13, copy _14); // scope[4]
-          assert(move _15, "index out of bounds: the length is {} but the index is {}", move _14, copy _13) -> [success: bb9, unwind continue]; // scope[4]
+          _14 = Lt(copy _13, const 20_usize); // scope[4]
+          assert(move _14, "index out of bounds: the length is {} but the index is {}", const 20_usize, copy _13) -> [success: bb9, unwind continue]; // scope[4]
       }
   --> tests/ui/utils/dump_mir.rs:28:18
    |
@@ -170,9 +154,8 @@ LL |         arr[i] = arr[j];
    |                  ^^^^-^
    |                  |   |
    |                  |   _13 = copy _2; // scope[4]
-   |                  _14 = const 20_usize; // scope[4]
-   |                  _15 = Lt(copy _13, copy _14); // scope[4]
-   |                  assert(move _15, "index out of bounds: the length is {} but the index is {}", move _14, copy _13) -> [success: bb9, unwind continue]; // scope[4]
+   |                  _14 = Lt(copy _13, const 20_usize); // scope[4]
+   |                  assert(move _14, "index out of bounds: the length is {} but the index is {}", const 20_usize, copy _13) -> [success: bb9, unwind continue]; // scope[4]
 note: bb8: {
           return; // scope[0]
       }
@@ -182,30 +165,25 @@ LL | }
    |  ^ return; // scope[0]
 note: bb9: {
           _12 = copy _1[_13]; // scope[4]
-          _16 = const 20_usize; // scope[4]
-          _17 = Lt(copy _11, copy _16); // scope[4]
-          assert(move _17, "index out of bounds: the length is {} but the index is {}", move _16, copy _11) -> [success: bb10, unwind continue]; // scope[4]
+          _15 = Lt(copy _11, const 20_usize); // scope[4]
+          assert(move _15, "index out of bounds: the length is {} but the index is {}", const 20_usize, copy _11) -> [success: bb10, unwind continue]; // scope[4]
       }
   --> tests/ui/utils/dump_mir.rs:28:9
    |
 LL |         arr[i] = arr[j];
    |         ^^^^^^   ------ _12 = copy _1[_13]; // scope[4]
    |         |
-   |         _16 = const 20_usize; // scope[4]
-   |         _17 = Lt(copy _11, copy _16); // scope[4]
-   |         assert(move _17, "index out of bounds: the length is {} but the index is {}", move _16, copy _11) -> [success: bb10, unwind continue]; // scope[4]
+   |         _15 = Lt(copy _11, const 20_usize); // scope[4]
+   |         assert(move _15, "index out of bounds: the length is {} but the index is {}", const 20_usize, copy _11) -> [success: bb10, unwind continue]; // scope[4]
 note: bb10: {
           _1[_11] = move _12; // scope[4]
-          _18 = copy _2; // scope[4]
-          _2 = Add(move _18, const 1_usize); // scope[4]
+          _16 = copy _2; // scope[4]
+          _2 = Add(move _16, const 1_usize); // scope[4]
           goto -> bb4; // scope[3]
       }
   --> tests/ui/utils/dump_mir.rs:18:5
    |
 LL | /     for i in (0..10).map(|i| i * 2).filter(|&i| i < 10) {
-LL | |
-LL | |
-LL | |
 ...  |
 LL | |         arr[i] = arr[j];
    | |         --------------- _1[_11] = move _12; // scope[4]
@@ -213,8 +191,8 @@ LL | |         arr[i] = arr[j];
 LL | |         j = j + 1;
    | |         ---------
    | |         |   |
-   | |         |   _18 = copy _2; // scope[4]
-   | |         _2 = Add(move _18, const 1_usize); // scope[4]
+   | |         |   _16 = copy _2; // scope[4]
+   | |         _2 = Add(move _16, const 1_usize); // scope[4]
 LL | |     }
    | |_____^ goto -> bb4; // scope[3]
 
@@ -224,9 +202,6 @@ note: MIR of `critical`
 LL |   #[rpl::dump_mir(dump_cfg, dump_ddg)]
    |   ------------------------------------ MIR dumpped because of this attribute
 LL | / fn critical(i: i16, j: i16) -> Result<i16, ()> {
-LL | |
-LL | |
-LL | |
 ...  |
 LL | |     Ok(result)
 LL | | }
@@ -244,9 +219,6 @@ LL |     fn critical(i: i16, j: i16) -> Result<i16, ()> {
    |     |           |       _2: i16; // scope[0]
    |  ___|           _1: i16; // scope[0]
    | |
-LL | |
-LL | |
-LL | |
 ...  |
 LL | |/      let result = 0_i16;
 LL | ||      let k = 3_i16 * i + j * j;
@@ -257,8 +229,7 @@ LL | ||      let k = 3_i16 * i + j * j;
    | |||
 LL | |||     if f2() {
    | |||        ---- _6: bool; // scope[0]
-LL | |||
-LL | |||
+...  |||
 LL | |||         if k > 0 {
    | |||            ----- _7: bool; // scope[0]
 ...  |||
@@ -349,7 +320,7 @@ LL |     let _ = std::alloc::alloc;
    = note: see `./mir_dump/alloc.alloc-alloc.-------.dump_mir..mir.cfg.dot` for dumpped control flow graph
    = note: see `./mir_dump/alloc.alloc-alloc.-------.dump_mir..mir.ddg.dot` for dumpped data dependency graph
 note: locals and scopes in this MIR
-  --> $SRC_DIR/alloc/src/alloc.rs:93:1
+  --> $SRC_DIR/alloc/src/alloc.rs:90:1
    |
 LL |         pub unsafe fn alloc(layout: Layout) -> *mut u8 {
    |         ^                   ------             ------- _0: *mut u8; // scope[0]
@@ -357,8 +328,7 @@ LL |         pub unsafe fn alloc(layout: Layout) -> *mut u8 {
    |  _______|                   _1: std::alloc::Layout; // scope[0]
    | |
 LL | |           unsafe {
-LL | |               // Make sure we don't accidentally allow omitting the allocator shim in
-LL | |               // stable code until it is actually stabilized.
+...  |
 LL | |               core::ptr::read_volatile(&__rust_no_alloc_shim_is_unstable);
    | |               ----------------------------------------------------------- _2: u8; // scope[0]
 LL | |
@@ -373,7 +343,7 @@ LL | |           }
 LL | |       }
    | |_______^ scope[0]
    |
-  ::: $SRC_DIR/core/src/ptr/mod.rs:1741:1
+  ::: $SRC_DIR/core/src/ptr/mod.rs:1740:1
    |
 LL |       / pub unsafe fn read_volatile<T>(src: *const T) -> T {
 LL |       |     // SAFETY: the caller must uphold the safety contract for `volatile_load`.
@@ -385,21 +355,20 @@ LL |       |             (
 LL |       |                 addr: *const () = src as *const (),
    |       |                                   ---------------- _9: *const (); // scope[1]
 ...        |
-LL |       |             ) => ub_checks::is_aligned_and_not_null(addr, align, is_zst)
+LL |       |             ) => ub_checks::maybe_is_aligned_and_not_null(addr, align, is_zst)
 LL |       |         );
    |       |         -
    |       |_________|
    |       |__________7: bool; // scope[1]
    |                 _8: (); // scope[1]
-LL |                 intrinsics::volatile_load(src)
-LL |       |     }
+...
 LL |       | }
    |       | -
    |       |_|
    |       |_scope[1]
    |         std::ptr::read_volatile::<u8>
    |
-  ::: $SRC_DIR/core/src/alloc/layout.rs:150:5
+  ::: $SRC_DIR/core/src/alloc/layout.rs:148:5
    |
 LL |       /     pub const fn size(&self) -> usize {
 LL |       |         self.size
@@ -418,7 +387,7 @@ LL |       |     }
    |       |_____scope[6]
    |             std::alloc::Layout::align
    |
-  ::: $SRC_DIR/core/src/ptr/alignment.rs:94:5
+  ::: $SRC_DIR/core/src/ptr/alignment.rs:91:5
    |
 LL |     /       pub const fn as_usize(self) -> usize {
 LL |     |           self.0 as usize
@@ -435,27 +404,30 @@ LL |     |       }
    |     |_______scope[7]
    |             std::ptr::Alignment::as_usize
    |
-  ::: $SRC_DIR/core/src/ub_checks.rs:95:1
+  ::: $SRC_DIR/core/src/ub_checks.rs:93:1
    |
 LL |       / pub(crate) const fn check_language_ub() -> bool {
-LL |       |     #[inline]
-LL |       /     fn runtime() -> bool {
-LL |       |         // Disable UB checks in Miri.
-LL |       |         !cfg!(miri)
-LL |       |     }
-   |       |     -
-   |       |_____|
-   |       |_____scope[3]
-   |             core::ub_checks::check_language_ub::runtime
-...
-LL |       |     intrinsics::ub_checks() && const_eval_select((), comptime, runtime)
+LL |       |     // Only used for UB checks so we may const_eval_select.
+LL |       |     intrinsics::ub_checks()
+LL |                 && const_eval_select!(
+   |        ____________-
+   |        ____________|
+   |       |
+LL |       |             @capture { } -> bool:
+LL |       |             if const {
+...        |
+LL |       |         )
+   |       |         -
+   |       |_________|
+   |       |_________scope[3]
+   |                 core::ub_checks::check_language_ub::runtime
 LL |       | }
    |       | -
    |       | |
    |       |_scope[2]
    |         core::ub_checks::check_language_ub
    |
-  ::: $SRC_DIR/core/src/mem/mod.rs:467:1
+  ::: $SRC_DIR/core/src/mem/mod.rs:466:1
    |
 LL |       / pub const fn align_of<T>() -> usize {
 LL |       |     intrinsics::min_align_of::<T>()
@@ -471,23 +443,22 @@ note: bb0: {
           switchInt(move _7) -> [0: bb5, otherwise: bb3]; // scope[1]
       }
    |
-  ::: $SRC_DIR/alloc/src/alloc.rs:97:9
+  ::: $SRC_DIR/alloc/src/alloc.rs:94:9
    |
 LL |           core::ptr::read_volatile(&__rust_no_alloc_shim_is_unstable);
    |           ----------------------------------------------------------- StorageLive(_2); // scope[0]
    |
-  ::: $SRC_DIR/core/src/ub_checks.rs:109:5
+  ::: $SRC_DIR/core/src/ub_checks.rs:95:5
    |
-LL |       intrinsics::ub_checks() && const_eval_select((), comptime, runtime)
+LL |       intrinsics::ub_checks()
    |       ----------------------- _7 = UbChecks(); // scope[2]
-  --> $SRC_DIR/core/src/ptr/mod.rs:1744:9
+  --> $SRC_DIR/core/src/ptr/mod.rs:1743:9
    |
 LL | /         ub_checks::assert_unsafe_precondition!(
 LL | |             check_language_ub,
 LL | |             "ptr::read_volatile requires that the pointer argument is aligned and non-null",
-LL | |             (
 ...  |
-LL | |             ) => ub_checks::is_aligned_and_not_null(addr, align, is_zst)
+LL | |             ) => ub_checks::maybe_is_aligned_and_not_null(addr, align, is_zst)
 LL | |         );
    | |         ^
    | |         |
@@ -498,7 +469,7 @@ note: bb1: {
           StorageDead(_3); // scope[0]
           return; // scope[0]
       }
-  --> $SRC_DIR/alloc/src/alloc.rs:101:2
+  --> $SRC_DIR/alloc/src/alloc.rs:98:2
    |
 LL |         __rust_alloc(layout.size(), layout.align())
    |                                                   -
@@ -541,7 +512,7 @@ note: bb2: {
           StorageDead(_6); // scope[0]
           _0 = alloc::alloc::__rust_alloc(move _3, move _5) -> [return: bb1, unwind unreachable]; // scope[0]
       }
-  --> $SRC_DIR/alloc/src/alloc.rs:99:9
+  --> $SRC_DIR/alloc/src/alloc.rs:96:9
    |
 LL |         core::ptr::read_volatile(&__rust_no_alloc_shim_is_unstable);
    |                                                                    - StorageDead(_2); // scope[0]
@@ -559,7 +530,7 @@ LL |         __rust_alloc(layout.size(), layout.align())
    |         |            _4 = &_1; // scope[0]
    |         _0 = alloc::alloc::__rust_alloc(move _3, move _5) -> [return: bb1, unwind unreachable]; // scope[0]
    |
-  ::: $SRC_DIR/core/src/alloc/layout.rs:151:9
+  ::: $SRC_DIR/core/src/alloc/layout.rs:149:9
    |
 LL |         self.size
    |         --------- _3 = copy (_1.0: usize); // scope[5]
@@ -579,7 +550,7 @@ LL |         self.align.as_usize()
    |         StorageLive(_10); // scope[6]
    |         _10 = copy (_1.1: std::ptr::Alignment); // scope[6]
    |
-  ::: $SRC_DIR/core/src/ptr/alignment.rs:95:9
+  ::: $SRC_DIR/core/src/ptr/alignment.rs:92:9
    |
 LL |         self.0 as usize
    |         ---------------
@@ -598,7 +569,7 @@ note: bb3: {
           _9 = const {alloc2: *const u8} as *const () (PtrToPtr); // scope[1]
           _8 = std::ptr::read_volatile::precondition_check(move _9, const 1_usize, const <u8 as std::mem::SizedTypeProperties>::IS_ZST) -> [return: bb4, unwind unreachable]; // scope[1]
       }
-  --> $SRC_DIR/core/src/ptr/mod.rs:1744:9
+  --> $SRC_DIR/core/src/ptr/mod.rs:1743:9
    |
 LL | /         ub_checks::assert_unsafe_precondition!(
 LL | |             check_language_ub,
@@ -610,21 +581,20 @@ LL | |                 addr: *const () = src as *const (),
    | |                                   StorageLive(_9); // scope[1]
    | |                                   _9 = const {alloc2: *const u8} as *const () (PtrToPtr); // scope[1]
 ...  |
-LL | |             ) => ub_checks::is_aligned_and_not_null(addr, align, is_zst)
+LL | |             ) => ub_checks::maybe_is_aligned_and_not_null(addr, align, is_zst)
 LL | |         );
    | |_________^ _8 = std::ptr::read_volatile::precondition_check(move _9, const 1_usize, const <u8 as std::mem::SizedTypeProperties>::IS_ZST) -> [return: bb4, unwind unreachable]; // scope[1]
 note: bb4: {
           StorageDead(_9); // scope[1]
           goto -> bb5; // scope[1]
       }
-  --> $SRC_DIR/core/src/ptr/mod.rs:1744:9
+  --> $SRC_DIR/core/src/ptr/mod.rs:1743:9
    |
 LL | /         ub_checks::assert_unsafe_precondition!(
 LL | |             check_language_ub,
 LL | |             "ptr::read_volatile requires that the pointer argument is aligned and non-null",
-LL | |             (
 ...  |
-LL | |             ) => ub_checks::is_aligned_and_not_null(addr, align, is_zst)
+LL | |             ) => ub_checks::maybe_is_aligned_and_not_null(addr, align, is_zst)
 LL | |         );
    | |         ^
    | |         |
@@ -634,14 +604,13 @@ note: bb5: {
           StorageDead(_7); // scope[1]
           _2 = std::intrinsics::volatile_load::<u8>(const {alloc2: *const u8}) -> [return: bb2, unwind unreachable]; // scope[1]
       }
-  --> $SRC_DIR/core/src/ptr/mod.rs:1753:9
+  --> $SRC_DIR/core/src/ptr/mod.rs:1752:9
    |
 LL | /         ub_checks::assert_unsafe_precondition!(
 LL | |             check_language_ub,
 LL | |             "ptr::read_volatile requires that the pointer argument is aligned and non-null",
-LL | |             (
 ...  |
-LL | |             ) => ub_checks::is_aligned_and_not_null(addr, align, is_zst)
+LL | |             ) => ub_checks::maybe_is_aligned_and_not_null(addr, align, is_zst)
 LL | |         );
    | |_________- StorageDead(_7); // scope[1]
 LL |           intrinsics::volatile_load(src)
@@ -692,7 +661,7 @@ LL |     let _ = <std::result::IntoIter<&str> as std::iter::Iterator>::next;
    = note: see `./mir_dump/core.result-{impl#20}-next.-------.dump_mir..mir.cfg.dot` for dumpped control flow graph
    = note: see `./mir_dump/core.result-{impl#20}-next.-------.dump_mir..mir.ddg.dot` for dumpped data dependency graph
 note: locals and scopes in this MIR
-  --> $SRC_DIR/core/src/result.rs:1902:5
+  --> $SRC_DIR/core/src/result.rs:1908:5
    |
 LL |        fn next(&mut self) -> Option<T> {
    |        ^       ---------     --------- _0: std::option::Option<T>; // scope[0]
@@ -700,28 +669,24 @@ LL |        fn next(&mut self) -> Option<T> {
    |   _____|       _1: &mut std::result::IntoIter<T>; // scope[0]
    |  |
 LL |  |         self.inner.take()
-   |  |         ---------- _2: &mut std::option::Option<T>; // scope[0]
 LL |  |     }
    |  |_____^ scope[0]
    |
-  ::: $SRC_DIR/core/src/option.rs:1719:5
+  ::: $SRC_DIR/core/src/option.rs:1726:5
    |
 LL |  /     pub const fn take(&mut self) -> Option<T> {
 LL |  |         // FIXME(const-hack) replace `mem::replace` by `mem::take` when the latter is const ready
 LL |  |         mem::replace(self, None)
-   |  |                            ---- _3: std::option::Option<T>; // scope[1]
+   |  |                            ---- _2: std::option::Option<T>; // scope[1]
 LL |  |     }
    |  |     -
    |  |_____|
    |  |_____scope[1]
    |        std::option::Option::<T>::take
    |
-  ::: $SRC_DIR/core/src/mem/mod.rs:862:1
+  ::: $SRC_DIR/core/src/mem/mod.rs:860:1
    |
 LL | /  pub const fn replace<T>(dest: &mut T, src: T) -> T {
-LL | |      // It may be tempting to use `swap` to avoid `unsafe` here. Don't!
-LL | |      // The compiler optimizes the implementation below to two `memcpy`s
-LL | |      // while `swap` would require at least three. See PR#83022 for details.
 ...  |
 LL | |/         let result = ptr::read(dest);
 LL | ||         ptr::write(dest, src);
@@ -734,14 +699,10 @@ LL | |  }
    | |__scope[2]
    |    std::mem::replace::<std::option::Option<T>>
    |
-  ::: $SRC_DIR/core/src/ptr/mod.rs:1336:1
+  ::: $SRC_DIR/core/src/ptr/mod.rs:1341:1
    |
 LL |  / pub const unsafe fn read<T>(src: *const T) -> T {
-LL |  |     // It would be semantically correct to implement this via `copy_nonoverlapping`
-LL |  |     // and `MaybeUninit`, as was done before PR #109035. Calling `assume_init`
-LL |  |     // provides enough information to know that this is a typed operation.
 ...   |
-LL |  |     }
 LL |  | }
    |  | -
    |  |_|
@@ -749,46 +710,35 @@ LL |  | }
    |    std::ptr::read::<std::option::Option<T>>
 ...
 LL |  / pub const unsafe fn write<T>(dst: *mut T, src: T) {
-LL |  |     // Semantically, it would be fine for this to be implemented as a
-LL |  |     // `copy_nonoverlapping` and appropriate drop suppression of `src`.
 ...   |
-LL |  |     }
 LL |  | }
    |  | -
    |  |_|
    |  |_scope[5]
    |    std::ptr::write::<std::option::Option<T>>
 note: bb0: {
-          StorageLive(_2); // scope[0]
-          _2 = &mut ((*_1).0: std::option::Option<T>); // scope[0]
-          _3 = std::option::Option::<T>::None; // scope[1]
+          _2 = std::option::Option::<T>::None; // scope[1]
           _0 = copy ((*_1).0: std::option::Option<T>); // scope[4]
-          ((*_1).0: std::option::Option<T>) = copy _3; // scope[5]
-          StorageDead(_2); // scope[0]
+          ((*_1).0: std::option::Option<T>) = copy _2; // scope[5]
           return; // scope[0]
       }
-  --> $SRC_DIR/core/src/result.rs:1904:6
+  --> $SRC_DIR/core/src/result.rs:1910:6
    |
-LL |         self.inner.take()
-   |         ----------      - StorageDead(_2); // scope[0]
-   |         |
-   |         StorageLive(_2); // scope[0]
-   |         _2 = &mut ((*_1).0: std::option::Option<T>); // scope[0]
 LL |     }
    |      ^ return; // scope[0]
    |
-  ::: $SRC_DIR/core/src/option.rs:1721:28
-   |
-LL |         mem::replace(self, None)
-   |                            ---- _3 = std::option::Option::<T>::None; // scope[1]
-   |
-  ::: $SRC_DIR/core/src/ptr/mod.rs:1375:9
+  ::: $SRC_DIR/core/src/ptr/mod.rs:1380:9
    |
 LL |         crate::intrinsics::read_via_copy(src)
    |         ------------------------------------- _0 = copy ((*_1).0: std::option::Option<T>); // scope[4]
 ...
 LL |         intrinsics::write_via_move(dst, src)
-   |         ------------------------------------ ((*_1).0: std::option::Option<T>) = copy _3; // scope[5]
+   |         ------------------------------------ ((*_1).0: std::option::Option<T>) = copy _2; // scope[5]
+   |
+  ::: $SRC_DIR/core/src/option.rs:1728:28
+   |
+LL |         mem::replace(self, None)
+   |                            ---- _2 = std::option::Option::<T>::None; // scope[1]
 
 error: abort due to debugging
   --> tests/ui/utils/dump_mir.rs:5:1

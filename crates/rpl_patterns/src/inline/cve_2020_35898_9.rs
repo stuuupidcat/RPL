@@ -35,7 +35,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     #[instrument(level = "debug", skip_all, fields(?item.owner_id))]
     fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
         match item.kind {
-            hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn{..} => {},
+            hir::ItemKind::Trait(hir::IsAuto::No, ..) | hir::ItemKind::Impl(_) | hir::ItemKind::Fn { .. } => {},
             _ => return,
         }
         intravisit::walk_item(self, item);
@@ -90,7 +90,7 @@ fn pattern_rc_unsafe_cell_get_mut(pcx: PatCtxt<'_>) -> PatternRcUnsafeCellGetMut
             let $self: &mut $CellT;
             let $inner_ref: &RcUnsafeCellT = &((*$self).$inner);
             let $inner_ptr: NonNullRcInnerUnsafeCellT = copy ((*$inner_ref).ptr);
-            let $const_ptr: *const RcInnerUnsafeCellT = copy($inner_ptr.pointer);
+            let $const_ptr: *const RcInnerUnsafeCellT = copy $inner_ptr as *const RcInnerUnsafeCellT (Transmute);
             let $unsafe_cell: &UnsafeCellT = &((*$const_ptr).value);
             let $unsafe_cell_ptr: *const UnsafeCellT = &raw const (*$unsafe_cell);
             let $value_ptr: *mut $T = copy $unsafe_cell_ptr as *mut $T (PtrToPtr);

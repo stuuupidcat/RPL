@@ -1,3 +1,4 @@
+
 struct Session<'a> {
     sess: *mut ffi::Session,
     _f: &'a (),
@@ -19,8 +20,10 @@ macro_rules! check {
 }
 
 impl Session<'_> {
+    //#[rpl::dump_mir(dump_cfg, dump_ddg)]
     pub fn attach(&mut self, table: Option<&str>) -> Result<(), Error> {
         let table = if let Some(table) = table {
+            #[allow(dangling_pointers_from_temporaries)]
             str_to_cstring(table)?.as_ptr()
         } else {
             //~^ NOTE: the `std::ffi::CString` value is dropped here
@@ -38,3 +41,5 @@ mod ffi {
         pub fn sqlite3session_attach(s: *mut Session, table: *const std::ffi::c_char) -> i32;
     }
 }
+
+fn main() {}

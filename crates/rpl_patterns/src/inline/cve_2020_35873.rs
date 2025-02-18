@@ -80,8 +80,7 @@ fn pattern(pcx: PatCtxt<'_>) -> Pattern<'_> {
             let $cstring: CString = _;
             let $cstring_ref: &CString = &$cstring;
             let $non_null: NonNullU8 = copy ((((*$cstring_ref).inner).0).pointer);
-            let $uslice_ptr: *const [u8] = copy $non_null.pointer;
-            let $cstr_ptr: *const CStr = copy $uslice_ptr as *const CStr (PtrToPtr);
+            let $cstr_ptr: *const CStr = copy $non_null as *const CStr (Transmute);
             let $cstr: &CStr = &(*$cstr_ptr);
             let $islice: *const [i8] = &raw const ((*$cstr).inner);
             let $iptr: *const i8 = move $islice as *const i8 (PtrToPtr);
