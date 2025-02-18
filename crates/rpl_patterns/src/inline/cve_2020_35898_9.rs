@@ -91,12 +91,12 @@ fn pattern_rc_unsafe_cell_get_mut(pcx: PatCtxt<'_>) -> PatternRcUnsafeCellGetMut
         fn $pattern(..) -> _ = mir! {
             type UnsafeCellT = core::cell::UnsafeCell::<$T>;
             type RcUnsafeCellT = alloc::rc::Rc::<core::cell::UnsafeCell::<$T>>;
-            type NonNullRcInnerUnsafeCellT = core::ptr::NonNull::<alloc::rc::RcInner::<core::cell::UnsafeCell::<$T>>>;
+            type NonNulArcInnerUnsafeCellT = core::ptr::NonNull::<alloc::rc::RcInner::<core::cell::UnsafeCell::<$T>>>;
             type RcInnerUnsafeCellT = alloc::rc::RcInner::<core::cell::UnsafeCell::<$T>>;
 
             let $self: &mut $CellT;
             let $inner_ref: &RcUnsafeCellT = &((*$self).$inner);
-            let $inner_ptr: NonNullRcInnerUnsafeCellT = copy ((*$inner_ref).ptr);
+            let $inner_ptr: NonNulArcInnerUnsafeCellT = copy ((*$inner_ref).ptr);
             let $const_ptr: *const RcInnerUnsafeCellT = copy $inner_ptr as *const RcInnerUnsafeCellT (Transmute);
             let $unsafe_cell: &UnsafeCellT = &((*$const_ptr).value);
             let $unsafe_cell_ptr: *const UnsafeCellT = &raw const (*$unsafe_cell);

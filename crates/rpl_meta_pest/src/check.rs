@@ -6,7 +6,7 @@ use crate::utils::{Ident, Path};
 use crate::{collect_elems_separated_by_comma, RPLMetaError};
 use parser::generics::{Choice12, Choice14, Choice2, Choice3, Choice4, Choice5, Choice6};
 use parser::{pairs, SpanWrapper};
-use rustc_data_structures::sync::Lrc;
+use std::sync::Arc;
 use std::ops::Deref;
 
 #[derive(Default)]
@@ -43,7 +43,7 @@ impl<'i> CheckCtxt<'i> {
                 let (ident, _, ty) = decl.get_matched();
                 // unwrap here is safe because we check the meta decl list before checking the rust items
                 // so the Rc is not cloned
-                let meta_vars_ref = Lrc::get_mut(&mut self.symbol_table.meta_vars).unwrap();
+                let meta_vars_ref = Arc::get_mut(&mut self.symbol_table.meta_vars).unwrap();
                 meta_vars_ref.add_ty_var(mctx, ident.into(), ty.into(), &mut self.errors);
             }
         }
@@ -128,7 +128,7 @@ impl<'i> CheckCtxt<'i> {
 }
 
 struct CheckFnCtxt<'i, 'r> {
-    meta_vars: Lrc<MetaVarTable<'i>>,
+    meta_vars: Arc<MetaVarTable<'i>>,
     _exports: &'r mut ExportTable<'i>,
     _impl_def: Option<&'r ImplInner<'i>>,
     fn_def: &'r mut FnInner<'i>,
@@ -643,7 +643,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
 }
 
 struct CheckVariantCtxt<'i, 'r> {
-    _meta_vars: Lrc<MetaVarTable<'i>>,
+    _meta_vars: Arc<MetaVarTable<'i>>,
     _exports: &'r mut ExportTable<'i>,
     variant_def: &'r mut Variant<'i>,
     errors: &'r mut Vec<RPLMetaError<'i>>,
@@ -678,7 +678,7 @@ impl<'i> CheckVariantCtxt<'i, '_> {
 }
 
 struct CheckEnumCtxt<'i, 'r> {
-    meta_vars: Lrc<MetaVarTable<'i>>,
+    meta_vars: Arc<MetaVarTable<'i>>,
     exports: &'r mut ExportTable<'i>,
     enum_def: &'r mut EnumInner<'i>,
     errors: &'r mut Vec<RPLMetaError<'i>>,
