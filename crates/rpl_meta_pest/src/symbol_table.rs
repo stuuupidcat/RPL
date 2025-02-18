@@ -7,9 +7,9 @@ use derive_more::derive::From;
 use parser::generics::{Choice3, Choice4};
 use parser::{pairs, SpanWrapper};
 use pest_typed::Span;
-use rustc_data_structures::sync::Lrc;
 use rustc_hash::FxHashMap;
 use std::ops::Deref;
+use std::sync::Arc;
 
 #[derive(Clone, Copy, From)]
 pub(crate) enum TypeOrPath<'i> {
@@ -91,13 +91,13 @@ impl<'i> ExportTable<'i> {
 }
 
 pub(crate) struct WithMetaTable<'i, T> {
-    pub(crate) meta_vars: Lrc<MetaVarTable<'i>>,
+    pub(crate) meta_vars: Arc<MetaVarTable<'i>>,
     pub(crate) exports: ExportTable<'i>, // FIXME
     pub(crate) inner: T,
 }
 
-impl<'i, T> From<(T, Lrc<MetaVarTable<'i>>)> for WithMetaTable<'i, T> {
-    fn from(inner: (T, Lrc<MetaVarTable<'i>>)) -> Self {
+impl<'i, T> From<(T, Arc<MetaVarTable<'i>>)> for WithMetaTable<'i, T> {
+    fn from(inner: (T, Arc<MetaVarTable<'i>>)) -> Self {
         Self {
             meta_vars: inner.1,
             exports: ExportTable::default(),
@@ -109,7 +109,7 @@ impl<'i, T> From<(T, Lrc<MetaVarTable<'i>>)> for WithMetaTable<'i, T> {
 #[derive(Default)]
 pub(crate) struct SymbolTable<'i> {
     // meta variables in p[$T: ty]
-    pub(crate) meta_vars: Lrc<MetaVarTable<'i>>,
+    pub(crate) meta_vars: Arc<MetaVarTable<'i>>,
     structs: FxHashMap<Ident<'i>, Struct<'i>>,
     enums: FxHashMap<Ident<'i>, Enum<'i>>,
     fns: FxHashMap<Ident<'i>, Fn<'i>>,
