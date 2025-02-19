@@ -1224,6 +1224,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rpl_context_pest"
+version = "0.1.0"
+dependencies = [
+ "rpl_meta_pest",
+ "rpl_parser",
+]
+
+[[package]]
 name = "rpl_driver"
 version = "0.1.0"
 dependencies = [
