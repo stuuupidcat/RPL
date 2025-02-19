@@ -1,5 +1,5 @@
 use rpl_context::PatternCtxt;
-use rpl_meta_pest::context::RPLMetaContext;
+use rustc_data_structures::sync::WorkerLocal;
 // use rpl_middle::ty::RplConfig;
 use rustc_interface::interface;
 use rustc_middle::ty::TyCtxt;
@@ -57,18 +57,17 @@ impl rustc_driver::Callbacks for RustcCallbacks {
 pub struct DefaultCallbacks;
 impl rustc_driver::Callbacks for DefaultCallbacks {}
 
-pub struct RplCallbacks<'mctx> {
+pub struct RplCallbacks {
     rpl_args_var: Option<String>,
-    mctx: RPLMetaContext<'mctx>,
 }
 
-impl<'mctx> RplCallbacks<'mctx> {
-    pub fn new(rpl_args_var: Option<String>, mctx: RPLMetaContext<'mctx>) -> Self {
-        Self { rpl_args_var, mctx }
+impl RplCallbacks {
+    pub fn new(rpl_args_var: Option<String>) -> Self {
+        Self { rpl_args_var }
     }
 }
 
-impl rustc_driver::Callbacks for RplCallbacks<'_> {
+impl rustc_driver::Callbacks for RplCallbacks {
     // JUSTIFICATION: necessary in RPL driver to set `mir_opt_level`
     #[allow(rustc::bad_opt_access)]
     fn config(&mut self, config: &mut interface::Config) {
@@ -126,7 +125,10 @@ impl rustc_driver::Callbacks for RplCallbacks<'_> {
     }
 
     fn after_analysis(&mut self, _compiler: &interface::Compiler, tcx: TyCtxt<'_>) -> rustc_driver::Compilation {
-        PatternCtxt::entered(|pcx| rpl_driver::check_crate(tcx, pcx, &self.mctx));
+        let mctx_arena = WorkerLocal::<rpl_meta_pest::arena::Arena<'_>>::default();
+        let patterns_and_paths = Vec::new(); // FIXME: should get from args.
+        let mctx = rpl_meta_pest::parse_and_collect(&mctx_arena, &patterns_and_paths);
+        PatternCtxt::entered(|pcx| rpl_driver::check_crate(tcx, pcx, &mctx));
         /*
         queries.global_ctxt().unwrap().enter(|tcx| {
             let mut lint_store = LaterLintStore::new();

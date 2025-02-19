@@ -9,7 +9,6 @@
 
 // FIXME: switch to something more ergonomic here, once available.
 // (Currently there is no way to opt into sysroot crates without `extern crate`.)
-extern crate rustc_data_structures;
 extern crate rustc_driver;
 extern crate rustc_log;
 extern crate rustc_session;
@@ -97,12 +96,6 @@ fn logger_config() -> rustc_log::LoggerConfig {
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::ignored_unit_patterns)]
 pub fn main() {
-    // FIXME: why this work?
-    rustc_data_structures::sync::Registry::new(std::num::NonZero::new(1).unwrap()).register();
-    let mctx_arena = WorkerLocal::<rpl_meta_pest::arena::Arena<'_>>::default();
-    let patterns_and_paths = Vec::new();
-    let mctx = rpl_meta_pest::parse_and_collect(&mctx_arena, &patterns_and_paths);
-
     let early_dcx = EarlyDiagCtxt::new(ErrorOutputType::default());
 
     rustc_driver::init_logger(&early_dcx, logger_config());
@@ -222,7 +215,7 @@ pub fn main() {
             /* rustc_driver::RunCompiler::new(&args, &mut RplCallbacks::new(rpl_args_var))
             .set_using_internal_features(using_internal_features)
             .run() */
-            rustc_driver::run_compiler(&args, &mut RplCallbacks::new(rpl_args_var, mctx))
+            rustc_driver::run_compiler(&args, &mut RplCallbacks::new(rpl_args_var))
         } else {
             /* rustc_driver::RunCompiler::new(&args, &mut RustcCallbacks::new(rpl_args_var))
             .set_using_internal_features(using_internal_features)
