@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./images/rpl-logo.svg" width="50%"/>
+  <img src="./icons/rpl-icon.svg" width="50%"/>
 </p>
 
 # RPL
