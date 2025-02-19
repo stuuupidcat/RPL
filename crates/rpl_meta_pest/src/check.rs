@@ -6,8 +6,8 @@ use crate::utils::{Ident, Path};
 use crate::{collect_elems_separated_by_comma, RPLMetaError};
 use parser::generics::{Choice12, Choice14, Choice2, Choice3, Choice4, Choice5, Choice6};
 use parser::{pairs, SpanWrapper};
-use std::sync::Arc;
 use std::ops::Deref;
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct CheckCtxt<'i> {
