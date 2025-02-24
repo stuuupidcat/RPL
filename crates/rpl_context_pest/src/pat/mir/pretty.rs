@@ -11,11 +11,11 @@ impl fmt::Debug for Location {
 impl fmt::Debug for Place<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.projection {
-            [] => self.local.fmt(f),
+            [] => self.base.fmt(f),
             [projection @ .., last] => fmt_projection(
                 f,
                 Place {
-                    local: self.local,
+                    base: self.base,
                     projection,
                 },
                 last,

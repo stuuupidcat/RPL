@@ -1,38 +1,34 @@
-use crate::context::RPLMetaContext;
+use crate::context::MetaContext;
 use crate::error::RPLMetaError;
 use crate::idx::RPLIdx;
 use crate::symbol_table::{DiagSymbolTable, SymbolTable};
 use colored::Colorize;
 use parser::pairs;
 use rustc_data_structures::fx::FxHashMap;
+use rustc_span::Symbol;
 use std::path::Path;
 
 /// Meta data of a single rpl file.
-pub struct RPLMeta<'mctx> {
+pub struct SymbolTables<'mcx> {
     /// Absolute path to the rpl file
-    pub path: &'mctx Path,
+    pub path: &'mcx Path,
     /// RPL Idx
     pub idx: RPLIdx,
     /// The name of the rpl file
-    pub name: &'mctx str,
+    pub name: Symbol,
     /// The symbol table of the util block
-    util_symbol_tables: FxHashMap<&'mctx str, SymbolTable<'mctx>>,
+    pub util_symbol_tables: FxHashMap<Symbol, SymbolTable<'mcx>>,
     /// The symbol table of the patt block
-    patt_symbol_tables: FxHashMap<&'mctx str, SymbolTable<'mctx>>,
+    pub patt_symbol_tables: FxHashMap<Symbol, SymbolTable<'mcx>>,
     /// The symbol table of the diag block
-    diag_symbol_tables: FxHashMap<&'mctx str, DiagSymbolTable<'mctx>>,
+    pub diag_symbol_tables: FxHashMap<Symbol, DiagSymbolTable>,
     /// errors
-    pub errors: Vec<RPLMetaError<'mctx>>,
+    pub errors: Vec<RPLMetaError<'mcx>>,
 }
 
-impl<'mctx> RPLMeta<'mctx> {
+impl<'mcx> SymbolTables<'mcx> {
     /// Collect the meta data of a parsed rpl file
-    pub fn collect(
-        path: &'mctx Path,
-        main: &'mctx pairs::main<'mctx>,
-        idx: RPLIdx,
-        mctx: &RPLMetaContext<'mctx>,
-    ) -> Self {
+    pub fn collect(path: &'mcx Path, main: &'mcx pairs::main<'mcx>, idx: RPLIdx, mctx: &MetaContext<'mcx>) -> Self {
         let mut errors = Vec::new();
         // Collect the pattern name of the rpl file.
         let name = Self::collect_rpl_pattern_name(main);
@@ -46,7 +42,7 @@ impl<'mctx> RPLMeta<'mctx> {
         let patt_symbol_tables = SymbolTable::collect_symbol_tables(mctx, patt_items, &mut errors);
         let diag_items = diags.iter().flat_map(|diag| diag.get_matched().2.iter_matched());
         let diag_symbol_tables = DiagSymbolTable::collect_symbol_tables(mctx, diag_items, &mut errors);
-        RPLMeta {
+        SymbolTables {
             path,
             name,
             idx,
@@ -57,15 +53,15 @@ impl<'mctx> RPLMeta<'mctx> {
         }
     }
 
-    fn collect_rpl_pattern_name(main: &pairs::main<'mctx>) -> &'mctx str {
+    fn collect_rpl_pattern_name(main: &pairs::main<'mcx>) -> Symbol {
         let rpl_pattern = main.get_matched().1;
         let rpl_header = rpl_pattern.get_matched().0;
         let name = rpl_header.get_matched().1.span.as_str();
-        name
+        Symbol::intern(name)
     }
 }
 
-impl RPLMeta<'_> {
+impl SymbolTables<'_> {
     pub fn show_error(&self, f: &mut impl std::io::Write) {
         if !self.errors.is_empty() {
             writeln!(
@@ -93,12 +89,12 @@ impl RPLMeta<'_> {
     }
 }
 
-pub fn collect_blocks<'i>(
-    main: &'i pairs::main<'i>,
+pub fn collect_blocks<'mcx, 'i>(
+    main: &'mcx pairs::main<'i>,
 ) -> (
-    Vec<&'i pairs::utilBlock<'i>>,
-    Vec<&'i pairs::pattBlock<'i>>,
-    Vec<&'i pairs::diagBlock<'i>>,
+    Vec<&'mcx pairs::utilBlock<'i>>,
+    Vec<&'mcx pairs::pattBlock<'i>>,
+    Vec<&'mcx pairs::diagBlock<'i>>,
 ) {
     let mut utils = Vec::new();
     let mut patts = Vec::new();

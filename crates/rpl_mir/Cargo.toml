@@ -8,7 +8,7 @@ keywords.workspace = true
 edition.workspace = true
 
 [dependencies]
-rpl_context.workspace = true
+rpl_context_pest.workspace = true
 rpl_match.workspace = true
 rpl_mir_graph.workspace = true
 syn.workspace = true

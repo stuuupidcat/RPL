@@ -1,9 +1,12 @@
 use rpl_meta_pest::collect_elems_separated_by_comma;
-use rpl_parser::generics::{Choice3, Choice4};
+use rpl_meta_pest::utils::Ident;
+use rpl_parser::generics::{Choice2, Choice3, Choice4};
 use rpl_parser::pairs;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_index::IndexVec;
 use rustc_span::Symbol;
+use std::ops::Deref;
+use std::sync::Arc;
 
 use crate::PatCtxt;
 
@@ -11,45 +14,76 @@ mod item;
 mod mir;
 mod pretty;
 mod ty;
+mod utils;
 
 pub use item::*;
 pub use mir::*;
 pub use ty::*;
 
 #[derive(Default)]
-pub struct MetaVars<'pcx> {
+pub struct NonLocalMetaVars<'pcx> {
     pub ty_vars: IndexVec<TyVarIdx, TyVar>,
     pub const_vars: IndexVec<ConstVarIdx, ConstVar<'pcx>>,
+    pub place_vars: IndexVec<PlaceVarIdx, PlaceVar<'pcx>>,
+}
+
+impl<'pcx> NonLocalMetaVars<'pcx> {
+    pub fn add_ty_var(&mut self, name: Symbol, pred: Option<TyPred>) {
+        let idx = self.ty_vars.next_index();
+        let ty_var = TyVar { idx, name, pred };
+        self.ty_vars.push(ty_var);
+    }
+    pub fn add_const_var(&mut self, name: Symbol, ty: Ty<'pcx>) {
+        let idx = self.const_vars.next_index();
+        let const_var = ConstVar { idx, name, ty };
+        self.const_vars.push(const_var);
+    }
+    pub fn add_place_var(&mut self, name: Symbol, ty: Ty<'pcx>) {
+        let idx = self.place_vars.next_index();
+        let place_var = PlaceVar { idx, name, ty };
+        self.place_vars.push(place_var);
+    }
+
+    pub fn from_meta_decls(meta_decls: Option<&pairs::MetaVariableDeclList<'_>>, pcx: PatCtxt<'pcx>) -> Self {
+        let mut meta = Self::default();
+        if let Some(decls) = meta_decls
+            && let Some(decls) = decls.get_matched().1
+        {
+            let decls = collect_elems_separated_by_comma!(decls).collect::<Vec<_>>();
+            for decl in decls {
+                let (ident, _, ty) = decl.get_matched();
+                match ty.deref() {
+                    Choice3::_0(_ty) => meta.add_ty_var(Symbol::intern(ident.span.as_str()), None),
+                    Choice3::_1(konst) => {
+                        let ty = Ty::from(konst.get_matched().2, pcx);
+                        meta.add_const_var(Symbol::intern(ident.span.as_str()), ty);
+                    },
+                    Choice3::_2(place) => {
+                        let ty = Ty::from(place.get_matched().2, pcx);
+                        meta.add_place_var(Symbol::intern(ident.span.as_str()), ty);
+                    },
+                }
+            }
+        }
+        meta
+    }
 }
 
 pub struct Pattern<'pcx> {
     // FIXME: remove it
     pub pcx: PatCtxt<'pcx>,
+    pub meta: Arc<NonLocalMetaVars<'pcx>>,
     pub adts: FxHashMap<Symbol, Adt<'pcx>>,
     pub fns: Fns<'pcx>,
     #[expect(dead_code)]
     impls: Vec<Impl<'pcx>>,
 }
 
-impl<'pcx> MetaVars<'pcx> {
-    pub fn new_ty_var(&mut self, pred: Option<TyPred>) -> TyVar {
-        let idx = self.ty_vars.next_index();
-        let ty_var = TyVar { idx, pred };
-        self.ty_vars.push(ty_var);
-        ty_var
-    }
-    pub fn new_const_var(&mut self, ty: Ty<'pcx>) -> ConstVar<'pcx> {
-        let idx = self.const_vars.next_index();
-        let const_var = ConstVar { idx, ty };
-        self.const_vars.push(const_var);
-        const_var
-    }
-}
-
 impl<'pcx> Pattern<'pcx> {
     pub(crate) fn new(pcx: PatCtxt<'pcx>) -> Self {
         Self {
             pcx,
+            meta: Default::default(),
             adts: Default::default(),
             fns: Default::default(),
             impls: Default::default(),
@@ -69,26 +103,27 @@ impl<'pcx> Pattern<'pcx> {
     pub fn get_adt(&self, name: Symbol) -> Option<&Adt<'pcx>> {
         self.adts.get(&name)
     }
-    pub fn from_parsed(pcx: PatCtxt<'pcx>, pat_item: &pairs::pattBlockItem<'_>) -> Self {
+}
+
+impl<'pcx> Pattern<'pcx> {
+    pub fn from_parsed(
+        pcx: PatCtxt<'pcx>,
+        pat_item: &pairs::pattBlockItem<'pcx>,
+        symbol_table: &'pcx rpl_meta_pest::symbol_table::SymbolTable<'_>,
+    ) -> Self {
         let mut pattern = Self::new(pcx);
         let (_, meta_decls, _, _, item_or_patt_op, _) = pat_item.get_matched();
-        if let Some(meta_decls) = meta_decls {
-            pattern.add_meta_decls(meta_decls);
-        }
-        pattern.add_item_or_patt_op(item_or_patt_op);
+        pattern.meta = Arc::new(NonLocalMetaVars::from_meta_decls(meta_decls.as_ref(), pcx));
+        pattern.add_item_or_patt_op(item_or_patt_op, symbol_table);
         pattern
     }
-    fn add_meta_decls(&mut self, meta_decls: &pairs::MetaVariableDeclList<'_>) {
-        if let Some(decls) = meta_decls.get_matched().1 {
-            let decls = collect_elems_separated_by_comma!(decls).collect::<Vec<_>>();
-            for decl in decls {
-                let (ident, _, ty) = decl.get_matched();
-                todo!()
-            }
-        }
-    }
-    fn add_item_or_patt_op(&mut self, item_or_patt_op: &pairs::RustItemOrPatternOperation<'_>) {
-        match &**item_or_patt_op {
+
+    fn add_item_or_patt_op(
+        &mut self,
+        item_or_patt_op: &pairs::RustItemOrPatternOperation<'pcx>,
+        symbol_table: &'pcx rpl_meta_pest::symbol_table::SymbolTable<'_>,
+    ) {
+        match item_or_patt_op.deref() {
             Choice3::_2(_patt_op) => {
                 // FIXME: process the patt operation
                 todo!()
@@ -103,25 +138,52 @@ impl<'pcx> Pattern<'pcx> {
                     vec![item.unwrap()]
                 };
                 for item in items {
-                    self.add_item(item);
+                    self.add_item(item, self.meta.clone(), symbol_table);
                 }
             },
         }
     }
-    fn add_item(&mut self, item: &pairs::RustItem<'_>) {
+    fn add_item(
+        &mut self,
+        item: &pairs::RustItem<'pcx>,
+        meta: Arc<NonLocalMetaVars<'pcx>>,
+        symbol_table: &'pcx rpl_meta_pest::symbol_table::SymbolTable<'_>,
+    ) {
         match &**item {
-            Choice4::_0(rust_fn) => self.add_fn(rust_fn),
+            Choice4::_0(rust_fn) => {
+                let fn_name = Symbol::intern(rust_fn.FnSig().FnName().span.as_str());
+                let fn_symbol_table = symbol_table.get_fn(fn_name).unwrap();
+                self.add_fn(rust_fn, meta, fn_symbol_table);
+            },
             Choice4::_1(rust_struct) => self.add_struct(rust_struct),
             Choice4::_2(rust_enum) => self.add_enum(rust_enum),
             Choice4::_3(_rust_impl) => todo!("check impl in meta pass"),
         }
     }
-    fn add_fn(&mut self, rust_fn: &pairs::Fn<'_>) {
-        todo!()
+}
+
+// fn-related methods
+impl<'pcx> Pattern<'pcx> {
+    fn add_fn(
+        &mut self,
+        rust_fn: &pairs::Fn<'pcx>,
+        meta: Arc<NonLocalMetaVars<'pcx>>,
+        fn_symbol_table: &FnSymbolTable<'pcx>,
+    ) {
+        let fn_pat = Fn::from(rust_fn, self.pcx, fn_symbol_table, meta);
+        self.fns.unnamed_fns.push(fn_pat);
     }
+}
+
+// struct-related methods
+impl<'pcx> Pattern<'pcx> {
     fn add_struct(&mut self, rust_struct: &pairs::Struct<'_>) {
         todo!()
     }
+}
+
+// enum-related methods
+impl<'pcx> Pattern<'pcx> {
     fn add_enum(&mut self, rust_enum: &pairs::Enum<'_>) {
         todo!()
     }

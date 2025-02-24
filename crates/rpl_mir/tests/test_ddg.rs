@@ -9,7 +9,7 @@ extern crate rustc_span;
 use pretty_assertions::assert_eq;
 use proc_macro2::TokenStream;
 use quote::quote;
-use rpl_context::{PatCtxt, PatternCtxt};
+use rpl_context_pest::{PatCtxt, PatternCtxt};
 use rpl_mir::graph::{pat_control_flow_graph, pat_data_dep_graph};
 use rpl_mir::pat::{Local, MirPattern};
 use rustc_span::Symbol;

@@ -22,7 +22,9 @@
                 // as it uses a hash in the file name.
                 // "--extern",
                 // "libc=${workspaceFolder}/target/debug/deps/liblibc-f5b3b8a882fe8188.rlib",
-                "tests/ui/cve_2020_35888_simplified/cve_2020_35888_simplified.rs"
+                "--pat",
+                "docs/patterns/CVE-2021-27376-MIR.rpl",
+                "tests/ui/cve_2018_21000/cve_2018_21000.rs"
             ],
             "env": {
                 "DYLD_LIBRARY_PATH": "${env:HOME}/.rustup/toolchains/nightly-2025-02-14-aarch64-apple-darwin/lib",

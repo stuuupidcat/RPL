@@ -9,7 +9,7 @@ keywords.workspace = true
 repository.workspace = true
 
 [dependencies]
-rpl_context.workspace = true
+rpl_context_pest.workspace = true
 
 [package.metadata.rust-analyzer]
 # This crate uses #[feature(rustc_private)]

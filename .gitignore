@@ -19,3 +19,5 @@
 
 mir_dump
 *.rlib
+
+tmp/

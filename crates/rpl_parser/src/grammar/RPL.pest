@@ -75,6 +75,9 @@ kw_i32          = @{ "i32" ~ !WordFollowing }
 kw_i64          = @{ "i64" ~ !WordFollowing }
 kw_isize        = @{ "isize" ~ !WordFollowing }
 kw_RET          = @{ "RET" ~ !WordFollowing }
+kw_bool         = @{ "bool" ~ !WordFollowing }
+kw_str          = @{ "str" ~ !WordFollowing }
+kw_place        = @{ "place" ~ !WordFollowing }
 
 Keywords = @{
     kw_pattern
@@ -147,6 +150,8 @@ Keywords = @{
   | kw_i32
   | kw_i64
   | kw_isize
+  | kw_bool
+  | kw_str
 }
 
 // Space and Comment
@@ -188,7 +193,7 @@ Minus      = @{ "-" }
 PlaceHolder = @{ "_" }
 
 // Literal
-Literal = @{
+Literal = {
     Integer
   | String
   | Bool
@@ -204,7 +209,7 @@ BIN_LITERAL = @{ "0b" ~ (BIN_DIGIT | "_")* ~ BIN_DIGIT ~ (BIN_DIGIT | "_")* }
 OCT_LITERAL = @{ "0o" ~ (OCT_DIGIT | "_")* ~ OCT_DIGIT ~ (OCT_DIGIT | "_")* }
 HEX_LITERAL = @{ "0x" ~ (HEX_DIGIT | "_")* ~ HEX_DIGIT ~ (HEX_DIGIT | "_")* }
 
-IntegerSuffix = @{
+IntegerSuffix = {
     kw_u8
   | kw_u16
   | kw_u32
@@ -217,14 +222,29 @@ IntegerSuffix = @{
   | kw_isize
 }
 
-Integer = @{
+PrimitiveType = {
+    kw_u8
+  | kw_u16
+  | kw_u32
+  | kw_u64
+  | kw_usize
+  | kw_i8
+  | kw_i16
+  | kw_i32
+  | kw_i64
+  | kw_isize
+  | kw_bool
+  | kw_str
+}
+
+Integer = {
     (DEC_LITERAL | BIN_LITERAL | OCT_LITERAL | HEX_LITERAL) ~ IntegerSuffix?
 }
 
 String = @{
     "\"" ~ (!"\"" ~ ANY)* ~ "\""
 }
-Bool   = @{
+Bool   =  {
     kw_true
   | kw_false
 }
@@ -238,8 +258,14 @@ Word          = @{ WordLeading ~ (WordFollowing)* }
 Identifier   = @{ !(Keywords) ~ Word }
 MetaVariable = @{ Dollar ~ Word }
 
+MetaVariableType = {
+    kw_type
+  | kw_const ~ LeftParen ~ Type ~ RightParen
+  | kw_place ~ LeftParen ~ Type ~ RightParen
+}
+
 // MetaVariable Declaration
-MetaVariableDecl                    = { MetaVariable ~ Colon ~ Identifier }
+MetaVariableDecl                    = { MetaVariable ~ Colon ~ MetaVariableType }
 MetaVariableDeclsSeparatedByComma   = {
     MetaVariableDecl ~ (Comma ~ MetaVariableDecl)* ~ Comma?
 }
@@ -358,11 +384,11 @@ TypeParen = {
 }
 
 TypePtr = {
-    Star ~ PtrMutability? ~ Type
+    Star ~ PtrMutability ~ Type
 }
 
 TypeReference = {
-    And ~ Region? ~ PtrMutability? ~ Type
+    And ~ Region? ~ Mutability ~ Type
 }
 
 TypeSlice = {
@@ -382,35 +408,35 @@ Type = {
   | TypeGroup
   | TypeNever
   | TypeParen
-  | TypeMetaVariable
   | TypePtr
   | TypeReference
   | TypeSlice
   | TypeTuple
+  | TypeMetaVariable
+  | kw_Self
+  | PrimitiveType
+  | PlaceHolder
   | TypePath
   | LangItemWithArgs
-  | kw_Self
-  | IntegerSuffix
-  | PlaceHolder
 }
 
 SelfParam = {
-    And? ~ Mutability ~ kw_self ~ (Colon ~ Type)?
+    And? ~ Mutability ~ kw_self
+}
+
+PlaceHolderWithType = {
+    Mutability ~ PlaceHolder ~ Colon ~ Type
 }
 
 FnParam = {
     SelfParam
   | NormalParam
+  | PlaceHolderWithType
   | Dot2
-  | PlaceHolder
-}
-
-ParamPat = {
-    Mutability ~ (Identifier | MetaVariable)
 }
 
 NormalParam = {
-    ParamPat? ~ Colon ~ Type
+    Mutability ~ MetaVariable ~ Colon ~ Type
 }
 
 Dollarself = @{ Dollar ~ kw_self }
@@ -478,16 +504,18 @@ MirOperandCopy = {
     kw_copy ~ MirPlace
 }
 
-MirOperandConstant = {
+MirOperandConst = {
     kw_const ~ (Literal | LangItemWithArgs | TypePath)
 }
 
 MirOperand = {
     PlaceHolder
   | Dot2
+  | MetaVariable // fn_pat
+
   | MirOperandMove
   | MirOperandCopy
-  | MirOperandConstant
+  | MirOperandConst
 }
 
 MirRvalueUse = {
@@ -666,19 +694,23 @@ MirDecl = {
 }
 
 MirCallIgnoreRet = {
-    PlaceHolder ~ Assign ~ MirCall
+    LabelWithColon? ~ PlaceHolder ~ Assign ~ MirCall
 }
 
 MirDrop = {
-    kw_drop ~ LeftParen ~ MirPlace ~ RightParen
+    LabelWithColon? ~ kw_drop ~ LeftParen ~ MirPlace ~ RightParen
 }
 
 Label = {
     Quote ~ Identifier
 }
 
+LabelWithColon = {
+    Label ~ Colon
+}
+
 MirControl = {
-    (kw_break | kw_continue) ~ Label?
+    LabelWithColon? ~ (kw_break | kw_continue) ~ Label?
 }
 
 MirStmtBlock = {
@@ -686,7 +718,7 @@ MirStmtBlock = {
 }
 
 MirLoop = {
-    (Label ~ Colon)? ~ kw_loop ~ MirStmtBlock
+    LabelWithColon? ~ kw_loop ~ MirStmtBlock
 }
 
 MirSwitchValue = {
@@ -712,7 +744,7 @@ MirSwitchInt = {
 }
 
 MirAssign = {
-    MirPlace ~ Assign ~ MirRvalueOrCall
+    LabelWithColon? ~ MirPlace ~ Assign ~ MirRvalueOrCall
 }
 
 MirStmt = {
@@ -739,7 +771,7 @@ FnParamsSeparatedByComma = {
 }
 
 FnSig = {
-    kw_unsafe? ~ kw_pub? ~ kw_fn ~ FnName ~ LeftParen ~ FnParamsSeparatedByComma? ~ RightParen ~ FnRet
+    kw_unsafe? ~ kw_pub? ~ kw_fn ~ FnName ~ LeftParen ~ FnParamsSeparatedByComma? ~ RightParen ~ FnRet?
 }
 
 FnBody = {
