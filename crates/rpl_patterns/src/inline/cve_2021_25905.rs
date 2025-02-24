@@ -100,8 +100,8 @@ fn pattern_from_raw_parts_iter(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
             let $ptr: *mut $T = copy $non_null as *mut $T (Transmute); // _6
             let $len_1: isize = copy $len as isize (IntToInt); // _8
             let $ptr_1: *mut $T = Offset(copy $ptr, copy $len_1); // _5
-            let $src_ref_2: &alloc::vec::Vec<$T> = &$src; // _11
-            let $capacity_no_high_bit: core::num::niche_types::UsizeNoHighBit = copy (*$src_ref_2).buf.inner.cap; // _12
+            let $src_ref_3: &alloc::vec::Vec<$T> = &$src; // _11
+            let $capacity_no_high_bit: core::num::niche_types::UsizeNoHighBit = copy (*$src_ref_3).buf.inner.cap; // _12
             let $capacity: usize = copy $capacity_no_high_bit as usize (Transmute); // _10
             let $slice_len: usize = Sub(move $capacity, copy $len); // _9
 

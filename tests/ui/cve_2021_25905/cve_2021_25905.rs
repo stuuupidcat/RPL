@@ -1,4 +1,7 @@
 //@ ignore-on-host
+//@ revisions: inline regular
+//@[inline] compile-flags: -Z inline-mir=true
+//@[regular] compile-flags: -Z inline-mir=false
 
 use std::io::{BufRead, Error as IoError, ErrorKind as IoErrorKind, Read, Result as IoResult};
 use std::ops::Bound;
@@ -151,6 +154,8 @@ where
 
     fn data_to_read(&self) -> &[u8] {
         &self.buf[self.consumed..]
+        //~[inline]^ ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
+        // Seems to be a false positive, as the offset is checked in the `read` method
     }
 
     fn prefetch_up_to(&mut self, i: usize) -> IoResult<()> {
@@ -193,7 +198,7 @@ impl<R> BufRead for GreedyAccessReader<R>
 where
     R: Read,
 {
-    #[rpl::dump_mir(dump_cfg, dump_ddg)]
+    // #[rpl::dump_mir(dump_cfg, dump_ddg)]
     fn fill_buf(&mut self) -> IoResult<&[u8]> {
         if self.buf.capacity() == self.consumed {
             self.reserve_up_to(self.buf.capacity() + 16);
