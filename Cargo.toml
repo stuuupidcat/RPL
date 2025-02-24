@@ -54,7 +54,7 @@ pin-project = "1.0"
 tokio = "1.43"
 tokio-util = { version = "0.2", features = ["codec"] }
 bytes = "1.10"
-cassandra-cpp-sys = "1.1.1"
+# cassandra-cpp-sys = "1.1.1"
 
 [package]
 name = "rpl"
@@ -108,7 +108,7 @@ pin-project.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 bytes.workspace = true
-cassandra-cpp-sys.workspace = true
+# cassandra-cpp-sys.workspace = true
 
 [build-dependencies]
 rustc_tools_util.workspace = true

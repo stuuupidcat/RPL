@@ -17,7 +17,7 @@ use std::sync::LazyLock;
 
 extern crate byte_slice_cast;
 extern crate bytes;
-extern crate cassandra_cpp_sys;
+// extern crate cassandra_cpp_sys;
 extern crate futures;
 extern crate if_chain;
 extern crate itertools;
@@ -63,7 +63,7 @@ static TEST_DEPENDENCIES: &[&str] = &[
     "tracing",
     "tokio",
     "tokio_util",
-    "cassandra_cpp_sys",
+    // "cassandra_cpp_sys", for cve_2024_27284
 ];
 
 /// Produces a string with an `--extern` flag for all UI test crate
