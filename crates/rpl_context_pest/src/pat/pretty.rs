@@ -1,5 +1,4 @@
 use rustc_middle::mir;
-use rustc_span::symbol::kw;
 
 use super::*;
 use std::fmt;
@@ -61,7 +60,7 @@ impl fmt::Debug for Ty<'_> {
 
 impl fmt::Debug for TyKind<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
+        match self.clone() {
             Self::TyVar(ty_var) => ty_var.fmt(f),
             Self::Array(ty, len) => write!(f, "[{ty:?}; {len:?}]"),
             Self::Slice(ty) => write!(f, "[{ty:?}]"),
@@ -174,13 +173,10 @@ impl fmt::Display for ConstVar<'_> {
 
 impl fmt::Display for Fn<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let name = match self.name {
-            kw::Underscore => "_".to_string(),
-            name => format!("${name}"),
-        };
         write!(
             f,
             "fn {name}{params:?} -> {ret:?}",
+            name = self.name,
             params = self.params,
             ret = self.ret,
         )
@@ -212,10 +208,7 @@ impl fmt::Debug for Params<'_> {
 
 impl fmt::Debug for Param<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.ident {
-            kw::Empty => {},
-            _ => write!(f, "{}{:?}: ", self.mutability.prefix_str(), self.ident)?,
-        }
+        write!(f, "{}{:?}: ", self.mutability.prefix_str(), self.ident)?;
         write!(f, "{:?}", self.ty)
     }
 }

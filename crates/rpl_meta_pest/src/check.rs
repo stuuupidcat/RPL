@@ -1,30 +1,29 @@
-use crate::context::RPLMetaContext;
-use crate::symbol_table::{
-    ident_is_primitive, EnumInner, ExportTable, FnInner, ImplInner, MetaVarTable, SymbolTable, Variant,
-};
+use crate::context::MetaContext;
+use crate::symbol_table::{ident_is_primitive, EnumInner, FnInner, ImplInner, NonLocalMetaTable, SymbolTable, Variant};
 use crate::utils::{Ident, Path};
 use crate::{collect_elems_separated_by_comma, RPLMetaError};
 use parser::generics::{Choice12, Choice14, Choice2, Choice3, Choice4, Choice5, Choice6};
 use parser::{pairs, SpanWrapper};
+use rustc_span::Symbol;
 use std::ops::Deref;
 use std::sync::Arc;
 
-#[derive(Default)]
 pub struct CheckCtxt<'i> {
-    pub(crate) name: &'i str,
+    pub(crate) name: Symbol,
     pub(crate) symbol_table: SymbolTable<'i>,
     pub(crate) errors: Vec<RPLMetaError<'i>>,
 }
 
 impl<'i> CheckCtxt<'i> {
-    pub fn new(name: &'i str) -> Self {
+    pub fn new(name: Symbol) -> Self {
         Self {
             name,
-            ..Default::default()
+            symbol_table: SymbolTable::default(),
+            errors: Vec::new(),
         }
     }
 
-    pub fn check_pat_item(&mut self, mctx: &RPLMetaContext<'i>, pat_item: &'i pairs::pattBlockItem<'i>) {
+    pub fn check_pat_item(&mut self, mctx: &MetaContext<'i>, pat_item: &'i pairs::pattBlockItem<'i>) {
         let (_, meta_decl_list, _, _, rust_item_or_patt_operation, _) = pat_item.get_matched();
         if let Some(meta_decl_list) = meta_decl_list {
             self.check_meta_decl_list(mctx, meta_decl_list);
@@ -34,7 +33,7 @@ impl<'i> CheckCtxt<'i> {
 
     pub fn check_meta_decl_list(
         &mut self,
-        mctx: &RPLMetaContext<'i>,
+        mctx: &MetaContext<'i>,
         meta_decl_list: &'i pairs::MetaVariableDeclList<'i>,
     ) {
         if let Some(decls) = meta_decl_list.get_matched().1 {
@@ -42,16 +41,16 @@ impl<'i> CheckCtxt<'i> {
             for decl in decls {
                 let (ident, _, ty) = decl.get_matched();
                 // unwrap here is safe because we check the meta decl list before checking the rust items
-                // so the Rc is not cloned
+                // so the Arc is not cloned
                 let meta_vars_ref = Arc::get_mut(&mut self.symbol_table.meta_vars).unwrap();
-                meta_vars_ref.add_ty_var(mctx, ident.into(), ty.into(), &mut self.errors);
+                meta_vars_ref.add_non_local_meta_var(mctx, ident.into(), ty, &mut self.errors);
             }
         }
     }
 
     fn check_rust_item_or_patt_operation(
         &mut self,
-        mctx: &RPLMetaContext<'i>,
+        mctx: &MetaContext<'i>,
         rust_item_or_patt_operation: &'i pairs::RustItemOrPatternOperation<'i>,
     ) {
         match rust_item_or_patt_operation.deref() {
@@ -72,7 +71,7 @@ impl<'i> CheckCtxt<'i> {
         }
     }
 
-    fn check_rust_items(&mut self, mctx: &RPLMetaContext<'i>, rust_items: Vec<&'i pairs::RustItem<'i>>) {
+    fn check_rust_items(&mut self, mctx: &MetaContext<'i>, rust_items: Vec<&'i pairs::RustItem<'i>>) {
         for rust_item in rust_items {
             match rust_item.deref() {
                 Choice4::_0(rust_fn) => self.check_fn(mctx, rust_fn),
@@ -83,13 +82,12 @@ impl<'i> CheckCtxt<'i> {
         }
     }
 
-    fn check_fn(&mut self, mctx: &RPLMetaContext<'i>, rust_fn: &'i pairs::Fn<'i>) {
+    fn check_fn(&mut self, mctx: &MetaContext<'i>, rust_fn: &'i pairs::Fn<'i>) {
         let fn_name = rust_fn.FnSig().FnName();
         let fn_def = self.symbol_table.add_fn(mctx, fn_name, None, &mut self.errors);
         if let Some(fn_def) = fn_def {
             CheckFnCtxt {
                 meta_vars: fn_def.meta_vars.clone(),
-                _exports: &mut fn_def.exports,
                 _impl_def: None,
                 fn_def: &mut fn_def.inner,
                 errors: &mut self.errors,
@@ -98,13 +96,12 @@ impl<'i> CheckCtxt<'i> {
         }
     }
 
-    fn check_struct(&mut self, mctx: &RPLMetaContext<'i>, rust_struct: &'i pairs::Struct<'i>) {
+    fn check_struct(&mut self, mctx: &MetaContext<'i>, rust_struct: &'i pairs::Struct<'i>) {
         let struct_name = rust_struct.get_matched().2;
         let struct_def = self.symbol_table.add_struct(mctx, struct_name.into(), &mut self.errors);
         if let Some(struct_def) = struct_def {
             CheckVariantCtxt {
                 _meta_vars: struct_def.meta_vars.clone(),
-                _exports: &mut struct_def.exports,
                 variant_def: &mut struct_def.inner,
                 errors: &mut self.errors,
             }
@@ -112,13 +109,12 @@ impl<'i> CheckCtxt<'i> {
         }
     }
 
-    fn check_enum(&mut self, mctx: &RPLMetaContext<'i>, rust_enum: &'i pairs::Enum<'i>) {
+    fn check_enum(&mut self, mctx: &MetaContext<'i>, rust_enum: &'i pairs::Enum<'i>) {
         let enum_name = rust_enum.get_matched().1;
         let enum_def = self.symbol_table.add_enum(mctx, enum_name.into(), &mut self.errors);
         if let Some(enum_def) = enum_def {
             CheckEnumCtxt {
                 meta_vars: enum_def.meta_vars.clone(),
-                exports: &mut enum_def.exports,
                 enum_def: &mut enum_def.inner,
                 errors: &mut self.errors,
             }
@@ -128,21 +124,20 @@ impl<'i> CheckCtxt<'i> {
 }
 
 struct CheckFnCtxt<'i, 'r> {
-    meta_vars: Arc<MetaVarTable<'i>>,
-    _exports: &'r mut ExportTable<'i>,
+    meta_vars: Arc<NonLocalMetaTable>,
     _impl_def: Option<&'r ImplInner<'i>>,
     fn_def: &'r mut FnInner<'i>,
     errors: &'r mut Vec<RPLMetaError<'i>>,
 }
 
 impl<'i> CheckFnCtxt<'i, '_> {
-    fn check_fn(mut self, mctx: &RPLMetaContext<'i>, rust_fn: &'i pairs::Fn<'i>) {
+    fn check_fn(mut self, mctx: &MetaContext<'i>, rust_fn: &'i pairs::Fn<'i>) {
         let (fn_sig, fn_body) = rust_fn.get_matched();
         self.check_fn_sig(mctx, fn_sig);
         self.check_fn_body(mctx, fn_body);
     }
 
-    fn check_fn_sig(&mut self, mctx: &RPLMetaContext<'i>, fn_sig: &'i pairs::FnSig<'i>) {
+    fn check_fn_sig(&mut self, mctx: &MetaContext<'i>, fn_sig: &'i pairs::FnSig<'i>) {
         let (_, _, _, _, _, params, _, ret) = fn_sig.get_matched();
         if let Some(params) = params {
             let params = collect_elems_separated_by_comma!(params).collect::<Vec<_>>();
@@ -150,10 +145,12 @@ impl<'i> CheckFnCtxt<'i, '_> {
                 self.check_fn_param(mctx, param);
             }
         }
-        self.check_fn_ret(mctx, ret);
+        if let Some(ret) = ret {
+            self.check_fn_ret(mctx, ret);
+        }
     }
 
-    fn check_fn_ret(&mut self, mctx: &RPLMetaContext<'i>, ret: &'i pairs::FnRet<'i>) {
+    fn check_fn_ret(&mut self, mctx: &MetaContext<'i>, ret: &'i pairs::FnRet<'i>) {
         let (_, ret_ty) = ret.get_matched();
 
         match ret_ty {
@@ -162,7 +159,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
         }
     }
 
-    fn check_fn_param(&mut self, mctx: &RPLMetaContext<'i>, param: &'i pairs::FnParam<'i>) {
+    fn check_fn_param(&mut self, mctx: &MetaContext<'i>, param: &'i pairs::FnParam<'i>) {
         match param.deref() {
             Choice4::_0(self_param) => self.check_self_param(mctx, self_param),
             Choice4::_1(normal_param) => self.check_normal_param(mctx, normal_param),
@@ -172,29 +169,18 @@ impl<'i> CheckFnCtxt<'i, '_> {
         }
     }
 
-    fn check_self_param(&mut self, mctx: &RPLMetaContext<'i>, self_param: &'i pairs::SelfParam<'i>) {
+    fn check_self_param(&mut self, mctx: &MetaContext<'i>, self_param: &'i pairs::SelfParam<'i>) {
         self.fn_def.add_self_param(mctx, self_param, self.errors);
-        let (_, _, _, ty) = self_param.get_matched();
-        if let Some(ty) = ty {
-            let (_, ty) = ty.get_matched();
-            self.check_type(mctx, ty);
-        }
     }
 
-    fn check_normal_param(&mut self, mctx: &RPLMetaContext<'i>, normal_param: &'i pairs::NormalParam<'i>) {
-        let (param_pat, _, ty) = normal_param.get_matched();
-        if let Some(param_pat) = param_pat {
-            let (_, ident) = param_pat.get_matched();
-            let ident = match ident {
-                Choice2::_0(ident) => ident.into(),
-                Choice2::_1(meta) => meta.into(),
-            };
-            self.fn_def.add_param(mctx, ident, ty, self.errors);
-        };
+    fn check_normal_param(&mut self, mctx: &MetaContext<'i>, normal_param: &'i pairs::NormalParam<'i>) {
+        let (_, ident, _, ty) = normal_param.get_matched();
+        let ident = ident.into();
+        self.fn_def.add_param(mctx, ident, ty, self.errors);
         self.check_type(mctx, ty);
     }
 
-    fn check_fn_body(&mut self, mctx: &RPLMetaContext<'i>, fn_body: &'i pairs::FnBody<'i>) {
+    fn check_fn_body(&mut self, mctx: &MetaContext<'i>, fn_body: &'i pairs::FnBody<'i>) {
         if let Some(mir) = fn_body.MirBody() {
             self.check_mir(mctx, mir);
         }
@@ -202,7 +188,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
 }
 
 impl<'i> CheckFnCtxt<'i, '_> {
-    fn check_mir(&mut self, mctx: &RPLMetaContext<'i>, mir: &'i pairs::MirBody<'i>) {
+    fn check_mir(&mut self, mctx: &MetaContext<'i>, mir: &'i pairs::MirBody<'i>) {
         let (mir_decls, mir_stmts) = mir.get_matched();
         mir_decls
             .iter_matched()
@@ -212,7 +198,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
             .for_each(|stmt| self.check_mir_stmt(mctx, stmt));
     }
 
-    fn check_mir_stmt(&mut self, mctx: &RPLMetaContext<'i>, stmt: &'i pairs::MirStmt<'i>) {
+    fn check_mir_stmt(&mut self, mctx: &MetaContext<'i>, stmt: &'i pairs::MirStmt<'i>) {
         match stmt.deref() {
             Choice6::_0(mir_call) => {
                 let call = mir_call.get_matched().0.MirCall();
@@ -237,7 +223,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
         }
     }
 
-    fn check_mir_switch_int(&mut self, mctx: &RPLMetaContext<'i>, switch_int: &'i pairs::MirSwitchInt<'i>) {
+    fn check_mir_switch_int(&mut self, mctx: &MetaContext<'i>, switch_int: &'i pairs::MirSwitchInt<'i>) {
         let (_, _, operand, _, _, targets, _) = switch_int.get_matched();
         self.check_mir_operand(mctx, operand);
         let mut has_otherwise = false;
@@ -257,7 +243,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
         });
     }
 
-    fn check_switch_int_value(&mut self, mctx: &RPLMetaContext<'i>, value: &'i pairs::MirSwitchValue<'i>) {
+    fn check_switch_int_value(&mut self, mctx: &MetaContext<'i>, value: &'i pairs::MirSwitchValue<'i>) {
         match value.deref() {
             Choice3::_0(_bool) => {},
             Choice3::_1(int) => {
@@ -283,7 +269,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
         }
     }
 
-    fn check_switch_int_body(&mut self, mctx: &RPLMetaContext<'i>, body: &'i pairs::MirSwitchBody<'i>) {
+    fn check_switch_int_body(&mut self, mctx: &MetaContext<'i>, body: &'i pairs::MirSwitchBody<'i>) {
         match body.deref() {
             Choice4::_0(block) => {
                 self.check_mir_block(mctx, block);
@@ -305,20 +291,20 @@ impl<'i> CheckFnCtxt<'i, '_> {
         }
     }
 
-    fn check_mir_control(&mut self, _mctx: &RPLMetaContext<'i>, _control: &'i pairs::MirControl<'i>) {}
+    fn check_mir_control(&mut self, _mctx: &MetaContext<'i>, _control: &'i pairs::MirControl<'i>) {}
 
-    fn check_mir_loop(&mut self, mctx: &RPLMetaContext<'i>, mir_loop: &'i pairs::MirLoop<'i>) {
+    fn check_mir_loop(&mut self, mctx: &MetaContext<'i>, mir_loop: &'i pairs::MirLoop<'i>) {
         let (label, _, block) = mir_loop.get_matched();
         let _label = label.as_ref().map(|label| label.get_matched().0);
         self.check_mir_block(mctx, block);
     }
 
-    fn check_mir_block(&mut self, mctx: &RPLMetaContext<'i>, block: &'i pairs::MirStmtBlock<'i>) {
+    fn check_mir_block(&mut self, mctx: &MetaContext<'i>, block: &'i pairs::MirStmtBlock<'i>) {
         let (_, stmts, _) = block.get_matched();
         stmts.iter_matched().for_each(|stmt| self.check_mir_stmt(mctx, stmt));
     }
 
-    fn check_mir_decl(&mut self, mctx: &RPLMetaContext<'i>, mir_decl: &'i pairs::MirDecl<'i>) {
+    fn check_mir_decl(&mut self, mctx: &MetaContext<'i>, mir_decl: &'i pairs::MirDecl<'i>) {
         match mir_decl.deref() {
             Choice3::_0(type_decl) => self.check_mir_type_decl(mctx, type_decl),
             Choice3::_1(use_path) => self.check_use_path(mctx, use_path),
@@ -326,34 +312,33 @@ impl<'i> CheckFnCtxt<'i, '_> {
         }
     }
 
-    fn check_use_path(&mut self, mctx: &RPLMetaContext<'i>, use_path: &'i pairs::UsePath<'i>) {
+    fn check_use_path(&mut self, mctx: &MetaContext<'i>, use_path: &'i pairs::UsePath<'i>) {
         let path = use_path.Path();
         self.fn_def.add_path(mctx, path, self.errors);
     }
 
-    fn check_mir_type_decl(&mut self, mctx: &RPLMetaContext<'i>, type_decl: &'i pairs::MirTypeDecl<'i>) {
+    fn check_mir_type_decl(&mut self, mctx: &MetaContext<'i>, type_decl: &'i pairs::MirTypeDecl<'i>) {
         let (_, ident, _, ty, _) = type_decl.get_matched();
         self.fn_def.add_type(mctx, ident.into(), ty, self.errors);
     }
 
-    fn check_mir_local_decl(&mut self, mctx: &RPLMetaContext<'i>, local_decl: &'i pairs::MirLocalDecl<'i>) {
+    fn check_mir_local_decl(&mut self, mctx: &MetaContext<'i>, local_decl: &'i pairs::MirLocalDecl<'i>) {
         let (_, _, local, _, ty, rvalue_or_call, _) = local_decl.get_matched();
-        // FIXME: export
-        self.fn_def.add_place_local(local, ty);
+        self.fn_def.add_place_local(mctx, local, ty, self.errors);
         self.check_type(mctx, ty);
         if let Some(rvalue_or_call) = rvalue_or_call {
             self.check_mir_rvalue_or_call(mctx, rvalue_or_call.get_matched().1);
         }
     }
 
-    fn check_mir_rvalue_or_call(&mut self, mctx: &RPLMetaContext<'i>, rvalue_or_call: &'i pairs::MirRvalueOrCall<'i>) {
+    fn check_mir_rvalue_or_call(&mut self, mctx: &MetaContext<'i>, rvalue_or_call: &'i pairs::MirRvalueOrCall<'i>) {
         match rvalue_or_call.deref() {
             Choice2::_0(call) => self.check_mir_call(mctx, call),
             Choice2::_1(rvalue) => self.check_mir_rvalue(mctx, rvalue),
         }
     }
 
-    fn check_mir_call(&mut self, mctx: &RPLMetaContext<'i>, call: &'i pairs::MirCall<'i>) {
+    fn check_mir_call(&mut self, mctx: &MetaContext<'i>, call: &'i pairs::MirCall<'i>) {
         let (fn_operand, _, args, _) = call.get_matched();
         self.check_mir_fn_operand(mctx, fn_operand);
         if let Some(args) = args {
@@ -364,7 +349,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
         }
     }
 
-    fn check_mir_fn_operand(&mut self, mctx: &RPLMetaContext<'i>, fn_operand: &'i pairs::MirFnOperand<'i>) {
+    fn check_mir_fn_operand(&mut self, mctx: &MetaContext<'i>, fn_operand: &'i pairs::MirFnOperand<'i>) {
         match fn_operand.deref() {
             Choice5::_0(copy_) => self.check_mir_place(mctx, copy_.get_matched().1.MirPlace()),
             Choice5::_1(move_) => self.check_mir_place(mctx, move_.get_matched().1.MirPlace()),
@@ -374,11 +359,11 @@ impl<'i> CheckFnCtxt<'i, '_> {
         }
     }
 
-    fn check_mir_fn_pat(&mut self, _mctx: &RPLMetaContext<'i>) {
+    fn check_mir_fn_pat(&mut self, _mctx: &MetaContext<'i>) {
         // TODO: check if the function pattern is defined
     }
 
-    fn check_mir_rvalue(&mut self, mctx: &RPLMetaContext<'i>, rvalue: &'i pairs::MirRvalue<'i>) {
+    fn check_mir_rvalue(&mut self, mctx: &MetaContext<'i>, rvalue: &'i pairs::MirRvalue<'i>) {
         match rvalue.deref() {
             Choice12::_0(_place_holder) => {},
             Choice12::_1(mir_rvalue_cast) => {
@@ -409,25 +394,30 @@ impl<'i> CheckFnCtxt<'i, '_> {
         }
     }
 
-    fn check_mir_operand(&mut self, mctx: &RPLMetaContext<'i>, operand: &'i pairs::MirOperand<'i>) {
+    fn check_mir_operand(&mut self, mctx: &MetaContext<'i>, operand: &'i pairs::MirOperand<'i>) {
         match operand.deref() {
-            Choice5::_0(_) | Choice5::_1(_) => {},
-            Choice5::_2(op_move) => self.check_mir_place(mctx, op_move.MirPlace()),
-            Choice5::_3(op_copy) => self.check_mir_place(mctx, op_copy.MirPlace()),
-            Choice5::_4(op_const) => self.check_mir_const_operand(mctx, op_const),
+            Choice6::_0(_) | Choice6::_1(_) => {},
+            Choice6::_2(meta_var) => {
+                _ = self
+                    .meta_vars
+                    .get_non_local_meta_var(mctx, meta_var.into(), self.errors)
+            },
+            Choice6::_3(op_move) => self.check_mir_place(mctx, op_move.MirPlace()),
+            Choice6::_4(op_copy) => self.check_mir_place(mctx, op_copy.MirPlace()),
+            Choice6::_5(op_const) => self.check_mir_const_operand(mctx, op_const),
         }
     }
 
-    fn check_mir_const_operand(&mut self, mctx: &RPLMetaContext<'i>, konst: &'i pairs::MirOperandConstant<'i>) {
-        let (_, const_operand) = konst.get_matched();
-        match const_operand {
+    fn check_mir_const_operand(&mut self, mctx: &MetaContext<'i>, konst: &'i pairs::MirOperandConst<'i>) {
+        let (_, konst) = konst.get_matched();
+        match konst {
             Choice3::_0(_lit) => {},
             Choice3::_1(lang_item) => self.check_lang_item_with_args(mctx, lang_item),
             Choice3::_2(ty_path) => self.check_type_path(mctx, ty_path),
         }
     }
 
-    fn check_mir_place(&mut self, mctx: &RPLMetaContext<'i>, place: &'i pairs::MirPlace<'i>) {
+    fn check_mir_place(&mut self, mctx: &MetaContext<'i>, place: &'i pairs::MirPlace<'i>) {
         let (base, suffix) = place.get_matched();
         match base.deref() {
             Choice3::_0(local) => self.check_mir_place_local(mctx, local),
@@ -455,13 +445,13 @@ impl<'i> CheckFnCtxt<'i, '_> {
         });
     }
 
-    fn check_mir_place_local(&mut self, mctx: &RPLMetaContext<'i>, local: &'i pairs::MirPlaceLocal<'i>) {
+    fn check_mir_place_local(&mut self, mctx: &MetaContext<'i>, local: &'i pairs::MirPlaceLocal<'i>) {
         self.fn_def.get_place_local(mctx, local, self.errors);
     }
 
     fn check_mir_rvalue_aggregate(
         &mut self,
-        mctx: &RPLMetaContext<'i>,
+        mctx: &MetaContext<'i>,
         mir_rvalue_aggregate: &'i pairs::MirRvalueAggregate<'i>,
     ) {
         match mir_rvalue_aggregate.deref() {
@@ -516,32 +506,28 @@ impl<'i> CheckFnCtxt<'i, '_> {
         }
     }
 
-    fn check_path_or_lang_item(&mut self, mctx: &RPLMetaContext<'i>, path_or_lang_item: &'i pairs::PathOrLangItem<'i>) {
+    fn check_path_or_lang_item(&mut self, mctx: &MetaContext<'i>, path_or_lang_item: &'i pairs::PathOrLangItem<'i>) {
         match path_or_lang_item.deref() {
             Choice2::_0(path) => self.check_path(mctx, path),
             Choice2::_1(lang_item) => self.check_lang_item_with_args(mctx, lang_item),
         }
     }
 
-    fn check_type(&mut self, mctx: &RPLMetaContext<'i>, ty: &'i pairs::Type<'i>) {
+    fn check_type(&mut self, mctx: &MetaContext<'i>, ty: &'i pairs::Type<'i>) {
         match ty.deref() {
             Choice14::_0(ty_array) => self.check_type(mctx, ty_array.Type()),
             Choice14::_1(ty_group) => self.check_type(mctx, ty_group.Type()),
             Choice14::_2(_ty_never) => {},
             Choice14::_3(ty_paren) => self.check_type(mctx, ty_paren.Type()),
-            Choice14::_4(ty_meta_var) => {
-                let ident = ty_meta_var.MetaVariable().into();
-                _ = self.meta_vars.get_ty_var(mctx, ident, self.errors)
-            },
-            Choice14::_5(ty_ptr) => self.check_type(mctx, ty_ptr.Type()),
-            Choice14::_6(ty_ref) => {
+            Choice14::_4(ty_ptr) => self.check_type(mctx, ty_ptr.Type()),
+            Choice14::_5(ty_ref) => {
                 if let Some(region) = ty_ref.Region() {
                     self.check_region(mctx, region);
                 }
                 self.check_type(mctx, ty_ref.Type());
             },
-            Choice14::_7(ty_slice) => self.check_type(mctx, ty_slice.Type()),
-            Choice14::_8(ty_tuple) => {
+            Choice14::_6(ty_slice) => self.check_type(mctx, ty_slice.Type()),
+            Choice14::_7(ty_tuple) => {
                 let (_, tys, _) = ty_tuple.get_matched();
                 if let Some(tys) = tys {
                     let tys = collect_elems_separated_by_comma!(tys).collect::<Vec<_>>();
@@ -550,17 +536,21 @@ impl<'i> CheckFnCtxt<'i, '_> {
                     }
                 }
             },
-            Choice14::_9(ty_path) => self.check_type_path(mctx, ty_path),
-            Choice14::_10(lang_item) => {
+            Choice14::_8(ty_meta_var) => {
+                let ident = ty_meta_var.MetaVariable().into();
+                _ = self.meta_vars.get_non_local_meta_var(mctx, ident, self.errors)
+            },
+            Choice14::_9(_ty_self) => {},
+            Choice14::_10(_primitive_types) => {},
+            Choice14::_11(_place_holder) => {},
+            Choice14::_12(ty_path) => self.check_type_path(mctx, ty_path),
+            Choice14::_13(lang_item) => {
                 self.check_lang_item_with_args(mctx, lang_item);
             },
-            Choice14::_11(_ty_self) => {},
-            Choice14::_12(_primitive_types) => {},
-            Choice14::_13(_place_holder) => {},
         }
     }
 
-    fn check_type_path(&mut self, mctx: &RPLMetaContext<'i>, ty_path: &'i pairs::TypePath<'i>) {
+    fn check_type_path(&mut self, mctx: &MetaContext<'i>, ty_path: &'i pairs::TypePath<'i>) {
         let (qself, path) = ty_path.get_matched();
         if let Some(qself) = qself {
             self.check_type(mctx, qself.Type());
@@ -568,7 +558,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
         self.check_path(mctx, path);
     }
 
-    fn check_path(&mut self, mctx: &RPLMetaContext<'i>, path: &'i pairs::Path<'i>) {
+    fn check_path(&mut self, mctx: &MetaContext<'i>, path: &'i pairs::Path<'i>) {
         let path: Path<'i> = path.into();
         if let Some(ident) = path.as_ident() {
             if !ident_is_primitive(&ident) {
@@ -583,7 +573,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
         }
     }
 
-    fn check_generic_args(&mut self, mctx: &RPLMetaContext<'i>, path_arguments: &'i pairs::PathArguments<'i>) {
+    fn check_generic_args(&mut self, mctx: &MetaContext<'i>, path_arguments: &'i pairs::PathArguments<'i>) {
         let (_, _, args, _) = path_arguments.get_matched();
 
         let args = collect_elems_separated_by_comma!(args).collect::<Vec<_>>();
@@ -592,7 +582,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
         }
     }
 
-    fn check_generic_arg(&mut self, mctx: &RPLMetaContext<'i>, arg: &'i pairs::GenericArgument<'i>) {
+    fn check_generic_arg(&mut self, mctx: &MetaContext<'i>, arg: &'i pairs::GenericArgument<'i>) {
         match arg.deref() {
             Choice3::_0(region) => self.check_region(mctx, region),
             Choice3::_1(ty) => self.check_type(mctx, ty),
@@ -606,9 +596,9 @@ impl<'i> CheckFnCtxt<'i, '_> {
         }
     }
 
-    fn check_region(&mut self, _mctx: &RPLMetaContext<'i>, _region: &'i pairs::Region<'i>) {}
+    fn check_region(&mut self, _mctx: &MetaContext<'i>, _region: &'i pairs::Region<'i>) {}
 
-    fn check_const(&mut self, mctx: &RPLMetaContext<'i>, konst: &'i pairs::Konst<'i>) {
+    fn check_const(&mut self, mctx: &MetaContext<'i>, konst: &'i pairs::Konst<'i>) {
         match konst.deref() {
             Choice2::_0(_lit) => {},
             Choice2::_1(ty_path) => {
@@ -617,7 +607,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
         }
     }
 
-    fn check_lang_item_with_args(&mut self, mctx: &RPLMetaContext<'i>, lang_item: &'i pairs::LangItemWithArgs<'i>) {
+    fn check_lang_item_with_args(&mut self, mctx: &MetaContext<'i>, lang_item: &'i pairs::LangItemWithArgs<'i>) {
         let item_span = lang_item.String().span;
         let args = lang_item.AngleBracketedGenericArguments();
 
@@ -627,7 +617,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
         let item_name = item_name.trim_matches('"');
         _ = rustc_hir::LangItem::from_name(rustc_span::Symbol::intern(item_name)).ok_or_else(|| {
             self.errors.push(RPLMetaError::UnknownLangItem {
-                value: item_span.as_str(),
+                value: Symbol::intern(item_name),
                 span: SpanWrapper::new(item_span, mctx.get_active_path()),
             });
         });
@@ -643,14 +633,13 @@ impl<'i> CheckFnCtxt<'i, '_> {
 }
 
 struct CheckVariantCtxt<'i, 'r> {
-    _meta_vars: Arc<MetaVarTable<'i>>,
-    _exports: &'r mut ExportTable<'i>,
+    _meta_vars: Arc<NonLocalMetaTable>,
     variant_def: &'r mut Variant<'i>,
     errors: &'r mut Vec<RPLMetaError<'i>>,
 }
 
 impl<'i> CheckVariantCtxt<'i, '_> {
-    fn check_struct(mut self, mctx: &RPLMetaContext<'i>, struct_: &'i pairs::Struct<'i>) {
+    fn check_struct(mut self, mctx: &MetaContext<'i>, struct_: &'i pairs::Struct<'i>) {
         let (_, _, _, _, fields, _) = struct_.get_matched();
         if let Some(fields) = fields {
             let fields = collect_elems_separated_by_comma!(fields).collect::<Vec<_>>();
@@ -658,13 +647,13 @@ impl<'i> CheckVariantCtxt<'i, '_> {
         }
     }
 
-    fn check_fields(&mut self, mctx: &RPLMetaContext<'i>, fields: impl Iterator<Item = &'i pairs::Field<'i>>) {
+    fn check_fields(&mut self, mctx: &MetaContext<'i>, fields: impl Iterator<Item = &'i pairs::Field<'i>>) {
         for field in fields {
             self.check_field(mctx, field);
         }
     }
 
-    fn check_field(&mut self, mctx: &RPLMetaContext<'i>, field: &'i pairs::Field<'i>) {
+    fn check_field(&mut self, mctx: &MetaContext<'i>, field: &'i pairs::Field<'i>) {
         let (ident, _, ty) = field.get_matched();
         let ident = ident.into();
         self.variant_def.add_field(mctx, ident, ty, self.errors);
@@ -672,20 +661,19 @@ impl<'i> CheckVariantCtxt<'i, '_> {
         self.check_type(mctx, ty);
     }
 
-    fn check_ident(&mut self, _mctx: &RPLMetaContext<'i>, _ident: Ident<'i>) {}
+    fn check_ident(&mut self, _mctx: &MetaContext<'i>, _ident: Ident<'i>) {}
 
-    fn check_type(&mut self, _mctx: &RPLMetaContext<'i>, _ty: &'i pairs::Type<'i>) {}
+    fn check_type(&mut self, _mctx: &MetaContext<'i>, _ty: &'i pairs::Type<'i>) {}
 }
 
 struct CheckEnumCtxt<'i, 'r> {
-    meta_vars: Arc<MetaVarTable<'i>>,
-    exports: &'r mut ExportTable<'i>,
+    meta_vars: Arc<NonLocalMetaTable>,
     enum_def: &'r mut EnumInner<'i>,
     errors: &'r mut Vec<RPLMetaError<'i>>,
 }
 
 impl<'i> CheckEnumCtxt<'i, '_> {
-    fn check_enum(&mut self, mctx: &RPLMetaContext<'i>, enum_: &'i pairs::Enum<'i>) {
+    fn check_enum(&mut self, mctx: &MetaContext<'i>, enum_: &'i pairs::Enum<'i>) {
         let (_, _, _, enum_variants, _) = enum_.get_matched();
         if let Some(enum_variants) = enum_variants {
             let enum_variants = collect_elems_separated_by_comma!(enum_variants).collect::<Vec<_>>();
@@ -712,7 +700,6 @@ impl<'i> CheckEnumCtxt<'i, '_> {
                 {
                     CheckVariantCtxt {
                         _meta_vars: self.meta_vars.clone(),
-                        _exports: self.exports,
                         variant_def,
                         errors: self.errors,
                     }

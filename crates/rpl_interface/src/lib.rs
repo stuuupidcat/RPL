@@ -1,6 +1,7 @@
 #![feature(rustc_private)]
 #![feature(let_chains)]
 #![feature(decl_macro)]
+#![recursion_limit = "1024"]
 
 extern crate rustc_data_structures;
 extern crate rustc_driver;
@@ -19,7 +20,7 @@ pub use callbacks::{DefaultCallbacks, RPL_ARGS_ENV, RplCallbacks, RustcCallbacks
 
 static RPL_LOCALE_RESOURCES: &[&str] = &[
     rpl_driver::DEFAULT_LOCALE_RESOURCE,
-    rpl_patterns::DEFAULT_LOCALE_RESOURCE,
+    // rpl_patterns::DEFAULT_LOCALE_RESOURCE,
     rpl_utils::DEFAULT_LOCALE_RESOURCE,
 ];
 

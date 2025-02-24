@@ -11,7 +11,7 @@ mod graph;
 use std::io::{self, Write};
 
 use gsgdt::{GraphvizSettings, NodeStyle};
-use rpl_context::pat::MirPattern;
+use rpl_context_pest::pat::MirPattern;
 use rustc_middle::mir;
 use rustc_middle::mir::interpret::PointerArithmetic;
 use rustc_middle::ty::TyCtxt;

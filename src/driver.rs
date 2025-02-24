@@ -6,6 +6,7 @@
 #![warn(rust_2018_idioms, unused_lifetimes)]
 // warn on rustc internal lints
 #![warn(rustc::internal)]
+#![recursion_limit = "256"]
 
 // FIXME: switch to something more ergonomic here, once available.
 // (Currently there is no way to opt into sysroot crates without `extern crate`.)
@@ -65,6 +66,36 @@ fn test_arg_value() {
     assert_eq!(arg_value(args, "--foo", |_| true), None);
 }
 
+fn consume_arg_values(args: &mut Vec<String>, find_arg: &str) -> Vec<String> {
+    let mut found_values = Vec::new();
+    let find_arg_with_eq = format!("{}=", find_arg);
+    let mut i = 0;
+
+    while i < args.len() {
+        let arg = args[i].clone();
+        if let Some(stripped) = arg.strip_prefix(&find_arg_with_eq) {
+            args.remove(i);
+            found_values.push(stripped.to_string());
+        } else if arg == find_arg {
+            args.remove(i);
+            if i < args.len() {
+                found_values.push(args.remove(i));
+            }
+        } else {
+            i += 1;
+        }
+    }
+    found_values
+}
+
+#[test]
+fn test_consume_arg_values() {
+    let args = vec!["--foo=bar", "--bar", "x", "--foo", "baz", "--foo=qux"];
+    let mut args = args.iter().map(ToString::to_string).collect();
+    assert_eq!(consume_arg_values(&mut args, "--foo"), vec!["bar", "baz", "qux"]);
+    assert_eq!(args, vec!["--bar", "x"]);
+}
+
 #[allow(clippy::ignored_unit_patterns)]
 fn display_help() {
     println!("{}", help_message());
@@ -98,7 +129,7 @@ fn logger_config() -> rustc_log::LoggerConfig {
 pub fn main() {
     let early_dcx = EarlyDiagCtxt::new(ErrorOutputType::default());
 
-    rustc_driver::init_logger(&early_dcx, logger_config());
+    rustc_driver::init_rustc_env_logger(&early_dcx);
 
     rustc_driver::install_ice_hook(BUG_REPORT_URL, |handler| {
         // FIXME: this macro calls unwrap internally but is called in a panicking context!  It's not
@@ -114,7 +145,10 @@ pub fn main() {
     });
 
     exit(rustc_driver::catch_with_exit_code(move || {
-        let mut orig_args: Vec<String> = env::args().collect();
+        let mut orig_args: Vec<String> = rustc_driver::args::raw_args(&early_dcx);
+
+        // collect pattern paths from `--pat` and consume them
+        let pattern_paths = consume_arg_values(&mut orig_args, "--pat");
 
         let has_sysroot_arg = |args: &mut [String]| -> bool {
             if arg_value(args, "--sysroot", |_| true).is_some() {
@@ -169,7 +203,6 @@ pub fn main() {
         // Setting RUSTC_WRAPPER causes Cargo to pass 'rustc' as the first argument.
         // We're invoking the compiler programmatically, so we ignore this/
         let wrapper_mode = orig_args.get(1).map(Path::new).and_then(Path::file_stem) == Some("rustc".as_ref());
-
         if wrapper_mode {
             // we still want to be able to invoke it normally though
             orig_args.remove(1);
@@ -215,11 +248,8 @@ pub fn main() {
             /* rustc_driver::RunCompiler::new(&args, &mut RplCallbacks::new(rpl_args_var))
             .set_using_internal_features(using_internal_features)
             .run() */
-            rustc_driver::run_compiler(&args, &mut RplCallbacks::new(rpl_args_var))
+            rustc_driver::run_compiler(&args, &mut RplCallbacks::new(rpl_args_var, pattern_paths))
         } else {
-            /* rustc_driver::RunCompiler::new(&args, &mut RustcCallbacks::new(rpl_args_var))
-            .set_using_internal_features(using_internal_features)
-            .run() */
             rustc_driver::run_compiler(&args, &mut RustcCallbacks::new(rpl_args_var))
         }
     }))
@@ -237,6 +267,7 @@ Run <cyan>rpl-driver</> with the same arguments you use for <cyan>rustc</>
 <green,bold>Common options:</>
     <cyan,bold>-h</>, <cyan,bold>--help</>               Print this message
     <cyan,bold>-V</>, <cyan,bold>--version</>            Print version info and exit
+    <cyan,bold>--pat</>                    Path to the pattern file(s), won't be passed to rustc
     <cyan,bold>--rustc</>                  Pass all arguments to <cyan>rustc</>
 "
     )

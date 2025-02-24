@@ -3,6 +3,7 @@
 use error_enum::error_type;
 use parser::{ParseError, SpanWrapper};
 use pest_typed::Span;
+use rustc_span::Symbol;
 use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -35,36 +36,36 @@ error_type!(
             }
                 "Cannot locate RPL pattern file `{path:?}` at {span}. Caused by:\n{error}",
             301 SymbolAlreadyDeclared {
-                ident: &'i str,
+                ident: Symbol,
                 span: SpanWrapper<'i>,
             }
                 "Symbol `{ident}` is already declared. \n{span}",
             302 SymbolNotDeclared {
-                ident: &'i str,
+                ident: Symbol,
                 span: SpanWrapper<'i>,
             }
                 "Symbol `{ident}` is not declared. \n{span}",
-            303 TypeMetaVariableAlreadyDeclared {
-                meta_var: &'i str,
+            303 NonLocalMetaVariableAlreadyDeclared {
+                meta_var: Symbol,
                 span: SpanWrapper<'i>,
             }
-                "Type meta variable `{meta_var}` is already declared. \n{span}",
-            304 TypeMetaVariableNotDeclared {
-                meta_var: &'i str,
+                "Non local meta variable `{meta_var}` is already declared. \n{span}",
+            304 NonLocalMetaVariableNotDeclared {
+                meta_var: Symbol,
                 span: SpanWrapper<'i>,
             }
-                "Type variable `{meta_var}` is not declared. \n{span}",
+                "Non local meta variable `{meta_var}` is not declared. \n{span}",
             305 ExportAlreadyDeclared {
                 _span: Span<'i>,
             }
                 "Export is already declared.",
             306 TypeOrPathAlreadyDeclared {
-                type_or_path: &'i str,
+                type_or_path: Symbol,
                 span: SpanWrapper<'i>,
             }
                 "Type or path `{type_or_path}` is already declared. \n{span}",
             307 TypeOrPathNotDeclared {
-                type_or_path: &'i str,
+                type_or_path: Symbol,
                 span: SpanWrapper<'i>,
             }
                 "Type or path `{type_or_path}` is not declared. \n{span}",
@@ -104,7 +105,7 @@ error_type!(
             }
                 "Missing integer suffix in switchInt statement. \n{span}",
             317 UnknownLangItem {
-                value: &'i str,
+                value: Symbol,
                 span: SpanWrapper<'i>,
             }
                 "Unknown lang item `{value}`. \n{span}",

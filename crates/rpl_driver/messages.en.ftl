@@ -1,0 +1,1 @@
+rpl_driver_error_found_with_pattern = An error was found with input RPL pattern(s)

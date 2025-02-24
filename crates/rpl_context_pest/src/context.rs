@@ -1,7 +1,8 @@
 use std::num::NonZero;
 use std::ops::Deref;
 
-use rpl_meta_pest::context::RPLMetaContext;
+use rpl_meta_pest::idx::RPLIdx;
+use rpl_meta_pest::meta::collect_blocks;
 use rpl_parser::pairs;
 use rustc_arena::DroplessArena;
 use rustc_data_structures::fx::FxHashMap;
@@ -71,9 +72,7 @@ impl<'pcx> Deref for PatCtxt<'pcx> {
 pub struct PatternCtxt<'pcx> {
     arena: &'pcx WorkerLocal<crate::Arena<'pcx>>,
     patterns: Lock<FxHashMap<Symbol, &'pcx pat::Pattern<'pcx>>>,
-    patts: Lock<FxHashMap<&'pcx str, &'pcx pat::Pattern<'pcx>>>,
-    utils: Lock<FxHashMap<&'pcx str, &'pcx pat::Pattern<'pcx>>>,
-    diags: Lock<FxHashMap<&'pcx str, ()>>,
+    rpl_patterns: Lock<FxHashMap<RPLIdx, &'pcx pat::Pattern<'pcx>>>,
     pub primitive_types: PrimitiveTypes<'pcx>,
 }
 
@@ -83,9 +82,7 @@ impl PatternCtxt<'_> {
         let pcx = &PatternCtxt {
             arena,
             patterns: Default::default(),
-            patts: Default::default(),
-            utils: Default::default(),
-            diags: Default::default(),
+            rpl_patterns: Default::default(),
             primitive_types: PrimitiveTypes::new(&arena.dropless),
         };
         f(PatCtxt { pcx })
@@ -108,38 +105,38 @@ impl<'pcx> PatCtxt<'pcx> {
         }
         self.arena.alloc_slice(slice)
     }
-    fn mk_generic_args(self, generics: &[pat::GenericArgKind<'pcx>]) -> pat::GenericArgsRef<'pcx> {
-        pat::GenericArgsRef(self.mk_slice(generics))
-    }
-    pub fn mk_type_relative(self, ty: Ty<'pcx>, path: &str) -> pat::Path<'pcx> {
-        pat::Path::TypeRelative(ty, Symbol::intern(path))
-    }
+    // fn mk_generic_args(self, generics: &[pat::GenericArgKind<'pcx>]) -> pat::GenericArgsRef<'pcx> {
+    //     pat::GenericArgsRef(self.mk_slice(generics))
+    // }
+    // pub fn mk_type_relative(self, ty: Ty<'pcx>, path: &str) -> pat::Path<'pcx> {
+    //     pat::Path::TypeRelative(ty, Symbol::intern(path))
+    // }
     pub fn mk_lang_item(self, item: &str) -> pat::Path<'pcx> {
         hir::LangItem::from_name(Symbol::intern(item))
             .unwrap_or_else(|| panic!("unknown language item \"{item}\""))
             .into()
     }
-    pub fn mk_item_path(self, path: &[&str]) -> pat::ItemPath<'pcx> {
-        pat::ItemPath(self.mk_symbols(path))
-    }
-    pub fn mk_path_with_args(
-        self,
-        path: impl Into<pat::Path<'pcx>>,
-        generics: &[pat::GenericArgKind<'pcx>],
-    ) -> pat::PathWithArgs<'pcx> {
-        let path = path.into();
-        let args = self.mk_generic_args(generics);
-        pat::PathWithArgs { path, args }
-    }
+    // pub fn mk_item_path(self, path: &[&str]) -> pat::ItemPath<'pcx> {
+    //     pat::ItemPath(self.mk_symbols(path))
+    // }
+    // pub fn mk_path_with_args(
+    //     self,
+    //     path: impl Into<pat::Path<'pcx>>,
+    //     generics: &[pat::GenericArgKind<'pcx>],
+    // ) -> pat::PathWithArgs<'pcx> {
+    //     let path = path.into();
+    //     let args = self.mk_generic_args(generics);
+    //     pat::PathWithArgs { path, args }
+    // }
     pub fn mk_path_ty(self, path_with_args: pat::PathWithArgs<'pcx>) -> Ty<'pcx> {
         self.mk_ty(TyKind::Path(path_with_args))
     }
     pub fn mk_adt_ty(self, path_with_args: pat::PathWithArgs<'pcx>) -> Ty<'pcx> {
         self.mk_path_ty(path_with_args)
     }
-    pub fn mk_adt_pat_ty(self, pat: Symbol) -> Ty<'pcx> {
-        self.mk_ty(TyKind::AdtPat(pat))
-    }
+    // pub fn mk_adt_pat_ty(self, pat: Symbol) -> Ty<'pcx> {
+    //     self.mk_ty(TyKind::AdtPat(pat))
+    // }
     pub fn mk_array_ty(self, ty: Ty<'pcx>, len: pat::Const<'pcx>) -> Ty<'pcx> {
         self.mk_ty(TyKind::Array(ty, len))
     }
@@ -179,16 +176,34 @@ impl<'pcx> PatCtxt<'pcx> {
     pub fn mk_mir_pattern(self, pattern: pat::MirPattern<'pcx>) -> &'pcx pat::MirPattern<'pcx> {
         self.arena.alloc(pattern)
     }
-    pub fn add_parsed_patterns(self, _mctx: &rpl_meta_pest::context::RPLMetaContext<'_>) {
-        todo!()
-    }
-    pub fn for_each_pattern(self, mut f: impl FnMut(Symbol, &'pcx pat::Pattern<'pcx>)) {
-        for (&name, pattern) in self.patterns.lock().iter() {
-            f(name, *pattern);
+    pub fn add_parsed_patterns<'mcx: 'pcx>(self, mctx: &'mcx rpl_meta_pest::context::MetaContext<'mcx>) {
+        for (id, syntax_tree) in mctx.syntax_trees.iter() {
+            self.add_parsed_pattern(*id, syntax_tree, mctx);
         }
     }
-    pub fn add_parsed_pattern(self, name: Symbol, pattern: &pairs::pattBlockItem<'_>) {
-        let pattern = self.arena.alloc(pat::Pattern::from_parsed(self, pattern));
-        self.patterns.lock().insert(name, pattern);
+    pub fn for_each_rpl_pattern(self, mut f: impl FnMut(RPLIdx, &'pcx pat::Pattern<'pcx>)) {
+        for (&id, pattern) in self.rpl_patterns.lock().iter() {
+            f(id, *pattern);
+        }
+    }
+    pub fn add_parsed_pattern<'mcx: 'pcx>(
+        self,
+        id: RPLIdx,
+        main: &pairs::main<'pcx>,
+        mctx: &'mcx rpl_meta_pest::context::MetaContext<'mcx>,
+    ) {
+        // FIXME
+        let (utils, patts, diags) = collect_blocks(main);
+
+        let patt_items = patts.iter().flat_map(|patt| patt.get_matched().3.iter_matched());
+        let patt_symbol_tables = &mctx.symbol_tables.get(&id).unwrap().patt_symbol_tables;
+
+        // zip patt_items and patt_symbol_tables
+        patt_items
+            .zip(patt_symbol_tables.iter())
+            .for_each(|(item, symbol_table)| {
+                let pattern = self.arena.alloc(pat::Pattern::from_parsed(self, item, symbol_table.1));
+                self.rpl_patterns.lock().insert(id, pattern);
+            });
     }
 }

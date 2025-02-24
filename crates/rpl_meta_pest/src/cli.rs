@@ -5,35 +5,28 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-pub fn collect_file_from_args_for_test() -> Vec<(PathBuf, String)> {
-    let args = std::env::args();
-    let args = args.skip(1);
-    if args.len() == 0 {
-        eprintln!("Usage: cargo run --package rpl_meta_pest --example meta-collector <file1> <file2> ...");
-        vec![]
-    } else {
-        let mut res = vec![];
-        for arg in args {
-            traverse_rpl(arg.into(), |path| {
-                let buf = read_file_from_path_buf(&path);
-                let buf = match buf {
-                    Ok(buf) => buf,
-                    Err(err) => {
-                        eprintln!(
-                            "{}",
-                            RPLMetaError::FileError {
-                                path,
-                                error: Arc::new(err)
-                            }
-                        );
-                        return;
-                    },
-                };
-                res.push((path, buf));
-            });
-        }
-        res
+pub fn collect_file_from_string_args(args: &[String]) -> Vec<(PathBuf, String)> {
+    let mut res = vec![];
+    for arg in args {
+        traverse_rpl(arg.into(), |path| {
+            let buf = read_file_from_path_buf(&path);
+            let buf = match buf {
+                Ok(buf) => buf,
+                Err(err) => {
+                    eprintln!(
+                        "{}",
+                        RPLMetaError::FileError {
+                            path,
+                            error: Arc::new(err)
+                        }
+                    );
+                    return;
+                },
+            };
+            res.push((path, buf));
+        });
     }
+    res
 }
 
 fn is_rpl(path: &OsStr) -> bool {

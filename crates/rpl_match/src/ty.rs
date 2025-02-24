@@ -29,7 +29,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
         pcx: PatCtxt<'pcx>,
         typing_env: ty::TypingEnv<'tcx>,
         pat: &'pcx pat::Pattern<'pcx>,
-        meta: &pat::MetaVars<'pcx>,
+        meta: &pat::NonLocalMetaVars<'pcx>,
     ) -> Self {
         Self {
             tcx,

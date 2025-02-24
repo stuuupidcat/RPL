@@ -9,7 +9,7 @@ edition.workspace = true
 
 [dependencies]
 gsgdt.workspace = true
-rpl_context.workspace = true
+rpl_context_pest.workspace = true
 rpl_mir.workspace = true
 rpl_mir_graph.workspace = true
 

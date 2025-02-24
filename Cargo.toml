@@ -14,7 +14,7 @@ keywords = ["Bug detection"]
 repository = "https://github.com/stuuupidcat/RPL"
 
 [workspace.dependencies]
-rpl_context = { path = "./crates/rpl_context" }
+# rpl_context = { path = "./crates/rpl_context" }
 rpl_driver = { path = "./crates/rpl_driver" }
 rpl_parser = { path = "./crates/rpl_parser" }
 rpl_graphviz = { path = "./crates/rpl_graphviz" }
@@ -26,7 +26,7 @@ rpl_mir_graph = { path = "./crates/rpl_mir_graph" }
 rpl_mir_transform = { path = "./crates/rpl_mir_transform" }
 rpl_pat_expand = { path = "./crates/rpl_pat_expand" }
 rpl_pat_syntax = { path = "./crates/rpl_pat_syntax" }
-rpl_patterns = { path = "./crates/rpl_patterns" }
+# rpl_patterns = { path = "./crates/rpl_patterns" }
 rpl_utils = { path = "./crates/rpl_utils" }
 rpl_meta_pest = { path = "./crates/rpl_meta_pest" }
 rpl_context_pest = { path = "./crates/rpl_context_pest" }
@@ -39,6 +39,7 @@ itertools = "0.12"
 rustc-semver = "1.1"
 walkdir = "2.3"
 quote = "1.0.38"
+sync-arena = { version = "0.1.6", features = ["std-reentrant-lock"] }
 syn = { version = "2.0", features = ["full"] }
 proc-macro2 = "1.0"
 tracing = "0.1.28"
@@ -55,9 +56,9 @@ num-traits = "0.2.8"
 pest = { version = "2.7.10", features = ["std"] }
 pest_generator = { version = "2.7.10", features = ["grammar-extras"] }
 pest_derive = { version = "2.7.10", features = ["grammar-extras"] }
-pest_typed = { version = "0.17.1", features = ["std"] }
-pest_typed_generator = { version = "0.17.1", features = ["grammar-extras"] }
-pest_typed_derive = { version = "0.17.1", features = ["grammar-extras"] }
+pest_typed = { version = "0.17.2", features = ["std"] }
+pest_typed_generator = { version = "0.17.2", features = ["grammar-extras"] }
+pest_typed_derive = { version = "0.17.2", features = ["grammar-extras"] }
 colored = "3.0.0"
 error-enum = "0.4.1"
 schemars = "0.8.21"

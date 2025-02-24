@@ -201,7 +201,7 @@ dependencies = [
  "semver",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror",
 ]
 
 [[package]]
@@ -937,20 +937,20 @@ dependencies = [
 
 [[package]]
 name = "pest"
-version = "2.7.15"
+version = "2.7.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b7cafe60d6cf8e62e1b9b2ea516a089c008945bb5a275416789e7db0bc199dc"
+checksum = "879952a81a83930934cbf1786752d6dedc3b1f29e8f8fb2ad1d0a36f377cf442"
 dependencies = [
  "memchr",
- "thiserror 2.0.11",
+ "thiserror",
  "ucd-trie",
 ]
 
 [[package]]
 name = "pest_derive"
-version = "2.7.15"
+version = "2.7.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "816518421cfc6887a0d62bf441b6ffb4536fcc926395a69e1a85852d4363f57e"
+checksum = "d214365f632b123a47fd913301e14c946c61d1c183ee245fa76eb752e59a02dd"
 dependencies = [
  "pest",
  "pest_generator",
@@ -958,9 +958,9 @@ dependencies = [
 
 [[package]]
 name = "pest_generator"
-version = "2.7.15"
+version = "2.7.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7d1396fd3a870fc7838768d171b4616d5c91f6cc25e377b673d714567d99377b"
+checksum = "eb55586734301717aea2ac313f50b2eb8f60d2fc3dc01d190eefa2e625f60c4e"
 dependencies = [
  "pest",
  "pest_meta",
@@ -971,9 +971,9 @@ dependencies = [
 
 [[package]]
 name = "pest_meta"
-version = "2.7.15"
+version = "2.7.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1e58089ea25d717bfd31fb534e4f3afcc2cc569c70de3e239778991ea3b7dea"
+checksum = "b75da2a70cf4d9cb76833c990ac9cd3923c9a8905a8929789ce347c84564d03d"
 dependencies = [
  "once_cell",
  "pest",
@@ -982,9 +982,9 @@ dependencies = [
 
 [[package]]
 name = "pest_typed"
-version = "0.17.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "085a5c6e989e54d81fce3e1526384d763770c3653e9e175521b5c300c42e83b0"
+checksum = "a35209cc6e8f388af4db342846c84626021cb2ccf76368092e795e9812f5b5a6"
 dependencies = [
  "cmp_by_derive",
  "custom_debug_derive",
@@ -994,18 +994,18 @@ dependencies = [
 
 [[package]]
 name = "pest_typed_derive"
-version = "0.17.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1260ef6b0cbb5612c21c78964fee85d17ec6b88a2475fa8e966799e56d272dc5"
+checksum = "9ec509545870d61fdc439f1c5472b40cd5fa356fa1aa42c05a8e5fd5abba54c1"
 dependencies = [
  "pest_typed_generator",
 ]
 
 [[package]]
 name = "pest_typed_generator"
-version = "0.17.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6264506747515215344d2599404c8da02b1b7e4617f64b6db1836bf8d0338f6d"
+checksum = "b39129d6874232b296c0c937614fb1f07cd115f2cd89ba3b1f0d9b5ff9d9a9fc"
 dependencies = [
  "pest",
  "pest_meta",
@@ -1140,7 +1140,7 @@ checksum = "ba009ff324d1fc1b900bd1fdb31564febe58a8ccc8a6fdbb93b543d33b13ca43"
 dependencies = [
  "getrandom",
  "libredox",
- "thiserror 1.0.69",
+ "thiserror",
 ]
 
 [[package]]
@@ -1203,7 +1203,7 @@ dependencies = [
  "serde_json",
  "syn 2.0.98",
  "tester",
- "thiserror 1.0.69",
+ "thiserror",
  "tokio 1.43.0",
  "tokio-util",
  "toml",
@@ -1235,9 +1235,9 @@ dependencies = [
 name = "rpl_driver"
 version = "0.1.0"
 dependencies = [
- "rpl_context",
+ "rpl_context_pest",
  "rpl_meta_pest",
- "rpl_patterns",
+ "rpl_mir",
  "rpl_utils",
 ]
 
@@ -1247,7 +1247,7 @@ version = "0.1.0"
 dependencies = [
  "gsgdt",
  "pretty_assertions",
- "rpl_context",
+ "rpl_context_pest",
  "rpl_macros",
  "rpl_mir",
  "rpl_mir_graph",
@@ -1257,11 +1257,11 @@ dependencies = [
 name = "rpl_interface"
 version = "0.1.0"
 dependencies = [
- "rpl_context",
+ "rpl_context_pest",
  "rpl_driver",
  "rpl_meta_pest",
- "rpl_patterns",
  "rpl_utils",
+ "sync-arena",
 ]
 
 [[package]]
@@ -1300,7 +1300,8 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "sync-arena",
+ "thiserror",
  "tracing",
 ]
 
@@ -1311,7 +1312,7 @@ dependencies = [
  "pretty_assertions",
  "proc-macro2",
  "quote",
- "rpl_context",
+ "rpl_context_pest",
  "rpl_macros",
  "rpl_match",
  "rpl_mir_graph",
@@ -1351,7 +1352,7 @@ dependencies = [
  "quote",
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror",
 ]
 
 [[package]]
@@ -1365,7 +1366,7 @@ dependencies = [
  "rpl_pat_syntax",
  "syn 2.0.98",
  "syn_derive",
- "thiserror 1.0.69",
+ "thiserror",
 ]
 
 [[package]]
@@ -1378,19 +1379,7 @@ dependencies = [
  "quote",
  "syn 2.0.98",
  "syn_derive",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "rpl_patterns"
-version = "0.1.0"
-dependencies = [
- "libc",
- "pin-project",
- "rpl_context",
- "rpl_macros",
- "rpl_match",
- "rpl_mir",
+ "thiserror",
 ]
 
 [[package]]
@@ -1639,6 +1628,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sync-arena"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6b776dbf8ae516c816eecf4bc5453c667be5c5ea632ae7b6510c9d10be5f824"
+dependencies = [
+ "cfg-if",
+ "smallvec",
+]
+
+[[package]]
 name = "synstructure"
 version = "0.12.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1680,16 +1679,7 @@ version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
 dependencies = [
- "thiserror-impl 1.0.69",
-]
-
-[[package]]
-name = "thiserror"
-version = "2.0.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d452f284b73e6d76dd36758a0c8684b1d5be31f92b89d07fd5822175732206fc"
-dependencies = [
- "thiserror-impl 2.0.11",
+ "thiserror-impl",
 ]
 
 [[package]]
@@ -1697,17 +1687,6 @@ name = "thiserror-impl"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.98",
-]
-
-[[package]]
-name = "thiserror-impl"
-version = "2.0.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "26afc1baea8a989337eeb52b6e72a039780ce45c3edfcc9c5b9d112feeb173c2"
 dependencies = [
  "proc-macro2",
  "quote",

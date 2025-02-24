@@ -1,5 +1,7 @@
-use rpl_context::PatternCtxt;
-use rustc_data_structures::sync::WorkerLocal;
+use std::sync::OnceLock;
+
+use rpl_context_pest::PatternCtxt;
+use rpl_meta_pest::cli::collect_file_from_string_args;
 // use rpl_middle::ty::RplConfig;
 use rustc_interface::interface;
 use rustc_middle::ty::TyCtxt;
@@ -59,15 +61,19 @@ impl rustc_driver::Callbacks for DefaultCallbacks {}
 
 pub struct RplCallbacks {
     rpl_args_var: Option<String>,
+    pattern_paths: Vec<String>,
 }
 
 impl RplCallbacks {
-    pub fn new(rpl_args_var: Option<String>) -> Self {
-        Self { rpl_args_var }
+    pub fn new(rpl_args_var: Option<String>, pattern_paths: Vec<String>) -> Self {
+        Self {
+            rpl_args_var,
+            pattern_paths,
+        }
     }
 }
 
-impl rustc_driver::Callbacks for RplCallbacks {
+impl<'mcx> rustc_driver::Callbacks for RplCallbacks {
     // JUSTIFICATION: necessary in RPL driver to set `mir_opt_level`
     #[allow(rustc::bad_opt_access)]
     fn config(&mut self, config: &mut interface::Config) {
@@ -123,34 +129,13 @@ impl rustc_driver::Callbacks for RplCallbacks {
         // Disable flattening and inlining of format_args!(), so the HIR matches with the AST.
         config.opts.unstable_opts.flatten_format_args = false;
     }
-
     fn after_analysis(&mut self, _compiler: &interface::Compiler, tcx: TyCtxt<'_>) -> rustc_driver::Compilation {
-        let mctx_arena = WorkerLocal::<rpl_meta_pest::arena::Arena<'_>>::default();
-        let patterns_and_paths = Vec::new(); // FIXME: should get from args.
-        let mctx = rpl_meta_pest::parse_and_collect(&mctx_arena, &patterns_and_paths);
+        static MCTX_ARENA: OnceLock<rpl_meta_pest::arena::Arena<'_>> = OnceLock::new();
+        static MCTX: OnceLock<rpl_meta_pest::context::MetaContext<'_>> = OnceLock::new();
+        let mctx_arena = MCTX_ARENA.get_or_init(rpl_meta_pest::arena::Arena::default);
+        let patterns_and_paths = mctx_arena.alloc(collect_file_from_string_args(&self.pattern_paths));
+        let mctx = MCTX.get_or_init(|| rpl_meta_pest::parse_and_collect(&mctx_arena, patterns_and_paths));
         PatternCtxt::entered(|pcx| rpl_driver::check_crate(tcx, pcx, &mctx));
-        /*
-        queries.global_ctxt().unwrap().enter(|tcx| {
-            let mut lint_store = LaterLintStore::new();
-            rpl_driver::register_later_lints(&mut lint_store);
-            let side_effect_backtrace = tcx.sess.psess.env_depinfo.lock().iter().any(|&(env, args)| {
-                env == Symbol::intern(RPL_ARGS_ENV)
-                    && args.is_some_and(|args| {
-                        args.as_str()
-                            .split_ascii_whitespace()
-                            .any(|arg| arg == RplConfig::SIDE_EFFECT_BACKTRACE)
-                    })
-            });
-            create_rpl_ctxt(
-                tcx,
-                Some(Box::new(lint_store)),
-                RplConfig { side_effect_backtrace },
-            )
-            .enter(|bcx| {
-                rpl_later_lint::check_crate(bcx);
-            });
-        });
-        */
         rustc_driver::Compilation::Continue
     }
 }

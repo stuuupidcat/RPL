@@ -1,40 +1,51 @@
 use crate::arena::Arena;
 use crate::idx::RPLIdx;
-use crate::meta::RPLMeta;
+use crate::meta::SymbolTables;
 use parser::pairs;
 use rustc_data_structures::fx::FxHashMap;
-use rustc_data_structures::sync::WorkerLocal;
 use std::cell::Cell;
 use std::path::Path;
+use std::sync::RwLock;
 
 /// Provides a context for the meta data of the RPL multi-files/modularity.
-pub struct RPLMetaContext<'mctx> {
-    pub arena: &'mctx WorkerLocal<Arena<'mctx>>,
-    pub path2id: FxHashMap<&'mctx Path, RPLIdx>,
-    pub id2path: FxHashMap<RPLIdx, &'mctx Path>,
-    pub contents: FxHashMap<RPLIdx, &'mctx str>,
-    pub syntax_trees: FxHashMap<RPLIdx, &'mctx pairs::main<'mctx>>,
-    pub metas: FxHashMap<RPLIdx, RPLMeta<'mctx>>,
-    active_path: Cell<Option<&'mctx Path>>,
+pub struct MetaContext<'mcx> {
+    arena: &'mcx Arena<'mcx>,
+    pub path2id: FxHashMap<&'mcx Path, RPLIdx>,
+    pub id2path: FxHashMap<RPLIdx, &'mcx Path>,
+    pub contents: FxHashMap<RPLIdx, &'mcx str>,
+    pub syntax_trees: FxHashMap<RPLIdx, &'mcx pairs::main<'mcx>>,
+    pub symbol_tables: FxHashMap<RPLIdx, SymbolTables<'mcx>>,
+    active_path: RwLock<Option<&'mcx Path>>,
 }
 
-impl<'mctx> RPLMetaContext<'mctx> {
-    pub fn new(arena: &'mctx WorkerLocal<Arena<'mctx>>) -> Self {
+mod test {
+    use super::*;
+
+    const fn check_sync<T: Sync>() {}
+
+    #[test]
+    fn test_check_sync() {
+        check_sync::<MetaContext<'_>>();
+    }
+}
+
+impl<'mcx> MetaContext<'mcx> {
+    pub fn new(arena: &'mcx Arena<'mcx>) -> Self {
         Self {
             arena,
             path2id: FxHashMap::default(),
             id2path: FxHashMap::default(),
             contents: FxHashMap::default(),
             syntax_trees: FxHashMap::default(),
-            metas: FxHashMap::default(),
-            active_path: Cell::new(None),
+            symbol_tables: FxHashMap::default(),
+            active_path: RwLock::new(None),
         }
     }
 
     /// Request a tree id for the given path.
     /// If the path already has an id, return it.
     /// Otherwise, create a new id, insert it into the path2id map, and return it.
-    pub fn request_rpl_idx(&mut self, path: &'mctx Path) -> RPLIdx {
+    pub fn request_rpl_idx(&mut self, path: &'mcx Path) -> RPLIdx {
         if let Some(&id) = self.path2id.get(path) {
             id
         } else {
@@ -48,14 +59,23 @@ impl<'mctx> RPLMetaContext<'mctx> {
     }
 
     /// Set the active path.
-    pub fn set_active_path(&self, path: Option<&'mctx Path>) {
-        self.active_path.set(path);
+    pub fn set_active_path(&self, path: Option<&'mcx Path>) {
+        *self.active_path.write().unwrap() = path;
     }
 
     /// Get the active path.
-    pub fn get_active_path(&self) -> &'mctx Path {
+    pub fn get_active_path(&self) -> &'mcx Path {
         self.active_path
-            .get()
+            .read()
+            .unwrap()
             .unwrap_or_else(|| panic!("Active path is not set."))
+    }
+
+    pub(crate) fn alloc_str(&self, s: &str) -> &'mcx str {
+        self.arena.alloc_str(s)
+    }
+
+    pub(crate) fn alloc_ast(&self, value: pairs::main<'mcx>) -> &'mcx pairs::main<'mcx> {
+        self.arena.alloc(value)
     }
 }
