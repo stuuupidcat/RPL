@@ -7,7 +7,6 @@ use rustc_data_structures::fx::FxIndexMap;
 use rustc_hir::Target;
 use rustc_index::IndexVec;
 use rustc_middle::mir;
-use rustc_span::Symbol;
 
 mod pretty;
 pub mod visitor;
@@ -119,7 +118,7 @@ impl<'pcx> BasicBlockData<'pcx> {
 pub enum PlaceElem<'pcx> {
     Deref,
     Field(FieldAcc),
-    FieldPat(Symbol),
+    FieldPat(Ident<'pcx>),
     Index(Local),
     ConstantIndex {
         offset: u64,
@@ -131,8 +130,8 @@ pub enum PlaceElem<'pcx> {
         to: u64,
         from_end: bool,
     },
-    Downcast(Symbol),
-    DowncastPat(Symbol),
+    Downcast(Ident<'pcx>),
+    DowncastPat(Ident<'pcx>),
     OpaqueCast(Ty<'pcx>),
     Subtype(Ty<'pcx>),
 }
@@ -185,7 +184,7 @@ impl Local {
 #[derive(Clone, Copy, Debug)]
 pub struct PlaceTy<'pcx> {
     pub ty: Ty<'pcx>,
-    pub variant: Option<Symbol>,
+    pub variant: Option<Ident<'pcx>>,
 }
 
 impl<'pcx> PlaceTy<'pcx> {

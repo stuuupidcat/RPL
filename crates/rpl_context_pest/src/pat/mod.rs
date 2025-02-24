@@ -1,9 +1,11 @@
 use rpl_meta_pest::collect_elems_separated_by_comma;
+use rpl_meta_pest::utils::Ident;
 use rpl_parser::generics::{Choice3, Choice4};
 use rpl_parser::pairs;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_index::IndexVec;
 use rustc_span::Symbol;
+use std::ops::Deref;
 
 use crate::PatCtxt;
 
@@ -88,7 +90,7 @@ impl<'pcx> Pattern<'pcx> {
         }
     }
     fn add_item_or_patt_op(&mut self, item_or_patt_op: &pairs::RustItemOrPatternOperation<'_>) {
-        match &**item_or_patt_op {
+        match item_or_patt_op.deref() {
             Choice3::_2(_patt_op) => {
                 // FIXME: process the patt operation
                 todo!()
@@ -116,12 +118,57 @@ impl<'pcx> Pattern<'pcx> {
             Choice4::_3(_rust_impl) => todo!("check impl in meta pass"),
         }
     }
+}
+
+impl<'pcx> Pattern<'pcx> {
     fn add_fn(&mut self, rust_fn: &pairs::Fn<'_>) {
         todo!()
     }
+
+    fn mk_fn(&self, rust_fn: &pairs::Fn<'_>) -> Fn<'pcx> {
+        let (fn_sig, fn_body) = rust_fn.get_matched();
+        let fn_sig = self.mk_fn_sig(fn_sig);
+        // let fn_body = self.mk_fn_body(fn_body);
+        todo!();
+        let f: Fn;
+    }
+
+    fn mk_fn_sig(&self, fn_sig: &pairs::FnSig<'_>) // -> (Safety, Visibility, Ident, Params, FnBody)
+    {
+        let (safety, visibility, _, fn_name, _, params, _, ret) = fn_sig.get_matched();
+        let safety = if safety.is_some() { Safety::Unsafe } else { Safety::Safe };
+        let visibility = if visibility.is_some() {
+            Visibility::Public
+        } else {
+            Visibility::Private
+        };
+        let fn_name: Ident<'_> = fn_name.span.into();
+        let mut param_vec = vec![];
+        if let Some(params) = params {
+            let params = collect_elems_separated_by_comma!(params).collect::<Vec<_>>();
+            for param in params {
+                param_vec.push(self.mk_fn_param(param));
+            }
+        }
+    }
+
+    fn mk_fn_param(&self, param: &pairs::FnParam<'_>) {
+        match param.deref() {
+            Choice4::_0(self_param) => {},
+            Choice4::_1(normal_param) => {},
+            Choice4::_2(dot2) => {},
+            Choice4::_3(place_holder) => {},
+        }
+    }
+}
+
+impl<'pcx> Pattern<'pcx> {
     fn add_struct(&mut self, rust_struct: &pairs::Struct<'_>) {
         todo!()
     }
+}
+
+impl<'pcx> Pattern<'pcx> {
     fn add_enum(&mut self, rust_enum: &pairs::Enum<'_>) {
         todo!()
     }
