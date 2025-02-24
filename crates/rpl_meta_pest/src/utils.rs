@@ -59,6 +59,19 @@ impl<'i> From<&pairs::MetaVariable<'i>> for Ident<'i> {
     }
 }
 
+impl<'i> From<Span<'i>> for Ident<'i> {
+    fn from(span: Span<'i>) -> Self {
+        let name = span.as_str();
+        Self { name, span }
+    }
+}
+
+impl std::fmt::Display for Ident<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.name.fmt(f)
+    }
+}
+
 pub struct Path<'i> {
     pub leading: Option<&'i pairs::PathLeading<'i>>,
     pub segments: Vec<&'i pairs::PathSegment<'i>>,

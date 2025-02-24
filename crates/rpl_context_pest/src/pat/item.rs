@@ -1,7 +1,7 @@
+use rpl_meta_pest::utils::Ident;
 use rustc_data_structures::fx::{FxHashMap, FxIndexMap};
 use rustc_middle::mir;
 use rustc_span::symbol::kw;
-use rustc_span::Symbol;
 
 use super::{MetaVars, MirPattern, Path, Ty};
 
@@ -12,12 +12,12 @@ pub struct Adt<'pcx> {
 
 pub enum AdtKind<'pcx> {
     Struct(Variant<'pcx>),
-    Enum(FxIndexMap<Symbol, Variant<'pcx>>),
+    Enum(FxIndexMap<Ident<'pcx>, Variant<'pcx>>),
 }
 
 #[derive(Default)]
 pub struct Variant<'pcx> {
-    pub fields: FxIndexMap<Symbol, Field<'pcx>>,
+    pub fields: FxIndexMap<Ident<'pcx>, Field<'pcx>>,
 }
 
 pub struct Field<'pcx> {
@@ -31,22 +31,34 @@ pub struct Impl<'pcx> {
     #[expect(dead_code)]
     trait_id: Option<Path<'pcx>>,
     #[expect(dead_code)]
-    fns: FxHashMap<Symbol, Fn<'pcx>>,
+    fns: FxHashMap<Ident<'pcx>, Fn<'pcx>>,
 }
 
 #[derive(Default)]
 pub struct Fns<'pcx> {
-    fns: FxHashMap<Symbol, Fn<'pcx>>,
-    fn_pats: FxHashMap<Symbol, Fn<'pcx>>,
+    fns: FxHashMap<Ident<'pcx>, Fn<'pcx>>,
+    fn_pats: FxHashMap<Ident<'pcx>, Fn<'pcx>>,
     unnamed_fns: Vec<Fn<'pcx>>,
 }
 
 pub struct Fn<'pcx> {
-    pub name: Symbol,
+    pub safety: Safety,
+    pub visibility: Visibility,
+    pub name: Ident<'pcx>,
     pub meta: MetaVars<'pcx>,
     pub params: Params<'pcx>,
     pub ret: Option<Ty<'pcx>>,
     pub body: Option<FnBody<'pcx>>,
+}
+
+pub enum Safety {
+    Safe,
+    Unsafe,
+}
+
+pub enum Visibility {
+    Public,
+    Private,
 }
 
 #[derive(Default)]
@@ -64,7 +76,7 @@ impl<'pcx> std::ops::Deref for Params<'pcx> {
 
 pub struct Param<'pcx> {
     pub mutability: mir::Mutability,
-    pub ident: Symbol,
+    pub ident: Ident<'pcx>,
     pub ty: Ty<'pcx>,
 }
 
@@ -94,7 +106,7 @@ impl<'pcx> Adt<'pcx> {
             AdtKind::Enum(_) => panic!("cannot mutate non-enum variant of enum"),
         }
     }
-    pub fn add_variant(&mut self, name: Symbol) -> &mut Variant<'pcx> {
+    pub fn add_variant(&mut self, name: Ident<'pcx>) -> &mut Variant<'pcx> {
         match &mut self.kind {
             AdtKind::Struct(_) => panic!("cannot add variant to struct"),
             AdtKind::Enum(variants) => variants.entry(name).or_insert_with(Variant::default),
@@ -106,7 +118,7 @@ impl<'pcx> Adt<'pcx> {
             AdtKind::Enum(_) => panic!("cannot access non-enum variant of enum"),
         }
     }
-    pub fn variant_and_index(&self, name: Symbol) -> (&Variant<'pcx>, usize) {
+    pub fn variant_and_index(&self, name: Ident<'pcx>) -> (&Variant<'pcx>, usize) {
         match &self.kind {
             AdtKind::Struct(_) => panic!("expected enum"),
             AdtKind::Enum(variants) => {
@@ -117,10 +129,10 @@ impl<'pcx> Adt<'pcx> {
             },
         }
     }
-    pub fn variant(&self, name: Symbol) -> &Variant<'pcx> {
+    pub fn variant(&self, name: Ident<'pcx>) -> &Variant<'pcx> {
         self.variant_and_index(name).0
     }
-    pub fn variant_index(&self, name: Symbol) -> usize {
+    pub fn variant_index(&self, name: Ident<'pcx>) -> usize {
         self.variant_and_index(name).1
     }
     pub fn is_enum(&self) -> bool {
@@ -132,56 +144,58 @@ impl<'pcx> Adt<'pcx> {
 }
 
 impl<'pcx> Variant<'pcx> {
-    pub fn add_field(&mut self, name: Symbol, ty: Ty<'pcx>) {
+    pub fn add_field(&mut self, name: Ident<'pcx>, ty: Ty<'pcx>) {
         self.fields.insert(name, Field { ty });
     }
-    pub fn field_and_index(&self, name: Symbol) -> (&Field<'pcx>, usize) {
+    pub fn field_and_index(&self, name: Ident<'pcx>) -> (&Field<'pcx>, usize) {
         let (index, _, field) = self
             .fields
             .get_full(&name)
             .unwrap_or_else(|| panic!("field `${name}` not found"));
         (field, index)
     }
-    pub fn field(&self, name: Symbol) -> &Field<'pcx> {
+    pub fn field(&self, name: Ident<'pcx>) -> &Field<'pcx> {
         self.field_and_index(name).0
     }
-    pub fn field_index(&self, name: Symbol) -> usize {
+    pub fn field_index(&self, name: Ident<'pcx>) -> usize {
         self.field_and_index(name).1
     }
 }
 
 impl<'pcx> Fns<'pcx> {
-    pub fn get_fn_pat(&self, name: Symbol) -> Option<&Fn<'pcx>> {
+    pub fn get_fn_pat(&self, name: Ident<'pcx>) -> Option<&Fn<'pcx>> {
         self.fn_pats.get(&name)
     }
-    pub fn new_fn(&mut self, name: Symbol) -> &mut Fn<'pcx> {
-        self.fns.entry(name).or_insert_with(|| Fn::new(name))
-    }
-    pub fn new_fn_pat(&mut self, name: Symbol) -> &mut Fn<'pcx> {
-        self.fn_pats.entry(name).or_insert_with(|| Fn::new(name))
-    }
-    pub fn new_unnamed(&mut self) -> &mut Fn<'pcx> {
-        self.unnamed_fns.push(Fn::new(kw::Underscore));
-        self.unnamed_fns.last_mut().unwrap()
-    }
+    // pub fn new_fn(&mut self, name: Symbol) -> &mut Fn<'pcx> {
+    //     self.fns.entry(name).or_insert_with(|| Fn::new(name))
+    // }
+    // pub fn new_fn_pat(&mut self, name: Symbol) -> &mut Fn<'pcx> {
+    //     self.fn_pats.entry(name).or_insert_with(|| Fn::new(name))
+    // }
+    // pub fn new_unnamed(&mut self) -> &mut Fn<'pcx> {
+    //     self.unnamed_fns.push(Fn::new(kw::Underscore));
+    //     self.unnamed_fns.last_mut().unwrap()
+    // }
 }
 
 impl<'pcx> Fn<'pcx> {
-    pub(crate) fn new(name: Symbol) -> Self {
-        Self {
-            name,
-            meta: MetaVars::default(),
-            params: Params::default(),
-            ret: None,
-            body: None,
-        }
-    }
-    pub fn set_ret_ty(&mut self, ty: Ty<'pcx>) {
-        self.ret = Some(ty);
-    }
-    pub fn set_body(&mut self, body: FnBody<'pcx>) {
-        self.body = Some(body);
-    }
+    // pub(crate) fn new(name: Ident<'pcx>) -> Self {
+    //     Self {
+    //         name,
+    //         safety: Safety::Safe,
+    //         visibility: Visibility::Public,
+    //         meta: MetaVars::default(),
+    //         params: Params::default(),
+    //         ret: None,
+    //         body: None,
+    //     }
+    // }
+    // pub fn set_ret_ty(&mut self, ty: Ty<'pcx>) {
+    //     self.ret = Some(ty);
+    // }
+    // pub fn set_body(&mut self, body: FnBody<'pcx>) {
+    //     self.body = Some(body);
+    // }
     // FIXME: remove this when all kinds of patterns are implemented
     pub fn expect_mir_body(&self) -> &'pcx MirPattern<'pcx> {
         match self.body {
@@ -192,7 +206,7 @@ impl<'pcx> Fn<'pcx> {
 }
 
 impl<'pcx> Params<'pcx> {
-    pub fn add_param(&mut self, ident: Symbol, mutability: mir::Mutability, ty: Ty<'pcx>) {
+    pub fn add_param(&mut self, ident: Ident<'pcx>, mutability: mir::Mutability, ty: Ty<'pcx>) {
         self.params.push(Param { mutability, ident, ty });
     }
     pub fn set_non_exhaustive(&mut self) {
