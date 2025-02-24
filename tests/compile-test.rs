@@ -25,6 +25,7 @@ extern crate libc;
 extern crate memmap;
 extern crate num_derive;
 extern crate num_rational;
+extern crate num_traits;
 extern crate parking_lot;
 extern crate pin_project;
 extern crate quote;

@@ -16,7 +16,7 @@ Then, use `cargo rpl +nightly-2025-02-14` to run RPL in your own repository to d
 
 You can control the way a test is built and interpreted through adding test directives.
 
-See <https://rustc-dev-guide.rust-lang.org/tests/directives.html> for more information.
+See <https://rustc-dev-guide.rust-lang.org/tests/ui.html> and <https://rustc-dev-guide.rust-lang.org/tests/directives.html> for more information.
 
 The currently mostly used one is `//@ ignore-on-host`.
 
