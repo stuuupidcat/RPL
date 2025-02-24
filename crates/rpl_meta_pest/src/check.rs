@@ -3,7 +3,7 @@ use crate::symbol_table::{
     ident_is_primitive, EnumInner, ExportTable, FnInner, ImplInner, MetaVarTable, SymbolTable, Variant,
 };
 use crate::utils::{Ident, Path};
-use crate::{collect_elems_separated_by_comma, RPLMetaError};
+use crate::{collect_elems_separated_by_comma, meta, RPLMetaError};
 use parser::generics::{Choice12, Choice14, Choice2, Choice3, Choice4, Choice5, Choice6};
 use parser::{pairs, SpanWrapper};
 use std::ops::Deref;
@@ -150,7 +150,9 @@ impl<'i> CheckFnCtxt<'i, '_> {
                 self.check_fn_param(mctx, param);
             }
         }
-        self.check_fn_ret(mctx, ret);
+        if let Some(ret) = ret {
+            self.check_fn_ret(mctx, ret);
+        }
     }
 
     fn check_fn_ret(&mut self, mctx: &RPLMetaContext<'i>, ret: &'i pairs::FnRet<'i>) {
@@ -174,23 +176,12 @@ impl<'i> CheckFnCtxt<'i, '_> {
 
     fn check_self_param(&mut self, mctx: &RPLMetaContext<'i>, self_param: &'i pairs::SelfParam<'i>) {
         self.fn_def.add_self_param(mctx, self_param, self.errors);
-        let (_, _, _, ty) = self_param.get_matched();
-        if let Some(ty) = ty {
-            let (_, ty) = ty.get_matched();
-            self.check_type(mctx, ty);
-        }
     }
 
     fn check_normal_param(&mut self, mctx: &RPLMetaContext<'i>, normal_param: &'i pairs::NormalParam<'i>) {
-        let (param_pat, _, ty) = normal_param.get_matched();
-        if let Some(param_pat) = param_pat {
-            let (_, ident) = param_pat.get_matched();
-            let ident = match ident {
-                Choice2::_0(ident) => ident.into(),
-                Choice2::_1(meta) => meta.into(),
-            };
-            self.fn_def.add_param(mctx, ident, ty, self.errors);
-        };
+        let (_, ident, _, ty) = normal_param.get_matched();
+        let ident = ident.into();
+        self.fn_def.add_param(mctx, ident, ty, self.errors);
         self.check_type(mctx, ty);
     }
 
@@ -411,16 +402,17 @@ impl<'i> CheckFnCtxt<'i, '_> {
 
     fn check_mir_operand(&mut self, mctx: &RPLMetaContext<'i>, operand: &'i pairs::MirOperand<'i>) {
         match operand.deref() {
-            Choice5::_0(_) | Choice5::_1(_) => {},
-            Choice5::_2(op_move) => self.check_mir_place(mctx, op_move.MirPlace()),
-            Choice5::_3(op_copy) => self.check_mir_place(mctx, op_copy.MirPlace()),
-            Choice5::_4(op_const) => self.check_mir_const_operand(mctx, op_const),
+            Choice6::_0(_) | Choice6::_1(_) => {},
+            Choice6::_2(meta_var) => _ = self.meta_vars.get_ty_var(mctx, meta_var.into(), self.errors),
+            Choice6::_3(op_move) => self.check_mir_place(mctx, op_move.MirPlace()),
+            Choice6::_4(op_copy) => self.check_mir_place(mctx, op_copy.MirPlace()),
+            Choice6::_5(op_const) => self.check_mir_const_operand(mctx, op_const),
         }
     }
 
-    fn check_mir_const_operand(&mut self, mctx: &RPLMetaContext<'i>, konst: &'i pairs::MirOperandConstant<'i>) {
-        let (_, const_operand) = konst.get_matched();
-        match const_operand {
+    fn check_mir_const_operand(&mut self, mctx: &RPLMetaContext<'i>, konst: &'i pairs::MirOperandConst<'i>) {
+        let (_, konst) = konst.get_matched();
+        match konst {
             Choice3::_0(_lit) => {},
             Choice3::_1(lang_item) => self.check_lang_item_with_args(mctx, lang_item),
             Choice3::_2(ty_path) => self.check_type_path(mctx, ty_path),
@@ -529,19 +521,15 @@ impl<'i> CheckFnCtxt<'i, '_> {
             Choice14::_1(ty_group) => self.check_type(mctx, ty_group.Type()),
             Choice14::_2(_ty_never) => {},
             Choice14::_3(ty_paren) => self.check_type(mctx, ty_paren.Type()),
-            Choice14::_4(ty_meta_var) => {
-                let ident = ty_meta_var.MetaVariable().into();
-                _ = self.meta_vars.get_ty_var(mctx, ident, self.errors)
-            },
-            Choice14::_5(ty_ptr) => self.check_type(mctx, ty_ptr.Type()),
-            Choice14::_6(ty_ref) => {
+            Choice14::_4(ty_ptr) => self.check_type(mctx, ty_ptr.Type()),
+            Choice14::_5(ty_ref) => {
                 if let Some(region) = ty_ref.Region() {
                     self.check_region(mctx, region);
                 }
                 self.check_type(mctx, ty_ref.Type());
             },
-            Choice14::_7(ty_slice) => self.check_type(mctx, ty_slice.Type()),
-            Choice14::_8(ty_tuple) => {
+            Choice14::_6(ty_slice) => self.check_type(mctx, ty_slice.Type()),
+            Choice14::_7(ty_tuple) => {
                 let (_, tys, _) = ty_tuple.get_matched();
                 if let Some(tys) = tys {
                     let tys = collect_elems_separated_by_comma!(tys).collect::<Vec<_>>();
@@ -550,13 +538,17 @@ impl<'i> CheckFnCtxt<'i, '_> {
                     }
                 }
             },
-            Choice14::_9(ty_path) => self.check_type_path(mctx, ty_path),
-            Choice14::_10(lang_item) => {
+            Choice14::_8(ty_meta_var) => {
+                let ident = ty_meta_var.MetaVariable().into();
+                _ = self.meta_vars.get_ty_var(mctx, ident, self.errors)
+            },
+            Choice14::_9(_ty_self) => {},
+            Choice14::_10(_primitive_types) => {},
+            Choice14::_11(_place_holder) => {},
+            Choice14::_12(ty_path) => self.check_type_path(mctx, ty_path),
+            Choice14::_13(lang_item) => {
                 self.check_lang_item_with_args(mctx, lang_item);
             },
-            Choice14::_11(_ty_self) => {},
-            Choice14::_12(_primitive_types) => {},
-            Choice14::_13(_place_holder) => {},
         }
     }
 

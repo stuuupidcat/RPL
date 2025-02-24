@@ -23,7 +23,7 @@ pub mod error;
 pub mod idx;
 pub mod meta;
 pub mod symbol_table;
-pub(crate) mod utils;
+pub mod utils;
 
 use context::RPLMetaContext;
 pub use error::RPLMetaError;

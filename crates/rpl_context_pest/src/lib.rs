@@ -9,6 +9,7 @@ extern crate either;
 extern crate rustc_abi;
 extern crate rustc_arena;
 extern crate rustc_ast;
+extern crate rustc_ast_ir;
 extern crate rustc_data_structures;
 extern crate rustc_driver;
 extern crate rustc_hir;

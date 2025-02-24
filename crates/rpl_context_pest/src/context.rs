@@ -108,38 +108,38 @@ impl<'pcx> PatCtxt<'pcx> {
         }
         self.arena.alloc_slice(slice)
     }
-    fn mk_generic_args(self, generics: &[pat::GenericArgKind<'pcx>]) -> pat::GenericArgsRef<'pcx> {
-        pat::GenericArgsRef(self.mk_slice(generics))
-    }
-    pub fn mk_type_relative(self, ty: Ty<'pcx>, path: &str) -> pat::Path<'pcx> {
-        pat::Path::TypeRelative(ty, Symbol::intern(path))
-    }
+    // fn mk_generic_args(self, generics: &[pat::GenericArgKind<'pcx>]) -> pat::GenericArgsRef<'pcx> {
+    //     pat::GenericArgsRef(self.mk_slice(generics))
+    // }
+    // pub fn mk_type_relative(self, ty: Ty<'pcx>, path: &str) -> pat::Path<'pcx> {
+    //     pat::Path::TypeRelative(ty, Symbol::intern(path))
+    // }
     pub fn mk_lang_item(self, item: &str) -> pat::Path<'pcx> {
         hir::LangItem::from_name(Symbol::intern(item))
             .unwrap_or_else(|| panic!("unknown language item \"{item}\""))
             .into()
     }
-    pub fn mk_item_path(self, path: &[&str]) -> pat::ItemPath<'pcx> {
-        pat::ItemPath(self.mk_symbols(path))
-    }
-    pub fn mk_path_with_args(
-        self,
-        path: impl Into<pat::Path<'pcx>>,
-        generics: &[pat::GenericArgKind<'pcx>],
-    ) -> pat::PathWithArgs<'pcx> {
-        let path = path.into();
-        let args = self.mk_generic_args(generics);
-        pat::PathWithArgs { path, args }
-    }
+    // pub fn mk_item_path(self, path: &[&str]) -> pat::ItemPath<'pcx> {
+    //     pat::ItemPath(self.mk_symbols(path))
+    // }
+    // pub fn mk_path_with_args(
+    //     self,
+    //     path: impl Into<pat::Path<'pcx>>,
+    //     generics: &[pat::GenericArgKind<'pcx>],
+    // ) -> pat::PathWithArgs<'pcx> {
+    //     let path = path.into();
+    //     let args = self.mk_generic_args(generics);
+    //     pat::PathWithArgs { path, args }
+    // }
     pub fn mk_path_ty(self, path_with_args: pat::PathWithArgs<'pcx>) -> Ty<'pcx> {
         self.mk_ty(TyKind::Path(path_with_args))
     }
     pub fn mk_adt_ty(self, path_with_args: pat::PathWithArgs<'pcx>) -> Ty<'pcx> {
         self.mk_path_ty(path_with_args)
     }
-    pub fn mk_adt_pat_ty(self, pat: Symbol) -> Ty<'pcx> {
-        self.mk_ty(TyKind::AdtPat(pat))
-    }
+    // pub fn mk_adt_pat_ty(self, pat: Symbol) -> Ty<'pcx> {
+    //     self.mk_ty(TyKind::AdtPat(pat))
+    // }
     pub fn mk_array_ty(self, ty: Ty<'pcx>, len: pat::Const<'pcx>) -> Ty<'pcx> {
         self.mk_ty(TyKind::Array(ty, len))
     }
@@ -161,7 +161,7 @@ impl<'pcx> PatCtxt<'pcx> {
     pub fn mk_fn(self, path_with_args: pat::PathWithArgs<'pcx>) -> Ty<'pcx> {
         self.mk_path_ty(path_with_args)
     }
-    pub fn mk_var_ty(self, ty_var: pat::TyVar) -> Ty<'pcx> {
+    pub fn mk_var_ty(self, ty_var: pat::TyVar<'pcx>) -> Ty<'pcx> {
         self.mk_ty(TyKind::TyVar(ty_var))
     }
     pub fn mk_any_ty(self) -> Ty<'pcx> {
@@ -187,7 +187,7 @@ impl<'pcx> PatCtxt<'pcx> {
             f(name, *pattern);
         }
     }
-    pub fn add_parsed_pattern(self, name: Symbol, pattern: &pairs::pattBlockItem<'_>) {
+    pub fn add_parsed_pattern(self, name: Symbol, pattern: &'pcx pairs::pattBlockItem<'_>) {
         let pattern = self.arena.alloc(pat::Pattern::from_parsed(self, pattern));
         self.patterns.lock().insert(name, pattern);
     }
