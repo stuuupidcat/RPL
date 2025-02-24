@@ -1,4 +1,3 @@
-//@ ignore-on-host
 //@ revisions: inline regular
 //@[inline] compile-flags: -Z inline-mir=true
 //@[regular] compile-flags: -Z inline-mir=false
@@ -9,5 +8,6 @@ fn main() {
     let b = buf.len();
     let buf = unsafe {
         std::slice::from_raw_parts_mut(buf.as_mut_ptr().offset(b as isize), buf.capacity() - b)
+        //~^ ERROR: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
     };
 }
