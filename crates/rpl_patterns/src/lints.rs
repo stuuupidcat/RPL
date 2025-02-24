@@ -98,3 +98,58 @@ declare_lint! {
     Deny,
     "detects a pointer that is offset using an unchecked integer"
 }
+
+declare_lint! {
+    /// The `cassandra_iter_next_ptr_passed_to_cass_iter_get` lint detects a pointer returned by
+    /// `cassandra_iterator_next` that is utilized in `cass_iterator_get_*`.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// /* extern crate cassandra_cpp_sys;
+    /// use cassandra_cpp_sys::CassIterator as _CassIterator;
+    /// use cassandra_cpp_sys::{
+    ///     cass_false, cass_iterator_get_aggregate_meta, cass_iterator_next, cass_true,
+    ///     CassAggregateMeta as _CassAggregateMeta,
+    /// };
+    /// use std::iter::Iterator;
+    /// pub struct AggregateMeta(*const _CassAggregateMeta);
+    /// impl AggregateMeta {
+    ///     fn build(inner: *const _CassAggregateMeta) -> Self {
+    ///         if inner.is_null() {
+    ///             panic!("Unexpected null pointer")
+    ///         };
+    ///         AggregateMeta(inner)
+    ///     }
+    /// }
+    /// #[derive(Debug)]
+    /// pub struct AggregateIterator(*mut _CassIterator);
+    /// impl Iterator for AggregateIterator {
+    ///     type Item = AggregateMeta;
+    ///     #![deny(cassandra_iter_next_ptr_passed_to_cass_iter_get)]
+    ///     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
+    ///         unsafe {
+    ///             match cass_iterator_next(self.0) {
+    ///                 cass_false => None,
+    ///                 cass_true => {
+    ///                     let field_value = cass_iterator_get_aggregate_meta(self.0);
+    ///                     Some(AggregateMeta::build(field_value))
+    ///                 }
+    ///             }
+    ///         }
+    ///     }
+    /// } */
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// Code that attempts to **use an item returned by an iterator
+    /// after the iterator has advanced to the next item** will be accessing freed memory,
+    /// which caused by the underlying Cassandra driver which invalidates the current item when `next()` is called,
+    /// leading to a **use-after-free** vulnerability.
+    pub CASSANDRA_ITER_NEXT_PTR_PASSED_TO_CASS_ITER_GET,
+    Deny,
+    "detects a pointer returned by `cassandra_iterator_next` that is utilized in `cass_iterator_get_*`"
+}

@@ -60,6 +60,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     inline::cve_2021_29941_2::check_item,
     normal::cve_2021_29941_2::check_item,
     normal::cve_2022_23639::check_item,
+    inline::cve_2024_27284::check_item,
 ];
 
 #[instrument(level = "info", skip_all, fields(item = ?item.owner_id.def_id))]
