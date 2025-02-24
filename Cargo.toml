@@ -22,6 +22,7 @@ rpl_macros = { path = "./crates/rpl_macros" }
 rpl_match = { path = "./crates/rpl_match" }
 rpl_mir = { path = "./crates/rpl_mir" }
 rpl_mir_graph = { path = "./crates/rpl_mir_graph" }
+rpl_mir_transform = { path = "./crates/rpl_mir_transform" }
 rpl_pat_expand = { path = "./crates/rpl_pat_expand" }
 rpl_pat_syntax = { path = "./crates/rpl_pat_syntax" }
 rpl_patterns = { path = "./crates/rpl_patterns" }
