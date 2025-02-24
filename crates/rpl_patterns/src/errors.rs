@@ -274,3 +274,12 @@ pub struct UncheckedPtrOffset {
     #[label(rpl_patterns_ptr_label)]
     pub ptr: Span,
 }
+
+// for cve_2024_27284
+#[derive(LintDiagnostic)]
+#[diag(rpl_patterns_cassandra_iter_next_ptr_passed_to_cass_iter_get)]
+#[help]
+pub struct CassandraIterNextPtrPassedToCassIterGet {
+    #[label(rpl_patterns_cass_iter_next_label)]
+    pub cass_iter_next: Span,
+}
