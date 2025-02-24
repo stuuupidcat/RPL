@@ -23,23 +23,23 @@ pub mod error;
 pub mod idx;
 pub mod meta;
 pub mod symbol_table;
-pub(crate) mod utils;
+pub mod utils;
 
-use context::RPLMetaContext;
+use arena::Arena;
+use context::MetaContext;
 pub use error::RPLMetaError;
-use meta::RPLMeta;
-use rustc_data_structures::sync::WorkerLocal;
+use meta::SymbolTables;
+use parser::pairs;
 use std::path::PathBuf;
 
-pub fn parse_and_collect<'mctx>(
-    arena: &'mctx WorkerLocal<crate::arena::Arena<'mctx>>,
-    path_and_content: &'mctx Vec<(PathBuf, String)>,
-) -> RPLMetaContext<'mctx> {
-    let mut mctx = RPLMetaContext::new(arena);
-
+pub fn parse_and_collect<'mcx>(
+    arena: &'mcx Arena<'mcx>,
+    path_and_content: &'mcx Vec<(PathBuf, String)>,
+) -> MetaContext<'mcx> {
+    let mut mctx = MetaContext::new(arena);
     for (path, content) in path_and_content {
         let idx = mctx.request_rpl_idx(path);
-        let content = mctx.arena.alloc_str(content);
+        let content = mctx.alloc_str(content);
         mctx.contents.insert(idx, content);
     }
 
@@ -50,12 +50,12 @@ pub fn parse_and_collect<'mctx>(
         match parse_res {
             Ok(main) => {
                 // Cache the syntax tree
-                let main = mctx.arena.alloc(main);
+                let main = mctx.alloc_ast(main);
                 mctx.syntax_trees.insert(*idx, main);
                 // Perform meta collection
-                let meta = RPLMeta::collect(path, main, *idx, &mctx);
+                let meta = SymbolTables::collect(path, main, *idx, &mctx);
                 meta.show_error(&mut std::io::stderr());
-                mctx.metas.insert(*idx, meta);
+                mctx.symbol_tables.insert(*idx, meta);
             },
             Err(err) => {
                 eprintln!("{}", RPLMetaError::from(err));

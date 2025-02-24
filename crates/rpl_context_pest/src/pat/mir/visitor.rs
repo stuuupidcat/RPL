@@ -90,7 +90,9 @@ pub trait PatternVisitor<'pcx>: Sized {
             };
         }
 
-        self.visit_local(place.local, pcx, location);
+        if let Some(local) = place.base.as_local() {
+            self.visit_local(local, pcx, location);
+        }
 
         self.visit_projection(place, pcx, location);
     }

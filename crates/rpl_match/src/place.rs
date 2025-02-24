@@ -1,4 +1,4 @@
-use rpl_context::{pat, PatCtxt};
+use rpl_context_pest::{pat, PatCtxt};
 use rustc_index::IndexVec;
 use rustc_middle::ty::TyCtxt;
 
@@ -9,7 +9,7 @@ pub struct MatchPlaceCtxt<'pcx, 'tcx> {
 }
 
 impl<'pcx, 'tcx> MatchPlaceCtxt<'pcx, 'tcx> {
-    pub fn new(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>, meta: &pat::MetaVars<'pcx>) -> Self {
+    pub fn new(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>, meta: &pat::NonLocalMetaVars<'pcx>) -> Self {
         let places = meta.place_vars.iter().map(|var| var.ty).collect(); //FIXME: implement this
         Self { tcx, pcx, places }
     }

@@ -1,10 +1,11 @@
 use parser::generics::Choice2;
 use parser::pairs;
 use pest_typed::Span;
+use rustc_span::Symbol;
 
 #[derive(Copy, Clone, Debug)]
 pub struct Ident<'i> {
-    pub name: &'i str,
+    pub name: Symbol,
     pub span: Span<'i>,
 }
 
@@ -27,7 +28,11 @@ impl Hash for Ident<'_> {
 impl<'i> From<&pairs::PathLeading<'i>> for Ident<'i> {
     fn from(leading: &pairs::PathLeading<'i>) -> Self {
         let (name, _) = leading.get_matched();
-        let name = if name.is_some() { "crate" } else { "" };
+        let name = if name.is_some() {
+            Symbol::intern("crate")
+        } else {
+            Symbol::intern("")
+        };
         let span = leading.span;
         Self { name, span }
     }
@@ -46,7 +51,7 @@ impl<'i> From<&pairs::PathSegment<'i>> for Ident<'i> {
 impl<'i> From<&pairs::Identifier<'i>> for Ident<'i> {
     fn from(ident: &pairs::Identifier<'i>) -> Self {
         let span = ident.span;
-        let name = span.as_str();
+        let name = Symbol::intern(span.as_str());
         Self { name, span }
     }
 }
@@ -54,8 +59,21 @@ impl<'i> From<&pairs::Identifier<'i>> for Ident<'i> {
 impl<'i> From<&pairs::MetaVariable<'i>> for Ident<'i> {
     fn from(meta: &pairs::MetaVariable<'i>) -> Self {
         let span = meta.span;
-        let name = span.as_str();
+        let name = Symbol::intern(span.as_str());
         Self { name, span }
+    }
+}
+
+impl<'i> From<Span<'i>> for Ident<'i> {
+    fn from(span: Span<'i>) -> Self {
+        let name = Symbol::intern(span.as_str());
+        Self { name, span }
+    }
+}
+
+impl std::fmt::Display for Ident<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.name.fmt(f)
     }
 }
 

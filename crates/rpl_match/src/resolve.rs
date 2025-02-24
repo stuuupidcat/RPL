@@ -1,7 +1,7 @@
 //! Resolve an item path.
 //!
 //! See <https://doc.rust-lang.org/nightly/nightly-rustc/src/clippy_utils/lib.rs.html#691>
-use rpl_context::{pat, PatCtxt};
+use rpl_context_pest::{pat, PatCtxt};
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::def_id::{CrateNum, LocalDefId, LOCAL_CRATE};
 use rustc_hir::{ImplItemRef, ItemKind, LangItem, Node, OwnerId, PrimTy, TraitItemRef};

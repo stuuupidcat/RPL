@@ -38,7 +38,7 @@ use std::cell::RefCell;
 use std::iter::zip;
 
 use crate::graph::{MirControlFlowGraph, MirDataDepGraph, PatControlFlowGraph, PatDataDepGraph};
-use rpl_context::PatCtxt;
+use rpl_context_pest::PatCtxt;
 use rpl_match::{Candidates, MatchFnCtxt, MatchPlaceCtxt, MatchTyCtxt};
 use rpl_mir_graph::TerminatorEdges;
 use rustc_abi::{FieldIdx, VariantIdx};
@@ -54,7 +54,7 @@ use rustc_middle::{mir, ty};
 use rustc_span::Symbol;
 
 pub use matches::{Matched, StatementMatch};
-pub use rpl_context::pat;
+pub use rpl_context_pest::pat;
 
 pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     ty: MatchTyCtxt<'pcx, 'tcx>,

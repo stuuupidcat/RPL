@@ -1,5 +1,5 @@
-use rpl_context::pat::{self};
-use rpl_context::PatCtxt;
+use rpl_context_pest::pat::{self};
+use rpl_context_pest::PatCtxt;
 use rustc_abi::FieldIdx;
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_index::bit_set::MixedBitSet;
