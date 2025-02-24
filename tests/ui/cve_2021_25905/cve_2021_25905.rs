@@ -5,7 +5,7 @@ use std::ops::Bound;
 use std::ops::RangeBounds;
 
 /// A buffered reader that greedily retains all memory read into a buffer.
-/// 
+///
 /// Like [`std::io::BufReader`], it fetches bytes from the source in bulk to
 /// reduce the number of actual reads. Moreover, it provides methods for
 /// reading a byte or slice of bytes at an arbitrary position, reading as many
@@ -13,7 +13,7 @@ use std::ops::RangeBounds;
 /// not in memory already. The position indices are always relative to the
 /// position of the data source when it was passed to this construct via
 /// [`new`] or [`with_capacity`].
-/// 
+///
 /// [`std::io::BufReader`]: https://doc.rust-lang.org/std/io/struct.BufReader.html
 /// [`new`]: ./struct.GreedyAccessReader.html#method.new
 /// [`with_capacity`]: ./struct.GreedyAccessReader.html#method.with_capacity
@@ -38,7 +38,7 @@ where
 
     /// Creates a new greedy buffered reader with the given byte source and
     /// the specified buffer capacity.
-    /// 
+    ///
     /// The buffer will be able to read approximately `capacity` bytes without
     /// reallocating.
     pub fn with_capacity(src: R, capacity: usize) -> Self {
@@ -67,7 +67,7 @@ where
         (self.inner, self.buf)
     }
 
-    /// Fetches a single byte from the buffered data source. 
+    /// Fetches a single byte from the buffered data source.
     pub fn get(&mut self, index: usize) -> IoResult<u8> {
         if let Some(v) = self.buf.get(index) {
             Ok(*v)
@@ -82,15 +82,15 @@ where
     }
 
     /// Obtains a slice of bytes.
-    /// 
+    ///
     /// The range's end must be bound (e.g. `5..` is not supported).
-    /// 
+    ///
     /// # Error
-    /// 
+    ///
     /// Returns an I/O error if the range is out of the boundaries
-    /// 
+    ///
     /// # Panics
-    /// 
+    ///
     /// Panics if the range is not end bounded.
     pub fn slice<T>(&mut self, range: T) -> IoResult<&[u8]>
     where
@@ -193,6 +193,7 @@ impl<R> BufRead for GreedyAccessReader<R>
 where
     R: Read,
 {
+    #[rpl::dump_mir(dump_cfg, dump_ddg)]
     fn fill_buf(&mut self) -> IoResult<&[u8]> {
         if self.buf.capacity() == self.consumed {
             self.reserve_up_to(self.buf.capacity() + 16);
@@ -204,7 +205,8 @@ where
             // and we won't be reading uninitialized memory
             std::slice::from_raw_parts_mut(
                 self.buf.as_mut_ptr().offset(b as isize),
-                self.buf.capacity() - b)
+                self.buf.capacity() - b,
+            )
         };
 
         match self.inner.read(buf) {
@@ -225,3 +227,5 @@ where
         self.consumed += amt;
     }
 }
+
+fn main() {}
