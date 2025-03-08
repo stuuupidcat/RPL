@@ -9,10 +9,10 @@ pub(super) struct RWCStates<Local: Idx> {
     /// Total number of locals.
     locals: usize,
 
-    /// A compressed representation of `RWState`s.
+    /// A compressed representation of `RWCState`s.
     ///
-    /// Each word represents 4 different `RWState`s packed together. Each packed
-    /// RWState is stored in 4 bits: a read bit, and a write bit.
+    /// Each word represents 4 different `RWCState`s packed together. Each packed
+    /// RWCState is stored in 4 bits: a read bit, and a write bit.
     ///
     /// The data for each statement is contiguous and starts at a word boundary,
     /// so there might be an unused space left.
@@ -32,7 +32,7 @@ impl<Local: Idx> RWCStates<Local> {
     const RWC_BITS: usize = 4;
     /// Size of a word in bits.
     const WORD_BITS: usize = std::mem::size_of::<u8>() * 8;
-    /// Number of packed RWStates that fit into a single word.
+    /// Number of packed RWCStates that fit into a single word.
     const WORD_RWC_COUNT: usize = Self::WORD_BITS / Self::RWC_BITS;
 
     pub(super) fn new(statements: usize, locals: usize) -> Self {
