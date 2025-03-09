@@ -31,8 +31,8 @@ extern crate smallvec;
 extern crate tracing;
 
 pub mod graph;
-
 mod matches;
+mod predicate;
 
 use std::cell::RefCell;
 use std::iter::zip;
@@ -1023,5 +1023,19 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         };
         debug!(?pat, ?konst, matched, "match_const_operand");
         matched
+    }
+}
+
+impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
+    /// The predicate check should be done after the `self.check` method.
+    /// (i.e. the graph matching process)
+    /// The predicate may take more arguments than the `self` parameter.
+    /// like the metavariables (which are already instantiated after the graph matching process),
+    /// or the pattern stmt index/label (which are mapped to the MIR stmt index after the graph
+    /// matching process).
+    fn check_predicates(&self /* Add more params as needed */) -> bool {
+        use crate::predicate::a::predicate_a;
+        let predicates: [fn(&CheckMirCtxt<'_, 'pcx, 'tcx>) -> bool; 1] = [predicate_a];
+        predicates.iter().all(|predicate| predicate(self))
     }
 }
