@@ -369,6 +369,9 @@ impl<BasicBlock> Location<BasicBlock> {
 pub struct DataDepGraph<BasicBlock: Idx, Local: Idx> {
     num_locals: usize,
     pub blocks: IndexVec<BasicBlock, BlockDataDepGraph<Local>>,
+    /// Record the interblock data dependencies.
+    /// i.e. the bb[stmt] depends on the dep_bb[dep_stmt] writing to the local.
+    /// and bb[Out] depends on the dep_bb[dep_stmt] writing to the local.
     interblock_edges: IndexVec<BasicBlock, InterblockEdges<BasicBlock, Local>>,
 }
 
@@ -500,7 +503,9 @@ impl<BasicBlock: Idx, Local: Idx> DataDepGraph<BasicBlock, Local> {
 }
 
 struct InterblockEdges<BasicBlock, Local> {
+    /// deps[stmt] records the interblock dependencies of the `stmt` in basic block.
     deps: Vec<InterblockEdgesEntry<BasicBlock, Local>>,
+    /// records the interblock dependencies of bb[Out]
     dep_end: InterblockEdgesEntry<BasicBlock, Local>,
 }
 
@@ -545,13 +550,38 @@ impl<BasicBlock: Idx, Local: Idx> InterblockEdgesEntry<BasicBlock, Local> {
     }
 }
 
+/// Record the data dependencies of a BasicBlock.
 pub struct BlockDataDepGraph<Local: Idx> {
+    /// Records the dependencies of each statement.
+    /// If deps[stmt].get(&prev_stmt) == Some(local),
+    /// Then the statement `stmt` depends on the statement `prev_stmt` writing to the local `local`.
     deps: Vec<FxIndexMap<usize, Local>>,
+    /// Records the reverse dependencies of each statement.
+    /// If rdeps[stmt].get(&next_stmt) == Some(local),
+    /// Then the statement `next_stmt` depends on the statement `stmt` writing to the local `local`.
     rdeps: Vec<FxIndexMap<usize, Local>>,
+    /// Records the start points of reverse dependencies for each statement.
+    /// If a statement `stmt` reads a local variable `local`,
+    /// but no statement writes to `local` before `stmt` (in current block)
+    /// then `local` is recorded in rdep_start[stmt],
+    /// indicating the dependency is introduced outside of the block (from parameters or other
+    /// blocks). (is used to analyze [In_bb] variables.)
     rdep_start: FxIndexMap<usize, MixedBitSet<Local>>,
+    /// Records the end points of dependencies for each statement.
+    /// If a statement `stmt` writes to a local variable `local`,
+    /// and the write is still valid at the end of the block (i.e., not consumed later),
+    /// then `local` is recorded in dep_end\[stmt\],
+    /// (is used to analyze \[Out_bb\] variables.)
     dep_end: FxIndexMap<usize, Local>,
+    /// If a local is introduced outside of the block
+    /// and (its last write in the block) is not consumed at the end of the block,
+    /// then it is recorded in rdep_start_end,
     rdep_start_end: MixedBitSet<Local>,
+    /// Store the read/write/consume states of local variables across all statements in a block.
+    /// (a compact representation)
     rw_states: RWCStates<Local>,
+    /// Record the specific access information of each statement.
+    /// accesses[stmt] indicating which Locals the `stmt` accessed and their access context.
     accesses: Vec<Vec<(Local, PlaceContext)>>,
 }
 
