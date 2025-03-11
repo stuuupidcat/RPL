@@ -1,0 +1,17 @@
+error: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
+  --> tests/ui/cve_2021_25905/minimal.rs:10:9
+   |
+LL |     let mut buf: Vec<u8> = Vec::new();
+   |                            ---------- `std::vec::Vec` created but not initialized
+LL |     let b = buf.len();
+   |             --------- slice created with this length
+LL |     let buf = unsafe {
+LL |         std::slice::from_raw_parts_mut(buf.as_mut_ptr().offset(b as isize), buf.capacity() - b)
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^----------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                                        |
+   |                                        slice created with this pointer
+   |
+   = help: See https://doc.rust-lang.org/std/slice/fn.std::slice::from_raw_parts_mut.html
+
+error: aborting due to 1 previous error
+
