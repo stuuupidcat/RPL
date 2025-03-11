@@ -91,7 +91,7 @@ declare_tool_lint! {
     /// unless both the pointer and the index are guaranteed to be valid, for example,
     /// when the index is calculated from the length of the slice, or both are constants.
     pub rpl::UNCHECKED_POINTER_OFFSET,
-    Deny,
+    Warn,
     "detects a pointer that is offset using an unchecked integer"
 }
 
