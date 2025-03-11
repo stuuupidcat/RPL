@@ -114,3 +114,9 @@ rpl_patterns_cassandra_iter_next_ptr_passed_to_cass_iter_get = it will be an und
     .cass_iter_next_label = `cass_iterator_next` called here
     .note = `cass_iterator_next` will invalidate the current item when called
     .help = consider implementing a `LendingIterator` instead
+
+rpl_patterns_slice_from_raw_parts_uninitialized_ = it violates the precondition of `{$fn_name}` to create a slice from uninitialized data
+    .slice_label = slice created here
+    .len_label   = slice created with this length
+    .ptr_label   = slice created with this pointer
+    .help        = See https://doc.rust-lang.org/std/slice/fn.{$fn_name}.html

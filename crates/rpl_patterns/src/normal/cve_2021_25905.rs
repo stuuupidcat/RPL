@@ -8,7 +8,7 @@ use rustc_middle::ty::TyCtxt;
 use rustc_span::{Span, Symbol};
 use std::ops::Not;
 
-#[instrument(level = "info", skip_all)]
+// #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
     // let def_id = item_id.owner_id.def_id;
@@ -27,7 +27,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         self.tcx.hir()
     }
 
-    #[instrument(level = "debug", skip_all, fields(?item.owner_id))]
+    // #[instrument(level = "debug", skip_all, fields(?item.owner_id))]
     fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
         match item.kind {
             hir::ItemKind::Trait(hir::IsAuto::No, hir::Safety::Safe, ..)
@@ -38,7 +38,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         intravisit::walk_item(self, item);
     }
 
-    #[instrument(level = "info", skip_all, fields(?def_id))]
+    // #[instrument(level = "info", skip_all, fields(?def_id))]
     fn visit_fn(
         &mut self,
         kind: intravisit::FnKind<'tcx>,
@@ -54,12 +54,10 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 let fn_name = pattern.fn_name;
                 let slice = matches[pattern.slice].span_no_inline(body);
                 let len = matches[pattern.len].span_no_inline(body);
-                let vec = matches[pattern.vec].span_no_inline(body);
                 let ptr = matches[pattern.ptr].span_no_inline(body);
-                self.tcx.dcx().emit_err(crate::errors::SliceFromRawPartsUninitialized {
+                self.tcx.dcx().emit_err(crate::errors::SliceFromRawPartsUninitialized_ {
                     fn_name,
                     len,
-                    vec,
                     ptr,
                     slice,
                 });
@@ -73,7 +71,6 @@ struct PatternFromRawParts<'pcx> {
     pattern: &'pcx pat::Pattern<'pcx>,
     fn_pat: &'pcx pat::Fn<'pcx>,
     slice: pat::Location,
-    vec: pat::Location,
     len: pat::Location,
     ptr: pat::Location,
     fn_name: &'static str,
@@ -81,15 +78,16 @@ struct PatternFromRawParts<'pcx> {
 
 #[rpl_macros::pattern_def]
 fn pattern_from_raw_parts_iter(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
-    let vec;
     let len;
     let ptr;
     let slice;
     let pattern = rpl! {
-        #[meta($T:ty)]
+        #[meta(
+            $T:ty,
+            $src:place,
+        )]
         fn $pattern (..) -> _ = mir! {
-            #[export(vec)]
-            let $src: alloc::vec::Vec<$T> = _; // _1
+            // let $src: alloc::vec::Vec<$T> = _; // _1
             let $src_ref_1: &alloc::vec::Vec<$T> = &$src; // _3
             #[export(len)]
             // let $len: usize = _; // _2
@@ -99,8 +97,8 @@ fn pattern_from_raw_parts_iter(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
             let $ptr: *mut $T = alloc::vec::Vec::as_mut_ptr(move $src_ref_2); // _6
             let $len_1: isize = copy $len as isize (IntToInt); // _8
             let $ptr_1: *mut $T = mut_ptr::offset(move $ptr, move $len_1); // _5
-            let $src_ref_2: &alloc::vec::Vec<$T> = &$src; // _11
-            let $capacity: usize = alloc::vec::Vec::capacity(move $src_ref_2); // _10
+            let $src_ref_3: &alloc::vec::Vec<$T> = &$src; // _11
+            let $capacity: usize = alloc::vec::Vec::capacity(move $src_ref_3); // _10
             let $slice_len: usize = Sub(move $capacity, copy $len); // _9
 
             // let $ptr: *mut $T = _; // _6
@@ -116,7 +114,6 @@ fn pattern_from_raw_parts_iter(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
         pattern,
         fn_pat,
         fn_name: "std::slice::from_raw_parts_mut",
-        vec,
         len,
         ptr,
         slice,

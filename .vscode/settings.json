@@ -3,9 +3,13 @@
     "rust-analyzer.linkedProjects": [
         "./Cargo.toml",
     ],
-    "rust-analyzer.procMacro.enable": false,
+    "rust-analyzer.procMacro.enable": true,
     "rust-analyzer.procMacro.attributes.enable": false, // Doesn't work
-    "rust-analyzer.procMacro.ignored": {}, // Doesn't work
+    "rust-analyzer.procMacro.ignored": {
+        "tracing": ["instrument"],
+        "tracing-attributes": ["instrument"],
+    }, // Doesn't work
+    "rust-analyzer.diagnostics.disabled": ["proc-macro"],
     "lldb.showDisassembly": "auto",
     "lldb.dereferencePointers": true,
     "lldb.consoleMode": "commands",

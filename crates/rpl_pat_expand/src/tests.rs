@@ -78,6 +78,43 @@ fn test_ty_var() {
 }
 
 #[test]
+fn test_place_var() {
+    mir_test_case!(
+        #[meta($T:ty, $src:place)]
+        pat! {
+            let $reference: &$T = &$src;
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T_ty_var = pattern_fn.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T_ty = pcx.mk_var_ty(T_ty_var);
+                #[allow(non_snake_case)]
+                let src_place_var = pattern_fn.meta.new_place_var();
+                #[allow(non_snake_case)]
+                let src_local = pcx.mk_var_place(src_place_var);
+            }
+            let reference_local = mir_pat.mk_local(
+                pcx
+                    .mk_ref_ty(
+                        ::rpl_context::pat::RegionKind::ReAny,
+                        T_ty,
+                        ::rustc_middle::mir::Mutability::Not
+                    )
+            );
+            mir_pat.mk_assign(
+                reference_local.into_place(),
+                ::rpl_context::pat::Rvalue::Ref(
+                    ::rpl_context::pat::RegionKind::ReAny,
+                    ::rustc_middle::mir::BorrowKind::Shared,
+                    src_local.into_place()
+                )
+            );
+        }
+    );
+}
+
+#[test]
 fn test_cve_2020_25016() {
     mir_test_case!(
         #[meta( #[export(ty_var)] $T:ty = is_all_safe_trait)]

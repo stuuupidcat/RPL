@@ -280,3 +280,17 @@ pub struct CassandraIterNextPtrPassedToCassIterGet {
     #[label(rpl_patterns_cass_iter_next_label)]
     pub cass_iter_next: Span,
 }
+
+// for cve_2021_25905
+#[derive(Diagnostic)]
+#[diag(rpl_patterns_slice_from_raw_parts_uninitialized_)]
+#[help]
+pub struct SliceFromRawPartsUninitialized_ {
+    #[primary_span]
+    pub slice: Span,
+    #[label(rpl_patterns_len_label)]
+    pub len: Span,
+    #[label(rpl_patterns_ptr_label)]
+    pub ptr: Span,
+    pub fn_name: &'static str,
+}
