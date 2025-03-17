@@ -258,6 +258,11 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
     */
 }
 
+type PlaceElemPair<'pcx, 'tcx> = (
+    (pat::PlaceElem<'pcx>, Option<pat::PlaceTy<'pcx>>),
+    (mir::ProjectionElem<mir::Local, ty::Ty<'tcx>>, mir::tcx::PlaceTy<'tcx>),
+);
+
 impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
     #[instrument(level = "trace", skip(self), ret)]
     pub fn match_local(&self, pat: pat::Local, local: mir::Local) -> bool {
@@ -328,13 +333,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             })
     }
 
-    fn match_place_elem(
-        &self,
-        ((proj_pat, place_pat_ty), (proj, place_ty)): (
-            (pat::PlaceElem<'pcx>, Option<pat::PlaceTy<'pcx>>),
-            (mir::ProjectionElem<mir::Local, ty::Ty<'tcx>>, mir::tcx::PlaceTy<'tcx>),
-        ),
-    ) -> bool {
+    fn match_place_elem(&self, ((proj_pat, place_pat_ty), (proj, place_ty)): PlaceElemPair<'pcx, 'tcx>) -> bool {
         use mir::ProjectionElem::*;
         use pat::FieldAcc::{Named, Unnamed};
         match (place_pat_ty.map(|p| p.ty.kind()), place_ty.ty.kind(), proj_pat, proj) {
@@ -1053,7 +1052,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
     }
 }
 
-impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
+impl<'pcx> CheckMirCtxt<'_, 'pcx, '_> {
     fn get_place_ty_from_local(&self, local: pat::Local) -> pat::PlaceTy<'pcx> {
         pat::PlaceTy::from_ty(self.mir_pat.locals[local])
     }

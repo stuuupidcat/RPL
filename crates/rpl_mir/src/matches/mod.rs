@@ -1094,12 +1094,12 @@ impl<'tcx> PlaceVarMatches<'tcx> {
         self.candidates.is_empty()
     }
 
-    // After `match_place_var_candidates`, all place variables are supposed to be matched,
-    // so we can assume that `self.matched` is `Some`.
-    #[track_caller]
-    fn force_get_matched(&self) -> PlaceRef<'tcx> {
-        self.matched.get().expect("bug: type variable not matched")
-    }
+    // // After `match_place_var_candidates`, all place variables are supposed to be matched,
+    // // so we can assume that `self.matched` is `Some`.
+    // #[track_caller]
+    // fn force_get_matched(&self) -> PlaceRef<'tcx> {
+    //     self.matched.get().expect("bug: type variable not matched")
+    // }
 }
 
 trait IntoLocation: Copy {
