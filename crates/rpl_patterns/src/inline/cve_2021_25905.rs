@@ -56,16 +56,14 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 let fn_name = pattern.fn_name;
                 let slice = matches[pattern.slice].span_no_inline(body);
                 let len = matches[pattern.len].span_no_inline(body);
-                let vec = matches[pattern.vec].span_no_inline(body);
                 let ptr = matches[pattern.ptr].span_no_inline(body);
                 self.tcx.emit_node_span_lint(
                     SLICE_FROM_RAW_PARTS_UNINITIALIZED,
                     self.tcx.local_def_id_to_hir_id(def_id),
                     slice,
-                    crate::errors::SliceFromRawPartsUninitialized {
+                    crate::errors::SliceFromRawPartsUninitialized_ {
                         fn_name,
                         len,
-                        vec,
                         ptr,
                         slice,
                     },
@@ -80,7 +78,6 @@ struct PatternFromRawParts<'pcx> {
     pattern: &'pcx pat::Pattern<'pcx>,
     fn_pat: &'pcx pat::Fn<'pcx>,
     slice: pat::Location,
-    vec: pat::Location,
     len: pat::Location,
     ptr: pat::Location,
     fn_name: &'static str,
@@ -88,15 +85,13 @@ struct PatternFromRawParts<'pcx> {
 
 #[rpl_macros::pattern_def]
 fn pattern_from_raw_parts_iter(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
-    let vec;
     let len;
     let ptr;
     let slice;
     let pattern = rpl! {
-        #[meta($T:ty)]
+        #[meta($T:ty, $src:place(alloc::vec::Vec<$T>))]
         fn $pattern (..) -> _ = mir! {
-            #[export(vec)]
-            let $src: alloc::vec::Vec<$T> = _; // _1
+            // let $src: alloc::vec::Vec<$T> = _; // _1
             let $src_ref_1: &alloc::vec::Vec<$T> = &$src; // _3
             #[export(len)]
             // let $len: usize = _; // _2
@@ -126,7 +121,6 @@ fn pattern_from_raw_parts_iter(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
         pattern,
         fn_pat,
         fn_name: "std::slice::from_raw_parts_mut",
-        vec,
         len,
         ptr,
         slice,
