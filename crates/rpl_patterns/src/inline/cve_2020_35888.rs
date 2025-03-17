@@ -7,6 +7,8 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::{Span, Symbol};
 
+use crate::lints::DROP_UNINIT_VALUE;
+
 #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
@@ -52,7 +54,12 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                 let drop = matches[pattern.drop].span_no_inline(body);
                 debug!(?drop);
-                self.tcx.dcx().emit_err(crate::errors::DropUninitValue { drop });
+                self.tcx.emit_node_span_lint(
+                    DROP_UNINIT_VALUE,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    drop,
+                    crate::errors::DropUninitValue { drop },
+                );
             }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);

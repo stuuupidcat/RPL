@@ -458,3 +458,84 @@ declare_tool_lint! {
     Deny,
     "detects calling `std::cell::UnsafeCell::get_mut` on an `Rc<UnsafeCell<T>>`"
 }
+
+declare_tool_lint! {
+    /// The `rpl::drop_uninit_value` lint detects dropping an uninitialized value.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![feature(maybe_uninit_array_assume_init)]
+    /// use std::mem::MaybeUninit;
+    ///
+    /// fn write_many<T: Clone>(value: T) -> [T; 3] {
+    ///   let mut x = [const { MaybeUninit::uninit() }; 3];
+    ///   for i in 0..3 {
+    ///     unsafe {
+    ///       *x[i].as_mut_ptr() = value.clone(); // May drop uninitialized value pointed by y.add(i)
+    ///     }
+    ///   }
+    ///   unsafe { MaybeUninit::array_assume_init(x) }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// Dropping an uninitialized value is undefined behavior.
+    pub rpl::DROP_UNINIT_VALUE,
+    Deny,
+    "detects dropping an uninitialized value"
+}
+
+declare_tool_lint! {
+    /// The `rpl::thread_local_static_ref` lint detects casting a reference to a thread-local static variable (which implements `Sync`) to a static reference.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// use std::cell::UnsafeCell;
+    ///
+    /// thread_local! {
+    ///   static THREAD_LOCAL: UnsafeCell<i32> = UnsafeCell::new(0);
+    /// }
+    ///
+    /// pub fn static_ref() -> &'static i32 {
+    ///   THREAD_LOCAL.with(|l| unsafe { &*l.get() })
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// It is unsound to expose a `&'static T` from a thread-local where `T` is `Sync`.
+    pub rpl::THREAD_LOCAL_STATIC_REF,
+    Deny,
+    "detects casting a reference to a thread-local static variable (which implements `Sync`) to a static reference"
+}
+
+declare_tool_lint! {
+    /// The `rpl::unvalidated_slice_from_raw_parts` lint detects calling `std::slice::from_raw_parts` or
+    /// `std::slice::from_raw_parts_mut` with a pointer that is not a valid pointer to the slice.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// fn to_slice<'a, T>(p: *const T) -> &'a [T] {
+    ///   unsafe {
+    ///     std::slice::from_raw_parts(p, 1)
+    ///   }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// The `from_raw_parts` and `from_raw_parts_mut` functions require that the pointer is a valid pointer to the slice.
+    pub rpl::UNVALIDATED_SLICE_FROM_RAW_PARTS,
+    Deny,
+    "detects calling `std::slice::from_raw_parts` or `std::slice::from_raw_parts_mut` with a pointer that is not a valid pointer to the slice"
+}

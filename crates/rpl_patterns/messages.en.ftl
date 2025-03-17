@@ -67,11 +67,14 @@ rpl_patterns_get_mut_in_rc_unsafecell = Obtaining a mutable reference to the val
     .help = use `std::cell::RefCell` instead
 
 rpl_patterns_drop_uninit_value = Possibly dropping an uninitialized value
+    .drop_label = dropped here
+    .help = assigning to a dereferenced pointer will cause previous value to be dropped, and try using `ptr::write` instead
 
-rpl_patterns_from_raw_parts = it is unsound to trust pointers from passed-in iterators in a public safe function
+rpl_patterns_uninvalidated_slice_from_raw_parts = it is unsound to trust pointers from passed-in iterators in a public safe function
+    .src_label = source iterator found here
     .ptr_label = pointer created here
     .slice_label = used here to create a slice from the pointer
-    .help = please mark the function as unsafe
+    .help = consider marking the function as unsafe
 
 rpl_patterns_unsound_cast_between_u64_and_atomic_u64 = it is unsound to cast between `u64` and `AtomicU64`
     .note = the alignment of `u64` is smaller than `AtomicU64` on many 32-bits platforms
@@ -80,7 +83,8 @@ rpl_patterns_unsound_cast_between_u64_and_atomic_u64 = it is unsound to cast bet
 rpl_patterns_thread_local_static_ref = it is unsound to expose a `&'static {$ty}` from a thread-local where `{$ty}` is `Sync`
     .sync_help = `{$ty}` is `Sync` so that it can shared among threads
     .help = the thread local is destroyed after the thread has been destroyed, and the exposed `&'static {$ty}` may outlive the thread it is exposed to
-    .label = thread local used here
+    .fn_label = function returning `&'static {$ty}` here
+    .thread_local_label = thread local used here
     .ret_label = `&'static {$ty}` returned here
 
 rpl_patterns_deref_null_pointer = Dereference of a possibly null pointer

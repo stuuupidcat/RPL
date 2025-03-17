@@ -177,22 +177,22 @@ pub struct GetMutInRcUnsafeCell {
 }
 
 // for cve_2020_35888
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_drop_uninit_value)]
 pub struct DropUninitValue {
-    #[primary_span]
+    #[label(rpl_patterns_drop_label)]
     pub drop: Span,
 }
 
 // for cve_2020_35907
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_thread_local_static_ref)]
 #[help(rpl_patterns_sync_help)]
 #[help]
 pub struct ThreadLocalStaticRef<'tcx> {
-    #[primary_span]
+    #[label(rpl_patterns_fn_label)]
     pub span: Span,
-    #[label]
+    #[label(rpl_patterns_thread_local_label)]
     pub thread_local: Span,
     #[label(rpl_patterns_ret_label)]
     pub ret: Span,
@@ -201,11 +201,11 @@ pub struct ThreadLocalStaticRef<'tcx> {
 
 // for cve_2021_25904
 // FIXME: add a span for `#[help]` containing the function header
-#[derive(Diagnostic)]
-#[diag(rpl_patterns_from_raw_parts)]
+#[derive(LintDiagnostic)]
+#[diag(rpl_patterns_uninvalidated_slice_from_raw_parts)]
 #[help]
 pub struct UnvalidatedSliceFromRawParts {
-    #[primary_span]
+    #[label(rpl_patterns_src_label)]
     pub src: Span,
     #[label(rpl_patterns_ptr_label)]
     pub ptr: Span,
