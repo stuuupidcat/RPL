@@ -243,7 +243,11 @@ declare_tool_lint! {
     /// use core::{mem::size_of, slice::from_raw_parts};
     /// let v: Vec<usize> = vec![1, 2, 3];
     /// let slice: &[usize] = v.as_slice();
-    /// let slice: &[u8] = from_raw_parts(slice.as_ptr() as *const u8, slice.len() * size_of::<usize>()); // undefined behavior
+    /// let slice: &[u8] = from_raw_parts(
+    ///   slice.as_ptr() as *const u8,
+    ///   slice.len() * size_of::<usize>()
+    /// );
+    /// // undefined behavior
     /// ```
     ///
     /// {{produces}}
@@ -332,7 +336,8 @@ declare_tool_lint! {
 }
 
 declare_tool_lint! {
-    /// The `rpl::wrong_assumption_of_fat_pointer_layout` lint detects casting a fat pointer to a thin pointer using `as` or `std::mem::transmute`.
+    /// The `rpl::wrong_assumption_of_fat_pointer_layout` lint detects casting a fat pointer
+    /// to a thin pointer using `as` or `std::mem::transmute`.
     ///
     /// ### Example
     ///
@@ -375,4 +380,93 @@ declare_tool_lint! {
     pub rpl::WRONG_ASSUMPTION_OF_LAYOUT_COMPATIBILITY,
     Deny,
     "detects casting a fat pointer to a thin pointer using `as` or `std::mem::transmute`"
+}
+
+declare_tool_lint! {
+    /// The `rpl::trust_exact_size_iterator` lint detects some codes, whose safety depends on the correctness of
+    /// the implementation of [`core::iter::ExactSizeIterator`].
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(rpl::trust_exact_size_iterator)]
+    /// use core::iter::ExactSizeIterator;
+    /// fn foo<I: ExactSizeIterator>(iter: I) {
+    ///   let len = iter.len();
+    ///   let mut v = Vec::with_capacity(len);
+    ///   let p = v.as_mut_ptr();
+    ///   for x in iter {
+    ///     unsafe {
+    ///       p.write(x);
+    ///     }
+    ///   }
+    ///   unsafe {
+    ///     v.set_len(len);
+    ///   }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// The safety of the code depends on the correctness of the implementation of `ExactSizeIterator`.
+    pub rpl::TRUST_EXACT_SIZE_ITERATOR,
+    Deny,
+    "detects some codes, whose safety depends the correctness of the implementation of `core::iter::ExactSizeIterator`"
+}
+
+declare_tool_lint! {
+    /// The `rpl::slice_from_raw_parts_uninitialized` lint detects calling `std::slice::from_raw_parts` or
+    /// `std::slice::from_raw_parts_mut` with uninitialized memory.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(rpl::slice_from_raw_parts_uninitialized)]
+    /// let mut v = Vec::with_capacity(3);
+    /// let p = v.as_ptr();
+    /// let cap = v.capacity();
+    /// let slice = unsafe {
+    ///   std::slice::from_raw_parts(p, len)
+    /// };
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// The `from_raw_parts` and `from_raw_parts_mut` functions requires that the memory is properly initialized.
+    pub rpl::SLICE_FROM_RAW_PARTS_UNINITIALIZED,
+    Deny,
+    "detects calling `std::slice::from_raw_parts` or `std::slice::from_raw_parts_mut` with uninitialized memory"
+}
+
+declare_tool_lint! {
+    /// The `rpl::get_mut_in_rc_unsafecell` lint detects calling [`std::cell::UnsafeCell::get_mut`] on an [`Rc<UnsafeCell<T>>`].
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(rpl::get_mut_in_rc_unsafecell)]
+    /// use std::cell::UnsafeCell;
+    /// use std::rc::Rc;
+    ///
+    /// let rc = Rc::new(UnsafeCell::new(42));
+    /// unsafe {
+    ///   let p1 = rc.get_mut();
+    ///   let p2 = rc.get_mut();
+    /// }
+    /// // p1 and p2 may point to the same memory
+    /// println!("{:p} {:p}", p1, p2);
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// The `get_mut` method is used to get a mutable reference to the value in the `UnsafeCell`.
+    pub rpl::GET_MUT_IN_RC_UNSAFECELL,
+    Deny,
+    "detects calling `std::cell::UnsafeCell::get_mut` on an `Rc<UnsafeCell<T>>`"
 }

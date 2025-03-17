@@ -5,9 +5,10 @@ LL |     let len = bla.len();
    |               --------- `std::iter::ExactSizeIterator::len` used here
 ...
 LL |         vec.set_len(len);
-   |         ^^^^^^^^^^^^^^^^
+   |         ^^^^^^^^^^^^^^^^ length used here in `Vec::set_len`
    |
-   = help: incorrect implementation of `std::iter::ExactSizeIterator::len` must not cause safety issues
+   = help: incorrect implementation of `std::iter::ExactSizeIterator::len` must not cause safety issues, and consider using `std::iter::TrustedLen` instead if it's stabilized
+   = note: `#[deny(rpl::trust_exact_size_iterator)]` on by default
 
 error: aborting due to 1 previous error
 

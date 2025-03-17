@@ -7,6 +7,8 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::{Span, Symbol};
 
+use crate::lints::{SLICE_FROM_RAW_PARTS_UNINITIALIZED, TRUST_EXACT_SIZE_ITERATOR};
+
 #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
@@ -54,9 +56,16 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 let len = matches[pattern.len].span_no_inline(body);
                 let set_len = matches[pattern.set_len].span_no_inline(body);
                 debug!(?len, ?set_len);
-                self.tcx
-                    .dcx()
-                    .emit_err(crate::errors::TrustExactSizeIterator { len, set_len });
+                self.tcx.emit_node_span_lint(
+                    TRUST_EXACT_SIZE_ITERATOR,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    set_len,
+                    crate::errors::TrustExactSizeIterator {
+                        len,
+                        set_len,
+                        fn_name: "Vec::set_len",
+                    },
+                );
             }
 
             let pattern = pattern_uninitialized_slice_inlined(self.pcx);
@@ -67,13 +76,18 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 let slice = matches[pattern.slice].span_no_inline(body);
 
                 debug!(?len, ?ptr, ?vec, ?slice);
-                self.tcx.dcx().emit_err(crate::errors::SliceFromRawPartsUninitialized {
-                    len,
-                    ptr,
-                    vec,
+                self.tcx.emit_node_span_lint(
+                    SLICE_FROM_RAW_PARTS_UNINITIALIZED,
+                    self.tcx.local_def_id_to_hir_id(def_id),
                     slice,
-                    fn_name: "std::slice::from_raw_parts",
-                });
+                    crate::errors::SliceFromRawPartsUninitialized {
+                        len,
+                        ptr,
+                        vec,
+                        slice,
+                        fn_name: "std::slice::from_raw_parts",
+                    },
+                );
             }
 
             let pattern = pattern_uninitialized_slice_mut_inlined(self.pcx);
@@ -83,13 +97,19 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 let vec = matches[pattern.vec].span_no_inline(body);
                 let slice = matches[pattern.slice].span_no_inline(body);
                 debug!(?len, ?ptr, ?vec, ?slice);
-                self.tcx.dcx().emit_err(crate::errors::SliceFromRawPartsUninitialized {
-                    len,
-                    ptr,
-                    vec,
+
+                self.tcx.emit_node_span_lint(
+                    SLICE_FROM_RAW_PARTS_UNINITIALIZED,
+                    self.tcx.local_def_id_to_hir_id(def_id),
                     slice,
-                    fn_name: "std::slice::from_raw_parts_mut",
-                });
+                    crate::errors::SliceFromRawPartsUninitialized {
+                        len,
+                        ptr,
+                        vec,
+                        slice,
+                        fn_name: "std::slice::from_raw_parts_mut",
+                    },
+                );
             }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);

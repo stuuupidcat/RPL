@@ -31,10 +31,12 @@ LL |     let mut result = Vec::<u32>::with_capacity(words);
 LL |         for word in &mut result {
    |                     ^^^^^^^^^^^
    |                     |
+   |                     slice created here
    |                     slice created with this length
    |                     slice created with this pointer
    |
    = help: See https://doc.rust-lang.org/std/slice/fn.std::slice::from_raw_parts_mut.html
+   = note: `#[deny(rpl::slice_from_raw_parts_uninitialized)]` on by default
 
 error: aborting due to 3 previous errors
 

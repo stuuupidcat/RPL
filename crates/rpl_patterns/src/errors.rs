@@ -104,22 +104,23 @@ pub struct WrongAssumptionOfLayoutCompatibility {
 }
 
 // for cve_2021_27376
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_trust_exact_size_iterator)]
 #[help]
 pub struct TrustExactSizeIterator {
-    #[primary_span]
+    #[label(rpl_patterns_label)]
     pub set_len: Span,
     #[label(rpl_patterns_len_label)]
     pub len: Span,
+    pub fn_name: &'static str,
 }
 
 // for cve_2021_27376
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_slice_from_raw_parts_uninitialized)]
 #[help]
 pub struct SliceFromRawPartsUninitialized {
-    #[primary_span]
+    #[label(rpl_patterns_slice_label)]
     pub slice: Span,
     #[label(rpl_patterns_len_label)]
     pub len: Span,
@@ -165,11 +166,11 @@ pub struct SetLenUninitialized {
 }
 
 // for cve_2020_35898_9
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_get_mut_in_rc_unsafecell)]
 #[help]
 pub struct GetMutInRcUnsafeCell {
-    #[primary_span]
+    #[label(rpl_patterns_get_mut_label)]
     #[note]
     #[help]
     pub get_mut: Span,

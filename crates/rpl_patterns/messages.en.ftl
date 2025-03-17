@@ -44,8 +44,10 @@ rpl_patterns_vec_set_len_to_truncate = Use `Vec::set_len` to truncate the length
     .help = Consider using `Vec::truncate` instead
 
 rpl_patterns_trust_exact_size_iterator = it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
+    .label = length used here in `{$fn_name}`
+    .note = `std::iter::ExactSizeIterator::len` may not be implemented correctly, and it should be used as a hint rather than a fact
     .len_label = `std::iter::ExactSizeIterator::len` used here
-    .help = incorrect implementation of `std::iter::ExactSizeIterator::len` must not cause safety issues
+    .help = incorrect implementation of `std::iter::ExactSizeIterator::len` must not cause safety issues, and consider using `std::iter::TrustedLen` instead if it's stabilized
 
 rpl_patterns_slice_from_raw_parts_uninitialized = it violates the precondition of `{$fn_name}` to create a slice from uninitialized data
     .slice_label = slice created here
@@ -59,7 +61,8 @@ rpl_patterns_set_len_uninitialized = it violates the precondition of `Vec::set_l
     .vec_label = `Vec` created here
     .help = before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
 
-rpl_patterns_get_mut_in_rc_unsafecell = Obtaining a mutable reference to the value wrapped by `Rc<UnsafeCell<$T>>` is unsound
+rpl_patterns_get_mut_in_rc_unsafecell = Obtaining a mutable reference to the value wrapped by `Rc<UnsafeCell<$T>>` may be unsound
+    .get_mut_label = `UnsafeCell::get_mut` called here
     .note = there will be multiple mutable references to the value at the same time
     .help = use `std::cell::RefCell` instead
 

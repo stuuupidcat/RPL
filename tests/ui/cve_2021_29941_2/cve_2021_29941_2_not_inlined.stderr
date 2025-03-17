@@ -17,9 +17,10 @@ LL |     let len = bla.len();
    |               --------- `std::iter::ExactSizeIterator::len` used here
 ...
 LL |         vec.set_len(len);
-   |         ^^^^^^^^^^^^^^^^
+   |         ^^^^^^^^^^^^^^^^ length used here in `Vec::set_len`
    |
-   = help: incorrect implementation of `std::iter::ExactSizeIterator::len` must not cause safety issues
+   = help: incorrect implementation of `std::iter::ExactSizeIterator::len` must not cause safety issues, and consider using `std::iter::TrustedLen` instead if it's stabilized
+   = note: `#[deny(rpl::trust_exact_size_iterator)]` on by default
 
 error: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
   --> tests/ui/cve_2021_29941_2/cve_2021_29941_2_not_inlined.rs:7:36
@@ -28,11 +29,13 @@ LL |     let mut vec = Vec::with_capacity(len);
    |                   ----------------------- `std::vec::Vec` created but not initialized
 LL |     let arr: &mut [u32] = unsafe { std::slice::from_raw_parts_mut(vec.as_mut_ptr(), bla.len()) };
    |                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^----------------^^---------^
-   |                                                                   |                 |
-   |                                                                   |                 slice created with this length
-   |                                                                   slice created with this pointer
+   |                                    |                              |                 |
+   |                                    |                              |                 slice created with this length
+   |                                    |                              slice created with this pointer
+   |                                    slice created here
    |
    = help: See https://doc.rust-lang.org/std/slice/fn.std::slice::from_raw_parts_mut.html
+   = note: `#[deny(rpl::slice_from_raw_parts_uninitialized)]` on by default
 
 error: aborting due to 3 previous errors
 
