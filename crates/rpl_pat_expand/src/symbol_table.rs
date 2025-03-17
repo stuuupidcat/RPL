@@ -36,6 +36,8 @@ pub(crate) enum CheckError<'a> {
     PlaceVarAlreadyDeclared(&'a Ident),
     #[error("type variable `${0}` is not declared")]
     TypeVarNotDeclared(&'a Ident),
+    #[error("place variable `${0}` is not declared")]
+    PlaceVarNotDeclared(&'a Ident),
     #[error("export named by `{0}` is already declared")]
     ExportAlreadyDeclared(&'a Ident),
     #[error("type or path named by `{0}` is already declared")]
@@ -275,7 +277,7 @@ impl<'a> MetaTable<'a> {
         self.place_vars
             .get(ident)
             .copied()
-            .ok_or_else(|| syn::Error::new(ident.span(), CheckError::TypeVarNotDeclared(ident)))
+            .ok_or_else(|| syn::Error::new(ident.span(), CheckError::PlaceVarNotDeclared(ident)))
     }
     pub fn add_export(&mut self, export: &'a Ident, kind: ExportKind) -> syn::Result<()> {
         self.exports.try_insert(export, kind).map_err(|entry| {
