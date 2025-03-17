@@ -1,4 +1,3 @@
-//@ ignore-on-host
 //@ revisions: inline regular
 //@[inline] compile-flags: -Z inline-mir=true
 //@[regular] compile-flags: -Z inline-mir=false
@@ -209,6 +208,7 @@ where
             // safe because it's within the buffer's limits
             // and we won't be reading uninitialized memory
             std::slice::from_raw_parts_mut(
+                //~[regular]^ ERROR: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
                 self.buf.as_mut_ptr().offset(b as isize),
                 self.buf.capacity() - b,
             )
