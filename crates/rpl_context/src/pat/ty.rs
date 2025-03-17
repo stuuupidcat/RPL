@@ -317,7 +317,7 @@ impl PlaceVarIdx {
     }
 }
 
-impl<'pcx> Debug for PlaceVar<'pcx> {
+impl Debug for PlaceVar<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&self.idx, f)
     }
