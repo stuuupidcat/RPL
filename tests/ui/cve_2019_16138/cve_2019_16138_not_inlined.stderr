@@ -8,8 +8,7 @@ LL |         ret.set_len(pixel_count);
    |         ^^^^^^^^^^^^^^^^^^^^^^^^ `Vec::set_len` called here
    |
    = help: before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
-   = note: `-D rpl::set-len-uninitialized` implied by `-D warnings`
-   = help: to override `-D warnings` add `#[allow(rpl::set_len_uninitialized)]`
+   = note: `#[deny(rpl::set_len_uninitialized)]` on by default
 
 error: aborting due to 1 previous error
 

@@ -5,9 +5,11 @@ rpl_patterns_offset_by_one = pointer out of bound
     .suggestion = did you mean this
 
 rpl_patterns_unsound_slice_cast = it is unsound to cast any slice `&{$mutability}[{$ty}]` to a byte slice `&{$mutability}[u8]`
+    .cast_to_label = casted to a byte slice here
     .note = trying to cast from this value of `&{$mutability}[{$ty}]` type
 
 rpl_patterns_use_after_drop = use a pointer from `{$ty}` after dropped
+    .use_label = used here
     .note = the `{$ty}` value is dropped here
 
 rpl_patterns_misordered_parameters = misordered parameters `len` and `cap` in `Vec::from_raw_parts`

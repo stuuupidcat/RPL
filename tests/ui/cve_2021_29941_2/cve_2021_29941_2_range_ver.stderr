@@ -20,8 +20,7 @@ LL |         vec.set_len(len);
    |             ^^^^^^^^^^^^ `Vec::set_len` called here
    |
    = help: before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
-   = note: `-D rpl::set-len-uninitialized` implied by `-D warnings`
-   = help: to override `-D warnings` add `#[allow(rpl::set_len_uninitialized)]`
+   = note: `#[deny(rpl::set_len_uninitialized)]` on by default
 
 error: it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
   --> tests/ui/cve_2021_29941_2/cve_2021_29941_2_range_ver.rs:20:13

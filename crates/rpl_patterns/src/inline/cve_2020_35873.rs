@@ -8,6 +8,8 @@ use rustc_span::{sym, Span, Symbol};
 use rpl_context::{pat, PatCtxt};
 use rpl_mir::CheckMirCtxt;
 
+use crate::lints::USE_AFTER_DROP;
+
 #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
@@ -43,11 +45,16 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                 let use_span = matches[pattern.ptr_usage].span_no_inline(body);
                 let drop_span = matches[pattern.cstring_drop].span_no_inline(body);
-                self.tcx.dcx().emit_err(crate::errors::UseAfterDrop {
+                self.tcx.emit_node_span_lint(
+                    USE_AFTER_DROP,
+                    self.tcx.local_def_id_to_hir_id(def_id),
                     use_span,
-                    drop_span,
-                    ty: self.tcx.type_of(cstring_did).instantiate_identity(),
-                });
+                    crate::errors::UseAfterDrop {
+                        use_span,
+                        drop_span,
+                        ty: self.tcx.type_of(cstring_did).instantiate_identity(),
+                    },
+                );
             }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);

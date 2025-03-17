@@ -17,31 +17,30 @@ impl IntoDiagArg for Mutability {
     }
 }
 
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_unsound_slice_cast)]
 pub struct UnsoundSliceCast<'tcx> {
     #[note]
     pub cast_from: Span,
-    #[primary_span]
+    #[label(rpl_patterns_cast_to_label)]
     pub cast_to: Span,
     pub ty: Ty<'tcx>,
     pub mutability: Mutability,
 }
 
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_use_after_drop)]
 pub struct UseAfterDrop<'tcx> {
     #[note]
     pub drop_span: Span,
-    #[primary_span]
+    #[label(rpl_patterns_use_label)]
     pub use_span: Span,
     pub ty: Ty<'tcx>,
 }
 
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_offset_by_one)]
 pub struct OffsetByOne {
-    #[primary_span]
     #[label(rpl_patterns_read_label)]
     pub read: Span,
     #[label(rpl_patterns_ptr_label)]

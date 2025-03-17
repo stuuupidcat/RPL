@@ -31,6 +31,7 @@ impl Session<'_> {
         };
         unsafe { check!(ffi::sqlite3session_attach(self.sess, table)) };
         //~^ ERROR: use a pointer from `std::ffi::CString` after dropped
+        //~| NOTE: `#[deny(rpl::use_after_drop)]` on by default
         Ok(())
     }
 }

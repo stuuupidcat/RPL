@@ -229,6 +229,78 @@ declare_tool_lint! {
     /// However, it does not initialize the new elements, which can lead to undefined behavior.
     /// To avoid this, you should always use the `resize` method to initialize the new elements.
     pub rpl::SET_LEN_UNINITIALIZED,
-    Warn,
+    Deny,
     "detects calling `Vec::set_len` without initializing the new elements in advance"
+}
+
+declare_tool_lint! {
+    /// The `rpl::unsound_slice_cast` lint detects a slice cast that can lead to undefined behavior.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(rpl::unsound_slice_cast)]
+    /// use core::{mem::size_of, slice::from_raw_parts};
+    /// let v: Vec<usize> = vec![1, 2, 3];
+    /// let slice: &[usize] = v.as_slice();
+    /// let slice: &[u8] = from_raw_parts(slice.as_ptr() as *const u8, slice.len() * size_of::<usize>()); // undefined behavior
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// A reference to a slice must has suitable alignment and size for the type it points to.
+    pub rpl::UNSOUND_SLICE_CAST,
+    Deny,
+    "detects a slice cast that can lead to undefined behavior"
+}
+
+declare_tool_lint! {
+    /// The `rpl::use_after_drop` lint detects using a value after it has been dropped.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(rpl::use_after_drop)]
+    /// let x = Box::new(42);
+    /// let y = x.as_ptr();
+    /// drop(x);
+    /// unsafe {
+    ///   *y; // undefined behavior
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// Using a value after it has been dropped is undefined behavior.
+    pub rpl::USE_AFTER_DROP,
+    Deny,
+    "detects using a value after it has been dropped"
+}
+
+declare_tool_lint! {
+    /// The `rpl::offset_by_one` lint detects reading or writing a value at an offset outside the bounds of a buffer by one.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(rpl::offset_by_one)]
+    /// let mut v = vec![1, 2, 3];
+    /// let p = v.as_mut_ptr();
+    /// unsafe {
+    ///   *p.offset(3) = 4; // undefined behavior
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// Reading or writing a value at an offset outside the bounds of a buffer by one is undefined behavior.
+    pub rpl::OFFSET_BY_ONE,
+    Deny,
+    "detects reading or writing a value at an offset outside the bounds of a buffer by one"
 }
