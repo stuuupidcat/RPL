@@ -7,6 +7,8 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::{Span, Symbol};
 
+use crate::lints::UNSOUND_PIN_PROJECT;
+
 #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
@@ -63,9 +65,12 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 let mut_self = body.local_decls[matches[pattern.mut_self]].source_info.span;
                 let ty = matches[pattern.ty_var.idx];
                 debug!(?span, ?mut_self, ?ty);
-                self.tcx
-                    .dcx()
-                    .emit_err(crate::errors::UnsoundPinNewUnchecked { span, mut_self, ty });
+                self.tcx.emit_node_span_lint(
+                    UNSOUND_PIN_PROJECT,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    span,
+                    crate::errors::UnsoundPinNewUnchecked { span, mut_self, ty },
+                );
             }
             let pattern = pattern_pin_field(self.pcx);
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
@@ -73,9 +78,12 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 let mut_self = body.local_decls[matches[pattern.mut_self]].source_info.span;
                 let ty = matches[pattern.ty_var.idx];
                 debug!(?span, ?mut_self, ?ty);
-                self.tcx
-                    .dcx()
-                    .emit_err(crate::errors::UnsoundPinNewUnchecked { span, mut_self, ty });
+                self.tcx.emit_node_span_lint(
+                    UNSOUND_PIN_PROJECT,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    span,
+                    crate::errors::UnsoundPinNewUnchecked { span, mut_self, ty },
+                );
             }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);

@@ -1,5 +1,5 @@
 use rustc_errors::IntoDiagArg;
-use rustc_macros::{Diagnostic, LintDiagnostic};
+use rustc_macros::LintDiagnostic;
 use rustc_middle::ty::{self, Ty};
 use rustc_span::Span;
 
@@ -214,22 +214,21 @@ pub struct UnvalidatedSliceFromRawParts {
 }
 
 // for cve_2022_23639
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_unsound_cast_between_u64_and_atomic_u64)]
 #[note]
 pub struct UnsoundCastBetweenU64AndAtomicU64 {
-    #[primary_span]
+    #[label(rpl_patterns_cast_label)]
     pub transmute: Span,
     #[label(rpl_patterns_src_label)]
     pub src: Span,
 }
 
 // for cve_2020_35860
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_deref_null_pointer)]
 #[note]
 pub struct DerefNullPointer {
-    #[primary_span]
     #[label(rpl_patterns_deref_label)]
     pub deref: Span,
     #[label(rpl_patterns_ptr_label)]
@@ -237,11 +236,10 @@ pub struct DerefNullPointer {
 }
 
 // for cve_2020_35877
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_deref_unchecked_ptr_offset)]
 #[help]
 pub struct DerefUncheckedPtrOffset {
-    #[primary_span]
     #[label(rpl_patterns_reference_label)]
     pub reference: Span,
     #[label(rpl_patterns_ptr_label)]
@@ -251,13 +249,13 @@ pub struct DerefUncheckedPtrOffset {
 }
 
 // for cve_2020_35901
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_unsound_pin_project)]
 #[note]
 pub struct UnsoundPinNewUnchecked<'tcx> {
-    #[primary_span]
+    #[label(rpl_patterns_pin_label)]
     pub span: Span,
-    #[label]
+    #[label(rpl_patterns_ref_label)]
     pub mut_self: Span,
     pub ty: Ty<'tcx>,
 }

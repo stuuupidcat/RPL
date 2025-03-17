@@ -8,6 +8,8 @@ use rustc_span::{Span, Symbol};
 
 use rpl_mir::{pat, CheckMirCtxt};
 
+use crate::lints::UNSOUND_CAST_BETWEEN_U64_AND_ATOMIC_U64;
+
 #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
@@ -50,9 +52,12 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                 let transmute = matches[pattern.transmute].span_no_inline(body);
                 let src = matches[pattern.src].span_no_inline(body);
-                self.tcx
-                    .dcx()
-                    .emit_err(crate::errors::UnsoundCastBetweenU64AndAtomicU64 { transmute, src });
+                self.tcx.emit_node_span_lint(
+                    UNSOUND_CAST_BETWEEN_U64_AND_ATOMIC_U64,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    transmute,
+                    crate::errors::UnsoundCastBetweenU64AndAtomicU64 { transmute, src },
+                );
             }
         }
     }

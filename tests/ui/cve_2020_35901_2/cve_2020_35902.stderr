@@ -5,9 +5,10 @@ LL |     pub fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), U::Err
    |                  --------- mutable reference passed into a public function here
 ...
 LL |                 Pin::new_unchecked(&mut self.io).poll_write(cx, &self.write_buf)
-   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Pin::new_unchecked` called here
    |
    = note: type `T` doesn't implement `Unpin`
+   = note: `#[deny(rpl::unsound_pin_project)]` on by default
 
 error: it is unsound to call `Pin::new_unchecked` on a mutable reference that can be freely moved
   --> tests/ui/cve_2020_35901_2/cve_2020_35902.rs:136:25
@@ -16,7 +17,7 @@ LL |     pub fn flush(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), U::Err
    |                  --------- mutable reference passed into a public function here
 ...
 LL |         ready!(unsafe { Pin::new_unchecked(&mut self.io).poll_flush(cx) })?;
-   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Pin::new_unchecked` called here
    |
    = note: type `T` doesn't implement `Unpin`
 
@@ -27,7 +28,7 @@ LL |     pub fn close(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), U::Err
    |                  --------- mutable reference passed into a public function here
 ...
 LL |             ready!(Pin::new_unchecked(&mut self.io).poll_flush(cx))?;
-   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Pin::new_unchecked` called here
    |
    = note: type `T` doesn't implement `Unpin`
 
@@ -38,7 +39,7 @@ LL |     pub fn close(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), U::Err
    |                  --------- mutable reference passed into a public function here
 ...
 LL |             ready!(Pin::new_unchecked(&mut self.io).poll_shutdown(cx))?;
-   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `Pin::new_unchecked` called here
    |
    = note: type `T` doesn't implement `Unpin`
 

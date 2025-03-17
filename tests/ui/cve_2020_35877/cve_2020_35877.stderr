@@ -11,6 +11,7 @@ LL |             &*p
    |             ^^^ dereferenced here
    |
    = help: check whether it's in bound before dereferencing
+   = note: `#[deny(rpl::deref_unchecked_ptr_offset)]` on by default
 
 error: it is unsound to dereference a pointer that is offset using an unchecked integer
   --> tests/ui/cve_2020_35877/cve_2020_35877.rs:49:13

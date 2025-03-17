@@ -539,3 +539,127 @@ declare_tool_lint! {
     Deny,
     "detects calling `std::slice::from_raw_parts` or `std::slice::from_raw_parts_mut` with a pointer that is not a valid pointer to the slice"
 }
+
+declare_tool_lint! {
+    /// The `rpl::unsound_cast_between_u64_and_atomic_u64` lint detects an unsound cast between [`u64`] and [`AtomicU64`].
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// use std::sync::atomic::AtomicU64;
+    ///
+    /// let x = &1u64;
+    /// let y = x as *const u64 as *const AtomicU64; // may cause undefined behavior if AtomicU64 has larger alignment
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// The alignment of [`AtomicU64`] may be larger than [`u64`], which can cause undefined behavior.
+    ///
+    /// [`AtomicU64`]: std::sync::atomic::AtomicU64
+    pub rpl::UNSOUND_CAST_BETWEEN_U64_AND_ATOMIC_U64,
+    Deny,
+    "detects an unsound cast between `u64` and `AtomicU64`"
+}
+
+declare_tool_lint! {
+    /// The `rpl::deref_null_pointer` lint detects dereferencing a null pointer.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// struct CBox<T: ?Sized> {
+    ///   pub ptr: *mut T, // `ptr` may be assigned to as it's public
+    /// }
+    ///
+    /// impl<T: ?Sized> CBox<T> {
+    ///   #[inline]
+    ///   /// Wrap the pointer in a `CBox`.
+    ///   pub fn new(ptr: *mut T) -> Self {
+    ///     CBox { ptr }
+    ///   }
+    ///   #[inline]
+    ///   /// Returns the internal pointer.
+    ///   pub unsafe fn as_ptr(&self) -> *mut T {
+    ///     self.ptr
+    ///   }
+    /// }
+    ///
+    /// impl<T: ?Sized> Deref for CBox<T> {
+    ///   type Target = T;
+    ///
+    ///   fn deref(&self) -> &T {
+    ///     unsafe {
+    ///       *self.ptr // undefined behavior
+    ///     }
+    ///   }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// Dereferencing a null pointer is undefined behavior.
+    pub rpl::DEREF_NULL_POINTER,
+    Deny,
+    "detects dereferencing a null pointer"
+}
+
+declare_tool_lint! {
+    /// The `rpl::deref_unchecked_ptr_offset` lint detects dereferencing a pointer that is offset using an unchecked integer.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// fn index(p: *const u8, index: usize) -> *const u8 {
+    ///   unsafe {
+    ///     p.add(index)
+    ///   }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// Dereferencing a pointer that is offset using an unchecked integer is undefined behavior.
+    pub rpl::DEREF_UNCHECKED_PTR_OFFSET,
+    Deny,
+    "detects dereferencing a pointer that is offset using an unchecked integer"
+}
+
+declare_tool_lint! {
+    /// The `rpl::unsound_pin_project` lint detects unsound usage of `#[pin_project]`.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// use pin_project::pin_project;
+    ///
+    /// #[pin_project]
+    /// pub struct Stream<S> {
+    ///     #[pin]
+    ///     stream: S,
+    /// }
+    ///
+    /// impl<S> Stream<S> {
+    ///     fn as_pin_mut(&mut self) -> Pin<&mut S> {
+    ///         unsafe {
+    ///             Pin::new_unchecked(self).project().stream
+    ///         }
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// It is unsound to call `Pin::new_unchecked` on a mutable reference that can be freely moved.
+    pub rpl::UNSOUND_PIN_PROJECT,
+    Deny,
+    "detects unsound usage of `#[pin_project]`"
+}

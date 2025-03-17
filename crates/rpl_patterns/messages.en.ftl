@@ -77,6 +77,7 @@ rpl_patterns_uninvalidated_slice_from_raw_parts = it is unsound to trust pointer
     .help = consider marking the function as unsafe
 
 rpl_patterns_unsound_cast_between_u64_and_atomic_u64 = it is unsound to cast between `u64` and `AtomicU64`
+    .cast_label = casted here
     .note = the alignment of `u64` is smaller than `AtomicU64` on many 32-bits platforms
     .src_label = u64 created here
 
@@ -99,7 +100,8 @@ rpl_patterns_deref_unchecked_ptr_offset = it is unsound to dereference a pointer
     .help = check whether it's in bound before dereferencing
 
 rpl_patterns_unsound_pin_project = it is unsound to call `Pin::new_unchecked` on a mutable reference that can be freely moved
-    .label = mutable reference passed into a public function here
+    .pin_label = `Pin::new_unchecked` called here
+    .ref_label = mutable reference passed into a public function here
     .note = type `{$ty}` doesn't implement `Unpin`
 
 rpl_patterns_unchecked_ptr_offset = it is an undefined behavior to offset a pointer using an unchecked integer
