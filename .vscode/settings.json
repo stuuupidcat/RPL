@@ -5,9 +5,11 @@
     ],
     "rust-analyzer.procMacro.enable": true,
     "rust-analyzer.procMacro.attributes.enable": false, // Doesn't work
+    "rust-analyzer.diagnostics.styleLints.enable": true,
     "rust-analyzer.procMacro.ignored": {
         "tracing": ["instrument"],
         "tracing-attributes": ["instrument"],
+        "tracing_attributes": ["instrument"],
     }, // Doesn't work
     "rust-analyzer.diagnostics.disabled": ["proc-macro"],
     "lldb.showDisassembly": "auto",
