@@ -80,7 +80,7 @@ fn test_ty_var() {
 #[test]
 fn test_place_var() {
     mir_test_case!(
-        #[meta($T:ty, $src:place)]
+        #[meta($T:ty, $src:place($T))]
         pat! {
             let $reference: &$T = &$src;
         } => {
@@ -90,7 +90,7 @@ fn test_place_var() {
                 #[allow(non_snake_case)]
                 let T_ty = pcx.mk_var_ty(T_ty_var);
                 #[allow(non_snake_case)]
-                let src_place_var = pattern_fn.meta.new_place_var();
+                let src_place_var = pattern_fn.meta.new_place_var(T_ty);
                 #[allow(non_snake_case)]
                 let src_local = pcx.mk_var_place(src_place_var);
             }

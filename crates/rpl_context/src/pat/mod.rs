@@ -16,7 +16,7 @@ pub use ty::*;
 #[derive(Default)]
 pub struct MetaVars<'pcx> {
     pub ty_vars: IndexVec<TyVarIdx, TyVar>,
-    pub place_vars: IndexVec<PlaceVarIdx, PlaceVar>,
+    pub place_vars: IndexVec<PlaceVarIdx, PlaceVar<'pcx>>,
     pub const_vars: IndexVec<ConstVarIdx, ConstVar<'pcx>>,
 }
 
@@ -35,9 +35,9 @@ impl<'pcx> MetaVars<'pcx> {
         self.ty_vars.push(ty_var);
         ty_var
     }
-    pub fn new_place_var(&mut self) -> PlaceVar {
+    pub fn new_place_var(&mut self, ty: Ty<'pcx>) -> PlaceVar<'pcx> {
         let idx = self.place_vars.next_index();
-        let place_var = PlaceVar { idx };
+        let place_var = PlaceVar { idx, ty };
         self.place_vars.push(place_var);
         place_var
     }

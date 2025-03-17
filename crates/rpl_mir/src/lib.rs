@@ -67,6 +67,7 @@ pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     // pat_pdg: PatProgramDepGraph,
     // mir_pdg: MirProgramDepGraph,
     locals: IndexVec<pat::Local, RefCell<MixedBitSet<mir::Local>>>,
+    places: IndexVec<pat::PlaceVarIdx, pat::Ty<'pcx>>,
 }
 
 impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
@@ -79,6 +80,8 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
     ) -> Self {
         let typing_env = ty::TypingEnv::post_analysis(tcx, body.source.def_id());
         let ty = MatchTyCtxt::new(tcx, pcx, typing_env, pat, &fn_pat.meta);
+        // let places = pat.locals.iter().map(|&local| ty.mk_ty(pat.locals[local].ty)).collect();
+        let places = fn_pat.meta.place_vars.iter().map(|var| var.ty).collect(); //FIXME: implement this
         let mir_pat = fn_pat.expect_mir_body();
         // let pat_pdg = crate::graph::pat_program_dep_graph(&patterns, tcx.pointer_size().bytes_usize());
         // let mir_pdg = crate::graph::mir_program_dep_graph(body);
@@ -101,6 +104,7 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
                 RefCell::new(MixedBitSet::new_empty(body.local_decls.len())),
                 mir_pat.locals.len(),
             ),
+            places,
         }
     }
     pub fn check(&self) -> Vec<Matched<'tcx>> {
@@ -295,21 +299,23 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         &self,
         place: pat::Place<'pcx>,
     ) -> impl Iterator<Item = (pat::PlaceElem<'pcx>, Option<pat::PlaceTy<'pcx>>)> + use<'tcx, '_, 'pcx> {
-        place.projection.iter().scan(
-            Some(pat::PlaceTy::from_ty(self.mir_pat.locals[place.local])),
-            |place_ty, &proj| {
+        place
+            .projection
+            .iter()
+            .scan(Some(self.get_place_ty_from_base(place.base)), |place_ty, &proj| {
                 Some((
                     proj,
                     std::mem::replace(place_ty, (*place_ty)?.projection_ty(self.ty.pat, proj)),
                 ))
-            },
-        )
+            })
     }
 
     #[instrument(level = "trace", skip(self), ret)]
     fn match_place_ref(&self, pat: pat::Place<'pcx>, place: mir::PlaceRef<'tcx>) -> bool {
-        if !self.match_local(pat.local, place.local) {
-            return false;
+        if let pat::PlaceBase::Local(pat_local) = pat.base {
+            if !self.match_local(pat_local, place.local) {
+                return false;
+            }
         }
         use mir::ProjectionElem::*;
         use pat::FieldAcc::{Named, Unnamed};
@@ -703,7 +709,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             ) => {
                 if let [pat::PlaceElem::Deref, projection @ ..] = place_pat.projection {
                     let place_pat = pat::Place {
-                        local: place_pat.local,
+                        base: place_pat.base,
                         projection,
                     };
                     return self.match_place(place_pat, place);
@@ -1023,5 +1029,22 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         };
         debug!(?pat, ?konst, matched, "match_const_operand");
         matched
+    }
+}
+
+impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
+    fn get_place_ty_from_local(&self, local: pat::Local) -> pat::PlaceTy<'pcx> {
+        pat::PlaceTy::from_ty(self.mir_pat.locals[local])
+    }
+    fn get_place_ty_from_place_var(&self, var: pat::PlaceVarIdx) -> pat::PlaceTy<'pcx> {
+        pat::PlaceTy::from_ty(self.places[var])
+        // pat::PlaceTy::from_ty(var.ty)
+    }
+    fn get_place_ty_from_base(&self, base: pat::PlaceBase) -> pat::PlaceTy<'pcx> {
+        match base {
+            pat::PlaceBase::Local(local) => self.get_place_ty_from_local(local),
+            pat::PlaceBase::Var(var) => self.get_place_ty_from_place_var(var),
+        }
+        // self.body.local_decls[place.local].ty
     }
 }

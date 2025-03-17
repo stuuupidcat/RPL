@@ -305,22 +305,19 @@ pub struct TyVar {
 }
 
 #[derive(Clone, Copy)]
-pub struct PlaceVar {
+pub struct PlaceVar<'pcx> {
     pub idx: PlaceVarIdx,
+    pub ty: Ty<'pcx>,
 }
 
-impl PlaceVar {
-    pub fn into_place<'pcx>(self) -> Place<'pcx> {
+impl PlaceVarIdx {
+    pub fn into_place<'pcx>(self) -> Place<'pcx, PlaceBase> {
         //FIXME: update `Place` to hold a `PlaceVar`
-        Place {
-            // base: PlaceBase::Var(self),
-            base: PlaceBase::Var(self),
-            projection: &[],
-        }
+        Place::from(self)
     }
 }
 
-impl Debug for PlaceVar {
+impl<'pcx> Debug for PlaceVar<'pcx> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&self.idx, f)
     }

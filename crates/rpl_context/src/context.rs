@@ -149,8 +149,8 @@ impl<'pcx> PatCtxt<'pcx> {
     pub fn mk_var_ty(self, ty_var: pat::TyVar) -> Ty<'pcx> {
         self.mk_ty(TyKind::TyVar(ty_var))
     }
-    pub fn mk_var_place(self, place_var: pat::PlaceVar) -> Place<'pcx> {
-        place_var.into_place()
+    pub fn mk_var_place(self, place_var: pat::PlaceVar<'pcx>) -> Place<'pcx> {
+        place_var.idx.into_place()
     }
 
     pub fn mk_any_ty(self) -> Ty<'pcx> {

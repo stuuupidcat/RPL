@@ -9,7 +9,7 @@ use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_index::bit_set::MixedBitSet;
 use rustc_index::{Idx, IndexVec};
 use rustc_middle::mir::visit::{MutatingUseContext, PlaceContext};
-use rustc_middle::mir::{self};
+use rustc_middle::mir::{self, Place};
 use rustc_middle::ty::Ty;
 use rustc_span::Span;
 
@@ -69,6 +69,7 @@ pub fn matches<'tcx>(cx: &CheckMirCtxt<'_, '_, 'tcx>) -> Vec<Matched<'tcx>> {
 struct Matching<'tcx> {
     basic_blocks: IndexVec<pat::BasicBlock, MatchingBlock>,
     locals: IndexVec<pat::Local, LocalMatches>,
+    place_vars: IndexVec<pat::PlaceVarIdx, PlaceVarMatches<'tcx>>,
     ty_vars: IndexVec<pat::TyVarIdx, TyVarMatches<'tcx>>,
 }
 
@@ -103,6 +104,25 @@ impl<'tcx> Index<pat::TyVarIdx> for Matching<'tcx> {
         &self.ty_vars[ty_var]
     }
 }
+
+impl<'tcx> Index<pat::PlaceVarIdx> for Matching<'tcx> {
+    type Output = PlaceVarMatches<'tcx>;
+
+    fn index(&self, place_var: pat::PlaceVarIdx) -> &Self::Output {
+        &self.place_vars[place_var]
+    }
+}
+
+// impl<'tcx> Index<pat::PlaceBase> for Matching<'tcx> {
+//     type Output = PlaceVarMatches<'tcx>;
+
+//     fn index(&self, place_base: pat::PlaceBase) -> &Self::Output {
+//         match place_base {
+//             pat::PlaceBase::Local(local) => &self.locals[local],
+//             pat::PlaceBase::Var(place_var) => &self.place_vars[place_var],
+//         }
+//     }
+// }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum StatementMatch {
@@ -217,6 +237,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             ),
             locals: IndexVec::from_fn_n(|_| LocalMatches::new(cx.body.local_decls.len()), num_locals),
             ty_vars: IndexVec::from_fn_n(|_| TyVarMatches::new(), cx.fn_pat.meta.ty_vars.len()),
+            place_vars: IndexVec::from_fn_n(|_| PlaceVarMatches::new(), cx.fn_pat.meta.place_vars.len()),
         }
     }
     #[instrument(level = "debug", skip(self))]
@@ -237,7 +258,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                 if loc_pat.statement_index < block_pat.statements.len()
                     && let pat::StatementKind::Assign(
                         pat::Place {
-                            local: local_pat,
+                            base: pat::PlaceBase::Local(local_pat),
                             projection: [],
                         },
                         pat::Rvalue::Any,
@@ -643,7 +664,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         if loc_pat.statement_index < self.cx.mir_pat[loc_pat.block].statements.len()
             && let pat::StatementKind::Assign(
                 pat::Place {
-                    local: local_pat,
+                    base: pat::PlaceBase::Local(local_pat),
                     projection: [],
                 },
                 pat::Rvalue::Any,
@@ -1003,6 +1024,35 @@ impl<'tcx> TyVarMatches<'tcx> {
     // so we can assume that `self.matched` is `Some`.
     #[track_caller]
     fn force_get_matched(&self) -> Ty<'tcx> {
+        self.matched.get().expect("bug: type variable not matched")
+    }
+}
+
+#[derive(Default, Debug)]
+struct PlaceVarMatches<'tcx> {
+    matched: CountedMatch<Place<'tcx>>,
+    candidates: FxIndexSet<Place<'tcx>>,
+}
+
+impl<'tcx> PlaceVarMatches<'tcx> {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn get(&self) -> Option<Place<'tcx>> {
+        self.matched.get()
+    }
+
+    /// Test if there are any empty candidates in the matches.
+    #[allow(unused)]
+    fn has_empty_candidates(&self) -> bool {
+        self.candidates.is_empty()
+    }
+
+    // After `match_place_var_candidates`, all place variables are supposed to be matched,
+    // so we can assume that `self.matched` is `Some`.
+    #[track_caller]
+    fn force_get_matched(&self) -> Place<'tcx> {
         self.matched.get().expect("bug: type variable not matched")
     }
 }

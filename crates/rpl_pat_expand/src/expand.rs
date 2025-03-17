@@ -625,12 +625,13 @@ impl ToTokens for ExpandPat<'_, &MetaItem> {
                     quote_each_token!(tokens #ident = #ty_var_ident;);
                 }
             },
-            MetaKind::Place(_place_var) => {
+            MetaKind::Place(place_var) => {
                 let place_ident = ident.as_place();
                 let place_var_ident = ident.as_place_var();
+                let ty = self.ecx.expand(&place_var.ty);
                 quote_each_token!(tokens
                     #[allow(non_snake_case)]
-                    let #place_var_ident = #pat.meta.new_place_var();
+                    let #place_var_ident = #pat.meta.new_place_var(#ty);
                     #[allow(non_snake_case)]
                     let #place_ident = #pcx.mk_var_place(#place_var_ident);
                 );

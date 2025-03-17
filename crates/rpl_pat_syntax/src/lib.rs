@@ -1086,6 +1086,10 @@ pub struct TyVar {
 #[derive(ToTokens, Parse)]
 pub struct PlaceMetaVar {
     kw_ty: kw::place,
+    #[syn(parenthesized)]
+    paren: token::Paren,
+    #[syn(in = paren)]
+    pub ty: Type,
 }
 
 #[derive(ToTokens, Parse, From)]
