@@ -1176,6 +1176,7 @@ name = "rpl_patterns"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "pin-project",
  "rpl_context",
  "rpl_macros",
  "rpl_match",

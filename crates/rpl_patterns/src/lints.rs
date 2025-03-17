@@ -570,6 +570,8 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
+    /// use std::ops::Deref;
+    ///
     /// struct CBox<T: ?Sized> {
     ///   pub ptr: *mut T, // `ptr` may be assigned to as it's public
     /// }
@@ -592,7 +594,7 @@ declare_tool_lint! {
     ///
     ///   fn deref(&self) -> &T {
     ///     unsafe {
-    ///       *self.ptr // undefined behavior
+    ///       &*self.ptr // undefined behavior
     ///     }
     ///   }
     /// }
@@ -637,6 +639,7 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
+    /// use std::pin::Pin;
     /// use pin_project::pin_project;
     ///
     /// #[pin_project]
