@@ -5,9 +5,11 @@ LL |                 let mut ret = Vec::with_capacity(pixel_count);
    |                               ------------------------------- `Vec` created here
 ...
 LL |                     ret.set_len(pixel_count);
-   |                     ^^^^^^^^^^^^^^^^^^^^^^^^
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^ `Vec::set_len` called here
    |
    = help: before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
+   = note: `-D rpl::set-len-uninitialized` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(rpl::set_len_uninitialized)]`
 
 error: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
   --> tests/ui/cve_2019_16138/src/lib_not_inlined.rs:213:33
@@ -16,7 +18,7 @@ LL | ...                   let mut buf = Vec::<RGBE8Pixel>::with_capacity(uszwid
    |                                     ------------------------------------------ `Vec` created here
 LL | ...                   unsafe {
 LL | ...                       buf.set_len(uszwidth);
-   |                           ^^^^^^^^^^^^^^^^^^^^^
+   |                           ^^^^^^^^^^^^^^^^^^^^^ `Vec::set_len` called here
    |
    = help: before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
 

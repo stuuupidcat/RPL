@@ -1,13 +1,13 @@
-use rustc_lint_defs::declare_lint;
+use rustc_lint_defs::declare_tool_lint;
 
-declare_lint! {
-    /// The `lengthless_buffer_passed_to_extern_function` lint detects a buffer
+declare_tool_lint! {
+    /// The `rpl::lengthless_buffer_passed_to_extern_function` lint detects a buffer
     /// pointer passed to an extern function without specifying its length.
     ///
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(lengthless_buffer_passed_to_extern_function)]
+    /// #![deny(rpl::lengthless_buffer_passed_to_extern_function)]
     /// use libc::c_char;
     /// extern fn gets(c: *const c_char) -> i32 {
     ///     0
@@ -31,19 +31,19 @@ declare_lint! {
     ///
     /// However, in some cases, the size of the buffer may be fixed, and this lint
     /// can be suppressed then.
-    pub LENGTHLESS_BUFFER_PASSED_TO_EXTERN_FUNCTION,
+    pub rpl::LENGTHLESS_BUFFER_PASSED_TO_EXTERN_FUNCTION,
     Warn,
     "detects a lengthless buffer passed to extern function"
 }
 
-declare_lint! {
-    /// The `rust_string_pointer_as_c_string_pointer` lint detects a Rust string pointer
+declare_tool_lint! {
+    /// The `rpl::rust_string_pointer_as_c_string_pointer` lint detects a Rust string pointer
     /// used as a C string pointer directly, for example, using `as` or `std::mem::transmute`
     ///
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rust_string_pointer_as_c_string_pointer)]
+    /// #![deny(rpl::rust_string_pointer_as_c_string_pointer)]
     /// use libc::c_char;
     /// extern fn gets(c: *const c_char) -> i32 {
     ///     0
@@ -64,19 +64,19 @@ declare_lint! {
     ///
     /// C strings normally end with a `\0`, while Rust strings do not. And
     /// Rust strings must contain valid UTF-8.
-    pub RUST_STRING_POINTER_AS_C_STRING_POINTER,
+    pub rpl::RUST_STRING_POINTER_AS_C_STRING_POINTER,
     Deny,
     "detects a Rust string pointer used as a C string pointer directly"
 }
 
-declare_lint! {
-    /// The `unchecked_pointer_offset` lint detects a pointer that is offset using an unchecked integer.
+declare_tool_lint! {
+    /// The `rpl::unchecked_pointer_offset` lint detects a pointer that is offset using an unchecked integer.
     /// This is a common source of undefined behavior.
     ///
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(unchecked_pointer_offset)]
+    /// #![deny(rpl::unchecked_pointer_offset)]
     ///
     /// fn index(p: *const u8, index: usize) -> *const u8 {
     ///     unsafe {
@@ -94,13 +94,13 @@ declare_lint! {
     /// To avoid this, you should always check the index before offsetting the pointer,
     /// unless both the pointer and the index are guaranteed to be valid, for example,
     /// when the index is calculated from the length of the slice, or both are constants.
-    pub UNCHECKED_POINTER_OFFSET,
+    pub rpl::UNCHECKED_POINTER_OFFSET,
     Deny,
     "detects a pointer that is offset using an unchecked integer"
 }
 
-declare_lint! {
-    /// The `cassandra_iter_next_ptr_passed_to_cass_iter_get` lint detects a pointer returned by
+declare_tool_lint! {
+    /// The `rpl::cassandra_iter_next_ptr_passed_to_cass_iter_get` lint detects a pointer returned by
     /// `cassandra_iterator_next` that is utilized in `cass_iterator_get_*`.
     ///
     /// ### Example
@@ -149,7 +149,86 @@ declare_lint! {
     /// after the iterator has advanced to the next item** will be accessing freed memory,
     /// which caused by the underlying Cassandra driver which invalidates the current item when `next()` is called,
     /// leading to a **use-after-free** vulnerability.
-    pub CASSANDRA_ITER_NEXT_PTR_PASSED_TO_CASS_ITER_GET,
+    pub rpl::CASSANDRA_ITER_NEXT_PTR_PASSED_TO_CASS_ITER_GET,
     Deny,
     "detects a pointer returned by `cassandra_iterator_next` that is utilized in `cass_iterator_get_*`"
+}
+
+declare_tool_lint! {
+    /// The `rpl::set_len_to_extend` lint detects using `Vec::set_len` to extend the length of a `Vec`
+    /// without initializing the new elements.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(rpl::set_len_to_extend)]
+    /// let v = vec![1, 2, 3];
+    /// unsafe {
+    ///    v.set_len(5);
+    /// }
+    /// v[4]; // undefined behavior
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// The `set_len` method is used to change the length of a `Vec` without changing its capacity.
+    /// However, it does not initialize the new elements, which can lead to undefined behavior,
+    /// even if the `Vec` is not used after the `set_len` call,
+    /// as the `Vec` may be dropped, and the destructor may access the uninitialized memory.
+    /// To avoid this, you should always use the `resize` method to extend the length of a `Vec`.
+    pub rpl::SET_LEN_TO_EXTEND,
+    Deny,
+    "detects using `Vec::set_len` to extend the length of a `Vec` without initializing the new elements"
+}
+
+declare_tool_lint! {
+    /// The `rpl::set_len_to_truncate` lint detects using `Vec::set_len` to truncate the length of a `Vec`.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(rpl::set_len_to_truncate)]
+    /// let mut v = vec![Box::new(1), Box::new(2), Box::new(3)];
+    /// unsafe {
+    ///   v.set_len(2); // memory leak
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// The `set_len` method is used to change the length of a `Vec` without changing its capacity.
+    /// However, it does not drop the elements that are removed, which can lead to memory leaks.
+    /// To avoid this, you should always use the `truncate` method to truncate the length of a `Vec`.
+    pub rpl::SET_LEN_TO_TRUNCATE,
+    Warn,
+    "detects using `Vec::set_len` to truncate the length of a `Vec` without dropping the elements"
+}
+
+declare_tool_lint! {
+    /// The `rpl::set_len_to_uninitialized` lint detects using `Vec::set_len` to truncate the length of a `Vec`.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(rpl::set_len_to_uninitialized)]
+    /// let mut v = Vec::with_capacity(3);
+    /// unsafe {
+    ///   v.set_len(3);
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// The `set_len` method is used to change the length of a `Vec` without changing its capacity.
+    /// However, it does not initialize the new elements, which can lead to undefined behavior.
+    /// To avoid this, you should always use the `resize` method to initialize the new elements.
+    pub rpl::SET_LEN_UNINITIALIZED,
+    Warn,
+    "detects calling `Vec::set_len` without initializing the new elements in advance"
 }

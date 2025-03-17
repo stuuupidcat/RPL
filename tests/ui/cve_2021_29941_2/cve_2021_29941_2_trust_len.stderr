@@ -5,9 +5,10 @@ LL |     let mut vec = Vec::new();
    |                   ---------- `Vec` created here
 ...
 LL |         vec.set_len(len);
-   |             ^^^^^^^^^^^^
+   |             ^^^^^^^^^^^^ `Vec::set_len` called here
    |
    = note: make sure all elements are initialized before using them
+   = note: `#[deny(rpl::set_len_to_extend)]` on by default
 
 error: it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
   --> tests/ui/cve_2021_29941_2/cve_2021_29941_2_trust_len.rs:12:13

@@ -134,33 +134,33 @@ pub struct SliceFromRawPartsUninitialized {
 
 // for cve_2018_20992
 // use `Vec::set_len` to extend the length of a `Vec` without initializing the new elements
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_vec_set_len_to_extend)]
 #[note]
 pub struct VecSetLenToExtend {
-    #[primary_span]
+    #[label(rpl_patterns_set_len_label)]
     pub set_len: Span,
-    #[label]
+    #[label(rpl_patterns_vec_label)]
     pub vec: Span,
 }
 
 // for cve_2018_20992
 // a workaround for without `#without!`
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 // use `Vec::set_len` to truncate the length of a `Vec`
 #[diag(rpl_patterns_vec_set_len_to_truncate)]
 pub struct VecSetLenToTruncate {
-    #[primary_span]
+    #[label(rpl_patterns_set_len_label)]
     #[help]
     pub span: Span,
 }
 
 // for cve_2019_16138
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_set_len_uninitialized)]
 #[help]
 pub struct SetLenUninitialized {
-    #[primary_span]
+    #[label(rpl_patterns_set_len_label)]
     pub set_len: Span,
     #[label(rpl_patterns_vec_label)]
     pub vec: Span,

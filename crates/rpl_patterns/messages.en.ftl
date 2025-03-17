@@ -31,10 +31,12 @@ rpl_patterns_wrong_assumption_of_layout_compatibility = wrong assumption of layo
     .help  = it's not guaranteed by Rust standard library. See https://github.com/rust-lang/rust/pull/78802
 
 rpl_patterns_vec_set_len_to_extend = Use `Vec::set_len` to extend the length of a `Vec`, potentially including uninitialized elements
-    .label = `Vec` created here
+    .set_len_label = `Vec::set_len` called here
+    .vec_label = `Vec` created here
     .note = make sure all elements are initialized before using them
 
 rpl_patterns_vec_set_len_to_truncate = Use `Vec::set_len` to truncate the length of a `Vec`
+    .set_len_label = `Vec::set_len` called here
     .help = Consider using `Vec::truncate` instead
 
 rpl_patterns_trust_exact_size_iterator = it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
@@ -49,6 +51,7 @@ rpl_patterns_slice_from_raw_parts_uninitialized = it violates the precondition o
     .help        = See https://doc.rust-lang.org/std/slice/fn.{$fn_name}.html
 
 rpl_patterns_set_len_uninitialized = it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
+    .set_len_label = `Vec::set_len` called here
     .vec_label = `Vec` created here
     .help = before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
 
