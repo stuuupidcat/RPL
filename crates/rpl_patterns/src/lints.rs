@@ -7,7 +7,6 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::lengthless_buffer_passed_to_extern_function)]
     /// use libc::c_char;
     /// extern fn gets(c: *const c_char) -> i32 {
     ///     0
@@ -43,7 +42,6 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::rust_string_pointer_as_c_string_pointer)]
     /// use libc::c_char;
     /// extern fn gets(c: *const c_char) -> i32 {
     ///     0
@@ -76,8 +74,6 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::unchecked_pointer_offset)]
-    ///
     /// fn index(p: *const u8, index: usize) -> *const u8 {
     ///     unsafe {
     ///         p.add(index)
@@ -161,8 +157,7 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::set_len_to_extend)]
-    /// let v = vec![1, 2, 3];
+    /// let mut v = vec![1, 2, 3];
     /// unsafe {
     ///    v.set_len(5);
     /// }
@@ -189,7 +184,6 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::set_len_to_truncate)]
     /// let mut v = vec![Box::new(1), Box::new(2), Box::new(3)];
     /// unsafe {
     ///   v.set_len(2); // memory leak
@@ -214,8 +208,7 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::set_len_to_uninitialized)]
-    /// let mut v = Vec::with_capacity(3);
+    /// let mut v: Vec<i32> = Vec::with_capacity(3);
     /// unsafe {
     ///   v.set_len(3);
     /// }
@@ -239,14 +232,13 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::unsound_slice_cast)]
     /// use core::{mem::size_of, slice::from_raw_parts};
     /// let v: Vec<usize> = vec![1, 2, 3];
     /// let slice: &[usize] = v.as_slice();
-    /// let slice: &[u8] = from_raw_parts(
+    /// let slice: &[u8] = unsafe { from_raw_parts(
     ///   slice.as_ptr() as *const u8,
     ///   slice.len() * size_of::<usize>()
-    /// );
+    /// ) };
     /// // undefined behavior
     /// ```
     ///
@@ -266,9 +258,8 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::use_after_drop)]
-    /// let x = Box::new(42);
-    /// let y = x.as_ptr();
+    /// let x: Box<i32> = Box::new(42);
+    /// let y: *const i32 = Box::as_ref(&x) as *const i32;
     /// drop(x);
     /// unsafe {
     ///   *y; // undefined behavior
@@ -291,7 +282,6 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::offset_by_one)]
     /// let mut v = vec![1, 2, 3];
     /// let p = v.as_mut_ptr();
     /// unsafe {
@@ -315,11 +305,13 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::misordered_parameters)]
+    /// use std::mem::forget;
+    ///
     /// let mut v = vec![1, 2, 3];
     /// let ptr = v.as_mut_ptr();
     /// let len = v.len();
     /// let cap = v.capacity();
+    /// forget(v);
     /// let v = unsafe {
     ///   Vec::from_raw_parts(ptr, cap, len) // misordered parameters
     /// };
@@ -342,7 +334,6 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::wrong_assumption_of_fat_pointer_layout)]
     /// let p = &mut [1, 2, 3] as *mut [i32];
     /// let p = p as *mut i32; // undefined behavior
     /// ```
@@ -363,7 +354,6 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::wrong_assumption_of_layout_compatibility)]
     /// use core::net::{SocketAddrV4, Ipv4Addr};
     /// use libc::sockaddr;
     /// let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080);
@@ -389,11 +379,10 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::trust_exact_size_iterator)]
     /// use core::iter::ExactSizeIterator;
-    /// fn foo<I: ExactSizeIterator>(iter: I) {
+    /// fn foo<T, I: Iterator<Item = T> + ExactSizeIterator>(iter: I) {
     ///   let len = iter.len();
-    ///   let mut v = Vec::with_capacity(len);
+    ///   let mut v: Vec<T> = Vec::with_capacity(len);
     ///   let p = v.as_mut_ptr();
     ///   for x in iter {
     ///     unsafe {
@@ -423,12 +412,11 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::slice_from_raw_parts_uninitialized)]
-    /// let mut v = Vec::with_capacity(3);
+    /// let mut v: Vec<i32> = Vec::with_capacity(3);
     /// let p = v.as_ptr();
     /// let cap = v.capacity();
     /// let slice = unsafe {
-    ///   std::slice::from_raw_parts(p, len)
+    ///   std::slice::from_raw_parts(p, cap)
     /// };
     /// ```
     ///
@@ -448,17 +436,17 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// #![deny(rpl::get_mut_in_rc_unsafecell)]
     /// use std::cell::UnsafeCell;
     /// use std::rc::Rc;
     ///
     /// let rc = Rc::new(UnsafeCell::new(42));
-    /// unsafe {
-    ///   let p1 = rc.get_mut();
-    ///   let p2 = rc.get_mut();
-    /// }
+    ///
+    /// let p1: &mut i32 = unsafe { &mut *rc.as_ref().get() };
+    /// let p2: &mut i32 = unsafe { &mut *rc.as_ref().get() };
+    ///
     /// // p1 and p2 may point to the same memory
     /// println!("{:p} {:p}", p1, p2);
+    /// assert_eq!(p1, p2);
     /// ```
     ///
     /// {{produces}}
