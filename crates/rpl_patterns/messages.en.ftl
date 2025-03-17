@@ -13,6 +13,7 @@ rpl_patterns_use_after_drop = use a pointer from `{$ty}` after dropped
     .note = the `{$ty}` value is dropped here
 
 rpl_patterns_misordered_parameters = misordered parameters `len` and `cap` in `Vec::from_raw_parts`
+    .label = `Vec::from_raw_parts` called here
     .help = the correct order is `Vec::from_raw_parts(ptr, len, cap)`
 
 rpl_patterns_wrong_assumption_of_fat_pointer_layout = wrong assumption of fat pointer layout
@@ -29,6 +30,7 @@ rpl_patterns_lengthless_buffer_passed_to_extern_function = it is usually a bug t
     .label = the pointer is passed here
 
 rpl_patterns_wrong_assumption_of_layout_compatibility = wrong assumption of layout compatibility from `{$type_from}` to `{$type_to}`
+    .cast_to_label = casted to `{$type_to}` here
     .note  = casted from this
     .help  = it's not guaranteed by Rust standard library. See https://github.com/rust-lang/rust/pull/78802
 

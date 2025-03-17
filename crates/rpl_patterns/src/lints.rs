@@ -304,3 +304,75 @@ declare_tool_lint! {
     Deny,
     "detects reading or writing a value at an offset outside the bounds of a buffer by one"
 }
+
+declare_tool_lint! {
+    /// The `rpl::misordered_parameters` lint detects misordered parameters in a function call.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(rpl::misordered_parameters)]
+    /// let mut v = vec![1, 2, 3];
+    /// let ptr = v.as_mut_ptr();
+    /// let len = v.len();
+    /// let cap = v.capacity();
+    /// let v = unsafe {
+    ///   Vec::from_raw_parts(ptr, cap, len) // misordered parameters
+    /// };
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// Misordered parameters in a unsafe function call can lead to undefined behavior.
+    pub rpl::MISORDERED_PARAMETERS,
+    Deny,
+    "detects misordered parameters in a function call"
+}
+
+declare_tool_lint! {
+    /// The `rpl::wrong_assumption_of_fat_pointer_layout` lint detects casting a fat pointer to a thin pointer using `as` or `std::mem::transmute`.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(rpl::wrong_assumption_of_fat_pointer_layout)]
+    /// let p = &mut [1, 2, 3] as *mut [i32];
+    /// let p = p as *mut i32; // undefined behavior
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// It's not documented that the data pointer part of a fat pointer is always at the beginning of the fat pointer.
+    pub rpl::WRONG_ASSUMPTION_OF_FAT_POINTER_LAYOUT,
+    Deny,
+    "detects casting a fat pointer to a thin pointer using `as` or `std::mem::transmute`"
+}
+
+declare_tool_lint! {
+    /// The `rpl::wrong_assumption_of_layout_compatibility` lint detects a wrong assumption of layout compatibility.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #![deny(rpl::wrong_assumption_of_layout_compatibility)]
+    /// use core::net::{SocketAddrV4, Ipv4Addr};
+    /// use libc::sockaddr;
+    /// let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080);
+    /// let p: *const sockaddr = &socket as *const SocketAddrV4 as *const sockaddr;
+    /// // p may not be a valid sockaddr pointer
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// The layout of `SocketAddrV4` and `sockaddr` may not be compatible.
+    /// See <https://github.com/rust-lang/rust/pull/78802> for more information.
+    pub rpl::WRONG_ASSUMPTION_OF_LAYOUT_COMPATIBILITY,
+    Deny,
+    "detects casting a fat pointer to a thin pointer using `as` or `std::mem::transmute`"
+}
