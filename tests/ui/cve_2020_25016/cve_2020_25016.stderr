@@ -3,29 +3,31 @@ error: it is unsound to cast any slice `&[T]` to a byte slice `&[u8]`
    |
 LL | /             core::slice::from_raw_parts(
 LL | |
+LL | |
 LL | |                 slice.as_ptr() as *const _,
 LL | |                 slice.len() * core::mem::size_of::<T>(),
 LL | |             )
-   | |_____________^
+   | |_____________^ casted to a byte slice here
    |
 note: trying to cast from this value of `&[T]` type
   --> tests/ui/cve_2020_25016/cve_2020_25016.rs:19:21
    |
 LL |         let slice = self.as_slice();
    |                     ^^^^^^^^^^^^^^^
+   = note: `#[deny(rpl::unsound_slice_cast)]` on by default
 
 error: it is unsound to cast any slice `&mut [T]` to a byte slice `&mut [u8]`
-  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:35:13
+  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:36:13
    |
 LL | /             core::slice::from_raw_parts_mut(
 LL | |
 LL | |                 slice.as_mut_ptr() as *mut _,
 LL | |                 slice.len() * core::mem::size_of::<T>(),
 LL | |             )
-   | |_____________^
+   | |_____________^ casted to a byte slice here
    |
 note: trying to cast from this value of `&mut [T]` type
-  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:32:21
+  --> tests/ui/cve_2020_25016/cve_2020_25016.rs:33:21
    |
 LL |         let slice = self.as_mut_slice();
    |                     ^^^^^^^^^^^^^^^^^^^

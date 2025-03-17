@@ -7,6 +7,8 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::{Span, Symbol};
 
+use crate::lints::WRONG_ASSUMPTION_OF_LAYOUT_COMPATIBILITY;
+
 #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
@@ -53,28 +55,34 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 let cast_from = matches[pattern.cast_from].span_no_inline(body);
                 let cast_to = matches[pattern.cast_to].span_no_inline(body);
                 debug!(?cast_from, ?cast_to);
-                self.tcx
-                    .dcx()
-                    .emit_err(crate::errors::WrongAssumptionOfLayoutCompatibility {
+                self.tcx.emit_node_span_lint(
+                    WRONG_ASSUMPTION_OF_LAYOUT_COMPATIBILITY,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    cast_to,
+                    crate::errors::WrongAssumptionOfLayoutCompatibility {
                         cast_from,
                         cast_to,
                         type_from: pattern.type_from,
                         type_to: pattern.type_to,
-                    });
+                    },
+                );
             }
             let pattern = pattern_cast_socket_addr_v4(self.pcx);
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                 let cast_from = matches[pattern.cast_from].span_no_inline(body);
                 let cast_to = matches[pattern.cast_to].span_no_inline(body);
                 debug!(?cast_from, ?cast_to);
-                self.tcx
-                    .dcx()
-                    .emit_err(crate::errors::WrongAssumptionOfLayoutCompatibility {
+                self.tcx.emit_node_span_lint(
+                    WRONG_ASSUMPTION_OF_LAYOUT_COMPATIBILITY,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    cast_to,
+                    crate::errors::WrongAssumptionOfLayoutCompatibility {
                         cast_from,
                         cast_to,
                         type_from: pattern.type_from,
                         type_to: pattern.type_to,
-                    });
+                    },
+                );
             }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);

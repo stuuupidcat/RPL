@@ -8,6 +8,8 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::{Span, Symbol};
 
+use crate::lints::OFFSET_BY_ONE;
+
 #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
@@ -93,12 +95,17 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     .source_map()
                     .span_to_snippet(len)
                     .unwrap_or_else(|_| "{expr}".to_string());
-                self.tcx.dcx().emit_err(crate::errors::OffsetByOne {
+                self.tcx.emit_node_span_lint(
+                    OFFSET_BY_ONE,
+                    self.tcx.local_def_id_to_hir_id(def_id),
                     read,
-                    ptr,
-                    len,
-                    len_local,
-                });
+                    crate::errors::OffsetByOne {
+                        read,
+                        ptr,
+                        len,
+                        len_local,
+                    },
+                );
             }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);

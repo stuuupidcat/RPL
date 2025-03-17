@@ -21,6 +21,7 @@ where
         unsafe {
             core::slice::from_raw_parts(
                 //~^ ERROR: it is unsound to cast any slice `&[T]` to a byte slice `&[u8]`
+                //~| NOTE: `#[deny(rpl::unsound_slice_cast)]` on by default
                 slice.as_ptr() as *const _,
                 slice.len() * core::mem::size_of::<T>(),
             )

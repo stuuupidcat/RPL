@@ -5,9 +5,10 @@ LL |     let mut result = Vec::<u32>::with_capacity(words);
    |                      -------------------------------- `Vec` created here
 ...
 LL |         result.set_len(words);
-   |                ^^^^^^^^^^^^^^
+   |                ^^^^^^^^^^^^^^ `Vec::set_len` called here
    |
    = note: make sure all elements are initialized before using them
+   = note: `#[deny(rpl::set_len_to_extend)]` on by default
 
 error: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
   --> tests/ui/cve_2021_45688/cve_2021_45688.rs:23:16
@@ -16,9 +17,10 @@ LL |     let mut result = Vec::<u32>::with_capacity(words);
    |                      -------------------------------- `Vec` created here
 ...
 LL |         result.set_len(words);
-   |                ^^^^^^^^^^^^^^
+   |                ^^^^^^^^^^^^^^ `Vec::set_len` called here
    |
    = help: before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
+   = note: `#[deny(rpl::set_len_uninitialized)]` on by default
 
 error: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
   --> tests/ui/cve_2021_45688/cve_2021_45688.rs:29:21
@@ -29,10 +31,12 @@ LL |     let mut result = Vec::<u32>::with_capacity(words);
 LL |         for word in &mut result {
    |                     ^^^^^^^^^^^
    |                     |
+   |                     slice created here
    |                     slice created with this length
    |                     slice created with this pointer
    |
    = help: See https://doc.rust-lang.org/std/slice/fn.std::slice::from_raw_parts_mut.html
+   = note: `#[deny(rpl::slice_from_raw_parts_uninitialized)]` on by default
 
 error: aborting due to 3 previous errors
 

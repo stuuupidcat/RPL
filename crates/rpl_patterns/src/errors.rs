@@ -1,5 +1,5 @@
 use rustc_errors::IntoDiagArg;
-use rustc_macros::{Diagnostic, LintDiagnostic};
+use rustc_macros::LintDiagnostic;
 use rustc_middle::ty::{self, Ty};
 use rustc_span::Span;
 
@@ -17,31 +17,30 @@ impl IntoDiagArg for Mutability {
     }
 }
 
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_unsound_slice_cast)]
 pub struct UnsoundSliceCast<'tcx> {
     #[note]
     pub cast_from: Span,
-    #[primary_span]
+    #[label(rpl_patterns_cast_to_label)]
     pub cast_to: Span,
     pub ty: Ty<'tcx>,
     pub mutability: Mutability,
 }
 
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_use_after_drop)]
 pub struct UseAfterDrop<'tcx> {
     #[note]
     pub drop_span: Span,
-    #[primary_span]
+    #[label(rpl_patterns_use_label)]
     pub use_span: Span,
     pub ty: Ty<'tcx>,
 }
 
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_offset_by_one)]
 pub struct OffsetByOne {
-    #[primary_span]
     #[label(rpl_patterns_read_label)]
     pub read: Span,
     #[label(rpl_patterns_ptr_label)]
@@ -53,20 +52,19 @@ pub struct OffsetByOne {
 }
 
 // for cve_2018_21000
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_misordered_parameters)]
 pub struct MisorderedParameters {
     #[help]
-    #[primary_span]
+    #[label(rpl_patterns_label)]
     pub span: Span,
 }
 
 // for cve_2020_35881
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_wrong_assumption_of_fat_pointer_layout)]
 #[help]
 pub struct WrongAssumptionOfFatPointerLayout {
-    #[primary_span]
     #[label(rpl_patterns_ptr_transmute_label)]
     pub ptr_transmute: Span,
     #[label(rpl_patterns_get_data_ptr_label)]
@@ -93,11 +91,11 @@ pub struct LengthlessBufferPassedToExternFunction {
 }
 
 // for cve_2021_27376
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_wrong_assumption_of_layout_compatibility)]
 #[help]
 pub struct WrongAssumptionOfLayoutCompatibility {
-    #[primary_span]
+    #[label(rpl_patterns_cast_to_label)]
     pub cast_to: Span,
     #[note]
     pub cast_from: Span,
@@ -106,22 +104,23 @@ pub struct WrongAssumptionOfLayoutCompatibility {
 }
 
 // for cve_2021_27376
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_trust_exact_size_iterator)]
 #[help]
 pub struct TrustExactSizeIterator {
-    #[primary_span]
+    #[label(rpl_patterns_label)]
     pub set_len: Span,
     #[label(rpl_patterns_len_label)]
     pub len: Span,
+    pub fn_name: &'static str,
 }
 
 // for cve_2021_27376
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_slice_from_raw_parts_uninitialized)]
 #[help]
 pub struct SliceFromRawPartsUninitialized {
-    #[primary_span]
+    #[label(rpl_patterns_slice_label)]
     pub slice: Span,
     #[label(rpl_patterns_len_label)]
     pub len: Span,
@@ -134,66 +133,66 @@ pub struct SliceFromRawPartsUninitialized {
 
 // for cve_2018_20992
 // use `Vec::set_len` to extend the length of a `Vec` without initializing the new elements
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_vec_set_len_to_extend)]
 #[note]
 pub struct VecSetLenToExtend {
-    #[primary_span]
+    #[label(rpl_patterns_set_len_label)]
     pub set_len: Span,
-    #[label]
+    #[label(rpl_patterns_vec_label)]
     pub vec: Span,
 }
 
 // for cve_2018_20992
 // a workaround for without `#without!`
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 // use `Vec::set_len` to truncate the length of a `Vec`
 #[diag(rpl_patterns_vec_set_len_to_truncate)]
 pub struct VecSetLenToTruncate {
-    #[primary_span]
+    #[label(rpl_patterns_set_len_label)]
     #[help]
     pub span: Span,
 }
 
 // for cve_2019_16138
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_set_len_uninitialized)]
 #[help]
 pub struct SetLenUninitialized {
-    #[primary_span]
+    #[label(rpl_patterns_set_len_label)]
     pub set_len: Span,
     #[label(rpl_patterns_vec_label)]
     pub vec: Span,
 }
 
 // for cve_2020_35898_9
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_get_mut_in_rc_unsafecell)]
 #[help]
 pub struct GetMutInRcUnsafeCell {
-    #[primary_span]
+    #[label(rpl_patterns_get_mut_label)]
     #[note]
     #[help]
     pub get_mut: Span,
 }
 
 // for cve_2020_35888
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_drop_uninit_value)]
 pub struct DropUninitValue {
-    #[primary_span]
+    #[label(rpl_patterns_drop_label)]
     pub drop: Span,
 }
 
 // for cve_2020_35907
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_thread_local_static_ref)]
 #[help(rpl_patterns_sync_help)]
 #[help]
 pub struct ThreadLocalStaticRef<'tcx> {
-    #[primary_span]
+    #[label(rpl_patterns_fn_label)]
     pub span: Span,
-    #[label]
+    #[label(rpl_patterns_thread_local_label)]
     pub thread_local: Span,
     #[label(rpl_patterns_ret_label)]
     pub ret: Span,
@@ -202,11 +201,11 @@ pub struct ThreadLocalStaticRef<'tcx> {
 
 // for cve_2021_25904
 // FIXME: add a span for `#[help]` containing the function header
-#[derive(Diagnostic)]
-#[diag(rpl_patterns_from_raw_parts)]
+#[derive(LintDiagnostic)]
+#[diag(rpl_patterns_uninvalidated_slice_from_raw_parts)]
 #[help]
 pub struct UnvalidatedSliceFromRawParts {
-    #[primary_span]
+    #[label(rpl_patterns_src_label)]
     pub src: Span,
     #[label(rpl_patterns_ptr_label)]
     pub ptr: Span,
@@ -215,22 +214,21 @@ pub struct UnvalidatedSliceFromRawParts {
 }
 
 // for cve_2022_23639
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_unsound_cast_between_u64_and_atomic_u64)]
 #[note]
 pub struct UnsoundCastBetweenU64AndAtomicU64 {
-    #[primary_span]
+    #[label(rpl_patterns_cast_label)]
     pub transmute: Span,
     #[label(rpl_patterns_src_label)]
     pub src: Span,
 }
 
 // for cve_2020_35860
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_deref_null_pointer)]
 #[note]
 pub struct DerefNullPointer {
-    #[primary_span]
     #[label(rpl_patterns_deref_label)]
     pub deref: Span,
     #[label(rpl_patterns_ptr_label)]
@@ -238,11 +236,10 @@ pub struct DerefNullPointer {
 }
 
 // for cve_2020_35877
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_deref_unchecked_ptr_offset)]
 #[help]
 pub struct DerefUncheckedPtrOffset {
-    #[primary_span]
     #[label(rpl_patterns_reference_label)]
     pub reference: Span,
     #[label(rpl_patterns_ptr_label)]
@@ -252,13 +249,13 @@ pub struct DerefUncheckedPtrOffset {
 }
 
 // for cve_2020_35901
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_unsound_pin_project)]
 #[note]
 pub struct UnsoundPinNewUnchecked<'tcx> {
-    #[primary_span]
+    #[label(rpl_patterns_pin_label)]
     pub span: Span,
-    #[label]
+    #[label(rpl_patterns_ref_label)]
     pub mut_self: Span,
     pub ty: Ty<'tcx>,
 }

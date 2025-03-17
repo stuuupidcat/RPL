@@ -7,6 +7,8 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::{Span, Symbol};
 
+use crate::lints::DEREF_NULL_POINTER;
+
 #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
@@ -58,10 +60,15 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 let ptr = matches[pattern.ptr].span_no_inline(body);
                 let from_ptr_func_call = matches[pattern.from_ptr_func_call].span_no_inline(body);
                 debug!(?ptr, ?from_ptr_func_call);
-                self.tcx.dcx().emit_err(crate::errors::DerefNullPointer {
-                    ptr,
-                    deref: from_ptr_func_call,
-                });
+                self.tcx.emit_node_span_lint(
+                    DEREF_NULL_POINTER,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    from_ptr_func_call,
+                    crate::errors::DerefNullPointer {
+                        deref: from_ptr_func_call,
+                        ptr,
+                    },
+                );
             }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);

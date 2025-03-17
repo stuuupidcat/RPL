@@ -5,9 +5,10 @@ LL |                 let mut ret = Vec::with_capacity(pixel_count);
    |                               ------------------------------- `Vec` created here
 ...
 LL |                     ret.set_len(pixel_count);
-   |                         ^^^^^^^^^^^^^^^^^^^^
+   |                         ^^^^^^^^^^^^^^^^^^^^ `Vec::set_len` called here
    |
    = note: make sure all elements are initialized before using them
+   = note: `#[deny(rpl::set_len_to_extend)]` on by default
 
 error: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
   --> tests/ui/cve_2019_16138/src/lib.rs:200:25
@@ -16,9 +17,10 @@ LL |                 let mut ret = Vec::with_capacity(pixel_count);
    |                               ------------------------------- `Vec` created here
 ...
 LL |                     ret.set_len(pixel_count);
-   |                         ^^^^^^^^^^^^^^^^^^^^
+   |                         ^^^^^^^^^^^^^^^^^^^^ `Vec::set_len` called here
    |
    = help: before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
+   = note: `#[deny(rpl::set_len_uninitialized)]` on by default
 
 error: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
   --> tests/ui/cve_2019_16138/src/lib.rs:215:37
@@ -27,7 +29,7 @@ LL | ...                   let mut buf = Vec::<RGBE8Pixel>::with_capacity(uszwid
    |                                     ------------------------------------------ `Vec` created here
 LL | ...                   unsafe {
 LL | ...                       buf.set_len(uszwidth);
-   |                               ^^^^^^^^^^^^^^^^^
+   |                               ^^^^^^^^^^^^^^^^^ `Vec::set_len` called here
    |
    = help: before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
 
@@ -40,10 +42,12 @@ LL |                 let mut ret = Vec::with_capacity(pixel_count);
 LL |                     let chunks_iter = ret.chunks_mut(uszwidth);
    |                                       ^^^^^^^^^^^^^^^^^^^^^^^^
    |                                       |
+   |                                       slice created here
    |                                       slice created with this length
    |                                       slice created with this pointer
    |
    = help: See https://doc.rust-lang.org/std/slice/fn.std::slice::from_raw_parts_mut.html
+   = note: `#[deny(rpl::slice_from_raw_parts_uninitialized)]` on by default
 
 error: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
   --> tests/ui/cve_2019_16138/src/lib.rs:218:65
@@ -54,6 +58,7 @@ LL | ...                   let mut buf = Vec::<RGBE8Pixel>::with_capacity(uszwid
 LL | ...                   (read_scanline(&mut self.r, &mut buf[..]))?;
    |                                                           ^^^^
    |                                                           |
+   |                                                           slice created here
    |                                                           slice created with this length
    |                                                           slice created with this pointer
    |

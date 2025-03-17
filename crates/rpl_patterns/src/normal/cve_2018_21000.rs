@@ -9,6 +9,8 @@ pub mod u8_to_t {
 
     use rpl_mir::{pat, CheckMirCtxt};
 
+    use crate::lints::MISORDERED_PARAMETERS;
+
     #[instrument(level = "info", skip_all)]
     pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
         let item = tcx.hir().item(item_id);
@@ -50,7 +52,13 @@ pub mod u8_to_t {
                 for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                     let span = matches[pattern.from_raw_parts].span_no_inline(body);
                     debug!(?span);
-                    self.tcx.dcx().emit_err(crate::errors::MisorderedParameters { span });
+
+                    self.tcx.emit_node_span_lint(
+                        MISORDERED_PARAMETERS,
+                        self.tcx.local_def_id_to_hir_id(def_id),
+                        span,
+                        crate::errors::MisorderedParameters { span },
+                    );
                 }
             }
         }
@@ -110,6 +118,8 @@ pub mod t_to_u8 {
 
     use rpl_mir::{pat, CheckMirCtxt};
 
+    use crate::lints::MISORDERED_PARAMETERS;
+
     #[instrument(level = "info", skip_all)]
     pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
         let item = tcx.hir().item(item_id);
@@ -151,7 +161,13 @@ pub mod t_to_u8 {
                 for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                     let span = matches[pattern.from_raw_parts].span_no_inline(body);
                     debug!(?span);
-                    self.tcx.dcx().emit_err(crate::errors::MisorderedParameters { span });
+
+                    self.tcx.emit_node_span_lint(
+                        MISORDERED_PARAMETERS,
+                        self.tcx.local_def_id_to_hir_id(def_id),
+                        span,
+                        crate::errors::MisorderedParameters { span },
+                    );
                 }
             }
         }

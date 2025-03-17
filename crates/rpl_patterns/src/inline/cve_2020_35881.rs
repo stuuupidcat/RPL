@@ -10,6 +10,8 @@ pub mod const_const_Transmute_ver {
 
     use rpl_mir::{pat, CheckMirCtxt};
 
+    use crate::lints::WRONG_ASSUMPTION_OF_FAT_POINTER_LAYOUT;
+
     #[instrument(level = "info", skip_all)]
     pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
         let item = tcx.hir().item(item_id);
@@ -52,12 +54,15 @@ pub mod const_const_Transmute_ver {
                 for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                     let ptr_transmute = matches[pattern.ptr_transmute].span_no_inline(body);
                     let data_ptr_get = matches[pattern.data_ptr_get].span_no_inline(body);
-                    self.tcx
-                        .dcx()
-                        .emit_err(crate::errors::WrongAssumptionOfFatPointerLayout {
+                    self.tcx.emit_node_span_lint(
+                        WRONG_ASSUMPTION_OF_FAT_POINTER_LAYOUT,
+                        self.tcx.local_def_id_to_hir_id(def_id),
+                        ptr_transmute,
+                        crate::errors::WrongAssumptionOfFatPointerLayout {
                             ptr_transmute,
                             data_ptr_get,
-                        });
+                        },
+                    );
                 }
             }
         }
@@ -114,6 +119,8 @@ pub mod mut_mut_Transmute_ver {
 
     use rpl_mir::{pat, CheckMirCtxt};
 
+    use crate::lints::WRONG_ASSUMPTION_OF_FAT_POINTER_LAYOUT;
+
     #[instrument(level = "info", skip_all)]
     pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
         let item = tcx.hir().item(item_id);
@@ -156,12 +163,15 @@ pub mod mut_mut_Transmute_ver {
                 for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                     let ptr_transmute = matches[pattern.ptr_transmute].span_no_inline(body);
                     let data_ptr_get = matches[pattern.data_ptr_get].span_no_inline(body);
-                    self.tcx
-                        .dcx()
-                        .emit_err(crate::errors::WrongAssumptionOfFatPointerLayout {
+                    self.tcx.emit_node_span_lint(
+                        WRONG_ASSUMPTION_OF_FAT_POINTER_LAYOUT,
+                        self.tcx.local_def_id_to_hir_id(def_id),
+                        ptr_transmute,
+                        crate::errors::WrongAssumptionOfFatPointerLayout {
                             ptr_transmute,
                             data_ptr_get,
-                        });
+                        },
+                    );
                 }
             }
         }
@@ -219,6 +229,8 @@ pub mod mut_const_PtrToPtr_ver {
 
     use rpl_mir::{pat, CheckMirCtxt};
 
+    use crate::lints::WRONG_ASSUMPTION_OF_FAT_POINTER_LAYOUT;
+
     #[instrument(level = "info", skip_all)]
     pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
         let item = tcx.hir().item(item_id);
@@ -261,12 +273,15 @@ pub mod mut_const_PtrToPtr_ver {
                 for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                     let ptr_transmute = matches[pattern.ptr_transmute].span_no_inline(body);
                     let data_ptr_get = matches[pattern.data_ptr_get].span_no_inline(body);
-                    self.tcx
-                        .dcx()
-                        .emit_err(crate::errors::WrongAssumptionOfFatPointerLayout {
+                    self.tcx.emit_node_span_lint(
+                        WRONG_ASSUMPTION_OF_FAT_POINTER_LAYOUT,
+                        self.tcx.local_def_id_to_hir_id(def_id),
+                        ptr_transmute,
+                        crate::errors::WrongAssumptionOfFatPointerLayout {
                             ptr_transmute,
                             data_ptr_get,
-                        });
+                        },
+                    );
                 }
             }
         }

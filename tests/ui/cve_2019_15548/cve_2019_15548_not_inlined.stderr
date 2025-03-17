@@ -10,7 +10,7 @@ note: the `*const libc::c_char` is created here
    |
 LL |         let ret = ll::instr(mem::transmute(buf));
    |                             ^^^^^^^^^^^^^^^^^^^
-   = note: `#[deny(rust_string_pointer_as_c_string_pointer)]` on by default
+   = note: `#[deny(rpl::rust_string_pointer_as_c_string_pointer)]` on by default
 
 error: it is usually a bug to pass a buffer pointer to an extern function without specifying its length
   --> tests/ui/cve_2019_15548/cve_2019_15548_not_inlined.rs:20:29
@@ -18,8 +18,8 @@ error: it is usually a bug to pass a buffer pointer to an extern function withou
 LL |         let ret = ll::instr(mem::transmute(buf));
    |                             ^^^^^^^^^^^^^^^^^^^ the pointer is passed here
    |
-   = note: `-D lengthless-buffer-passed-to-extern-function` implied by `-D warnings`
-   = help: to override `-D warnings` add `#[allow(lengthless_buffer_passed_to_extern_function)]`
+   = note: `-D rpl::lengthless-buffer-passed-to-extern-function` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(rpl::lengthless_buffer_passed_to_extern_function)]`
 
 error: aborting due to 2 previous errors
 

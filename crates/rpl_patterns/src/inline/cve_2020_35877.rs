@@ -1,4 +1,4 @@
-use crate::lints::UNCHECKED_POINTER_OFFSET;
+use crate::lints::{DEREF_UNCHECKED_PTR_OFFSET, UNCHECKED_POINTER_OFFSET};
 use rpl_context::PatCtxt;
 use rpl_mir::pat::Location;
 use rpl_mir::{pat, CheckMirCtxt, Matched};
@@ -67,9 +67,12 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 let offset = matches[pattern.offset].span_no_inline(body);
                 let reference = matches[pattern.reference].span_no_inline(body);
                 debug!(?ptr, ?offset, ?reference);
-                self.tcx
-                    .dcx()
-                    .emit_err(crate::errors::DerefUncheckedPtrOffset { ptr, offset, reference });
+                self.tcx.emit_node_span_lint(
+                    DEREF_UNCHECKED_PTR_OFFSET,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    reference,
+                    crate::errors::DerefUncheckedPtrOffset { reference, ptr, offset },
+                );
             }
 
             // The pattern means: there exists a pointer `ptr` and an offset `offset` such that `ptr` is

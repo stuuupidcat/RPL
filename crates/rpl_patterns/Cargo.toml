@@ -15,6 +15,7 @@ rpl_context.workspace = true
 
 [dev-dependencies]
 libc.workspace = true
+pin-project.workspace = true
 
 [features]
 

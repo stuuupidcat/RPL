@@ -9,6 +9,8 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::{sym, Span, Symbol};
 
+use crate::lints::UNSOUND_SLICE_CAST;
+
 #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
@@ -61,12 +63,17 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 let cast_to = matches[pattern_cast.cast_to].span_no_inline(body);
                 let ty = matches[pattern_cast.ty_var];
                 debug!(?cast_from, ?cast_to, ?ty);
-                self.tcx.dcx().emit_err(crate::errors::UnsoundSliceCast {
-                    cast_from,
+                self.tcx.emit_node_span_lint(
+                    UNSOUND_SLICE_CAST,
+                    self.tcx.local_def_id_to_hir_id(def_id),
                     cast_to,
-                    ty,
-                    mutability: ty::Mutability::Not.into(),
-                });
+                    crate::errors::UnsoundSliceCast {
+                        cast_from,
+                        cast_to,
+                        ty,
+                        mutability: ty::Mutability::Not.into(),
+                    },
+                );
             }
 
             let pattern_cast_mut = pattern_cast_mut(self.pcx);
@@ -83,12 +90,17 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 let cast_to = matches[pattern_cast_mut.cast_to].span_no_inline(body);
                 let ty = matches[pattern_cast_mut.ty_var];
                 debug!(?cast_from, ?cast_to, ?ty);
-                self.tcx.dcx().emit_err(crate::errors::UnsoundSliceCast {
-                    cast_from,
+                self.tcx.emit_node_span_lint(
+                    UNSOUND_SLICE_CAST,
+                    self.tcx.local_def_id_to_hir_id(def_id),
                     cast_to,
-                    ty,
-                    mutability: ty::Mutability::Mut.into(),
-                });
+                    crate::errors::UnsoundSliceCast {
+                        cast_from,
+                        cast_to,
+                        ty,
+                        mutability: ty::Mutability::Mut.into(),
+                    },
+                );
             }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);

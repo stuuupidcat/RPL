@@ -9,6 +9,8 @@ pub mod extend {
 
     use rpl_mir::{pat, CheckMirCtxt};
 
+    use crate::lints::SET_LEN_TO_EXTEND;
+
     #[instrument(level = "info", skip_all)]
     pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
         let item = tcx.hir().item(item_id);
@@ -51,9 +53,12 @@ pub mod extend {
                 for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                     let set_len = matches[pattern.set_len_use].span_no_inline(body);
                     let vec = matches[pattern.vec].span_no_inline(body);
-                    self.tcx
-                        .dcx()
-                        .emit_err(crate::errors::VecSetLenToExtend { set_len, vec });
+                    self.tcx.emit_node_span_lint(
+                        SET_LEN_TO_EXTEND,
+                        self.tcx.local_def_id_to_hir_id(def_id),
+                        set_len,
+                        crate::errors::VecSetLenToExtend { set_len, vec },
+                    );
                 }
             }
         }
@@ -112,6 +117,8 @@ pub mod truncate {
 
     use rpl_mir::{pat, CheckMirCtxt};
 
+    use crate::lints::SET_LEN_TO_TRUNCATE;
+
     #[instrument(level = "info", skip_all)]
     pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
         let item = tcx.hir().item(item_id);
@@ -153,7 +160,12 @@ pub mod truncate {
                 let pattern = pattern_vec_set_len_to_truncate(self.pcx);
                 for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                     let span = matches[pattern.set_len_use].span_no_inline(body);
-                    self.tcx.dcx().emit_err(crate::errors::VecSetLenToTruncate { span });
+                    self.tcx.emit_node_span_lint(
+                        SET_LEN_TO_TRUNCATE,
+                        self.tcx.local_def_id_to_hir_id(def_id),
+                        span,
+                        crate::errors::VecSetLenToTruncate { span },
+                    );
                 }
             }
         }
