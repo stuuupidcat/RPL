@@ -11,7 +11,7 @@
         "tracing-attributes": ["instrument"],
         "tracing_attributes": ["instrument"],
     }, // Doesn't work
-    "rust-analyzer.diagnostics.disabled": ["proc-macro"],
+    "rust-analyzer.diagnostics.disabled": ["proc-macro", "macro-error"],
     "lldb.showDisassembly": "auto",
     "lldb.dereferencePointers": true,
     "lldb.consoleMode": "commands",

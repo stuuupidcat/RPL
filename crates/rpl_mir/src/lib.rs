@@ -280,7 +280,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         }
         matched
     }
-    // #[instrument(level = "trace", skip(self), ret)]
+    #[instrument(level = "trace", skip(self), ret)]
     pub fn match_place_var(&self, pat: pat::PlaceVarIdx, place: mir::PlaceRef<'tcx>) -> bool {
         let mut places = self.places[pat].borrow_mut();
         trace!(?places, ?pat, ?place, "match_place_var");
@@ -415,7 +415,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         }
     }
 
-    // #[instrument(level = "trace", skip(self), ret)]
+    #[instrument(level = "trace", skip(self), ret)]
     fn match_place_ref(&self, pat: pat::Place<'pcx>, place: mir::PlaceRef<'tcx>) -> bool {
         match pat.base {
             pat::PlaceBase::Local(pat_local) => {

@@ -10,7 +10,7 @@ use std::ops::Not;
 
 use crate::lints::SLICE_FROM_RAW_PARTS_UNINITIALIZED;
 
-// #[instrument(level = "info", skip_all)]
+#[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
     // let def_id = item_id.owner_id.def_id;
@@ -29,7 +29,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         self.tcx.hir()
     }
 
-    // #[instrument(level = "debug", skip_all, fields(?item.owner_id))]
+    #[instrument(level = "debug", skip_all, fields(?item.owner_id))]
     fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
         match item.kind {
             hir::ItemKind::Trait(hir::IsAuto::No, hir::Safety::Safe, ..)
@@ -40,7 +40,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         intravisit::walk_item(self, item);
     }
 
-    // #[instrument(level = "info", skip_all, fields(?def_id))]
+    #[instrument(level = "info", skip_all, fields(?def_id))]
     fn visit_fn(
         &mut self,
         kind: intravisit::FnKind<'tcx>,
