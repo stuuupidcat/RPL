@@ -358,7 +358,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     }
     fn match_ty_var_candidates(&self, ty_var: pat::TyVarIdx, loc_pats: &[pat::Location]) {
         if ty_var == self.cx.fn_pat.meta.ty_vars.next_index() {
-            self.match_local_candidates(pat::Local::ZERO, loc_pats);
+            self.match_place_var_candidates(pat::PlaceVarIdx::ZERO, loc_pats);
             return;
         }
         for &cand in &self.matching[ty_var].candidates {
@@ -369,6 +369,21 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             }
             // backtrack, clear status
             self.unmatch_ty_var(ty_var);
+        }
+    }
+    fn match_place_var_candidates(&self, place_var: pat::PlaceVarIdx, loc_pats: &[pat::Location]) {
+        if place_var == self.cx.fn_pat.meta.place_vars.next_index() {
+            self.match_local_candidates(pat::Local::ZERO, loc_pats);
+            return;
+        }
+        for &cand in &self.matching[place_var].candidates {
+            let _span = debug_span!("match_place_var_candidates", ?place_var, ?cand).entered();
+            if self.match_place_var(place_var, cand) {
+                // recursion
+                ensure_sufficient_stack(|| self.match_place_var_candidates(place_var.plus(1), loc_pats));
+            }
+            // backtrack, clear status
+            self.unmatch_place_var(place_var);
         }
     }
     fn match_local_candidates(&self, local: pat::Local, loc_pats: &[pat::Location]) {
@@ -726,6 +741,10 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     fn match_ty_var(&self, ty_var: pat::TyVarIdx, ty: Ty<'tcx>) -> bool {
         self.matching[ty_var].matched.r#match(ty)
     }
+    #[instrument(level = "debug", skip(self), ret)]
+    fn match_place_var(&self, place_var: pat::PlaceVarIdx, place: PlaceRef<'tcx>) -> bool {
+        self.matching[place_var].matched.r#match(place)
+    }
     // #[instrument(level = "debug", skip(self))]
     // fn unmatch_stmt_locals(&self, loc_pat: pat::Location) {
     //     for &(local_pat, _) in self.cx.pat_ddg[loc_pat.block].accesses(loc_pat.statement_index) {
@@ -778,6 +797,11 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     #[instrument(level = "debug", skip(self))]
     fn unmatch_ty_var(&self, ty_var: pat::TyVarIdx) {
         self.matching[ty_var].matched.unmatch();
+    }
+
+    #[instrument(level = "debug", skip(self))]
+    fn unmatch_place_var(&self, place_var: pat::PlaceVarIdx) {
+        self.matching[place_var].matched.unmatch();
     }
 
     fn log_stmt_matched(&self, loc_pat: impl IntoLocation<Location = pat::Location>, stmt_match: StatementMatch) {
