@@ -39,10 +39,10 @@ use std::iter::zip;
 
 use crate::graph::{MirControlFlowGraph, MirDataDepGraph, PatControlFlowGraph, PatDataDepGraph};
 use rpl_context::PatCtxt;
-use rpl_match::{Candidates, MatchFnCtxt, MatchTyCtxt};
+use rpl_match::{Candidates, MatchFnCtxt, MatchPlaceCtxt, MatchTyCtxt};
 use rpl_mir_graph::TerminatorEdges;
 use rustc_abi::{FieldIdx, VariantIdx};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 use rustc_hir::def::CtorKind;
 use rustc_hir::def_id::DefId;
 use rustc_index::bit_set::MixedBitSet;
@@ -57,6 +57,7 @@ pub use rpl_context::pat;
 
 pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     ty: MatchTyCtxt<'pcx, 'tcx>,
+    place: MatchPlaceCtxt<'pcx, 'tcx>,
     body: &'a mir::Body<'tcx>,
     fn_pat: &'a pat::Fn<'pcx>,
     mir_pat: &'a pat::MirPattern<'pcx>,
@@ -67,7 +68,7 @@ pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     // pat_pdg: PatProgramDepGraph,
     // mir_pdg: MirProgramDepGraph,
     locals: IndexVec<pat::Local, RefCell<MixedBitSet<mir::Local>>>,
-    places: IndexVec<pat::PlaceVarIdx, pat::Ty<'pcx>>,
+    places: IndexVec<pat::PlaceVarIdx, RefCell<FxHashSet<mir::PlaceRef<'tcx>>>>,
 }
 
 impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
@@ -80,8 +81,8 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
     ) -> Self {
         let typing_env = ty::TypingEnv::post_analysis(tcx, body.source.def_id());
         let ty = MatchTyCtxt::new(tcx, pcx, typing_env, pat, &fn_pat.meta);
+        let place = MatchPlaceCtxt::new(tcx, pcx, &fn_pat.meta);
         // let places = pat.locals.iter().map(|&local| ty.mk_ty(pat.locals[local].ty)).collect();
-        let places = fn_pat.meta.place_vars.iter().map(|var| var.ty).collect(); //FIXME: implement this
         let mir_pat = fn_pat.expect_mir_body();
         // let pat_pdg = crate::graph::pat_program_dep_graph(&patterns, tcx.pointer_size().bytes_usize());
         // let mir_pdg = crate::graph::mir_program_dep_graph(body);
@@ -91,6 +92,7 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
         let mir_ddg = crate::graph::mir_data_dep_graph(body, &mir_cfg);
         Self {
             ty,
+            place,
             body,
             fn_pat,
             mir_pat,
@@ -104,7 +106,7 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
                 RefCell::new(MixedBitSet::new_empty(body.local_decls.len())),
                 mir_pat.locals.len(),
             ),
-            places,
+            places: IndexVec::from_elem_n(RefCell::new(FxHashSet::default()), fn_pat.meta.place_vars.len()),
         }
     }
     pub fn check(&self) -> Vec<Matched<'tcx>> {
@@ -272,6 +274,21 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         }
         matched
     }
+    // #[instrument(level = "trace", skip(self), ret)]
+    pub fn match_place_var(&self, pat: pat::PlaceVarIdx, place: mir::PlaceRef<'tcx>) -> bool {
+        let mut places = self.places[pat].borrow_mut();
+        trace!(?places, ?pat, ?place, "match_place_var");
+        if places.contains(&place) {
+            return true;
+        }
+        let place_ty = place.ty(&self.body.local_decls, self.ty.tcx);
+        let matched = self.ty.match_ty(self.place.places[pat], place_ty.ty);
+        debug!(?pat, ?place, matched, "match_place_var");
+        if matched {
+            places.insert(place);
+        }
+        matched
+    }
     #[instrument(level = "trace", skip(self), ret)]
     pub fn match_place(&self, pat: pat::Place<'pcx>, place: mir::Place<'tcx>) -> bool {
         self.match_place_ref(pat, place.as_ref())
@@ -310,12 +327,19 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
             })
     }
 
-    #[instrument(level = "trace", skip(self), ret)]
+    // #[instrument(level = "trace", skip(self), ret)]
     fn match_place_ref(&self, pat: pat::Place<'pcx>, place: mir::PlaceRef<'tcx>) -> bool {
-        if let pat::PlaceBase::Local(pat_local) = pat.base {
-            if !self.match_local(pat_local, place.local) {
-                return false;
-            }
+        match pat.base {
+            pat::PlaceBase::Local(pat_local) => {
+                if !self.match_local(pat_local, place.local) {
+                    return false;
+                }
+            },
+            pat::PlaceBase::Var(pat_var) => {
+                if !self.match_place_var(pat_var, place) {
+                    return false;
+                }
+            },
         }
         use mir::ProjectionElem::*;
         use pat::FieldAcc::{Named, Unnamed};
@@ -1037,7 +1061,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
         pat::PlaceTy::from_ty(self.mir_pat.locals[local])
     }
     fn get_place_ty_from_place_var(&self, var: pat::PlaceVarIdx) -> pat::PlaceTy<'pcx> {
-        pat::PlaceTy::from_ty(self.places[var])
+        pat::PlaceTy::from_ty(self.place.places[var])
         // pat::PlaceTy::from_ty(var.ty)
     }
     fn get_place_ty_from_base(&self, base: pat::PlaceBase) -> pat::PlaceTy<'pcx> {

@@ -8,6 +8,8 @@ use rustc_middle::ty::TyCtxt;
 use rustc_span::{Span, Symbol};
 use std::ops::Not;
 
+use crate::lints::SLICE_FROM_RAW_PARTS_UNINITIALIZED;
+
 // #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
@@ -55,12 +57,17 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 let slice = matches[pattern.slice].span_no_inline(body);
                 let len = matches[pattern.len].span_no_inline(body);
                 let ptr = matches[pattern.ptr].span_no_inline(body);
-                self.tcx.dcx().emit_err(crate::errors::SliceFromRawPartsUninitialized_ {
-                    fn_name,
-                    len,
-                    ptr,
+                self.tcx.emit_node_span_lint(
+                    SLICE_FROM_RAW_PARTS_UNINITIALIZED,
+                    self.tcx.local_def_id_to_hir_id(def_id),
                     slice,
-                });
+                    crate::errors::SliceFromRawPartsUninitialized_ {
+                        fn_name,
+                        len,
+                        ptr,
+                        slice,
+                    },
+                );
             }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);

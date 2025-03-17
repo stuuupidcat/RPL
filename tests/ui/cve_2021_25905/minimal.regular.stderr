@@ -6,10 +6,12 @@ LL |     let b = buf.len();
 LL |     let buf = unsafe {
 LL |         std::slice::from_raw_parts_mut(buf.as_mut_ptr().offset(b as isize), buf.capacity() - b)
    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^----------------^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-   |                                        |
-   |                                        slice created with this pointer
+   |         |                              |
+   |         |                              slice created with this pointer
+   |         slice created here
    |
    = help: See https://doc.rust-lang.org/std/slice/fn.std::slice::from_raw_parts_mut.html
+   = note: `#[deny(rpl::slice_from_raw_parts_uninitialized)]` on by default
 
 error: aborting due to 1 previous error
 

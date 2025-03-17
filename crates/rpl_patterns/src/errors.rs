@@ -282,11 +282,11 @@ pub struct CassandraIterNextPtrPassedToCassIterGet {
 }
 
 // for cve_2021_25905
-#[derive(Diagnostic)]
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_slice_from_raw_parts_uninitialized_)]
 #[help]
 pub struct SliceFromRawPartsUninitialized_ {
-    #[primary_span]
+    #[label(rpl_patterns_slice_label)]
     pub slice: Span,
     #[label(rpl_patterns_len_label)]
     pub len: Span,
