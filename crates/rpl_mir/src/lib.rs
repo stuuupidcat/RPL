@@ -42,7 +42,8 @@ use rpl_context::PatCtxt;
 use rpl_match::{Candidates, MatchFnCtxt, MatchPlaceCtxt, MatchTyCtxt};
 use rpl_mir_graph::TerminatorEdges;
 use rustc_abi::{FieldIdx, VariantIdx};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_data_structures::fx::FxIndexSet;
+use rustc_hash::FxHashMap;
 use rustc_hir::def::CtorKind;
 use rustc_hir::def_id::DefId;
 use rustc_index::bit_set::MixedBitSet;
@@ -68,7 +69,7 @@ pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     // pat_pdg: PatProgramDepGraph,
     // mir_pdg: MirProgramDepGraph,
     locals: IndexVec<pat::Local, RefCell<MixedBitSet<mir::Local>>>,
-    places: IndexVec<pat::PlaceVarIdx, RefCell<FxHashSet<mir::PlaceRef<'tcx>>>>,
+    places: IndexVec<pat::PlaceVarIdx, RefCell<FxIndexSet<mir::PlaceRef<'tcx>>>>,
 }
 
 impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
@@ -106,7 +107,7 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
                 RefCell::new(MixedBitSet::new_empty(body.local_decls.len())),
                 mir_pat.locals.len(),
             ),
-            places: IndexVec::from_elem_n(RefCell::new(FxHashSet::default()), fn_pat.meta.place_vars.len()),
+            places: IndexVec::from_elem_n(RefCell::new(FxIndexSet::default()), fn_pat.meta.place_vars.len()),
         }
     }
     pub fn check(&self) -> Vec<Matched<'tcx>> {

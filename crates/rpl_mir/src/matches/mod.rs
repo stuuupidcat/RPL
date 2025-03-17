@@ -9,7 +9,7 @@ use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_index::bit_set::MixedBitSet;
 use rustc_index::{Idx, IndexVec};
 use rustc_middle::mir::visit::{MutatingUseContext, PlaceContext};
-use rustc_middle::mir::{self, Place};
+use rustc_middle::mir::{self, PlaceRef};
 use rustc_middle::ty::Ty;
 use rustc_span::Span;
 
@@ -19,6 +19,7 @@ pub struct Matched<'tcx> {
     pub basic_blocks: IndexVec<pat::BasicBlock, MatchedBlock>,
     pub locals: IndexVec<pat::Local, mir::Local>,
     pub ty_vars: IndexVec<pat::TyVarIdx, Ty<'tcx>>,
+    pub place_vars: IndexVec<pat::PlaceVarIdx, PlaceRef<'tcx>>,
 }
 
 pub struct MatchedBlock {
@@ -333,6 +334,9 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             }
         }
         for (candidates, matches) in core::iter::zip(&self.cx.ty.ty_vars, &mut self.matching.ty_vars) {
+            matches.candidates = std::mem::take(&mut *candidates.borrow_mut());
+        }
+        for (candidates, matches) in core::iter::zip(&self.cx.places, &mut self.matching.place_vars) {
             matches.candidates = std::mem::take(&mut *candidates.borrow_mut());
         }
     }
@@ -837,6 +841,10 @@ impl<'tcx> Matching<'tcx> {
         for (ty_var, matches) in self.ty_vars.iter_enumerated() {
             info!("{ty_var:?}: {:?}", matches.candidates);
         }
+        info!("pat place metavar <-> mir candidate places");
+        for (place_var, matches) in self.place_vars.iter_enumerated() {
+            info!("{place_var:?}: {:?}", matches.candidates);
+        }
     }
 
     #[instrument(level = "info", skip_all)]
@@ -855,6 +863,9 @@ impl<'tcx> Matching<'tcx> {
         }
         for (ty_var, matches) in self.ty_vars.iter_enumerated() {
             info!("{ty_var:?}: {:?}", matches.matched.get());
+        }
+        for (place_var, matches) in self.place_vars.iter_enumerated() {
+            info!("{place_var:?}: {:?}", matches.matched.get());
         }
     }
 
@@ -882,10 +893,20 @@ impl<'tcx> Matching<'tcx> {
                     .unwrap_or_else(|| panic!("bug: type variable {ty_var:?} not matched"))
             })
             .collect();
+        let place_vars = self
+            .place_vars
+            .iter_enumerated()
+            .map(|(place_var, matching)| {
+                matching
+                    .get()
+                    .unwrap_or_else(|| panic!("bug: place variable {place_var:?} not matched"))
+            })
+            .collect();
         Matched {
             basic_blocks,
             locals,
             ty_vars,
+            place_vars,
         }
     }
 }
@@ -1030,8 +1051,8 @@ impl<'tcx> TyVarMatches<'tcx> {
 
 #[derive(Default, Debug)]
 struct PlaceVarMatches<'tcx> {
-    matched: CountedMatch<Place<'tcx>>,
-    candidates: FxIndexSet<Place<'tcx>>,
+    matched: CountedMatch<PlaceRef<'tcx>>,
+    candidates: FxIndexSet<PlaceRef<'tcx>>,
 }
 
 impl<'tcx> PlaceVarMatches<'tcx> {
@@ -1039,7 +1060,7 @@ impl<'tcx> PlaceVarMatches<'tcx> {
         Self::default()
     }
 
-    fn get(&self) -> Option<Place<'tcx>> {
+    fn get(&self) -> Option<PlaceRef<'tcx>> {
         self.matched.get()
     }
 
@@ -1052,7 +1073,7 @@ impl<'tcx> PlaceVarMatches<'tcx> {
     // After `match_place_var_candidates`, all place variables are supposed to be matched,
     // so we can assume that `self.matched` is `Some`.
     #[track_caller]
-    fn force_get_matched(&self) -> Place<'tcx> {
+    fn force_get_matched(&self) -> PlaceRef<'tcx> {
         self.matched.get().expect("bug: type variable not matched")
     }
 }
