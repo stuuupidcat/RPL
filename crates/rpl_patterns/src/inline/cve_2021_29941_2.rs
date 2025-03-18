@@ -241,7 +241,7 @@ fn pattern_uninitialized_slice_mut_inlined(pcx: PatCtxt<'_>) -> PatternFromRawPa
             // #[export(slice)]
             // let slice: &mut [$T] = std::slice::from_raw_parts_mut::<'_, $T>(move ptr, copy len);
 
-            // FIXME: if this statement is put in the beginning, it may fail to match the cdoe where
+            // FIXME: if this statement is put in the beginning, it may fail to match the code where
             // `Vec::with_capacity` is called in advance of `ExactSizeIterator::len`.
             // See `rpl_mir::matches::match_block_ends_with` for more details.
             #[export(len)]

@@ -202,7 +202,7 @@ pub struct ThreadLocalStaticRef<'tcx> {
 // for cve_2021_25904
 // FIXME: add a span for `#[help]` containing the function header
 #[derive(LintDiagnostic)]
-#[diag(rpl_patterns_uninvalidated_slice_from_raw_parts)]
+#[diag(rpl_patterns_unvalidated_slice_from_raw_parts)]
 #[help]
 pub struct UnvalidatedSliceFromRawParts {
     #[label(rpl_patterns_src_label)]

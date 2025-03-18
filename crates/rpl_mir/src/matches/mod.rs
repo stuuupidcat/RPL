@@ -349,7 +349,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         }
         self.match_candidates();
     }
-    // Recursvely traverse all candidates of type variables, local variables, and statements, and then
+    // Recursively traverse all candidates of type variables, local variables, and statements, and then
     // match the graph.
     #[instrument(level = "info", skip(self))]
     fn match_candidates(&self) {
@@ -563,7 +563,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                 })
                 && {
                     matching.end.set(Some(bb));
-                    // recursively check all the succesor blocks
+                    // recursively check all the successor blocks
                     self.match_block_successors(bb_pat, bb)
                 }
             || {

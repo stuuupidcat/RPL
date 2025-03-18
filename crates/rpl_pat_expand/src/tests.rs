@@ -1252,7 +1252,7 @@ fn test_cve_2021_29941_2() {
                 }
             }
             // variable shadowing?
-            // There cannnot be two mutable references to `vec` in the same scope
+            // There cannot be two mutable references to `vec` in the same scope
             $ref_to_vec = &mut $vec;
             _ = Vec::set_len(move $ref_to_vec, copy $len);
         } => {

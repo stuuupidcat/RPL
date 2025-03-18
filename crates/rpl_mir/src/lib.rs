@@ -171,7 +171,7 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
             }
         }
         for candidate in &mut self.candidates {
-            candidate.sort_unstable_by_key(|candicate| std::cmp::Reverse(candicate.edges_matched));
+            candidate.sort_unstable_by_key(|candidate| std::cmp::Reverse(candidate.edges_matched));
         }
     }
     */

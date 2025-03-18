@@ -15,7 +15,7 @@ pub(crate) enum SymbolKind {
     Enum,
     #[display("field")]
     Field,
-    #[display("local varialble")]
+    #[display("local variable")]
     Local,
     #[display("parameter")]
     Param,

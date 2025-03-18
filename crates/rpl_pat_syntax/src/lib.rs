@@ -359,7 +359,7 @@ pub enum Type {
     /// A `TyVar` from `#[meta($T:ty)]` or other pattern.
     TyVar(TypeVar),
 
-    /// A languate item
+    /// A language item
     LangItem(LangItemWithArgs),
 
     /// The `Self` type

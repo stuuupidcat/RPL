@@ -98,8 +98,8 @@ impl<'pcx> BasicBlockData<'pcx> {
         match &mut self.terminator {
             None => self.terminator = Some(TerminatorKind::Goto(block)),
             Some(TerminatorKind::Call { target, .. } | TerminatorKind::Drop { target, .. }) => *target = block,
-            // Here the `goto ?bb` termiantor comes from `break` or `continue`,
-            // plus the `return` termnator, are all skipped because thay are
+            // Here the `goto ?bb` terminator comes from `break` or `continue`,
+            // plus the `return` terminator, are all skipped because thay are
             // abnormal control flows.
             Some(TerminatorKind::Goto(_) | TerminatorKind::Return) => {},
             Some(terminator @ (TerminatorKind::SwitchInt { .. } | TerminatorKind::PatEnd)) => {

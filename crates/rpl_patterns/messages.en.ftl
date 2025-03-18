@@ -70,7 +70,7 @@ rpl_patterns_drop_uninit_value = Possibly dropping an uninitialized value
     .drop_label = dropped here
     .help = assigning to a dereferenced pointer will cause previous value to be dropped, and try using `ptr::write` instead
 
-rpl_patterns_uninvalidated_slice_from_raw_parts = it is unsound to trust pointers from passed-in iterators in a public safe function
+rpl_patterns_unvalidated_slice_from_raw_parts = it is unsound to trust pointers from passed-in iterators in a public safe function
     .src_label = source iterator found here
     .ptr_label = pointer created here
     .slice_label = used here to create a slice from the pointer

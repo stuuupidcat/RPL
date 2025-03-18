@@ -52,9 +52,9 @@ impl<'a> PatControlFlowGraph<'a> {
 }
 
 impl<'a> PatTerminatorEdges<'a> {
-    fn from_normalized(termiantor: Option<&'a pat::TerminatorKind<'_>>, pointer_bytes: usize) -> Self {
+    fn from_normalized(terminator: Option<&'a pat::TerminatorKind<'_>>, pointer_bytes: usize) -> Self {
         use pat::TerminatorKind::{Call, Drop, Goto, PatEnd, Return, SwitchInt};
-        match termiantor {
+        match terminator {
             None | Some(Return | PatEnd) => TerminatorEdges::None,
             Some(&Goto(target) | &Call { target, .. } | &Drop { target, .. }) => TerminatorEdges::Single(target),
             Some(SwitchInt { targets, .. }) => {
