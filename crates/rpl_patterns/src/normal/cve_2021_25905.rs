@@ -90,8 +90,8 @@ fn pattern_from_raw_parts_iter(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
     let slice;
     let pattern = rpl! {
         #[meta(
-            $T:ty,
-            $src:place(alloc::vec::Vec<$T>),
+            $T: ty,
+            $src: place(alloc::vec::Vec<$T>),
         )]
         fn $pattern (..) -> _ = mir! {
             // let $src: alloc::vec::Vec<$T> = _; // _1

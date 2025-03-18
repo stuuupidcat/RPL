@@ -80,7 +80,7 @@ fn test_ty_var() {
 #[test]
 fn test_place_var() {
     mir_test_case!(
-        #[meta($T:ty, $src:place($T))]
+        #[meta($T: ty, $src: place($T))]
         pat! {
             let $reference: &$T = &$src;
         } => {
