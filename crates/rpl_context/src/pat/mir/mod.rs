@@ -1,4 +1,5 @@
 use core::iter::IntoIterator;
+use std::fmt::{self, Debug};
 use std::ops::Index;
 
 use either::Either;
@@ -97,8 +98,8 @@ impl<'pcx> BasicBlockData<'pcx> {
         match &mut self.terminator {
             None => self.terminator = Some(TerminatorKind::Goto(block)),
             Some(TerminatorKind::Call { target, .. } | TerminatorKind::Drop { target, .. }) => *target = block,
-            // Here the `goto ?bb` termiantor comes from `break` or `continue`,
-            // plus the `return` termnator, are all skipped because thay are
+            // Here the `goto ?bb` terminator comes from `break` or `continue`,
+            // plus the `return` terminator, are all skipped because thay are
             // abnormal control flows.
             Some(TerminatorKind::Goto(_) | TerminatorKind::Return) => {},
             Some(terminator @ (TerminatorKind::SwitchInt { .. } | TerminatorKind::PatEnd)) => {
@@ -137,20 +138,64 @@ pub enum PlaceElem<'pcx> {
     Subtype(Ty<'pcx>),
 }
 
+/// Place base is the base of a place, which can be a local
+/// or a [variable](`PlaceVar`) declared in meta table.
 #[derive(Clone, Copy)]
-pub struct Place<'pcx> {
-    pub local: Local,
+pub enum PlaceBase {
+    Local(Local),
+    Var(PlaceVarIdx),
+}
+
+impl PlaceBase {
+    pub fn as_local(self) -> Option<Local> {
+        match self {
+            PlaceBase::Local(local) => Some(local),
+            PlaceBase::Var(_) => None,
+        }
+    }
+}
+
+impl Debug for PlaceBase {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            PlaceBase::Local(local) => Debug::fmt(local, f),
+            PlaceBase::Var(var) => Debug::fmt(var, f),
+        }
+    }
+}
+
+/// A place is a path to a value in memory.
+#[derive(Clone, Copy)]
+pub struct Place<'pcx, B = PlaceBase> {
+    pub base: B,
     pub projection: &'pcx [PlaceElem<'pcx>],
 }
 
-impl<'pcx> Place<'pcx> {
+impl<'pcx> Place<'pcx, PlaceBase> {
     pub fn new(local: Local, projection: &'pcx [PlaceElem<'pcx>]) -> Self {
-        Self { local, projection }
+        Self {
+            base: PlaceBase::Local(local),
+            projection,
+        }
     }
     pub fn as_local(&self) -> Option<Local> {
-        self.projection.is_empty().then_some(self.local)
+        self.projection.is_empty().then(|| self.base.as_local()).flatten()
     }
+}
 
+// impl<'pcx> Place<'pcx, Local> {
+//     pub fn new(local: Local, projection: &'pcx [PlaceElem<'pcx>]) -> Self {
+//         Self {
+//             base: local,
+//             projection,
+//         }
+//     }
+//     pub fn as_local(&self) -> Option<Local> {
+//         self.projection.is_empty().then(|| self.base)
+//     }
+// }
+
+impl<'pcx, B: Copy> Place<'pcx, B> {
     /// Iterate over the projections in evaluation order, i.e., the first element is the base with
     /// its projection and then subsequently more projections are added.
     /// As a concrete example, given the place a.b.c, this would yield:
@@ -159,22 +204,54 @@ impl<'pcx> Place<'pcx> {
     ///
     /// Given a place without projections, the iterator is empty.
     #[inline]
-    pub fn iter_projections(self) -> impl DoubleEndedIterator<Item = (Place<'pcx>, PlaceElem<'pcx>)> {
+    pub fn iter_projections(self) -> impl DoubleEndedIterator<Item = (Self, PlaceElem<'pcx>)> {
         self.projection.iter().enumerate().map(move |(i, proj)| {
             let base = Place {
-                local: self.local,
+                base: self.base,
                 projection: &self.projection[..i],
             };
             (base, *proj)
         })
     }
-}
 
-impl From<Local> for Place<'_> {
-    fn from(local: Local) -> Self {
-        Place { local, projection: &[] }
+    /// Identity.
+    pub fn into_place(self) -> Self {
+        self
     }
 }
+
+impl<B> From<B> for Place<'_, B> {
+    fn from(base: B) -> Self {
+        Place { base, projection: &[] }
+    }
+}
+
+impl From<Local> for Place<'_, PlaceBase> {
+    fn from(local: Local) -> Self {
+        Place {
+            base: PlaceBase::Local(local),
+            projection: &[],
+        }
+    }
+}
+
+impl From<PlaceVarIdx> for Place<'_, PlaceBase> {
+    fn from(var: PlaceVarIdx) -> Self {
+        Place {
+            base: PlaceBase::Var(var),
+            projection: &[],
+        }
+    }
+}
+
+// impl From<Local> for Place<'_, Local> {
+//     fn from(local: Local) -> Self {
+//         Place {
+//             base: local,
+//             projection: &[],
+//         }
+//     }
+// }
 
 impl Local {
     pub fn into_place<'pcx>(self) -> Place<'pcx> {

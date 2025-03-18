@@ -207,7 +207,7 @@ fn pattern_uninitialized_slice_mut(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> 
             let $vec_ref: &mut alloc::vec::Vec<$T> = &mut $vec;
             #[export(ptr)]
             let $ptr: *mut $T = alloc::vec::Vec::as_mut_ptr(move $vec_ref);
-            // FIXME: if this statement is put in the beginning, it may fail to match the cdoe where
+            // FIXME: if this statement is put in the beginning, it may fail to match the code where
             // `Vec::with_capacity` is called in advance of `ExactSizeIterator::len`.
             // See `rpl_mir::matches::match_block_ends_with` for more details.
             #[export(len)]

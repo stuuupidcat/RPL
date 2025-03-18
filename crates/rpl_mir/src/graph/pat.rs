@@ -37,7 +37,10 @@ pub fn pat_control_flow_graph(patterns: &pat::MirPattern<'_>, pointer_bytes: u64
 
 impl<'tcx> PatternVisitor<'tcx> for BlockDataDepGraphVisitor<'_, pat::Local> {
     fn visit_place(&mut self, place: pat::Place<'_>, pcx: PlaceContext, location: pat::Location) {
-        self.graph.access_local(place.local, pcx, location.statement_index);
+        match place.base {
+            pat::PlaceBase::Local(local) => self.graph.access_local(local, pcx, location.statement_index),
+            pat::PlaceBase::Var(_) => {}, //FIXME: handle var
+        }
         self.super_place(place, pcx, location);
     }
     fn visit_local(&mut self, local: pat::Local, pcx: PlaceContext, location: pat::Location) {

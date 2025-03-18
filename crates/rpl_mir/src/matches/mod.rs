@@ -9,7 +9,7 @@ use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_index::bit_set::MixedBitSet;
 use rustc_index::{Idx, IndexVec};
 use rustc_middle::mir::visit::{MutatingUseContext, PlaceContext};
-use rustc_middle::mir::{self};
+use rustc_middle::mir::{self, PlaceRef};
 use rustc_middle::ty::Ty;
 use rustc_span::Span;
 
@@ -19,6 +19,7 @@ pub struct Matched<'tcx> {
     pub basic_blocks: IndexVec<pat::BasicBlock, MatchedBlock>,
     pub locals: IndexVec<pat::Local, mir::Local>,
     pub ty_vars: IndexVec<pat::TyVarIdx, Ty<'tcx>>,
+    pub place_vars: IndexVec<pat::PlaceVarIdx, PlaceRef<'tcx>>,
 }
 
 pub struct MatchedBlock {
@@ -69,6 +70,7 @@ pub fn matches<'tcx>(cx: &CheckMirCtxt<'_, '_, 'tcx>) -> Vec<Matched<'tcx>> {
 struct Matching<'tcx> {
     basic_blocks: IndexVec<pat::BasicBlock, MatchingBlock>,
     locals: IndexVec<pat::Local, LocalMatches>,
+    place_vars: IndexVec<pat::PlaceVarIdx, PlaceVarMatches<'tcx>>,
     ty_vars: IndexVec<pat::TyVarIdx, TyVarMatches<'tcx>>,
 }
 
@@ -103,6 +105,25 @@ impl<'tcx> Index<pat::TyVarIdx> for Matching<'tcx> {
         &self.ty_vars[ty_var]
     }
 }
+
+impl<'tcx> Index<pat::PlaceVarIdx> for Matching<'tcx> {
+    type Output = PlaceVarMatches<'tcx>;
+
+    fn index(&self, place_var: pat::PlaceVarIdx) -> &Self::Output {
+        &self.place_vars[place_var]
+    }
+}
+
+// impl<'tcx> Index<pat::PlaceBase> for Matching<'tcx> {
+//     type Output = PlaceVarMatches<'tcx>;
+
+//     fn index(&self, place_base: pat::PlaceBase) -> &Self::Output {
+//         match place_base {
+//             pat::PlaceBase::Local(local) => &self.locals[local],
+//             pat::PlaceBase::Var(place_var) => &self.place_vars[place_var],
+//         }
+//     }
+// }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum StatementMatch {
@@ -217,6 +238,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             ),
             locals: IndexVec::from_fn_n(|_| LocalMatches::new(cx.body.local_decls.len()), num_locals),
             ty_vars: IndexVec::from_fn_n(|_| TyVarMatches::new(), cx.fn_pat.meta.ty_vars.len()),
+            place_vars: IndexVec::from_fn_n(|_| PlaceVarMatches::new(), cx.fn_pat.meta.place_vars.len()),
         }
     }
     #[instrument(level = "debug", skip(self))]
@@ -237,7 +259,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                 if loc_pat.statement_index < block_pat.statements.len()
                     && let pat::StatementKind::Assign(
                         pat::Place {
-                            local: local_pat,
+                            base: pat::PlaceBase::Local(local_pat),
                             projection: [],
                         },
                         pat::Rvalue::Any,
@@ -314,6 +336,9 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         for (candidates, matches) in core::iter::zip(&self.cx.ty.ty_vars, &mut self.matching.ty_vars) {
             matches.candidates = std::mem::take(&mut *candidates.borrow_mut());
         }
+        for (candidates, matches) in core::iter::zip(&self.cx.places, &mut self.matching.place_vars) {
+            matches.candidates = std::mem::take(&mut *candidates.borrow_mut());
+        }
     }
     #[instrument(level = "info", skip(self))]
     fn do_match(&mut self) {
@@ -324,7 +349,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         }
         self.match_candidates();
     }
-    // Recursvely traverse all candidates of type variables, local variables, and statements, and then
+    // Recursively traverse all candidates of type variables, local variables, and statements, and then
     // match the graph.
     #[instrument(level = "info", skip(self))]
     fn match_candidates(&self) {
@@ -333,7 +358,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     }
     fn match_ty_var_candidates(&self, ty_var: pat::TyVarIdx, loc_pats: &[pat::Location]) {
         if ty_var == self.cx.fn_pat.meta.ty_vars.next_index() {
-            self.match_local_candidates(pat::Local::ZERO, loc_pats);
+            self.match_place_var_candidates(pat::PlaceVarIdx::ZERO, loc_pats);
             return;
         }
         for &cand in &self.matching[ty_var].candidates {
@@ -344,6 +369,21 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             }
             // backtrack, clear status
             self.unmatch_ty_var(ty_var);
+        }
+    }
+    fn match_place_var_candidates(&self, place_var: pat::PlaceVarIdx, loc_pats: &[pat::Location]) {
+        if place_var == self.cx.fn_pat.meta.place_vars.next_index() {
+            self.match_local_candidates(pat::Local::ZERO, loc_pats);
+            return;
+        }
+        for &cand in &self.matching[place_var].candidates {
+            let _span = debug_span!("match_place_var_candidates", ?place_var, ?cand).entered();
+            if self.match_place_var(place_var, cand) {
+                // recursion
+                ensure_sufficient_stack(|| self.match_place_var_candidates(place_var.plus(1), loc_pats));
+            }
+            // backtrack, clear status
+            self.unmatch_place_var(place_var);
         }
     }
     fn match_local_candidates(&self, local: pat::Local, loc_pats: &[pat::Location]) {
@@ -523,7 +563,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                 })
                 && {
                     matching.end.set(Some(bb));
-                    // recursively check all the succesor blocks
+                    // recursively check all the successor blocks
                     self.match_block_successors(bb_pat, bb)
                 }
             || {
@@ -643,7 +683,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         if loc_pat.statement_index < self.cx.mir_pat[loc_pat.block].statements.len()
             && let pat::StatementKind::Assign(
                 pat::Place {
-                    local: local_pat,
+                    base: pat::PlaceBase::Local(local_pat),
                     projection: [],
                 },
                 pat::Rvalue::Any,
@@ -701,6 +741,10 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     fn match_ty_var(&self, ty_var: pat::TyVarIdx, ty: Ty<'tcx>) -> bool {
         self.matching[ty_var].matched.r#match(ty)
     }
+    #[instrument(level = "debug", skip(self), ret)]
+    fn match_place_var(&self, place_var: pat::PlaceVarIdx, place: PlaceRef<'tcx>) -> bool {
+        self.matching[place_var].matched.r#match(place)
+    }
     // #[instrument(level = "debug", skip(self))]
     // fn unmatch_stmt_locals(&self, loc_pat: pat::Location) {
     //     for &(local_pat, _) in self.cx.pat_ddg[loc_pat.block].accesses(loc_pat.statement_index) {
@@ -753,6 +797,11 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     #[instrument(level = "debug", skip(self))]
     fn unmatch_ty_var(&self, ty_var: pat::TyVarIdx) {
         self.matching[ty_var].matched.unmatch();
+    }
+
+    #[instrument(level = "debug", skip(self))]
+    fn unmatch_place_var(&self, place_var: pat::PlaceVarIdx) {
+        self.matching[place_var].matched.unmatch();
     }
 
     fn log_stmt_matched(&self, loc_pat: impl IntoLocation<Location = pat::Location>, stmt_match: StatementMatch) {
@@ -816,6 +865,10 @@ impl<'tcx> Matching<'tcx> {
         for (ty_var, matches) in self.ty_vars.iter_enumerated() {
             info!("{ty_var:?}: {:?}", matches.candidates);
         }
+        info!("pat place metavar <-> mir candidate places");
+        for (place_var, matches) in self.place_vars.iter_enumerated() {
+            info!("{place_var:?}: {:?}", matches.candidates);
+        }
     }
 
     #[instrument(level = "info", skip_all)]
@@ -834,6 +887,9 @@ impl<'tcx> Matching<'tcx> {
         }
         for (ty_var, matches) in self.ty_vars.iter_enumerated() {
             info!("{ty_var:?}: {:?}", matches.matched.get());
+        }
+        for (place_var, matches) in self.place_vars.iter_enumerated() {
+            info!("{place_var:?}: {:?}", matches.matched.get());
         }
     }
 
@@ -861,10 +917,20 @@ impl<'tcx> Matching<'tcx> {
                     .unwrap_or_else(|| panic!("bug: type variable {ty_var:?} not matched"))
             })
             .collect();
+        let place_vars = self
+            .place_vars
+            .iter_enumerated()
+            .map(|(place_var, matching)| {
+                matching
+                    .get()
+                    .unwrap_or_else(|| panic!("bug: place variable {place_var:?} not matched"))
+            })
+            .collect();
         Matched {
             basic_blocks,
             locals,
             ty_vars,
+            place_vars,
         }
     }
 }
@@ -1005,6 +1071,35 @@ impl<'tcx> TyVarMatches<'tcx> {
     fn force_get_matched(&self) -> Ty<'tcx> {
         self.matched.get().expect("bug: type variable not matched")
     }
+}
+
+#[derive(Default, Debug)]
+struct PlaceVarMatches<'tcx> {
+    matched: CountedMatch<PlaceRef<'tcx>>,
+    candidates: FxIndexSet<PlaceRef<'tcx>>,
+}
+
+impl<'tcx> PlaceVarMatches<'tcx> {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn get(&self) -> Option<PlaceRef<'tcx>> {
+        self.matched.get()
+    }
+
+    /// Test if there are any empty candidates in the matches.
+    #[allow(unused)]
+    fn has_empty_candidates(&self) -> bool {
+        self.candidates.is_empty()
+    }
+
+    // // After `match_place_var_candidates`, all place variables are supposed to be matched,
+    // // so we can assume that `self.matched` is `Some`.
+    // #[track_caller]
+    // fn force_get_matched(&self) -> PlaceRef<'tcx> {
+    //     self.matched.get().expect("bug: type variable not matched")
+    // }
 }
 
 trait IntoLocation: Copy {

@@ -23,6 +23,7 @@ pub(crate) mod kw {
     // Metadata
     syn::custom_keyword!(meta);
     syn::custom_keyword!(ty);
+    syn::custom_keyword!(place);
     syn::custom_keyword!(lang);
     syn::custom_keyword!(ctor);
     syn::custom_keyword!(mir);
@@ -358,7 +359,7 @@ pub enum Type {
     /// A `TyVar` from `#[meta($T:ty)]` or other pattern.
     TyVar(TypeVar),
 
-    /// A languate item
+    /// A language item
     LangItem(LangItemWithArgs),
 
     /// The `Self` type
@@ -483,7 +484,7 @@ impl PlaceDowncast {
 
 #[derive(ToTokens, From)]
 pub enum Place {
-    /// `local`
+    /// `$local`
     Local(PlaceLocal),
     /// `(place)`
     Paren(PlaceParen),
@@ -924,6 +925,7 @@ pub struct LocalInit {
     pub rvalue_or_call: RvalueOrCall,
 }
 
+/// A local declaration with an optional initializer.
 #[derive(Parse, ToTokens)]
 pub struct LocalDecl {
     #[parse(Export::parse_opt)]
@@ -1072,6 +1074,7 @@ pub struct Statement {
     pub kind: StatementKind,
 }
 
+/// A type variable from `#[meta($T:ty)]` or other pattern.
 #[derive(ToTokens, Parse)]
 pub struct TyVar {
     kw_ty: kw::ty,
@@ -1079,9 +1082,22 @@ pub struct TyVar {
     pub ty_pred: Option<PunctAnd<Token![=], syn::Expr>>,
 }
 
+/// A place variable from `#[meta($p:place)]` or other pattern.
+#[derive(ToTokens, Parse)]
+pub struct PlaceMetaVar {
+    kw_ty: kw::place,
+    #[syn(parenthesized)]
+    paren: token::Paren,
+    #[syn(in = paren)]
+    pub ty: Type,
+}
+
 #[derive(ToTokens, Parse, From)]
 pub enum MetaKind {
+    #[parse(peek = kw::ty)]
     Ty(TyVar),
+    #[parse(peek = kw::place)]
+    Place(PlaceMetaVar),
 }
 
 #[derive(ToTokens, Parse)]

@@ -53,7 +53,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         def_id: LocalDefId,
     ) -> Self::Result {
         // let vis = self.tcx.local_visibility(def_id);
-        // FIXME: should check accesibility of trait methods
+        // FIXME: should check accessibility of trait methods
         if self.tcx.is_mir_available(def_id)
         // && (vis == ty::Visibility::Public || vis == ty::Visibility::Restricted(CRATE_DEF_ID))
         {

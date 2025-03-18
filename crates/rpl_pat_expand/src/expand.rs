@@ -161,6 +161,10 @@ trait ExpandIdent: Sized {
     fn as_ty(&self) -> Ident {
         self.with_suffix("_ty")
     }
+    fn as_place(&self) -> Ident {
+        //FIXME: use suffix "_place"?
+        self.with_suffix("_local")
+    }
     fn as_adt(&self) -> Ident {
         self.with_suffix("_adt")
     }
@@ -169,6 +173,9 @@ trait ExpandIdent: Sized {
     }
     fn as_ty_var(&self) -> Ident {
         self.with_suffix("_ty_var")
+    }
+    fn as_place_var(&self) -> Ident {
+        self.with_suffix("_place_var")
     }
     fn as_local(&self) -> Ident {
         self.with_suffix("_local")
@@ -617,6 +624,18 @@ impl ToTokens for ExpandPat<'_, &MetaItem> {
                     let ident = &inner.ident;
                     quote_each_token!(tokens #ident = #ty_var_ident;);
                 }
+            },
+            MetaKind::Place(place_var) => {
+                let place_ident = ident.as_place();
+                let place_var_ident = ident.as_place_var();
+                let ty = self.ecx.expand(&place_var.ty);
+                quote_each_token!(tokens
+                    #[allow(non_snake_case)]
+                    let #place_var_ident = #pat.meta.new_place_var(#ty);
+                    #[allow(non_snake_case)]
+                    let #place_ident = #pcx.mk_var_place(#place_var_ident);
+                );
+                // quote_each_token!(tokens #ident = #place_var_ident;);
             },
         }
     }

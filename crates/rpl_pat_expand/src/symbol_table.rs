@@ -3,7 +3,7 @@ use proc_macro2::Span;
 use rustc_hash::FxHashMap;
 use syn::Ident;
 use syn_derive::ToTokens;
-use syntax::{Path, PlaceLocal, PlaceLocalKind, SelfParam, TyVar, Type};
+use syntax::{Path, PlaceLocal, PlaceLocalKind, PlaceMetaVar, SelfParam, TyVar, Type};
 
 #[derive(Debug, Display)]
 pub(crate) enum SymbolKind {
@@ -15,7 +15,7 @@ pub(crate) enum SymbolKind {
     Enum,
     #[display("field")]
     Field,
-    #[display("local varialble")]
+    #[display("local variable")]
     Local,
     #[display("parameter")]
     Param,
@@ -32,8 +32,12 @@ pub(crate) enum CheckError<'a> {
     SymbolNotDeclared(SymbolKind, &'a Ident),
     #[error("type or path `${0}` is already declared")]
     TypeVarAlreadyDeclared(&'a Ident),
+    #[error("place variable `${0}` is already declared")]
+    PlaceVarAlreadyDeclared(&'a Ident),
     #[error("type variable `${0}` is not declared")]
     TypeVarNotDeclared(&'a Ident),
+    #[error("place variable `${0}` is not declared")]
+    PlaceVarNotDeclared(&'a Ident),
     #[error("export named by `{0}` is already declared")]
     ExportAlreadyDeclared(&'a Ident),
     #[error("type or path named by `{0}` is already declared")]
@@ -98,6 +102,7 @@ impl<P: syn::parse::Parse + quote::ToTokens> From<&syntax::PunctAnd<P, syntax::E
 #[derive(Default)]
 pub(crate) struct MetaTable<'a> {
     ty_vars: FxHashMap<&'a Ident, &'a TyVar>,
+    place_vars: FxHashMap<&'a Ident, &'a PlaceMetaVar>,
     exports: FxHashMap<&'a Ident, ExportKind>,
 }
 
@@ -261,6 +266,18 @@ impl<'a> MetaTable<'a> {
             .get(ident)
             .copied()
             .ok_or_else(|| syn::Error::new(ident.span(), CheckError::TypeVarNotDeclared(ident)))
+    }
+    pub fn add_place_var(&mut self, ident: &'a Ident, place_var: &'a PlaceMetaVar) -> syn::Result<()> {
+        self.place_vars
+            .try_insert(ident, place_var)
+            .map_err(|entry| syn::Error::new(entry.entry.key().span(), CheckError::PlaceVarAlreadyDeclared(ident)))?;
+        Ok(())
+    }
+    pub fn get_place_var(&self, ident: &Ident) -> syn::Result<&'a PlaceMetaVar> {
+        self.place_vars
+            .get(ident)
+            .copied()
+            .ok_or_else(|| syn::Error::new(ident.span(), CheckError::PlaceVarNotDeclared(ident)))
     }
     pub fn add_export(&mut self, export: &'a Ident, kind: ExportKind) -> syn::Result<()> {
         self.exports.try_insert(export, kind).map_err(|entry| {

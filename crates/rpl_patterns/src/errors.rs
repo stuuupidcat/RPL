@@ -202,7 +202,7 @@ pub struct ThreadLocalStaticRef<'tcx> {
 // for cve_2021_25904
 // FIXME: add a span for `#[help]` containing the function header
 #[derive(LintDiagnostic)]
-#[diag(rpl_patterns_uninvalidated_slice_from_raw_parts)]
+#[diag(rpl_patterns_unvalidated_slice_from_raw_parts)]
 #[help]
 pub struct UnvalidatedSliceFromRawParts {
     #[label(rpl_patterns_src_label)]
@@ -279,4 +279,18 @@ pub struct UncheckedPtrOffset {
 pub struct CassandraIterNextPtrPassedToCassIterGet {
     #[label(rpl_patterns_cass_iter_next_label)]
     pub cass_iter_next: Span,
+}
+
+// for cve_2021_25905
+#[derive(LintDiagnostic)]
+#[diag(rpl_patterns_slice_from_raw_parts_uninitialized_)]
+#[help]
+pub struct SliceFromRawPartsUninitialized_ {
+    #[label(rpl_patterns_slice_label)]
+    pub slice: Span,
+    #[label(rpl_patterns_len_label)]
+    pub len: Span,
+    #[label(rpl_patterns_ptr_label)]
+    pub ptr: Span,
+    pub fn_name: &'static str,
 }

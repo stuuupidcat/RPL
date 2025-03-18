@@ -220,6 +220,7 @@ trait CheckMeta<'pat> {
         }
         match &meta_item.kind {
             MetaKind::Ty(ty_var) => meta_table.add_ty_var(&meta_item.ident, ty_var)?,
+            MetaKind::Place(place_var) => meta_table.add_place_var(&meta_item.ident, place_var)?,
         }
         Ok(())
     }
@@ -445,7 +446,14 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
     }
 
     fn check_place_local(&self, local: &PlaceLocal) -> syn::Result<()> {
-        self.fn_def.get_place_local(local)?;
+        self.fn_def.get_place_local(local).map(|_| ()).or_else(|err| {
+            if let PlaceLocalKind::Local(ident) = &local.kind {
+                self.meta_table.get_place_var(ident)?;
+                Ok(())
+            } else {
+                Err(err)
+            }
+        })?;
         Ok(())
     }
 

@@ -438,7 +438,7 @@ test_case! {
             }
         }
         // variable shadowing?
-        // There cannnot be two mutable references to `vec` in the same scope
+        // There cannot be two mutable references to `vec` in the same scope
         $ref_to_vec = &mut $vec;
         $_tmp = Vec::set_len(move $ref_to_vec, copy $len);
     } => {

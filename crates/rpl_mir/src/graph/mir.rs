@@ -55,8 +55,8 @@ impl<'tcx> Visitor<'tcx> for BlockDataDepGraphVisitor<'_, mir::Local> {
     }
 }
 
-fn terminator_edges(termiantor: &mir::TerminatorKind<'_>) -> MirTerminatorEdges {
-    match termiantor.edges() {
+fn terminator_edges(terminator: &mir::TerminatorKind<'_>) -> MirTerminatorEdges {
+    match terminator.edges() {
         mir::TerminatorEdges::None => TerminatorEdges::None,
         mir::TerminatorEdges::Single(bb) => TerminatorEdges::Single(bb),
         mir::TerminatorEdges::Double(bb0, bb1) => TerminatorEdges::Double(bb0, bb1),

@@ -568,7 +568,7 @@ impl RvalueOrCall {
         )
     }
 
-    fn parse_opertion_or_call(input: ParseStream<'_>) -> Result<Self> {
+    fn parse_operation_or_call(input: ParseStream<'_>) -> Result<Self> {
         Ok(if input.peek(kw::Len) {
             Rvalue::Len(input.parse()?).into()
         } else if input.fork().parse::<NullOp>().is_ok() {
@@ -599,7 +599,7 @@ impl Parse for RvalueOrCall {
         } else if Operand::lookahead(&lookahead) {
             RvalueOrCall::parse_operand(input)
         } else if lookahead.peek(syn::Ident) && input.peek2(token::Paren) {
-            RvalueOrCall::parse_opertion_or_call(input)
+            RvalueOrCall::parse_operation_or_call(input)
         } else {
             RvalueOrCall::parse_fn_operand_or_aggregate(input, lookahead)
         }

@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use rustc_data_structures::packed::Pu128;
 use rustc_hir::def_id::DefId;
 use rustc_hir::{LangItem, PrimTy};
@@ -8,6 +10,8 @@ use rustc_span::Symbol;
 use crate::cvt_prim_ty::CvtPrimTy;
 use crate::PatCtxt;
 
+use super::{Place, PlaceBase};
+
 rustc_index::newtype_index! {
     #[debug_format = "?T{}"]
     pub struct TyVarIdx {}
@@ -16,6 +20,11 @@ rustc_index::newtype_index! {
 rustc_index::newtype_index! {
     #[debug_format = "?C{}"]
     pub struct ConstVarIdx {}
+}
+
+rustc_index::newtype_index! {
+    #[debug_format = "?P{}"]
+    pub struct PlaceVarIdx {}
 }
 
 // FIXME: Use interning for the types
@@ -293,6 +302,25 @@ pub enum Const<'pcx> {
 pub struct TyVar {
     pub idx: TyVarIdx,
     pub pred: Option<TyPred>,
+}
+
+#[derive(Clone, Copy)]
+pub struct PlaceVar<'pcx> {
+    pub idx: PlaceVarIdx,
+    pub ty: Ty<'pcx>,
+}
+
+impl PlaceVarIdx {
+    pub fn into_place<'pcx>(self) -> Place<'pcx, PlaceBase> {
+        //FIXME: update `Place` to hold a `PlaceVar`
+        Place::from(self)
+    }
+}
+
+impl Debug for PlaceVar<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.idx, f)
+    }
 }
 
 #[derive(Clone, Copy)]
