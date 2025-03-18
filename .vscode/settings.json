@@ -2,14 +2,17 @@
   "rust-analyzer.rustc.source": "discover",
   "rust-analyzer.linkedProjects": ["./Cargo.toml"],
   "rust-analyzer.procMacro.enable": true,
-  "rust-analyzer.procMacro.attributes.enable": false, // Doesn't work
+  // Setting to false doesn't work for `#[instrument]`
+  "rust-analyzer.procMacro.attributes.enable": true,
   "rust-analyzer.diagnostics.styleLints.enable": true,
+  // Doesn't work for `#[instrument]`
   "rust-analyzer.procMacro.ignored": {
     "tracing": ["instrument"],
     "tracing-attributes": ["instrument"],
     "tracing_attributes": ["instrument"]
-  }, // Doesn't work
-  "rust-analyzer.diagnostics.disabled": ["proc-macro", "macro-error"],
+  },
+  // Suppresses "macro-error" diagnostic, such as `#[instrument]`
+  "rust-analyzer.diagnostics.disabled": ["macro-error"],
   "lldb.showDisassembly": "auto",
   "lldb.dereferencePointers": true,
   "lldb.consoleMode": "commands",
