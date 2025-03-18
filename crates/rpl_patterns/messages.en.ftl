@@ -125,3 +125,7 @@ rpl_patterns_private_function_marked_inline =  it usually isn’t necessary to a
     .label = `#[inline]` applied here
     .note = within a crate, the compiler generally makes good inline decisions
     .help = See https://matklad.github.io/2021/07/09/inline-in-rust.html
+rpl_patterns_unsound_transmute_to_bool = it is unsound to transmute a type to a boolean
+    .from_label = transmuted from here
+    .to_label = transmuted to here
+    .note = transmuting types to booleans probably produces a boolean value with an invalid state

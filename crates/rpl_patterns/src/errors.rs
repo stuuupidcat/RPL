@@ -302,3 +302,13 @@ pub struct PrivateFunctionMarkedInline {
     #[label(rpl_patterns_label)]
     pub span: Span,
 }
+
+// for std::mem::transmute
+#[derive(LintDiagnostic)]
+#[diag(rpl_patterns_unsound_transmute_to_bool)]
+pub struct UnsoundTransmuteToBool {
+    #[label(rpl_patterns_from_label)]
+    pub from: Span,
+    #[label(rpl_patterns_to_label)]
+    pub to: Span,
+}

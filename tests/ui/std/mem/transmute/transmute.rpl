@@ -1,0 +1,17 @@
+pattern std_mem_transmute 
+
+patt {
+    transmute_to_bool[
+        $T: ty
+    ] = pub fn _ (..) -> _ {
+        let $from: $T = _;
+        let $to: bool = move _1 as bool (Transmute);
+    }
+
+    transmute_int_to_ptr[
+        $T: ty // {usize, isize}
+    ] = pub fn _ (..) -> _ {
+        let $from: $T = _;
+        let $to: *const $T = move _1 as *const $T (Transmute);
+    }
+}
