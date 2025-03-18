@@ -114,3 +114,8 @@ rpl_patterns_cassandra_iter_next_ptr_passed_to_cass_iter_get = it will be an und
     .cass_iter_next_label = `cass_iterator_next` called here
     .note = `cass_iterator_next` will invalidate the current item when called
     .help = consider implementing a `LendingIterator` instead
+
+rpl_patterns_unsound_transmute_to_bool = it is unsound to transmute a type to a boolean
+    .from_label = transmuted from here
+    .to_label = transmuted to here
+    .note = transmuting types to booleans probably produces a boolean value with an invalid state

@@ -666,3 +666,29 @@ declare_tool_lint! {
     Deny,
     "detects unsound usage of `#[pin_project]`"
 }
+
+declare_tool_lint! {
+    /// The `rpl::unsound_transmute_to_bool` lint detects a transmute from a type to a boolean.
+    ///
+    /// ### Example
+    /// ```rust
+    /// #![deny(rpl::unsound_transmute_to_bool)]
+    ///
+    /// use std::mem::transmute;
+    ///
+    /// fn invalid_value() -> bool {
+    ///     let x: u8 = 10;
+    ///     unsafe { transmute::<u8, bool>(x) }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// Transmuting integers to booleans is highly unsound,
+    /// probably producing a boolean value with an invalid state.
+    pub rpl::UNSOUND_TRANSMUTE_TO_BOOL,
+    Deny,
+    "detects a transmute from a type to a boolean"
+}

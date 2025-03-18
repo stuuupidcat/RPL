@@ -1,0 +1,47 @@
+note: MIR of `uninitialized_value`
+  --> tests/ui/std/mem/uninitiallized/uninitiallized.rs:6:1
+   |
+LL |   #[rpl::dump_mir()]
+   |   ------------------ MIR dumpped because of this attribute
+LL | / fn uninitialized_value<T>() -> T {
+LL | |     unsafe { uninitialized() }
+LL | | }
+   | |_^
+   |
+   = note: see `/Users/stuuupidcat/home/code/projects/RPL/mir_dump/uninitiallized.uninitialized_value.-------.dump_mir..mir` for dumpped MIR
+note: locals and scopes in this MIR
+  --> tests/ui/std/mem/uninitiallized/uninitiallized.rs:6:1
+   |
+LL |   fn uninitialized_value<T>() -> T {
+   |   ^                              - _0: T; // scope[0]
+   |  _|
+   | |
+LL | |     unsafe { uninitialized() }
+LL | | }
+   | |_^ scope[0]
+note: bb0: {
+          _0 = std::mem::uninitialized::<T>() -> [return: bb1, unwind continue]; // scope[0]
+      }
+  --> tests/ui/std/mem/uninitiallized/uninitiallized.rs:7:14
+   |
+LL |     unsafe { uninitialized() }
+   |              ^^^^^^^^^^^^^^^ _0 = std::mem::uninitialized::<T>() -> [return: bb1, unwind continue]; // scope[0]
+note: bb1: {
+          return; // scope[0]
+      }
+  --> tests/ui/std/mem/uninitiallized/uninitiallized.rs:8:2
+   |
+LL | }
+   |  ^ return; // scope[0]
+
+error: abort due to debugging
+  --> tests/ui/std/mem/uninitiallized/uninitiallized.rs:5:1
+   |
+LL | #[rpl::dump_mir()]
+   | ^^^^^^^^^^^^^^^^^^ help: remove this attribute
+   |
+   = note: `#[rpl::dump_hir]`, `#[rpl::print_hir]` and `#[rpl::dump_mir]` are only used for debugging
+   = note: this error is to remind you removing these attributes
+
+error: aborting due to 1 previous error
+
