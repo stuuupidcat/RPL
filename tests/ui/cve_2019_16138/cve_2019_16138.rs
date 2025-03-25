@@ -10,4 +10,5 @@ fn foo() {
 
 fn main() {
     foo()
+    //~^ERROR: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
 }

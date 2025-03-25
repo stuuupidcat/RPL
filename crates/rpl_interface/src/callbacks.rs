@@ -112,7 +112,7 @@ impl rustc_driver::Callbacks for RplCallbacks {
         // We rely on `-Z inline-mir` to get the inlined MIR.
         if *config.opts.unstable_opts.inline_mir.get_or_insert(true) {
             _ = config.opts.unstable_opts.inline_mir_threshold.get_or_insert(100);
-            _ = config.opts.unstable_opts.cross_crate_inline_threshold = InliningThreshold::Sometimes(100);
+            _ = config.opts.unstable_opts.cross_crate_inline_threshold = InliningThreshold::Always;
             _ = config.opts.unstable_opts.inline_mir_hint_threshold.get_or_insert(100);
             _ = config
                 .opts

@@ -1,3 +1,7 @@
+//@ revisions: inline regular
+//@[inline] compile-flags: -Z inline-mir=true
+//@[regular] compile-flags: -Z inline-mir=false
+
 extern crate libc;
 
 use libc::{sockaddr, sockaddr_storage, socklen_t};
@@ -15,7 +19,9 @@ impl Addr {
     fn new(addr: std::net::SocketAddr) -> Self {
         match &addr {
             SocketAddr::V4(addr) => Self::new_v4(addr),
+            //~[inline]^ ERROR: wrong assumption of layout compatibility from `std::net::SocketAddrV4` to `libc::sockaddr`
             SocketAddr::V6(addr) => Self::new_v6(addr),
+            //~[inline]^ ERROR: wrong assumption of layout compatibility from `std::net::SocketAddrV6` to `libc::sockaddr`
         }
     }
 
