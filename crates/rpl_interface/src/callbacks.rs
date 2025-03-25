@@ -110,20 +110,16 @@ impl rustc_driver::Callbacks for RplCallbacks {
         _ = config.opts.unstable_opts.mir_opt_level.get_or_insert(1);
 
         // We rely on `-Z inline-mir` to get the inlined MIR.
-        _ = config.opts.unstable_opts.inline_mir.get_or_insert(true);
-
-        _ = config.opts.unstable_opts.inline_mir_threshold.get_or_insert(100);
-        // _ = config.opts.unstable_opts.cross_crate_inline_threshold = InliningThreshold::Always;
-        // _ = config
-        //     .opts
-        //     .unstable_opts
-        //     .inline_mir_hint_threshold
-        //     .get_or_insert(usize::MAX);
-        // _ = config
-        //     .opts
-        //     .unstable_opts
-        //     .inline_mir_forwarder_threshold
-        //     .get_or_insert(usize::MAX);
+        if *config.opts.unstable_opts.inline_mir.get_or_insert(true) {
+            _ = config.opts.unstable_opts.inline_mir_threshold.get_or_insert(100);
+            _ = config.opts.unstable_opts.cross_crate_inline_threshold = InliningThreshold::Sometimes(100);
+            _ = config.opts.unstable_opts.inline_mir_hint_threshold.get_or_insert(100);
+            _ = config
+                .opts
+                .unstable_opts
+                .inline_mir_forwarder_threshold
+                .get_or_insert(50);
+        }
 
         // Disable flattening and inlining of format_args!(), so the HIR matches with the AST.
         config.opts.unstable_opts.flatten_format_args = false;
