@@ -181,9 +181,11 @@ where
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         // we'll be reading from the buffer
         let mut to_read = self.data_to_read();
+        //~[inline]^ ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
         if to_read.is_empty() {
             self.fill_buf()?;
             to_read = self.data_to_read();
+            //~[inline]^ ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
         }
 
         let len = usize::min(to_read.len(), buf.len());

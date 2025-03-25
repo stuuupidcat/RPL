@@ -12,8 +12,32 @@ LL |         &self.buf[self.consumed..]
    = note: `-D rpl::unchecked-pointer-offset` implied by `-D warnings`
    = help: to override `-D warnings` add `#[allow(rpl::unchecked_pointer_offset)]`
 
+error: it is an undefined behavior to offset a pointer using an unchecked integer
+  --> tests/ui/cve_2021_25905/cve_2021_25905.rs:183:32
+   |
+LL |         let mut to_read = self.data_to_read();
+   |                                ^^^^^^^^^^^^^^
+   |                                |
+   |                                offset here
+   |                                pointer used here
+   |
+   = help: check whether it's in bound before offsetting
+   = note: See the safety section in https://doc.rust-lang.org/std/primitive.pointer.html#method.offset
+
+error: it is an undefined behavior to offset a pointer using an unchecked integer
+  --> tests/ui/cve_2021_25905/cve_2021_25905.rs:187:28
+   |
+LL |             to_read = self.data_to_read();
+   |                            ^^^^^^^^^^^^^^
+   |                            |
+   |                            offset here
+   |                            pointer used here
+   |
+   = help: check whether it's in bound before offsetting
+   = note: See the safety section in https://doc.rust-lang.org/std/primitive.pointer.html#method.offset
+
 error: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
-  --> tests/ui/cve_2021_25905/cve_2021_25905.rs:210:13
+  --> tests/ui/cve_2021_25905/cve_2021_25905.rs:212:13
    |
 LL |           let b = self.buf.len();
    |                            ----- slice created with this length
@@ -29,5 +53,5 @@ LL | |             )
    = help: See https://doc.rust-lang.org/std/slice/fn.std::slice::from_raw_parts_mut.html
    = note: `#[deny(rpl::slice_from_raw_parts_uninitialized)]` on by default
 
-error: aborting due to 2 previous errors
+error: aborting due to 4 previous errors
 
