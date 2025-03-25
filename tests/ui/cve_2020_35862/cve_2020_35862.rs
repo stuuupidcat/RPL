@@ -1,15 +1,64 @@
 //@ ignore-on-host
 
 use core::slice;
+use std::cell::Cell;
 use std::marker::PhantomData;
+use std::mem;
 use std::ops::Deref;
 use std::ptr::NonNull;
 
 pub trait BitStore: Copy {
-    const INDX: u8;
-    const MASK: u8;
-    const BITS: u8;
+    /// The width, in bits, of this type.
+    const BITS: u8 = size_of::<Self>() as u8 * 8;
+
+    /// The number of bits required to index a bit inside the type. This is
+    /// always log<sub>2</sub> of the type’s bit width.
+    const INDX: u8 = Self::BITS.trailing_zeros() as u8;
+
+    /// The bitmask to turn an arbitrary number into a bit index. Bit indices
+    /// are always stored in the lowest bits of an index value.
+    const MASK: u8 = Self::BITS - 1;
+
+    /// The value with all bits unset.
+    const FALSE: Self;
+
+    /// The value with all bits set.
+    const TRUE: Self;
+
+    /// Name of the implementing type. This is only necessary until the compiler
+    /// stabilizes `type_name()`.
+    const TYPENAME: &'static str;
+
     type Access;
+}
+
+/// Batch implementation of `BitStore` for the appropriate fundamental integers.
+macro_rules! bitstore {
+	($($t:ty => $bits:literal , $atom:ty ;)*) => { $(
+		impl BitStore for $t {
+			const TYPENAME: &'static str = stringify!($t);
+
+			const FALSE: Self = 0;
+			const TRUE: Self = !0;
+
+			#[cfg(feature = "atomic")]
+			type Access = $atom;
+
+			#[cfg(not(feature = "atomic"))]
+			type Access = Cell<Self>;
+
+			// #[inline(always)]
+			// fn count_ones(self) -> usize {
+			// 	Self::count_ones(self) as usize
+			// }
+		}
+	)* };
+}
+
+bitstore! {
+    u8 => 1, atomic::AtomicU8;
+    u16 => 2, atomic::AtomicU16;
+    u32 => 4, atomic::AtomicU32;
 }
 
 pub trait BitOrder {}
@@ -30,12 +79,58 @@ where
     u: usize,
 }
 
+impl<T> From<&T> for Pointer<T>
+where
+    T: BitStore,
+{
+    fn from(r: &T) -> Self {
+        Self { r }
+    }
+}
+
+impl<T> From<*const T> for Pointer<T>
+where
+    T: BitStore,
+{
+    fn from(r: *const T) -> Self {
+        Self { r }
+    }
+}
+
+impl<T> From<&mut T> for Pointer<T>
+where
+    T: BitStore,
+{
+    fn from(w: &mut T) -> Self {
+        Self { w }
+    }
+}
+
+impl<T> From<*mut T> for Pointer<T>
+where
+    T: BitStore,
+{
+    fn from(w: *mut T) -> Self {
+        Self { w }
+    }
+}
+
 impl<T> From<usize> for Pointer<T>
 where
     T: BitStore,
 {
     fn from(u: usize) -> Self {
         Self { u }
+    }
+}
+
+impl<T> Pointer<T>
+where
+    T: BitStore,
+{
+    #[inline]
+    pub(crate) fn w(self) -> *mut T {
+        unsafe { self.w }
     }
 }
 
@@ -48,6 +143,112 @@ where
     _ty: PhantomData<T>,
     ptr: NonNull<u8>,
     len: usize,
+}
+
+impl<T> BitPtr<T>
+where
+    T: BitStore,
+{
+    pub const PTR_DATA_MASK: usize = !Self::PTR_HEAD_MASK;
+    pub const PTR_HEAD_BITS: usize = T::INDX as usize - Self::LEN_HEAD_BITS;
+    pub const PTR_HEAD_MASK: usize = T::MASK as usize >> Self::LEN_HEAD_BITS;
+    pub const LEN_HEAD_BITS: usize = 3;
+    pub const LEN_HEAD_MASK: usize = 0b0111;
+    pub const MAX_ELTS: usize = (Self::MAX_BITS >> 3) + 1;
+    pub const MAX_BITS: usize = !0 >> Self::LEN_HEAD_BITS;
+
+    pub(crate) fn pointer(&self) -> Pointer<T> {
+        (self.ptr.as_ptr() as usize & Self::PTR_DATA_MASK).into()
+    }
+
+    #[inline]
+    pub fn as_slice<'a>(&self) -> &'a [T] {
+        unsafe { slice::from_raw_parts(self.pointer().r, self.elements()) }
+    }
+
+    /// Accesses the element slice behind the pointer as a Rust mutable slice.
+    ///
+    /// # Parameters
+    ///
+    /// - `&self`
+    ///
+    /// # Returns
+    ///
+    /// Standard Rust slice handle over the data governed by this pointer.
+    ///
+    /// # Lifetimes
+    ///
+    /// - `'a`: Lifetime for which the data behind the pointer is live.
+    #[inline]
+    pub fn as_mut_slice<'a>(&self) -> &'a mut [T] {
+        unsafe { slice::from_raw_parts_mut(self.pointer().w, self.elements()) }
+    }
+
+    pub fn elements(&self) -> usize {
+        self.head().span(self.len()).0
+    }
+
+    #[inline]
+    pub fn head(&self) -> BitIdx<T> {
+        let ptr = self.ptr.as_ptr() as usize;
+        let ptr_head = (ptr & Self::PTR_HEAD_MASK) << Self::LEN_HEAD_BITS;
+        let len_head = self.len & Self::LEN_HEAD_MASK;
+        let idx = (ptr_head | len_head) as u8;
+        BitIdx {
+            idx,
+            _ty: PhantomData,
+        }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.len >> Self::LEN_HEAD_BITS
+    }
+
+    pub(crate) fn from_bitslice<O>(bs: &BitSlice<O, T>) -> Self
+    where
+        O: BitOrder,
+    {
+        let src = unsafe { &*(bs as *const BitSlice<O, T> as *const [()]) };
+        let ptr = Pointer::from(src.as_ptr() as *const u8);
+        let (ptr, len) = match (ptr.w(), src.len()) {
+            (_, 0) => (NonNull::dangling(), 0),
+            (p, _) if p.is_null() => unreachable!("Rust forbids null refs"),
+            (p, l) => (unsafe { NonNull::new_unchecked(p) }, l),
+        };
+        Self {
+            ptr,
+            len,
+            _ty: PhantomData,
+        }
+    }
+
+    /// Cast a `*mut BitSlice<O, T>` raw pointer into an equivalent `BitPtr<T>`.
+    pub(crate) fn from_mut_ptr<O>(ptr: *mut BitSlice<O, T>) -> Self
+    where
+        O: BitOrder,
+    {
+        unsafe { &*ptr }.bitptr()
+    }
+
+    pub(crate) fn into_bitslice_mut<'a, O>(self) -> &'a mut BitSlice<O, T>
+    where
+        O: BitOrder,
+    {
+        unsafe {
+            &mut *(slice::from_raw_parts_mut(
+                Pointer::from(self.ptr.as_ptr()).w() as *mut (),
+                self.len,
+            ) as *mut [()] as *mut BitSlice<O, T>)
+        }
+    }
+
+    pub(crate) fn as_mut_ptr<O>(self) -> *mut BitSlice<O, T>
+    where
+        O: BitOrder,
+    {
+        self.into_bitslice_mut() as *mut BitSlice<O, T>
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -163,67 +364,6 @@ where
     }
 }
 
-impl<T> BitPtr<T>
-where
-    T: BitStore,
-{
-    pub const PTR_DATA_MASK: usize = !Self::PTR_HEAD_MASK;
-    pub const PTR_HEAD_BITS: usize = T::INDX as usize - Self::LEN_HEAD_BITS;
-    pub const PTR_HEAD_MASK: usize = T::MASK as usize >> Self::LEN_HEAD_BITS;
-    pub const LEN_HEAD_BITS: usize = 3;
-    pub const LEN_HEAD_MASK: usize = 0b0111;
-    pub const MAX_ELTS: usize = (Self::MAX_BITS >> 3) + 1;
-    pub const MAX_BITS: usize = !0 >> Self::LEN_HEAD_BITS;
-
-    pub(crate) fn pointer(&self) -> Pointer<T> {
-        (self.ptr.as_ptr() as usize & Self::PTR_DATA_MASK).into()
-    }
-
-    #[inline]
-    pub fn as_slice<'a>(&self) -> &'a [T] {
-        unsafe { slice::from_raw_parts(self.pointer().r, self.elements()) }
-    }
-
-    /// Accesses the element slice behind the pointer as a Rust mutable slice.
-    ///
-    /// # Parameters
-    ///
-    /// - `&self`
-    ///
-    /// # Returns
-    ///
-    /// Standard Rust slice handle over the data governed by this pointer.
-    ///
-    /// # Lifetimes
-    ///
-    /// - `'a`: Lifetime for which the data behind the pointer is live.
-    #[inline]
-    pub fn as_mut_slice<'a>(&self) -> &'a mut [T] {
-        unsafe { slice::from_raw_parts_mut(self.pointer().w, self.elements()) }
-    }
-
-    pub fn elements(&self) -> usize {
-        self.head().span(self.len()).0
-    }
-
-    #[inline]
-    pub fn head(&self) -> BitIdx<T> {
-        let ptr = self.ptr.as_ptr() as usize;
-        let ptr_head = (ptr & Self::PTR_HEAD_MASK) << Self::LEN_HEAD_BITS;
-        let len_head = self.len & Self::LEN_HEAD_MASK;
-        let idx = (ptr_head | len_head) as u8;
-        BitIdx {
-            idx,
-            _ty: PhantomData,
-        }
-    }
-
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.len >> Self::LEN_HEAD_BITS
-    }
-}
-
 pub struct BitBox<O, T>
 where
     O: BitOrder,
@@ -251,6 +391,13 @@ where
     O: BitOrder,
     T: BitStore,
 {
+    pub unsafe fn from_raw(raw: *mut BitSlice<O, T>) -> Self {
+        Self {
+            _order: PhantomData,
+            pointer: BitPtr::from_mut_ptr(raw),
+        }
+    }
+
     pub fn as_slice(&self) -> &[T] {
         self.bitptr().as_slice()
     }
@@ -270,5 +417,83 @@ where
     /// A copy of the interior `BitPtr<T>`.
     pub(crate) fn bitptr(&self) -> BitPtr<T> {
         self.pointer
+    }
+}
+
+#[repr(transparent)]
+pub struct BitSlice<O, T>
+where
+    O: BitOrder,
+    T: BitStore,
+{
+    /// BitOrder type for selecting bits inside an element.
+    _kind: PhantomData<O>,
+    /// Element type of the slice.
+    ///
+    /// eddyb recommends using `PhantomData<T>` and `[()]` instead of `[T]`
+    /// alone.
+    _type: PhantomData<T>,
+    /// Slice of elements `T` over which the `BitSlice` has usage.
+    _elts: [()],
+}
+
+impl<O, T> BitSlice<O, T>
+where
+    O: BitOrder,
+    T: BitStore,
+{
+    #[inline]
+    pub(crate) fn bitptr(&self) -> BitPtr<T> {
+        BitPtr::from_bitslice(self)
+    }
+}
+
+#[repr(C)]
+pub struct BitVec<O, T>
+where
+    O: BitOrder,
+    T: BitStore,
+{
+    /// Phantom `BitOrder` member to satisfy the constraint checker.
+    _order: PhantomData<O>,
+    /// Slice pointer over the owned memory.
+    pointer: BitPtr<T>,
+    /// The number of *elements* this vector has allocated.
+    capacity: usize,
+}
+
+impl<O, T> BitVec<O, T>
+where
+    O: BitOrder,
+    T: BitStore,
+{
+    #[inline]
+    pub unsafe fn from_raw_parts(pointer: BitPtr<T>, capacity: usize) -> Self {
+        Self {
+            _order: PhantomData,
+            pointer,
+            capacity,
+        }
+    }
+
+    #[rpl::dump_mir(dump_cfg, dump_ddg)]
+    pub fn into_vec(self) -> Vec<T> {
+        let slice = self.pointer.as_mut_slice();
+        let out = unsafe { Vec::from_raw_parts(slice.as_mut_ptr(), slice.len(), self.capacity) };
+        mem::forget(self);
+        out
+    }
+
+    #[rpl::dump_mir(dump_cfg, dump_ddg)]
+    pub fn into_boxed_bitslice(self) -> BitBox<O, T> {
+        let pointer = self.pointer;
+        //  Convert the Vec allocation into a Box<[T]> allocation
+        mem::forget(self.into_boxed_slice());
+        unsafe { BitBox::from_raw(pointer.as_mut_ptr()) }
+    }
+
+    #[inline]
+    pub fn into_boxed_slice(self) -> Box<[T]> {
+        self.into_vec().into_boxed_slice()
     }
 }
