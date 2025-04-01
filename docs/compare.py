@@ -13,8 +13,8 @@ import re
 
 compare: dict[int, dict]
 
-if os.path.exists("compare_speed.yaml"):
-    with open("compare_speed.yaml", "r") as f:
+if os.path.exists("compare.yaml"):
+    with open("compare.yaml", "r") as f:
         compare = yaml.safe_load(f)
         # print(config)
 else:
@@ -29,6 +29,13 @@ child = subprocess.run(
     stderr=subprocess.DEVNULL,
     encoding="utf-8",
 )
+
+# Tests that we want to investigate which specific functions are inlined.
+skip = [
+    "tests/ui/cve_2020_35862/cve_2020_35862_manually_inlined.rs",
+    "tests/ui/cve_2020_35862/cve_2020_35862.rs",
+    "tests/ui/cve_2021_38190/cve_2021_38190.rs",
+]
 
 re_result = re.compile(
     "test result: (FAIL|ok). ((?P<failed>\d+) failed; )?(?P<passed>\d+) passed; (?P<ignored>\d+) ignored;"
@@ -58,7 +65,7 @@ for cfg in [
     print(f"Running with -Z inline-mir-threshold={cfg}")
     t1 = time.time()
     child = subprocess.run(
-        ["cargo", "uitest", "--release"],
+        ["cargo", "uitest", "--release", "--", *(["--skip", skip] for skip in skip)],
         env={
             **os.environ,
             "RPL_TEST_INLINE_MIR_THRESHOLD": str(cfg),
@@ -102,8 +109,8 @@ for cfg in [
 
 print("Done with all tests")
 
-print("Writing results to compare_speed.yaml")
+print("Writing results to compare.yaml")
 
-with open("docs/compare_speed.yaml", "w") as f:
+with open("docs/compare.yaml", "w") as f:
     yaml.safe_dump(compare, f)
-print("Done writing results to compare_speed.yaml")
+print("Done writing results to compare.yaml")
