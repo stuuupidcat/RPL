@@ -1,10 +1,7 @@
-use std::usize;
-
 use rpl_context::PatternCtxt;
 // use rpl_middle::ty::RplConfig;
 use rustc_interface::interface;
 use rustc_middle::ty::TyCtxt;
-use rustc_session::config::InliningThreshold;
 use rustc_session::parse::ParseSess;
 use rustc_span::Symbol;
 
@@ -111,14 +108,15 @@ impl rustc_driver::Callbacks for RplCallbacks {
 
         // We rely on `-Z inline-mir` to get the inlined MIR.
         if *config.opts.unstable_opts.inline_mir.get_or_insert(true) {
-            _ = config.opts.unstable_opts.inline_mir_threshold.get_or_insert(100);
-            _ = config.opts.unstable_opts.cross_crate_inline_threshold = InliningThreshold::Always;
-            _ = config.opts.unstable_opts.inline_mir_hint_threshold.get_or_insert(100);
-            _ = config
-                .opts
-                .unstable_opts
-                .inline_mir_forwarder_threshold
-                .get_or_insert(50);
+            // use rustc_session::config::InliningThreshold;
+            // _ = config.opts.unstable_opts.inline_mir_threshold.get_or_insert(100);
+            // _ = config.opts.unstable_opts.cross_crate_inline_threshold = InliningThreshold::Always;
+            // _ = config.opts.unstable_opts.inline_mir_hint_threshold.get_or_insert(100);
+            // _ = config
+            //     .opts
+            //     .unstable_opts
+            //     .inline_mir_forwarder_threshold
+            //     .get_or_insert(50);
         }
 
         // Disable flattening and inlining of format_args!(), so the HIR matches with the AST.

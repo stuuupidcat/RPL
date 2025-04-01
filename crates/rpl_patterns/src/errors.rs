@@ -39,6 +39,16 @@ pub struct UseAfterDrop<'tcx> {
 }
 
 #[derive(LintDiagnostic)]
+#[diag(rpl_patterns_use_after_move)]
+pub struct UseAfterMove<'tcx> {
+    #[note]
+    pub move_span: Span,
+    #[label(rpl_patterns_use_label)]
+    pub use_span: Span,
+    pub ty: Ty<'tcx>,
+}
+
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_offset_by_one)]
 pub struct OffsetByOne {
     #[label(rpl_patterns_read_label)]

@@ -12,6 +12,10 @@ rpl_patterns_use_after_drop = use a pointer from `{$ty}` after dropped
     .use_label = used here
     .note = the `{$ty}` value is dropped here
 
+rpl_patterns_use_after_move = use a pointer from `{$ty}` after it's moved
+    .use_label = used here
+    .note = the `{$ty}` value may be moved here
+
 rpl_patterns_misordered_parameters = misordered parameters `len` and `cap` in `Vec::from_raw_parts`
     .label = `Vec::from_raw_parts` called here
     .help = the correct order is `Vec::from_raw_parts(ptr, len, cap)`

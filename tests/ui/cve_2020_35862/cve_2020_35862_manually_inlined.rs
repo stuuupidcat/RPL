@@ -1,5 +1,4 @@
-//@ ignore-on-host
-
+//@ignore-on-host
 use core::slice;
 use std::cell::Cell;
 use std::marker::PhantomData;
@@ -467,34 +466,18 @@ where
     O: BitOrder,
     T: BitStore,
 {
-    #[inline]
-    pub unsafe fn from_raw_parts(pointer: BitPtr<T>, capacity: usize) -> Self {
-        Self {
-            _order: PhantomData,
-            pointer,
-            capacity,
-        }
-    }
-
     // #[rpl::dump_mir(dump_cfg, dump_ddg)]
-    #[inline(always)]
-    pub fn into_vec(self) -> Vec<T> {
-        let slice = self.pointer.as_mut_slice();
-        let out = unsafe { Vec::from_raw_parts(slice.as_mut_ptr(), slice.len(), self.capacity) };
-        mem::forget(self);
-        out
-    }
-
-    #[rpl::dump_mir(dump_cfg, dump_ddg)]
     pub fn into_boxed_bitslice(self) -> BitBox<O, T> {
         let pointer = self.pointer;
         //  Convert the Vec allocation into a Box<[T]> allocation
-        mem::forget(self.into_boxed_slice());
+        let slice = self.pointer.as_mut_slice();
+        let out = unsafe { Vec::from_raw_parts(slice.as_mut_ptr(), slice.len(), self.capacity) };
+        mem::forget(self);
+        let boxed_slice = out.into_boxed_slice();
+        //~^NOTE:  the `std::vec::Vec<T>` value may be moved here
+        mem::forget(boxed_slice);
         unsafe { BitBox::from_raw(pointer.as_mut_ptr()) }
-    }
-
-    #[inline]
-    pub fn into_boxed_slice(self) -> Box<[T]> {
-        self.into_vec().into_boxed_slice()
+        //~^ERROR: use a pointer from `std::vec::Vec<T>` after it's moved
+        //~|NOTE:  `#[deny(rpl::use_after_move)]` on by default
     }
 }

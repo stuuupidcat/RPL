@@ -668,6 +668,31 @@ declare_tool_lint! {
 }
 
 declare_tool_lint! {
+    /// The `rpl::use_after_move` lint detects using a value after it has been moved to another location.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// let mut v = vec![1, 2, 3];
+    /// v.reserve(10);
+    /// let p = v.as_mut_ptr();
+    /// let b = v.into_boxed_slice();
+    /// unsafe {
+    ///     *p = 4; // undefined behavior
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// Using a value after it has been moved to another location is undefined behavior.
+    pub rpl::USE_AFTER_MOVE,
+    Deny,
+    "detects using a value after it has been moved to another location"
+}
+
+declare_tool_lint! {
     /// The `rpl::private_and_inline` lint detects private functions that are marked with `#[inline]`.
     ///
     /// ### Example

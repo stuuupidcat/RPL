@@ -52,6 +52,7 @@ num-rational = "0.3.0"
 num-traits = "0.2.8"
 memmap = "0.5.0"
 pin-project = "1.0"
+radium = "0.3"
 tokio = "1.43"
 tokio-util = { version = "0.2", features = ["codec"] }
 bytes = "1.10"
@@ -106,6 +107,7 @@ num-traits.workspace = true
 thiserror.workspace = true
 memmap.workspace = true
 pin-project.workspace = true
+radium.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 bytes.workspace = true
