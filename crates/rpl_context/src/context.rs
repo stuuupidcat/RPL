@@ -1,8 +1,8 @@
 use std::num::NonZero;
 use std::ops::Deref;
 
-use rpl_meta_pest::idx::RPLIdx;
-use rpl_meta_pest::meta::collect_blocks;
+use rpl_meta::idx::RPLIdx;
+use rpl_meta::meta::collect_blocks;
 use rpl_parser::pairs;
 use rustc_arena::DroplessArena;
 use rustc_data_structures::fx::FxHashMap;
@@ -71,8 +71,7 @@ impl<'pcx> Deref for PatCtxt<'pcx> {
 
 pub struct PatternCtxt<'pcx> {
     arena: &'pcx WorkerLocal<crate::Arena<'pcx>>,
-    patterns: Lock<FxHashMap<Symbol, &'pcx pat::Pattern<'pcx>>>,
-    rpl_patterns: Lock<FxHashMap<RPLIdx, &'pcx pat::Pattern<'pcx>>>,
+    patterns: Lock<FxHashMap<RPLIdx, &'pcx pat::Pattern<'pcx>>>,
     pub primitive_types: PrimitiveTypes<'pcx>,
 }
 
@@ -82,7 +81,6 @@ impl PatternCtxt<'_> {
         let pcx = &PatternCtxt {
             arena,
             patterns: Default::default(),
-            rpl_patterns: Default::default(),
             primitive_types: PrimitiveTypes::new(&arena.dropless),
         };
         f(PatCtxt { pcx })
@@ -176,13 +174,13 @@ impl<'pcx> PatCtxt<'pcx> {
     pub fn mk_mir_pattern(self, pattern: pat::MirPattern<'pcx>) -> &'pcx pat::MirPattern<'pcx> {
         self.arena.alloc(pattern)
     }
-    pub fn add_parsed_patterns<'mcx: 'pcx>(self, mctx: &'mcx rpl_meta_pest::context::MetaContext<'mcx>) {
+    pub fn add_parsed_patterns<'mcx: 'pcx>(self, mctx: &'mcx rpl_meta::context::MetaContext<'mcx>) {
         for (id, syntax_tree) in mctx.syntax_trees.iter() {
             self.add_parsed_pattern(*id, syntax_tree, mctx);
         }
     }
     pub fn for_each_rpl_pattern(self, mut f: impl FnMut(RPLIdx, &'pcx pat::Pattern<'pcx>)) {
-        for (&id, pattern) in self.rpl_patterns.lock().iter() {
+        for (&id, pattern) in self.patterns.lock().iter() {
             f(id, *pattern);
         }
     }
@@ -190,10 +188,10 @@ impl<'pcx> PatCtxt<'pcx> {
         self,
         id: RPLIdx,
         main: &pairs::main<'pcx>,
-        mctx: &'mcx rpl_meta_pest::context::MetaContext<'mcx>,
+        mctx: &'mcx rpl_meta::context::MetaContext<'mcx>,
     ) {
         // FIXME
-        let (utils, patts, diags) = collect_blocks(main);
+        let (_utils, patts, _diags) = collect_blocks(main);
 
         let patt_items = patts.iter().flat_map(|patt| patt.get_matched().3.iter_matched());
         let patt_symbol_tables = &mctx.symbol_tables.get(&id).unwrap().patt_symbol_tables;
@@ -203,7 +201,7 @@ impl<'pcx> PatCtxt<'pcx> {
             .zip(patt_symbol_tables.iter())
             .for_each(|(item, symbol_table)| {
                 let pattern = self.arena.alloc(pat::Pattern::from_parsed(self, item, symbol_table.1));
-                self.rpl_patterns.lock().insert(id, pattern);
+                self.patterns.lock().insert(id, pattern);
             });
     }
 }

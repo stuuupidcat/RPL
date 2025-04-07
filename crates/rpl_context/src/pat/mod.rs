@@ -1,6 +1,6 @@
-use rpl_meta_pest::collect_elems_separated_by_comma;
-use rpl_meta_pest::symbol_table::NonLocalMetaSymTab;
-use rpl_meta_pest::utils::Ident;
+use rpl_meta::collect_elems_separated_by_comma;
+use rpl_meta::symbol_table::NonLocalMetaSymTab;
+use rpl_meta::utils::Ident;
 use rpl_parser::generics::{Choice2, Choice3, Choice4};
 use rpl_parser::pairs;
 use rustc_data_structures::fx::FxHashMap;
@@ -124,7 +124,7 @@ impl<'pcx> Pattern<'pcx> {
     pub fn from_parsed(
         pcx: PatCtxt<'pcx>,
         pat_item: &pairs::pattBlockItem<'pcx>,
-        symbol_table: &'pcx rpl_meta_pest::symbol_table::SymbolTable<'_>,
+        symbol_table: &'pcx rpl_meta::symbol_table::SymbolTable<'_>,
     ) -> Self {
         let mut pattern = Self::new(pcx);
         let (_, meta_decls, _, _, item_or_patt_op, _) = pat_item.get_matched();
@@ -140,7 +140,7 @@ impl<'pcx> Pattern<'pcx> {
     fn add_item_or_patt_op(
         &mut self,
         item_or_patt_op: &pairs::RustItemOrPatternOperation<'pcx>,
-        symbol_table: &'pcx rpl_meta_pest::symbol_table::SymbolTable<'_>,
+        symbol_table: &'pcx rpl_meta::symbol_table::SymbolTable<'_>,
     ) {
         match item_or_patt_op.deref() {
             Choice3::_2(_patt_op) => {
@@ -166,7 +166,7 @@ impl<'pcx> Pattern<'pcx> {
         &mut self,
         item: &pairs::RustItem<'pcx>,
         meta: Arc<NonLocalMetaVars<'pcx>>,
-        symbol_table: &'pcx rpl_meta_pest::symbol_table::SymbolTable<'_>,
+        symbol_table: &'pcx rpl_meta::symbol_table::SymbolTable<'_>,
     ) {
         match &**item {
             Choice4::_0(rust_fn) => {
