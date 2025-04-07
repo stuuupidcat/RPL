@@ -13,8 +13,6 @@ extern crate rustc_session;
 extern crate rustc_span;
 
 mod callbacks;
-// pub mod interface;
-// mod passes;
 
 pub use callbacks::{DefaultCallbacks, RplCallbacks, RustcCallbacks, RPL_ARGS_ENV};
 
