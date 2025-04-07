@@ -195,14 +195,14 @@ impl<'pcx> Pattern<'pcx> {
 }
 
 // struct-related methods
-impl<'pcx> Pattern<'pcx> {
+impl Pattern<'_> {
     fn add_struct(&mut self, _rust_struct: &pairs::Struct<'_>) {
         todo!()
     }
 }
 
 // enum-related methods
-impl<'pcx> Pattern<'pcx> {
+impl Pattern<'_> {
     fn add_enum(&mut self, _rust_enum: &pairs::Enum<'_>) {
         todo!()
     }

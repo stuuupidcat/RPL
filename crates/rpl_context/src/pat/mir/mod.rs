@@ -3,7 +3,7 @@ use std::fmt::{self, Debug};
 use std::ops::Index;
 
 use either::Either;
-use rpl_parser::generics::{Choice12, Choice5, Choice6};
+use rpl_parser::generics::{Choice5, Choice6, Choice12};
 use rustc_abi::FieldIdx;
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_hir::Target;
@@ -149,7 +149,7 @@ pub enum PlaceElem<'pcx> {
     Subtype(Ty<'pcx>),
 }
 
-impl<'pcx> PlaceElem<'pcx> {
+impl PlaceElem<'_> {
     pub fn from_field(field: &pairs::MirPlaceField) -> Self {
         let (_, field) = field.get_matched();
         match field {
@@ -272,7 +272,7 @@ impl<'pcx> Place<'pcx, PlaceBase> {
             .collect::<Vec<_>>();
         Self {
             base: PlaceBase::Local(local),
-            projection: &pcx.mk_slice(&place_elems),
+            projection: pcx.mk_slice(&place_elems),
         }
     }
 }
@@ -636,13 +636,13 @@ impl<'pcx> Rvalue<'pcx> {
                 } else {
                     RegionKind::ReAny
                 };
-                let mutability = borrow_kind_from_pair_mutability(&mutability);
+                let mutability = borrow_kind_from_pair_mutability(mutability);
                 let place = Place::from(place, pcx, fn_sym_tab);
                 Self::Ref(region_kind, mutability, place)
             },
             Choice12::_5(raw_ptr) => {
                 let (_, _, ptr_mutability, place) = raw_ptr.get_matched();
-                let mutability = mutability_from_pair_ptr_mutability(&ptr_mutability);
+                let mutability = mutability_from_pair_ptr_mutability(ptr_mutability);
                 let place = Place::from(place, pcx, fn_sym_tab);
                 Self::RawPtr(mutability, place)
             },
@@ -749,7 +749,7 @@ impl<'pcx> Call<'pcx> {
     pub fn from(call: &pairs::MirCall<'pcx>, pcx: PatCtxt<'pcx>, sym_tab: &FnSymbolTable<'pcx>) -> Self {
         let (fn_op, _, args, _) = call.get_matched();
         let func = Operand::from_fn_op(fn_op, pcx, sym_tab);
-        let args = collect_operands(&args, pcx, sym_tab);
+        let args = collect_operands(args, pcx, sym_tab);
         Self(func, args)
     }
 }
@@ -849,12 +849,12 @@ impl<'pcx> AggKind<'pcx> {
         match agg.deref() {
             Choice6::_0(array) => {
                 let (_, operands, _) = array.get_matched();
-                let operands = collect_operands(&operands, pcx, fn_sym_tab);
+                let operands = collect_operands(operands, pcx, fn_sym_tab);
                 (Self::Array, operands.into_boxed_slice())
             },
             Choice6::_1(tuple) => {
                 let (_, operands, _) = tuple.get_matched();
-                let operands = collect_operands(&operands, pcx, fn_sym_tab);
+                let operands = collect_operands(operands, pcx, fn_sym_tab);
                 (Self::Tuple, operands.into_boxed_slice())
             },
             Choice6::_2(adt_struct) => {
@@ -880,7 +880,7 @@ impl<'pcx> AggKind<'pcx> {
             },
             Choice6::_3(tuple) => {
                 let (_, _, _, _, _, _, operands, _) = tuple.get_matched();
-                let operands = collect_operands(&operands, pcx, fn_sym_tab);
+                let operands = collect_operands(operands, pcx, fn_sym_tab);
                 (Self::Tuple, operands.into_boxed_slice())
             },
             Choice6::_4(unit) => {
@@ -892,7 +892,7 @@ impl<'pcx> AggKind<'pcx> {
                 let (ty_ptr, _, _, op1, _, op2, _) = raw_ptr.get_matched();
                 let (_, ptr_mutability, ty) = ty_ptr.get_matched();
                 let ty = Ty::from(ty, pcx, fn_sym_tab.meta_vars.clone());
-                let mutability = mutability_from_pair_ptr_mutability(&ptr_mutability);
+                let mutability = mutability_from_pair_ptr_mutability(ptr_mutability);
                 let operands = Box::new([Operand::from(op1, pcx, fn_sym_tab), Operand::from(op2, pcx, fn_sym_tab)]);
                 (Self::RawPtr(ty, mutability), operands)
             },
@@ -1037,12 +1037,11 @@ impl<'pcx> MirPatternBuilder<'pcx> {
     }
 
     fn mk_raw_decl(&mut self, kind: RawDecleration<'pcx>) {
-        match kind {
-            RawDecleration::LocalInit(local, Some(rvalue_or_call)) => match rvalue_or_call {
+        if let RawDecleration::LocalInit(local, Some(rvalue_or_call)) = kind {
+            match rvalue_or_call {
                 RvalueOrCall::Rvalue(rvalue) => _ = self.mk_assign(StatementKind::Assign(local.into(), rvalue)),
                 RvalueOrCall::Call(call) => _ = self.mk_fn_call(call.0, call.1.into_boxed_slice(), Some(local.into())),
-            },
-            _ => {},
+            }
         }
     }
 
@@ -1126,7 +1125,7 @@ impl<'pcx> MirPatternBuilder<'pcx> {
         next: BasicBlock,
     ) {
         let target = self.pattern.basic_blocks.push(BasicBlockData::default());
-        targets.targets.insert(value.into(), target);
+        targets.targets.insert(value, target);
         self.current = target;
         for stmt in stmts {
             self.mk_raw_stmt(stmt);

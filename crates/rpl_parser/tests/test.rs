@@ -1,5 +1,5 @@
 #[cfg(test)]
-use rpl_parser::parser::{pairs, Grammar};
+use rpl_parser::parser::{Grammar, pairs};
 
 macro_rules! full_test {
     ($T:ident, $input:expr $(,)?) => {{

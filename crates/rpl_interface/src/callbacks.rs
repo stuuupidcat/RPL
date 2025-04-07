@@ -73,7 +73,7 @@ impl RplCallbacks {
     }
 }
 
-impl<'mcx> rustc_driver::Callbacks for RplCallbacks {
+impl rustc_driver::Callbacks for RplCallbacks {
     // JUSTIFICATION: necessary in RPL driver to set `mir_opt_level`
     #[allow(rustc::bad_opt_access)]
     fn config(&mut self, config: &mut interface::Config) {
@@ -134,8 +134,8 @@ impl<'mcx> rustc_driver::Callbacks for RplCallbacks {
         static MCTX: OnceLock<rpl_meta::context::MetaContext<'_>> = OnceLock::new();
         let mctx_arena = MCTX_ARENA.get_or_init(rpl_meta::arena::Arena::default);
         let patterns_and_paths = mctx_arena.alloc(collect_file_from_string_args(&self.pattern_paths));
-        let mctx = MCTX.get_or_init(|| rpl_meta::parse_and_collect(&mctx_arena, patterns_and_paths));
-        PatternCtxt::entered(|pcx| rpl_driver::check_crate(tcx, pcx, &mctx));
+        let mctx = MCTX.get_or_init(|| rpl_meta::parse_and_collect(mctx_arena, patterns_and_paths));
+        PatternCtxt::entered(|pcx| rpl_driver::check_crate(tcx, pcx, mctx));
         rustc_driver::Compilation::Continue
     }
 }

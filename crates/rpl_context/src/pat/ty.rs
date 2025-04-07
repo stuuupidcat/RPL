@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use rpl_meta::collect_elems_separated_by_comma;
 use rpl_meta::symbol_table::NonLocalMetaSymTab;
-use rpl_parser::generics::{Choice10, Choice12, Choice14, Choice2, Choice3, Choice4};
+use rpl_parser::generics::{Choice2, Choice3, Choice4, Choice10, Choice12, Choice14};
 use rpl_parser::pairs;
 use rustc_data_structures::packed::Pu128;
 use rustc_hir::def_id::DefId;
@@ -12,8 +12,8 @@ use rustc_middle::mir;
 use rustc_middle::ty::{self, TyCtxt};
 use rustc_span::Symbol;
 
-use crate::cvt_prim_ty::CvtPrimTy;
 use crate::PatCtxt;
+use crate::cvt_prim_ty::CvtPrimTy;
 
 rustc_index::newtype_index! {
     #[debug_format = "?T{}"]
@@ -115,9 +115,9 @@ impl<'pcx> Ty<'pcx> {
                 let (ty, idx) = meta_var_sym_tab
                     .get_type_and_idx_from_symbol(Symbol::intern(ty_meta_var.span.as_str()))
                     .unwrap(); // unwrap should be safe here because of the meta pass.
-                               // FIXME: Information loss, the pred is not stored.
-                               // Solution:
-                               // Store the pred in the meta_pass.
+                // FIXME: Information loss, the pred is not stored.
+                // Solution:
+                // Store the pred in the meta_pass.
                 let ty_meta_var = match ty {
                     rpl_meta::symbol_table::MetaVariableType::Type => TyVar {
                         idx: idx.into(),
@@ -205,11 +205,7 @@ impl<'pcx> TyKind<'pcx> {
     //FIXME: this may breaks uniqueness of `Ty`
     pub fn from_ty_lossy(pcx: PatCtxt<'pcx>, ty: ty::Ty<'_>, args: GenericArgsRef<'pcx>) -> Option<Self> {
         fn require_empty(args: GenericArgsRef<'_>) -> Option<GenericArgsRef<'_>> {
-            if args.is_empty() {
-                Some(args)
-            } else {
-                None
-            }
+            if args.is_empty() { Some(args) } else { None }
         }
         Some(match ty.kind() {
             ty::TyKind::Bool => Self::Bool,
@@ -483,6 +479,7 @@ pub struct IntValue {
 }
 
 impl IntValue {
+    #[allow(clippy::from_str_radix_10)]
     pub fn from_integer(int: &pairs::Integer<'_>) -> Self {
         let (lit, ty) = int.get_matched();
         let value = match lit {
@@ -523,8 +520,8 @@ impl IntValue {
 
 impl IntValue {
     pub fn normalize(self, pointer_bytes: u64) -> Pu128 {
-        use ty::IntTy::{Isize, I128, I16, I32, I64, I8};
         use IntTy::{Bool, Int, NegInt, Uint};
+        use ty::IntTy::{I8, I16, I32, I64, I128, Isize};
 
         let IntValue { ty, value } = self;
         let mask: u128 = match ty {
@@ -592,7 +589,7 @@ pub enum Const<'pcx> {
     Value(IntValue),
 }
 
-impl<'pcx> Const<'pcx> {
+impl Const<'_> {
     pub fn from(konst: &pairs::Konst<'_>) -> Self {
         match konst.deref() {
             Choice2::_0(lit) => match lit.deref() {

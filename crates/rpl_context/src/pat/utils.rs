@@ -1,6 +1,6 @@
 use crate::pat::mir::Operand;
 use rpl_meta::collect_elems_separated_by_comma;
-use rpl_parser::generics::{Choice12, Choice2, Choice3};
+use rpl_parser::generics::{Choice2, Choice3, Choice12};
 use rpl_parser::pairs::{self};
 use rustc_middle::mir;
 use std::ops::Deref;

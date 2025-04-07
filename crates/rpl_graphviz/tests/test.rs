@@ -1,5 +1,4 @@
 #![allow(unused)]
-
 #![feature(rustc_private)]
 #![feature(macro_metavar_expr_concat)]
 
@@ -83,7 +82,7 @@ macro_rules! test_case {
 // test_case! {
 //     fn cve_2020_35892_3() {
 //         meta!($T:ty, $SlabT:ty);
-// 
+//
 //         let $self: &mut $SlabT;
 //         let $len: usize;
 //         let $x1: usize;
@@ -102,7 +101,7 @@ macro_rules! test_case {
 //         let $offset: isize;
 //         let $elem_ptr: *mut $T;
 //         let $cmp: bool;
-// 
+//
 //         $len = copy (*$self).len;
 //         $range = core::ops::range::Range { start: const 0_usize, end: move $len };
 //         $iter = move $range;
@@ -136,7 +135,7 @@ macro_rules! test_case {
 //         }
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2020_35892_3_offset() {
 //         meta!($T:ty, $SlabT:ty);
@@ -149,11 +148,11 @@ macro_rules! test_case {
 //         let $elem: $T = copy (*$ptr);
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2018_21000_const() {
 //         meta!($T:ty);
-// 
+//
 //         let $from_slice: &[$T] = _;
 //         let $from_raw: *const [$T] = &raw const *$from_slice;
 //         let $from_len: usize = PtrMetadata(copy $from_slice);
@@ -165,11 +164,11 @@ macro_rules! test_case {
 //         let $to_slice: &[u8] = &*$to_raw;
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2018_21000() {
 //         meta!($T:ty);
-// 
+//
 //         let $from_slice_mut: &mut [$T] = _;
 //         let $from_raw_mut: *mut [$T] = &raw mut *$from_slice_mut;
 //         let $from_len_mut: usize = PtrMetadata(copy $from_slice_mut);
@@ -180,11 +179,11 @@ macro_rules! test_case {
 //         let $to_slice_mut: &mut [u8] = &mut *$to_raw_mut;
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2020_35877() {
 //         meta!($T:ty);
-// 
+//
 //         let $offset: usize = _; // _2
 //         let $offset_1: usize = copy $offset; // _3
 //         let $ptr_1: *const $T = _; // _4
@@ -212,16 +211,16 @@ macro_rules! test_case {
 //         }
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2021_27376() {
 //         meta!();
-// 
+//
 //         let $src: *const std::net::SocketAddrV4 = _;
 //         let $dst: *const libc::sockaddr = move $src as *const libc::sockaddr (PtrToPtr);
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2021_29941_2() {
 //         meta!($T:ty);
@@ -235,18 +234,18 @@ macro_rules! test_case {
 //         type EnumerateRangeT = std::iter::Enumerate<RangeT>;
 //         type RefMutEnumerateRangeT = &mut std::iter::Enumerate<RangeT>;
 //         type OptionUsizeT = std::option::Option<(usize, $T)>;
-// 
+//
 //         let $iter: RangeT = _;
 //         // let len: usize = <RangeT as std::iter::ExactSizeIterator>::len(move iter);
 //         let $len: usize = RangeT::len(move $iter);
 //         let mut $vec: VecT = std::vec::Vec::with_capacity(copy $len);
 //         let mut $ref_to_vec: RefMutVecT = &mut $vec;
 //         let mut $ptr_to_vec: PtrMutT = Vec::as_mut_ptr(move $ref_to_vec);
-//         let mut $slice: RefMutSliceT = std::slice::from_raw_parts_mut(copy $ptr_to_vec, copy $len);
-//         // let mut enumerate: EnumerateRangeT = <RangeT as std::iter::Iterator>::enumerate(move iter);
-//         let mut $enumerate: EnumerateRangeT = RangeT::enumerate(move $iter);
-//         let mut $enumerate: RefMutEnumerateRangeT = &mut $enumerate;
-//         let $next: OptionUsizeT;
+//         let mut $slice: RefMutSliceT = std::slice::from_raw_parts_mut(copy $ptr_to_vec, copy
+// $len);         // let mut enumerate: EnumerateRangeT = <RangeT as
+// std::iter::Iterator>::enumerate(move iter);         let mut $enumerate: EnumerateRangeT =
+// RangeT::enumerate(move $iter);         let mut $enumerate: RefMutEnumerateRangeT = &mut
+// $enumerate;         let $next: OptionUsizeT;
 //         let $cmp: isize;
 //         let $first: usize;
 //         let $second_t: $T;
@@ -274,29 +273,29 @@ macro_rules! test_case {
 //         $ref_to_vec = &mut $vec;
 //         $_tmp = Vec::set_len(move $ref_to_vec, copy $len);
 //     }
-// 
+//
 // }
-// 
+//
 // test_case! {
 //     fn cve_2021_29941() {
 //         meta!(
 //             $T:ty,
 //             $I:ty,
 //         );
-// 
+//
 //         let $iter: $I = _;
 //         let $len: usize = std::iter::ExactSizeIterator::len(move $iter);
 //         let $vec: &mut alloc::vec::Vec<$T> = _;
 //         _ = alloc::vec::Vec::set_len(move $vec, copy $len);
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2021_29941_uninitialized_slice() {
 //         meta!(
 //             $T:ty,
 //         );
-// 
+//
 //         let $len: usize = _;
 //         let $vec: alloc::vec::Vec<$T> = alloc::vec::Vec::with_capacity(_);
 //         let $vec_ref: &alloc::vec::Vec<$T> = &$vec;
@@ -304,13 +303,13 @@ macro_rules! test_case {
 //         let $slice: &[$T] = std::slice::from_raw_parts::<'_, $T>(move $ptr, copy $len);
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn unsafe_cell_alias() {
 //         meta!($T:ty);
-// 
+//
 //         type unsafe_cell_t = core::cell::UnsafeCell<$T>;
-// 
+//
 //         let $a: &unsafe_cell_t = _;
 //         let $b: &unsafe_cell_t = _;
 //         let $raw_a: *const unsafe_cell_t = &raw const *$a;
@@ -323,11 +322,11 @@ macro_rules! test_case {
 //         (*$mut_b) = _;
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn control_flow() {
 //         meta!();
-// 
+//
 //         let $a: &mut i32 = _;
 //         let $f: bool = _;
 //         switchInt(copy $f) {
@@ -338,7 +337,7 @@ macro_rules! test_case {
 //         }
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn pattern_drop_unit_value()  {
 //         meta!($T:ty);

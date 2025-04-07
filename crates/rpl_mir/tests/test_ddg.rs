@@ -1,5 +1,4 @@
 #![allow(unused)]
-
 #![feature(macro_metavar_expr_concat)]
 #![feature(rustc_private)]
 
@@ -53,21 +52,21 @@ fn format_stmt_local((stmt, local): (usize, Local)) -> impl std::fmt::Debug {
 //                 let string = &mut String::new();
 //                 for (bb, block) in graph.blocks() {
 //                     write!(string, "{bb:?}: {{").unwrap();
-//                     write!(string, "IN -> {:?},", block.rdep_start().map(format_stmt_local).collect::<Vec<_>>()).unwrap();
-//                     for stmt in 0..block.num_statements() {
-//                         write!(string, "{stmt} <- {:?},", block.deps(stmt).map(format_stmt_local).collect::<Vec<_>>()).unwrap();
-//                         if stmt < pattern[bb].statements.len() {
-//                             write!(string, " | {:?};", pattern[bb].statements[stmt]).unwrap();
-//                         } else if let Some(terminator) = &pattern[bb].terminator {
-//                             write!(string, " | {:?};", terminator).unwrap();
-//                         }
+//                     write!(string, "IN -> {:?},",
+// block.rdep_start().map(format_stmt_local).collect::<Vec<_>>()).unwrap();                     for
+// stmt in 0..block.num_statements() {                         write!(string, "{stmt} <- {:?},",
+// block.deps(stmt).map(format_stmt_local).collect::<Vec<_>>()).unwrap();                         if
+// stmt < pattern[bb].statements.len() {                             write!(string, " | {:?};",
+// pattern[bb].statements[stmt]).unwrap();                         } else if let Some(terminator) =
+// &pattern[bb].terminator {                             write!(string, " | {:?};",
+// terminator).unwrap();                         }
 //                     }
-//                     write!(string, "OUT <- {:?};", block.dep_end().map(format_stmt_local).collect::<Vec<_>>()).unwrap();
-//                     if block.full_rdep_start_end() {
-//                         write!(string, "OUT <- IN / [*]").unwrap();
+//                     write!(string, "OUT <- {:?};",
+// block.dep_end().map(format_stmt_local).collect::<Vec<_>>()).unwrap();                     if
+// block.full_rdep_start_end() {                         write!(string, "OUT <- IN / [*]").unwrap();
 //                     } else {
-//                         write!(string, "OUT <- IN / {:?}", block.rdep_start_end().collect::<Vec<_>>()).unwrap();
-//                     }
+//                         write!(string, "OUT <- IN / {:?}",
+// block.rdep_start_end().collect::<Vec<_>>()).unwrap();                     }
 //                     write!(string, "}}").unwrap();
 //                 }
 //                 assert_eq!(
@@ -88,31 +87,31 @@ fn format_stmt_local((stmt, local): (usize, Local)) -> impl std::fmt::Debug {
 //         }
 //     };
 // }
-// 
+//
 // test_case! {
 //     fn cve_2020_25016() {
 //         meta!($T:ty);
-// 
+//
 //         let $from_slice: &[$T] = _;
 //         let $from_slice_mut: &mut [$T] = _;
-// 
+//
 //         let $from_raw: *const [$T] = &raw const *$from_slice;
 //         let $from_raw_mut: *mut [$T] = &raw mut *$from_slice_mut;
-// 
+//
 //         let $to_ptr: *const u8 = copy $from_raw as *const u8 (PtrToPtr);
 //         let $to_ptr_mut: *mut u8 = copy $from_raw_mut as *mut u8 (PtrToPtr);
-// 
+//
 //         let $from_len: usize = Len(*$from_slice);
 //         let $from_mut_len: usize = Len(*$from_slice_mut);
-// 
+//
 //         let $ty_size: usize = SizeOf($T);
-// 
+//
 //         let $to_len: usize = Mul(move $from_len, move $ty_size);
 //         let $to_mut_len: usize = Mul(move $from_mut_len, move $ty_size);
-// 
+//
 //         let $to_raw: *const [u8] = *const [u8] from (copy $to_ptr, copy $to_len);
 //         let $to_raw_mut: *mut [u8] = *mut [u8] from (copy $to_ptr_mut, copy $to_mut_len);
-// 
+//
 //         let $to_slice: &[u8] = &*$to_raw;
 //         let $to_slice_mut: &mut [u8] = &mut *$to_raw_mut;
 //     } => {
@@ -142,11 +141,11 @@ fn format_stmt_local((stmt, local): (usize, Local)) -> impl std::fmt::Debug {
 //         }
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2020_35892_3_loop() {
 //         meta!($T:ty, $SlabT:ty);
-// 
+//
 //         let $self: &mut $SlabT;
 //         let $len: usize; // _2
 //         let mut $x0: usize; // _17
@@ -159,7 +158,7 @@ fn format_stmt_local((stmt, local): (usize, Local)) -> impl std::fmt::Debug {
 //         let $elem_ptr: *mut $T; // _5
 //         let $x_cmp: usize; // _16
 //         let $cmp: bool; // _13
-// 
+//
 //         $len = copy (*$self).len;
 //         $x0 = const 0_usize;
 //         loop {
@@ -203,8 +202,8 @@ fn format_stmt_local((stmt, local): (usize, Local)) -> impl std::fmt::Debug {
 //         ?bb5: {
 //             IN -> [0/_?2],
 //             0 <- [],      | _?3 = copy _?2;
-//             1 <- [0/_?3], | _?4 = core::iter::Step::forward_unchecked(copy _?3, const 1_usize) -> ?bb6;
-//             OUT <- [0/_?3, 1/_?4];
+//             1 <- [0/_?3], | _?4 = core::iter::Step::forward_unchecked(copy _?3, const 1_usize) ->
+// ?bb6;             OUT <- [0/_?3, 1/_?4];
 //             OUT <- IN / [_?0, _?1, _?2, _?5, _?6, _?7, _?8, _?9, _?10, _?11]
 //         }
 //         ?bb6: {
@@ -221,7 +220,7 @@ fn format_stmt_local((stmt, local): (usize, Local)) -> impl std::fmt::Debug {
 //         }
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2020_35892_3_offset_by_one() {
 //         meta!($T:ty, $SlabT:ty);

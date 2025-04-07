@@ -1,9 +1,11 @@
 use crate::context::MetaContext;
-use crate::symbol_table::{ident_is_primitive, EnumInner, FnInner, ImplInner, NonLocalMetaSymTab, SymbolTable, Variant};
+use crate::symbol_table::{
+    EnumInner, FnInner, ImplInner, NonLocalMetaSymTab, SymbolTable, Variant, ident_is_primitive,
+};
 use crate::utils::{Ident, Path};
-use crate::{collect_elems_separated_by_comma, RPLMetaError};
-use parser::generics::{Choice12, Choice14, Choice2, Choice3, Choice4, Choice5, Choice6};
-use parser::{pairs, SpanWrapper};
+use crate::{RPLMetaError, collect_elems_separated_by_comma};
+use parser::generics::{Choice2, Choice3, Choice4, Choice5, Choice6, Choice12, Choice14};
+use parser::{SpanWrapper, pairs};
 use rustc_span::Symbol;
 use std::ops::Deref;
 use std::sync::Arc;

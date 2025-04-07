@@ -200,11 +200,9 @@ impl<'pcx> Fn<'pcx> {
         } else {
             Params::default()
         };
-        let ret = if let Some(ret) = ret {
-            Some(Ty::from_fn_ret(ret, pcx, fn_sym_tab.meta_vars.clone()))
-        } else {
-            None
-        };
+        let ret = ret
+            .as_ref()
+            .map(|ret| Ty::from_fn_ret(ret, pcx, fn_sym_tab.meta_vars.clone()));
         (safety, visibility, fn_name, params, ret)
     }
 }
@@ -247,14 +245,14 @@ impl<'pcx> Param<'pcx> {
             },
             Choice4::_1(normal) => {
                 let (mutability, ident, _, ty) = normal.get_matched();
-                let mutability = mutability_from_pair_mutability(&mutability);
+                let mutability = mutability_from_pair_mutability(mutability);
                 let ident = Symbol::intern(ident.span.as_str());
                 let ty = Ty::from(ty, pcx, fn_sym_tab.meta_vars.clone());
                 (Some(Self { mutability, ident, ty }), false)
             },
             Choice4::_2(place_holder_with_type) => {
                 let (mutability, placeholder, _, ty) = place_holder_with_type.get_matched();
-                let mutability = mutability_from_pair_mutability(&mutability);
+                let mutability = mutability_from_pair_mutability(mutability);
                 let ty = Ty::from(ty, pcx, fn_sym_tab.meta_vars.clone());
                 (
                     Some(Self {

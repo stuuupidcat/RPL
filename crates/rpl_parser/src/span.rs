@@ -1,6 +1,6 @@
 use colored::Colorize;
-use serde::ser::SerializeTuple;
 use serde::Serialize;
+use serde::ser::SerializeTuple;
 use std::fmt::{Debug, Display};
 use std::path::Path;
 
