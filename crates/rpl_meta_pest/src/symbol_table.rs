@@ -34,14 +34,15 @@ pub enum MetaVariableType {
     Place,
 }
 
+// the usize in the hashmap is the *-index of a non-local meta variable
 #[derive(Default, Clone)]
-pub struct NonLocalMetaTable {
-    ty_vars: FxHashSet<Symbol>,
-    const_vars: FxHashSet<Symbol>,
-    place_vars: FxHashSet<Symbol>,
+pub struct NonLocalMetaSymTab {
+    ty_vars: FxHashMap<Symbol, usize>,
+    const_vars: FxHashMap<Symbol, usize>,
+    place_vars: FxHashMap<Symbol, usize>,
 }
 
-impl NonLocalMetaTable {
+impl NonLocalMetaSymTab {
     pub fn add_non_local_meta_var<'i>(
         &mut self,
         mctx: &MetaContext<'i>,
@@ -51,8 +52,8 @@ impl NonLocalMetaTable {
     ) {
         match meta_var_ty.deref() {
             Choice3::_0(_) => {
-                let non_exist = self.ty_vars.insert(meta_var.name);
-                if !non_exist {
+                let existed = self.ty_vars.insert(meta_var.name, self.ty_vars.len());
+                if existed.is_some() {
                     let err = RPLMetaError::NonLocalMetaVariableAlreadyDeclared {
                         meta_var: meta_var.name,
                         span: SpanWrapper::new(meta_var.span, mctx.get_active_path()),
@@ -61,8 +62,8 @@ impl NonLocalMetaTable {
                 }
             },
             Choice3::_1(_) => {
-                let non_exist = self.const_vars.insert(meta_var.name);
-                if !non_exist {
+                let existed = self.const_vars.insert(meta_var.name, self.const_vars.len());
+                if existed.is_some() {
                     let err = RPLMetaError::NonLocalMetaVariableAlreadyDeclared {
                         meta_var: meta_var.name,
                         span: SpanWrapper::new(meta_var.span, mctx.get_active_path()),
@@ -71,8 +72,8 @@ impl NonLocalMetaTable {
                 }
             },
             Choice3::_2(_) => {
-                let non_exist = self.place_vars.insert(meta_var.name);
-                if !non_exist {
+                let existed = self.place_vars.insert(meta_var.name, self.place_vars.len());
+                if existed.is_some() {
                     let err = RPLMetaError::NonLocalMetaVariableAlreadyDeclared {
                         meta_var: meta_var.name,
                         span: SpanWrapper::new(meta_var.span, mctx.get_active_path()),
@@ -89,11 +90,11 @@ impl NonLocalMetaTable {
         meta_var: Ident<'i>,
         errors: &mut Vec<RPLMetaError<'i>>,
     ) -> Option<MetaVariableType> {
-        if self.ty_vars.contains(&meta_var.name) {
+        if self.ty_vars.contains_key(&meta_var.name) {
             Some(MetaVariableType::Type)
-        } else if self.const_vars.contains(&meta_var.name) {
+        } else if self.const_vars.contains_key(&meta_var.name) {
             Some(MetaVariableType::Const)
-        } else if self.place_vars.contains(&meta_var.name) {
+        } else if self.place_vars.contains_key(&meta_var.name) {
             Some(MetaVariableType::Place)
         } else {
             let err = RPLMetaError::NonLocalMetaVariableNotDeclared {
@@ -104,15 +105,27 @@ impl NonLocalMetaTable {
             None
         }
     }
+
+    pub fn get_type_and_idx_from_symbol(&self, symbol: Symbol) -> Option<(MetaVariableType, usize)> {
+        if let Some(idx) = self.ty_vars.get(&symbol) {
+            Some((MetaVariableType::Type, *idx))
+        } else if let Some(idx) = self.const_vars.get(&symbol) {
+            Some((MetaVariableType::Const, *idx))
+        } else if let Some(idx) = self.place_vars.get(&symbol) {
+            Some((MetaVariableType::Place, *idx))
+        } else {
+            None
+        }
+    }
 }
 
 pub struct WithMetaTable<T> {
-    pub meta_vars: Arc<NonLocalMetaTable>,
+    pub meta_vars: Arc<NonLocalMetaSymTab>,
     pub inner: T,
 }
 
-impl<T> From<(T, Arc<NonLocalMetaTable>)> for WithMetaTable<T> {
-    fn from(inner: (T, Arc<NonLocalMetaTable>)) -> Self {
+impl<T> From<(T, Arc<NonLocalMetaSymTab>)> for WithMetaTable<T> {
+    fn from(inner: (T, Arc<NonLocalMetaSymTab>)) -> Self {
         Self {
             meta_vars: inner.1,
             inner: inner.0,
@@ -123,7 +136,7 @@ impl<T> From<(T, Arc<NonLocalMetaTable>)> for WithMetaTable<T> {
 #[derive(Default)]
 pub struct SymbolTable<'i> {
     // meta variables in p[$T: ty]
-    pub meta_vars: Arc<NonLocalMetaTable>,
+    pub meta_vars: Arc<NonLocalMetaSymTab>,
     structs: FxHashMap<Symbol, Struct<'i>>,
     enums: FxHashMap<Symbol, Enum<'i>>,
     fns: FxHashMap<Symbol, Fn<'i>>,

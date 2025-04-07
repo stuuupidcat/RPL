@@ -15,7 +15,7 @@ pub mod visitor;
 
 use super::utils::{
     binop_from_pair, borrow_kind_from_pair_mutability, collect_operands, mutability_from_pair_ptr_mutability,
-    unop_from_pair,
+    nullop_from_pair, unop_from_pair,
 };
 pub use super::*;
 
@@ -393,19 +393,22 @@ pub enum RawDecleration<'pcx> {
 }
 
 impl<'pcx> RawDecleration<'pcx> {
-    pub fn from(decl: &pairs::MirDecl<'pcx>, pcx: PatCtxt<'pcx>, sym_tab: &FnSymbolTable<'pcx>) -> Self {
+    pub fn from(decl: &pairs::MirDecl<'pcx>, pcx: PatCtxt<'pcx>, fn_sym_tab: &FnSymbolTable<'pcx>) -> Self {
         match decl.deref() {
             Choice3::_0(type_alias) => {
                 let (_, name, _, ty, _) = type_alias.get_matched();
-                Self::TypeAlias(Symbol::intern(name.span.as_str()), Ty::from(ty, pcx))
+                Self::TypeAlias(
+                    Symbol::intern(name.span.as_str()),
+                    Ty::from(ty, pcx, fn_sym_tab.meta_vars.clone()),
+                )
             },
             Choice3::_1(use_path) => Self::UsePath(Path::from(use_path.get_matched().1, pcx)),
             Choice3::_2(local_init) => {
                 let (_, _, local, _, _, init, _) = local_init.get_matched();
-                let local = Local::from(sym_tab.inner.get_local_idx(Symbol::intern(local.span.as_str())));
+                let local = Local::from(fn_sym_tab.inner.get_local_idx(Symbol::intern(local.span.as_str())));
                 let rvalue_or_call = if let Some(init) = init {
                     let (_, init) = init.get_matched();
-                    let rvalue_or_call = RvalueOrCall::from(init, pcx, sym_tab);
+                    let rvalue_or_call = RvalueOrCall::from(init, pcx, fn_sym_tab);
                     Some(rvalue_or_call)
                 } else {
                     None
@@ -455,10 +458,10 @@ impl<'pcx> RawStatement<'pcx> {
     pub fn from_call_ignore_ret(
         call_ignore_ret: &pairs::MirCallIgnoreRet<'pcx>,
         pcx: PatCtxt<'pcx>,
-        sym_tab: &FnSymbolTable<'pcx>,
+        fn_sym_tab: &FnSymbolTable<'pcx>,
     ) -> Self {
         let (_label, _, _, call) = call_ignore_ret.get_matched();
-        let call = Call::from(call, pcx, sym_tab);
+        let call = Call::from(call, pcx, fn_sym_tab);
         Self::CallIgnoreRet(call)
     }
 
@@ -490,16 +493,16 @@ impl<'pcx> RawStatement<'pcx> {
     pub fn from_switch_int(
         switch_int: &pairs::MirSwitchInt<'pcx>,
         pcx: PatCtxt<'pcx>,
-        sym_tab: &FnSymbolTable<'pcx>,
+        fn_sym_tab: &FnSymbolTable<'pcx>,
     ) -> Self {
         let (_, _, op, _, _, targets, _) = switch_int.get_matched();
-        let operand = Operand::from(op, pcx, sym_tab);
+        let operand = Operand::from(op, pcx, fn_sym_tab);
         let mut target_value_and_stmts: Vec<(IntValue, Vec<Self>)> = Vec::new();
         let mut otherwise_stmts: Option<Vec<Self>> = None;
         targets.iter_matched().for_each(|target| {
             let (target_value, _, block) = target.get_matched();
             let target_value = IntValue::from_switch_int_value(target_value);
-            let statements = Self::from_switch_int_block(block, pcx, sym_tab);
+            let statements = Self::from_switch_int_block(block, pcx, fn_sym_tab);
             if let Some(target_value) = target_value {
                 target_value_and_stmts.push((target_value, statements));
             } else {
@@ -516,26 +519,26 @@ impl<'pcx> RawStatement<'pcx> {
     pub fn from_switch_int_block(
         block: &pairs::MirSwitchBody<'pcx>,
         pcx: PatCtxt<'pcx>,
-        sym_tab: &FnSymbolTable<'pcx>,
+        fn_sym_tab: &FnSymbolTable<'pcx>,
     ) -> Vec<Self> {
         let mut stmts = Vec::new();
         match block.deref() {
             Choice4::_0(mir_stmt_block) => {
-                return Self::from_mir_stmt_block(mir_stmt_block, pcx, sym_tab);
+                return Self::from_mir_stmt_block(mir_stmt_block, pcx, fn_sym_tab);
             },
             Choice4::_1(single_stmt_with_comma) => {
                 let (stmt, _) = single_stmt_with_comma.get_matched();
                 match stmt {
                     Choice4::_0(call_ignore_ret) => {
-                        stmts.push(Self::from_call_ignore_ret(call_ignore_ret, pcx, sym_tab));
+                        stmts.push(Self::from_call_ignore_ret(call_ignore_ret, pcx, fn_sym_tab));
                     },
-                    Choice4::_1(drop) => stmts.push(Self::from_drop(drop, pcx, sym_tab)),
+                    Choice4::_1(drop) => stmts.push(Self::from_drop(drop, pcx, fn_sym_tab)),
                     Choice4::_2(control) => stmts.push(Self::from_control(control)),
-                    Choice4::_3(assign) => stmts.push(Self::from_assign(assign, pcx, sym_tab)),
+                    Choice4::_3(assign) => stmts.push(Self::from_assign(assign, pcx, fn_sym_tab)),
                 };
             },
-            Choice4::_2(loop_) => stmts.push(Self::from_loop(loop_, pcx, sym_tab)),
-            Choice4::_3(switch_int) => stmts.push(Self::from_switch_int(switch_int, pcx, sym_tab)),
+            Choice4::_2(loop_) => stmts.push(Self::from_loop(loop_, pcx, fn_sym_tab)),
+            Choice4::_3(switch_int) => stmts.push(Self::from_switch_int(switch_int, pcx, fn_sym_tab)),
         }
         stmts
     }
@@ -543,13 +546,13 @@ impl<'pcx> RawStatement<'pcx> {
     pub fn from_mir_stmt_block(
         block: &pairs::MirStmtBlock<'pcx>,
         pcx: PatCtxt<'pcx>,
-        sym_tab: &FnSymbolTable<'pcx>,
+        fn_sym_tab: &FnSymbolTable<'pcx>,
     ) -> Vec<Self> {
         block
             .get_matched()
             .1
             .iter_matched()
-            .map(|stmt| Self::from(stmt, pcx, sym_tab))
+            .map(|stmt| Self::from(stmt, pcx, fn_sym_tab))
             .collect()
     }
 }
@@ -599,13 +602,13 @@ pub enum Rvalue<'pcx> {
 }
 
 impl<'pcx> Rvalue<'pcx> {
-    fn from_rvalue(rvalue: &pairs::MirRvalue<'pcx>, pcx: PatCtxt<'pcx>, sym_tab: &FnSymbolTable<'pcx>) -> Self {
+    fn from_rvalue(rvalue: &pairs::MirRvalue<'pcx>, pcx: PatCtxt<'pcx>, fn_sym_tab: &FnSymbolTable<'pcx>) -> Self {
         match rvalue.deref() {
             Choice12::_0(_any) => Rvalue::Any,
             Choice12::_1(cast) => {
                 let (operand, _, ty, _, cast_kind, _) = cast.get_matched();
-                let operand = Operand::from(operand, pcx, sym_tab);
-                let ty = Ty::from(ty, pcx);
+                let operand = Operand::from(operand, pcx, fn_sym_tab);
+                let ty = Ty::from(ty, pcx, fn_sym_tab.meta_vars.clone());
                 let cast_kind = match cast_kind.deref() {
                     Choice3::_0(_ptr_to_ptr) => mir::CastKind::PtrToPtr,
                     Choice3::_1(_int_to_int) => mir::CastKind::IntToInt,
@@ -615,14 +618,14 @@ impl<'pcx> Rvalue<'pcx> {
             },
             Choice12::_2(rvalue_use) => {
                 let operand = match rvalue_use.deref() {
-                    Choice2::_0(op) => Operand::from(op.get_matched().1, pcx, sym_tab),
-                    Choice2::_1(op) => Operand::from(op, pcx, sym_tab),
+                    Choice2::_0(op) => Operand::from(op.get_matched().1, pcx, fn_sym_tab),
+                    Choice2::_1(op) => Operand::from(op, pcx, fn_sym_tab),
                 };
                 Self::Use(operand)
             },
             Choice12::_3(repeat) => {
                 let (_, operand, _, count, _) = repeat.get_matched();
-                let operand = Operand::from(operand, pcx, sym_tab);
+                let operand = Operand::from(operand, pcx, fn_sym_tab);
                 let count = Const::from_integer(count);
                 Self::Repeat(operand, count)
             },
@@ -634,49 +637,46 @@ impl<'pcx> Rvalue<'pcx> {
                     RegionKind::ReAny
                 };
                 let mutability = borrow_kind_from_pair_mutability(&mutability);
-                let place = Place::from(place, pcx, sym_tab);
+                let place = Place::from(place, pcx, fn_sym_tab);
                 Self::Ref(region_kind, mutability, place)
             },
             Choice12::_5(raw_ptr) => {
                 let (_, _, ptr_mutability, place) = raw_ptr.get_matched();
                 let mutability = mutability_from_pair_ptr_mutability(&ptr_mutability);
-                let place = Place::from(place, pcx, sym_tab);
+                let place = Place::from(place, pcx, fn_sym_tab);
                 Self::RawPtr(mutability, place)
             },
             Choice12::_6(len) => {
                 let (_, _, place, _) = len.get_matched();
-                let place = Place::from(place, pcx, sym_tab);
+                let place = Place::from(place, pcx, fn_sym_tab);
                 Self::Len(place)
             },
             Choice12::_7(bin_op) => {
                 let (bin_op, _, lop, _, rop, _) = bin_op.get_matched();
                 let bin_op = binop_from_pair(bin_op);
-                let lop = Operand::from(lop, pcx, sym_tab);
-                let rop = Operand::from(rop, pcx, sym_tab);
+                let lop = Operand::from(lop, pcx, fn_sym_tab);
+                let rop = Operand::from(rop, pcx, fn_sym_tab);
                 Self::BinaryOp(bin_op, Box::new([lop, rop]))
             },
             Choice12::_8(nullary_op) => {
                 let (nullary_op, _, ty, _) = nullary_op.get_matched();
-                let nullary_op = match nullary_op.deref() {
-                    Choice2::_0(_size_of) => mir::NullOp::SizeOf,
-                    Choice2::_1(_align_of) => mir::NullOp::AlignOf,
-                };
-                let ty = Ty::from(ty, pcx);
+                let nullary_op = nullop_from_pair(nullary_op);
+                let ty = Ty::from(ty, pcx, fn_sym_tab.meta_vars.clone());
                 Self::NullaryOp(nullary_op, ty)
             },
             Choice12::_9(un_op) => {
                 let (un_op, _, operand, _) = un_op.get_matched();
                 let un_op = unop_from_pair(un_op);
-                let operand = Operand::from(operand, pcx, sym_tab);
+                let operand = Operand::from(operand, pcx, fn_sym_tab);
                 Self::UnaryOp(un_op, operand)
             },
             Choice12::_10(discriminant) => {
                 let (_, _, place, _) = discriminant.get_matched();
-                let place = Place::from(place, pcx, sym_tab);
+                let place = Place::from(place, pcx, fn_sym_tab);
                 Self::Discriminant(place)
             },
             Choice12::_11(agg) => {
-                let (agg_kind, operands) = AggKind::from(agg, pcx, sym_tab);
+                let (agg_kind, operands) = AggKind::from(agg, pcx, fn_sym_tab);
                 Self::Aggregate(agg_kind, operands)
             },
         }
@@ -693,14 +693,14 @@ pub enum Operand<'pcx> {
 }
 
 impl<'pcx> Operand<'pcx> {
-    pub fn from(op: &pairs::MirOperand<'pcx>, pcx: PatCtxt<'pcx>, sym_tab: &FnSymbolTable<'pcx>) -> Self {
+    pub fn from(op: &pairs::MirOperand<'pcx>, pcx: PatCtxt<'pcx>, fn_sym_tab: &FnSymbolTable<'pcx>) -> Self {
         match op.deref() {
             Choice6::_0(_any) => Self::Any,
             Choice6::_1(_any_multiple) => Self::Any, // FIXME
             Choice6::_2(meta_var) => Self::from_meta_var(meta_var),
-            Choice6::_3(move_) => Self::from_move(move_, pcx, sym_tab),
-            Choice6::_4(copy_) => Self::from_copy(copy_, pcx, sym_tab),
-            Choice6::_5(konst) => Self::from_constant(konst, pcx),
+            Choice6::_3(move_) => Self::from_move(move_, pcx, fn_sym_tab),
+            Choice6::_4(copy_) => Self::from_copy(copy_, pcx, fn_sym_tab),
+            Choice6::_5(konst) => Self::from_constant(konst, pcx, fn_sym_tab),
         }
     }
 
@@ -711,29 +711,33 @@ impl<'pcx> Operand<'pcx> {
     pub fn from_move(
         move_: &pairs::MirOperandMove<'pcx>,
         pcx: PatCtxt<'pcx>,
-        sym_tab: &FnSymbolTable<'pcx>,
+        fn_sym_tab: &FnSymbolTable<'pcx>,
     ) -> Self {
-        Self::Move(Place::from(move_.MirPlace(), pcx, sym_tab))
+        Self::Move(Place::from(move_.MirPlace(), pcx, fn_sym_tab))
     }
 
     pub fn from_copy(
         copy_: &pairs::MirOperandCopy<'pcx>,
         pcx: PatCtxt<'pcx>,
-        sym_tab: &FnSymbolTable<'pcx>,
+        fn_sym_tab: &FnSymbolTable<'pcx>,
     ) -> Self {
-        Self::Copy(Place::from(copy_.MirPlace(), pcx, sym_tab))
+        Self::Copy(Place::from(copy_.MirPlace(), pcx, fn_sym_tab))
     }
 
-    pub fn from_constant(konst: &pairs::MirOperandConst<'_>, pcx: PatCtxt<'pcx>) -> Self {
-        Self::Constant(ConstOperand::from(konst, pcx))
+    pub fn from_constant(
+        konst: &pairs::MirOperandConst<'_>,
+        pcx: PatCtxt<'pcx>,
+        fn_sym_tab: &FnSymbolTable<'pcx>,
+    ) -> Self {
+        Self::Constant(ConstOperand::from(konst, pcx, fn_sym_tab))
     }
 
-    pub fn from_fn_op(op: &pairs::MirFnOperand<'pcx>, pcx: PatCtxt<'pcx>, sym_tab: &FnSymbolTable<'pcx>) -> Self {
+    pub fn from_fn_op(op: &pairs::MirFnOperand<'pcx>, pcx: PatCtxt<'pcx>, fn_sym_tab: &FnSymbolTable<'pcx>) -> Self {
         match op.deref() {
-            Choice5::_0(copy_) => Self::from_copy(copy_.get_matched().1, pcx, sym_tab),
-            Choice5::_1(move_) => Self::from_move(move_.get_matched().1, pcx, sym_tab),
-            Choice5::_2(type_path) => Self::Constant(ConstOperand::from_type_path(type_path, pcx)),
-            Choice5::_3(lang_item) => Self::Constant(ConstOperand::from_lang_item(lang_item, pcx)),
+            Choice5::_0(copy_) => Self::from_copy(copy_.get_matched().1, pcx, fn_sym_tab),
+            Choice5::_1(move_) => Self::from_move(move_.get_matched().1, pcx, fn_sym_tab),
+            Choice5::_2(type_path) => Self::Constant(ConstOperand::from_type_path(type_path, pcx, fn_sym_tab)),
+            Choice5::_3(lang_item) => Self::Constant(ConstOperand::from_lang_item(lang_item, pcx, fn_sym_tab)),
             Choice5::_4(meta_var) => Self::from_meta_var(meta_var),
         }
     }
@@ -759,11 +763,11 @@ impl<'pcx> RvalueOrCall<'pcx> {
     pub fn from(
         rvalue_or_call: &pairs::MirRvalueOrCall<'pcx>,
         pcx: PatCtxt<'pcx>,
-        sym_tab: &FnSymbolTable<'pcx>,
+        fn_sym_tab: &FnSymbolTable<'pcx>,
     ) -> Self {
         match rvalue_or_call.deref() {
-            Choice2::_0(call) => Self::Call(Call::from(call, pcx, sym_tab)),
-            Choice2::_1(rvalue) => Self::Rvalue(Rvalue::from_rvalue(rvalue, pcx, sym_tab)),
+            Choice2::_0(call) => Self::Call(Call::from(call, pcx, fn_sym_tab)),
+            Choice2::_1(rvalue) => Self::Rvalue(Rvalue::from_rvalue(rvalue, pcx, fn_sym_tab)),
         }
     }
 }
@@ -778,21 +782,33 @@ pub enum ConstOperand<'pcx> {
 }
 
 impl<'pcx> ConstOperand<'pcx> {
-    fn from(op: &pairs::MirOperandConst<'_>, pcx: PatCtxt<'pcx>) -> Self {
+    fn from(op: &pairs::MirOperandConst<'_>, pcx: PatCtxt<'pcx>, fn_sym_tab: &FnSymbolTable<'pcx>) -> Self {
         let (_, op) = op.get_matched();
         match op {
             Choice3::_0(lit) => Self::from_literal(lit),
-            Choice3::_1(lang_item_with_args) => Self::from_lang_item(lang_item_with_args, pcx),
-            Choice3::_2(type_path) => Self::from_type_path(type_path, pcx),
+            Choice3::_1(lang_item_with_args) => Self::from_lang_item(lang_item_with_args, pcx, fn_sym_tab),
+            Choice3::_2(type_path) => Self::from_type_path(type_path, pcx, fn_sym_tab),
         }
     }
 
-    fn from_type_path(type_path: &pairs::TypePath<'_>, pcx: PatCtxt<'pcx>) -> Self {
-        Self::ZeroSized(PathWithArgs::from_type_path(type_path, pcx))
+    fn from_type_path(type_path: &pairs::TypePath<'_>, pcx: PatCtxt<'pcx>, fn_sym_tab: &FnSymbolTable<'pcx>) -> Self {
+        Self::ZeroSized(PathWithArgs::from_type_path(
+            type_path,
+            pcx,
+            fn_sym_tab.meta_vars.clone(),
+        ))
     }
 
-    fn from_lang_item(lang_item: &pairs::LangItemWithArgs<'_>, pcx: PatCtxt<'pcx>) -> Self {
-        Self::ZeroSized(PathWithArgs::from_lang_item(lang_item, pcx))
+    fn from_lang_item(
+        lang_item: &pairs::LangItemWithArgs<'_>,
+        pcx: PatCtxt<'pcx>,
+        fn_sym_tab: &FnSymbolTable<'pcx>,
+    ) -> Self {
+        Self::ZeroSized(PathWithArgs::from_lang_item(
+            lang_item,
+            pcx,
+            fn_sym_tab.meta_vars.clone(),
+        ))
     }
 
     fn from_literal(lit: &pairs::Literal<'_>) -> Self {
@@ -828,29 +844,30 @@ impl<'pcx> AggKind<'pcx> {
     pub fn from(
         agg: &pairs::MirRvalueAggregate<'pcx>,
         pcx: PatCtxt<'pcx>,
-        sym_tab: &FnSymbolTable<'pcx>,
+        fn_sym_tab: &FnSymbolTable<'pcx>,
     ) -> (Self, List<Operand<'pcx>>) {
         match agg.deref() {
             Choice6::_0(array) => {
                 let (_, operands, _) = array.get_matched();
-                let operands = collect_operands(&operands, pcx, sym_tab);
+                let operands = collect_operands(&operands, pcx, fn_sym_tab);
                 (Self::Array, operands.into_boxed_slice())
             },
             Choice6::_1(tuple) => {
                 let (_, operands, _) = tuple.get_matched();
-                let operands = collect_operands(&operands, pcx, sym_tab);
+                let operands = collect_operands(&operands, pcx, fn_sym_tab);
                 (Self::Tuple, operands.into_boxed_slice())
             },
             Choice6::_2(adt_struct) => {
                 let (path_or_lang_item, _, fields, _) = adt_struct.get_matched();
-                let path_or_lang_item = PathWithArgs::from_path_or_lang_item(path_or_lang_item, pcx);
+                let path_or_lang_item =
+                    PathWithArgs::from_path_or_lang_item(path_or_lang_item, pcx, fn_sym_tab.meta_vars.clone());
                 let (symbol_list, op_list): (List<Symbol>, List<Operand>) = if let Some(fields) = fields {
                     let fields = collect_elems_separated_by_comma!(fields);
                     let (symbols, ops): (Vec<Symbol>, Vec<Operand>) = fields
                         .map(|field| {
                             (
                                 Symbol::intern(field.Identifier().span.as_str()),
-                                Operand::from(field.MirOperand(), pcx, sym_tab),
+                                Operand::from(field.MirOperand(), pcx, fn_sym_tab),
                             )
                         })
                         .unzip();
@@ -863,19 +880,20 @@ impl<'pcx> AggKind<'pcx> {
             },
             Choice6::_3(tuple) => {
                 let (_, _, _, _, _, _, operands, _) = tuple.get_matched();
-                let operands = collect_operands(&operands, pcx, sym_tab);
+                let operands = collect_operands(&operands, pcx, fn_sym_tab);
                 (Self::Tuple, operands.into_boxed_slice())
             },
             Choice6::_4(unit) => {
-                let path_or_lang_item = PathWithArgs::from_path_or_lang_item(unit.deref(), pcx);
+                let path_or_lang_item =
+                    PathWithArgs::from_path_or_lang_item(unit.deref(), pcx, fn_sym_tab.meta_vars.clone());
                 (Self::Adt(path_or_lang_item, AggAdtKind::Unit), Box::new([]))
             },
             Choice6::_5(raw_ptr) => {
                 let (ty_ptr, _, _, op1, _, op2, _) = raw_ptr.get_matched();
                 let (_, ptr_mutability, ty) = ty_ptr.get_matched();
-                let ty = Ty::from(ty, pcx);
+                let ty = Ty::from(ty, pcx, fn_sym_tab.meta_vars.clone());
                 let mutability = mutability_from_pair_ptr_mutability(&ptr_mutability);
-                let operands = Box::new([Operand::from(op1, pcx, sym_tab), Operand::from(op2, pcx, sym_tab)]);
+                let operands = Box::new([Operand::from(op1, pcx, fn_sym_tab), Operand::from(op2, pcx, fn_sym_tab)]);
                 (Self::RawPtr(ty, mutability), operands)
             },
         }
@@ -958,10 +976,10 @@ impl<'pcx> MirPatternBuilder<'pcx> {
         self.pattern
     }
 
-    pub fn mk_locals(&mut self, symbol_table: &FnSymbolTable<'pcx>, pcx: PatCtxt<'pcx>) {
-        let locals = symbol_table.inner.get_sorted_locals();
+    pub fn mk_locals(&mut self, fn_sym_tab: &FnSymbolTable<'pcx>, pcx: PatCtxt<'pcx>) {
+        let locals = fn_sym_tab.inner.get_sorted_locals();
         for (_, ty) in locals {
-            let ty = Ty::from(ty, pcx);
+            let ty = Ty::from(ty, pcx, fn_sym_tab.meta_vars.clone());
             self.mk_local(ty);
         }
     }

@@ -21,11 +21,11 @@ pub struct MetaContext<'mcx> {
 mod test {
     use super::*;
 
-    const fn check_sync<T: Sync>() {}
+    const fn _check_sync<T: Sync>() {}
 
     #[test]
     fn test_check_sync() {
-        check_sync::<MetaContext<'_>>();
+        _check_sync::<MetaContext<'_>>();
     }
 }
 

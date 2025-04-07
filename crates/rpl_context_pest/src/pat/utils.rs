@@ -70,11 +70,11 @@ pub(crate) fn unop_from_pair(pair: &pairs::MirUnOp<'_>) -> mir::UnOp {
 pub(crate) fn collect_operands<'pcx>(
     operands: &Option<pairs::MirOperandsSeparatedByComma<'pcx>>,
     pcx: PatCtxt<'pcx>,
-    sym_tab: &FnSymbolTable<'pcx>,
+    fn_sym_tab: &FnSymbolTable<'pcx>,
 ) -> Vec<Operand<'pcx>> {
     if let Some(operands) = operands {
         collect_elems_separated_by_comma!(operands)
-            .map(|operand| Operand::from(operand, pcx, sym_tab))
+            .map(|operand| Operand::from(operand, pcx, fn_sym_tab))
             .collect()
     } else {
         vec![]
