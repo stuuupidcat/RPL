@@ -28,11 +28,7 @@ fn fmt_projection<'pcx>(f: &mut fmt::Formatter<'_>, place: Place<'pcx>, proj: &P
     struct FromEnd(bool);
     impl fmt::Display for FromEnd {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            if self.0 {
-                f.write_str("-")
-            } else {
-                Ok(())
-            }
+            if self.0 { f.write_str("-") } else { Ok(()) }
         }
     }
     match proj {

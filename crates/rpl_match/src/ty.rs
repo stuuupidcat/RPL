@@ -1,17 +1,17 @@
 use std::cell::RefCell;
 use std::iter::zip;
 
-use rpl_context::{pat, PatCtxt};
+use rpl_context::{PatCtxt, pat};
 use rustc_data_structures::fx::{FxHashMap, FxIndexSet};
 use rustc_hir::def::Res;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::definitions::DefPathData;
 use rustc_index::IndexVec;
 use rustc_middle::ty::{self, TyCtxt, ValTreeKind};
-use rustc_span::symbol::kw;
 use rustc_span::Symbol;
+use rustc_span::symbol::kw;
 
-use crate::resolve::{self, lang_item_res, ty_res, PatItemKind};
+use crate::resolve::{self, PatItemKind, lang_item_res, ty_res};
 use crate::{AdtMatch, MatchAdtCtxt};
 
 pub struct MatchTyCtxt<'pcx, 'tcx> {

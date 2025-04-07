@@ -14,7 +14,7 @@ extern crate rustc_span;
 
 mod callbacks;
 
-pub use callbacks::{DefaultCallbacks, RplCallbacks, RustcCallbacks, RPL_ARGS_ENV};
+pub use callbacks::{DefaultCallbacks, RPL_ARGS_ENV, RplCallbacks, RustcCallbacks};
 
 static RPL_LOCALE_RESOURCES: &[&str] = &[
     rpl_driver::DEFAULT_LOCALE_RESOURCE,

@@ -1,15 +1,15 @@
 //! Resolve an item path.
 //!
 //! See <https://doc.rust-lang.org/nightly/nightly-rustc/src/clippy_utils/lib.rs.html#691>
-use rpl_context::{pat, PatCtxt};
+use rpl_context::{PatCtxt, pat};
 use rustc_hir::def::{DefKind, Res};
-use rustc_hir::def_id::{CrateNum, LocalDefId, LOCAL_CRATE};
+use rustc_hir::def_id::{CrateNum, LOCAL_CRATE, LocalDefId};
 use rustc_hir::{ImplItemRef, ItemKind, LangItem, Node, OwnerId, PrimTy, TraitItemRef};
 use rustc_middle::ty::fast_reject::SimplifiedType;
 use rustc_middle::ty::{FloatTy, IntTy, Mutability, TyCtxt, UintTy};
+use rustc_span::Symbol;
 use rustc_span::def_id::DefId;
 use rustc_span::symbol::Ident;
-use rustc_span::Symbol;
 
 /// Kind of an item path in pattern.
 ///

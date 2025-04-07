@@ -181,7 +181,7 @@ impl<'pcx> PatCtxt<'pcx> {
     }
     pub fn for_each_rpl_pattern(self, mut f: impl FnMut(RPLIdx, &'pcx pat::Pattern<'pcx>)) {
         for (&id, pattern) in self.patterns.lock().iter() {
-            f(id, *pattern);
+            f(id, pattern);
         }
     }
     pub fn add_parsed_pattern<'mcx: 'pcx>(

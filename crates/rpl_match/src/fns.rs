@@ -1,6 +1,6 @@
 use std::iter::zip;
 
-use rpl_context::{pat, PatCtxt};
+use rpl_context::{PatCtxt, pat};
 use rustc_hir::def_id::DefId;
 use rustc_middle::ty::{self, TyCtxt};
 

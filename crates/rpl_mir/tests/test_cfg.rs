@@ -1,5 +1,4 @@
 #![allow(unused)]
-
 #![feature(rustc_private)]
 #![feature(macro_metavar_expr_concat)]
 
@@ -40,7 +39,7 @@ use rustc_span::Symbol;
 //         }
 //     };
 // }
-// 
+//
 // #[track_caller]
 // fn assert_eq(mir_pattern: &MirPattern<'_>, expected: TokenStream) {
 //     assert_eq!(
@@ -52,27 +51,27 @@ use rustc_span::Symbol;
 //         expected.to_string().replace(';', ";\n"),
 //     );
 // }
-// 
+//
 // test_case! {
 //     fn cve_2020_25016() {
 //         meta!($T:ty);
-// 
+//
 //         let $from_slice: &[$T] = _;
 //         let $from_slice_mut: &mut [$T] = _;
-// 
+//
 //         let $from_raw: *const [$T] = &raw const *$from_slice;
 //         let $from_raw_mut: *mut [$T] = &raw mut *$from_slice_mut;
-// 
+//
 //         let $to_ptr: *const u8 = copy $from_raw as *const u8 (PtrToPtr);
 //         let $to_ptr_mut: *mut u8 = copy $from_raw_mut as *mut u8 (PtrToPtr);
-// 
+//
 //         let $from_len: usize = Len(*$from_slice);
 //         let $ty_size: usize = SizeOf($T);
 //         let $to_len: usize = Mul(move $from_len, move $ty_size);
-// 
+//
 //         let $to_raw: *const [u8] = *const [u8] from (copy $to_ptr, copy $to_len);
 //         let $to_raw_mut: *mut [u8] = *mut [u8] from (copy $to_ptr_mut, copy $to_len);
-// 
+//
 //         let $to_slice: &[u8] = &*$to_raw;
 //         let $to_slice_mut: &mut [u8] = &mut *$to_raw_mut;
 //     } => {
@@ -107,11 +106,11 @@ use rustc_span::Symbol;
 //         }
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2020_35892() {
 //         meta!($T:ty, $SlabT:ty);
-// 
+//
 //         let $self: &mut $SlabT;
 //         let $len: usize; // _2
 //         let mut $x0: usize; // _17
@@ -124,7 +123,7 @@ use rustc_span::Symbol;
 //         let $elem_ptr: *mut $T; // _5
 //         let $x_cmp: usize; // _16
 //         let $cmp: bool; // _13
-// 
+//
 //         $len = copy (*$self).len;
 //         $x0 = const 0_usize;
 //         loop {
@@ -186,17 +185,17 @@ use rustc_span::Symbol;
 //         }
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2018_21000() {
 //         meta!($T1:ty, $T2:ty, $T3:ty);
-// 
+//
 //         type VecT1 = std::vec::Vec<$T1>;
 //         type _VecT2 = std::vec::Vec<$T2>;
 //         type VecT3 = std::vec::Vec<$T3>;
 //         type PtrT1 = *mut $T1;
 //         type PtrT3 = *mut $T3;
-// 
+//
 //         let $from_vec: VecT1 = _;
 //         let $size: usize = SizeOf($T2);
 //         let $from_cap: usize = Vec::capacity(move $from_vec);
@@ -239,11 +238,11 @@ use rustc_span::Symbol;
 //         ?bb4: { end; }
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2018_21000_inlined() {
 //         meta!($T:ty);
-// 
+//
 //         let $to_vec: alloc::vec::Vec<$T, alloc::alloc::Global>;
 //         let $from_vec: alloc::vec::Vec<u8, alloc::alloc::Global> = _;
 //         let $to_vec_cap: usize;
@@ -256,7 +255,7 @@ use rustc_span::Symbol;
 //         let mut $to_raw_vec_inner: alloc::raw_vec::RawVecInner<alloc::alloc::Global>;
 //         let mut $to_vec_wrapped_len: alloc::raw_vec::Cap = _;
 //         let mut $from_vec_unique_ptr: core::ptr::unique::Unique<u8>;
-// 
+//
 //         $from_vec_ptr = copy $from_vec.buf.inner.ptr.pointer;
 //         $from_vec_cap = copy $from_vec.buf.inner.cap.0;
 //         $tsize = SizeOf($T);
@@ -325,22 +324,22 @@ use rustc_span::Symbol;
 //         }
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2020_35881_const() {
 //         meta!($T1:ty);
-// 
+//
 //         type PtrT1 = *const $T1;
 //         type PtrPtrT1 = *const *const $T1;
 //         type DerefPtrT1 = &*const $T1;
 //         type PtrT2 = *const ();
 //         type PtrPtrT2 = *const *const ();
-// 
+//
 //         let $ptr_to_data: PtrT1 = _;
 //         let $data: DerefPtrT1 = &$ptr_to_data;
 //         let $ptr_to_ptr_to_data: PtrPtrT1 = &raw const (*$data);
-//         let $ptr_to_ptr_to_res: PtrPtrT2 = move $ptr_to_ptr_to_data as *const *const () (Transmute);
-//         let $ptr_to_res: PtrT2 = copy* $ptr_to_ptr_to_res;
+//         let $ptr_to_ptr_to_res: PtrPtrT2 = move $ptr_to_ptr_to_data as *const *const ()
+// (Transmute);         let $ptr_to_res: PtrT2 = copy* $ptr_to_ptr_to_res;
 //         // neglected the type-size-equivalence check
 //     } => {
 //         let _?0: *const ?T0;
@@ -358,17 +357,17 @@ use rustc_span::Symbol;
 //         }
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2020_35881_mut() {
 //         meta!($T1:ty);
-// 
+//
 //         type PtrT1 = *mut $T1;
 //         type PtrPtrT1 = *mut *mut $T1;
 //         type DerefPtrT1 = &mut *mut $T1;
 //         type PtrT2 = *mut ();
 //         type PtrPtrT2 = *mut *mut ();
-// 
+//
 //         let $ptr_to_data: PtrT1 = _;
 //         let $data: DerefPtrT1 = &mut $ptr_to_data;
 //         let $ptr_to_ptr_to_data: PtrPtrT1 = &raw mut (*$data);
@@ -390,11 +389,11 @@ use rustc_span::Symbol;
 //         }
 //     }
 // }
-// 
+//
 // test_case! {
 //     fn cve_2021_29941_2() {
 //         meta!($T:ty);
-// 
+//
 //         // type ExactSizeIterT = impl std::iter::ExactSizeIterator<Item = $T>;
 //         // let's use a std::ops::Range<$T> instead temporarily
 //         type RangeT = std::ops::Range<$T>;
@@ -405,18 +404,18 @@ use rustc_span::Symbol;
 //         type EnumerateRangeT = std::iter::Enumerate<RangeT>;
 //         type RefMutEnumerateRangeT = &mut std::iter::Enumerate<RangeT>;
 //         type OptionUsizeT = std::option::Option<(usize, $T)>;
-// 
+//
 //         let $iter: RangeT = _;
 //         // let len: usize = <RangeT as std::iter::ExactSizeIterator>::len(move iter);
 //         let $len: usize = RangeT::len(move $iter);
 //         let mut $vec: VecT = std::vec::Vec::with_capacity(copy $len);
 //         let mut $ref_to_vec: RefMutVecT = &mut $vec;
 //         let mut $ptr_to_vec: PtrMutT = Vec::as_mut_ptr(move $ref_to_vec);
-//         let mut $slice: RefMutSliceT = std::slice::from_raw_parts_mut(copy $ptr_to_vec, copy $len);
-//         // let mut enumerate: EnumerateRangeT = <RangeT as std::iter::Iterator>::enumerate(move iter);
-//         let mut $enumerate: EnumerateRangeT = RangeT::enumerate(move $iter);
-//         let mut $enumerate: RefMutEnumerateRangeT = &mut $enumerate;
-//         let $next: OptionUsizeT;
+//         let mut $slice: RefMutSliceT = std::slice::from_raw_parts_mut(copy $ptr_to_vec, copy
+// $len);         // let mut enumerate: EnumerateRangeT = <RangeT as
+// std::iter::Iterator>::enumerate(move iter);         let mut $enumerate: EnumerateRangeT =
+// RangeT::enumerate(move $iter);         let mut $enumerate: RefMutEnumerateRangeT = &mut
+// $enumerate;         let $next: OptionUsizeT;
 //         let $cmp: isize;
 //         let $first: usize;
 //         let $second_t: $T;

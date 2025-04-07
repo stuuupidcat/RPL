@@ -5,7 +5,7 @@ use crate::error::{RPLMetaError, RPLMetaResult};
 use crate::utils::{Ident, Path};
 use derive_more::derive::From;
 use parser::generics::{Choice3, Choice4};
-use parser::{pairs, SpanWrapper};
+use parser::{SpanWrapper, pairs};
 use pest_typed::Span;
 use rustc_hash::FxHashMap;
 use rustc_span::Symbol;
@@ -105,6 +105,7 @@ impl NonLocalMetaSymTab {
         }
     }
 
+    #[allow(clippy::manual_map)]
     pub fn get_type_and_idx_from_symbol(&self, symbol: Symbol) -> Option<(MetaVariableType, usize)> {
         if let Some(idx) = self.ty_vars.get(&symbol) {
             Some((MetaVariableType::Type, *idx))
@@ -258,7 +259,7 @@ impl<'i> SymbolTable<'i> {
             _ = symbol_tables.try_insert(name, symbols).map_err(|entry| {
                 let name = entry.entry.key();
                 let err = RPLMetaError::SymbolAlreadyDeclared {
-                    ident: name.clone(),
+                    ident: *name,
                     span: SpanWrapper::new(pat_item.Identifier().span, mctx.get_active_path()),
                 };
                 errors.push(err);
@@ -436,7 +437,7 @@ impl<'i> FnInner<'i> {
 
     pub fn get_local_idx(&self, symbol: Symbol) -> usize {
         self.symbol_to_local_idx.get(&symbol).copied().expect("local not found") // should not
-                                                                                 // panic
+        // panic
     }
 }
 
@@ -477,15 +478,15 @@ impl<'i> FnInner<'i> {
         errors: &mut Vec<RPLMetaError<'i>>,
     ) {
         let len = self.locals.len();
-        if self.locals.contains_key(&ident.name) {
+        if let std::collections::hash_map::Entry::Vacant(e) = self.locals.entry(ident.name) {
+            e.insert((len, ty));
+            self.symbol_to_local_idx.insert(ident.name, len);
+        } else {
             let err = RPLMetaError::SymbolAlreadyDeclared {
                 ident: ident.name,
                 span: SpanWrapper::new(ident.span, mctx.get_active_path()),
             };
             errors.push(err);
-        } else {
-            self.locals.insert(ident.name, (len, ty));
-            self.symbol_to_local_idx.insert(ident.name, len);
         }
     }
     pub fn add_place_local(
@@ -505,7 +506,7 @@ impl<'i> FnInner<'i> {
     fn get_local_impl(&self, ident: Ident<'i>) -> Option<&'i pairs::Type<'i>> {
         self.locals
             .get(&ident.name)
-            .and_then(|(_idx, ty)| Some(ty))
+            .map(|(_idx, ty)| ty)
             .or_else(|| self.params.get(&ident.name))
             .copied()
     }
@@ -608,7 +609,7 @@ impl DiagSymbolTable {
                 .map_err(|entry| {
                     let ident = entry.entry.key();
                     let err = RPLMetaError::SymbolAlreadyDeclared {
-                        ident: ident.clone(),
+                        ident: *ident,
                         span: SpanWrapper::new(name.span, mctx.get_active_path()),
                     };
                     errors.push(err);

@@ -60,7 +60,7 @@ impl fmt::Debug for Ty<'_> {
 
 impl fmt::Debug for TyKind<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.clone() {
+        match *self {
             Self::TyVar(ty_var) => ty_var.fmt(f),
             Self::Array(ty, len) => write!(f, "[{ty:?}; {len:?}]"),
             Self::Slice(ty) => write!(f, "[{ty:?}]"),
