@@ -1,6 +1,8 @@
 use std::ops::Deref;
+use std::sync::Arc;
 
 use rpl_meta_pest::collect_elems_separated_by_comma;
+use rpl_meta_pest::symbol_table::NonLocalMetaSymTab;
 use rpl_parser::generics::{Choice10, Choice12, Choice14, Choice2, Choice3, Choice4};
 use rpl_parser::pairs;
 use rustc_data_structures::packed::Pu128;
@@ -48,27 +50,27 @@ impl<'pcx> Ty<'pcx> {
         pcx.mk_ty(TyKind::Def(def_id, args))
     }
 
-    pub fn from(ty: &pairs::Type<'_>, pcx: PatCtxt<'pcx>) -> Self {
+    pub fn from(ty: &pairs::Type<'_>, pcx: PatCtxt<'pcx>, meta_var_sym_tab: Arc<NonLocalMetaSymTab>) -> Self {
         match ty.deref() {
             Choice14::_0(ty_array) => {
                 let (_, ty, _, len, _) = ty_array.get_matched();
-                let ty = Self::from(ty, pcx);
+                let ty = Self::from(ty, pcx, meta_var_sym_tab);
                 pcx.mk_array_ty(ty, IntValue::from_integer(len).into())
             },
             Choice14::_1(ty_group) => {
                 let (_, ty) = ty_group.get_matched();
-                Self::from(ty, pcx)
+                Self::from(ty, pcx, meta_var_sym_tab)
             },
             Choice14::_2(_ty_never) => {
                 todo!("implement `TyKind::Never`")
             },
             Choice14::_3(ty_paren) => {
                 let (_, ty, _) = ty_paren.get_matched();
-                Self::from(ty, pcx)
+                Self::from(ty, pcx, meta_var_sym_tab)
             },
             Choice14::_4(ty_ptr) => {
                 let (_, mutability, ty) = ty_ptr.get_matched();
-                let ty = Self::from(ty, pcx);
+                let ty = Self::from(ty, pcx, meta_var_sym_tab);
                 let mutability = if mutability.kw_mut().is_some() {
                     mir::Mutability::Mut
                 } else {
@@ -78,7 +80,7 @@ impl<'pcx> Ty<'pcx> {
             },
             Choice14::_5(ty_ref) => {
                 let (_, region, mutability, ty) = ty_ref.get_matched();
-                let ty = Self::from(ty, pcx);
+                let ty = Self::from(ty, pcx, meta_var_sym_tab);
                 let region = if let Some(region) = region {
                     RegionKind::from(region)
                 } else {
@@ -93,14 +95,16 @@ impl<'pcx> Ty<'pcx> {
             },
             Choice14::_6(ty_slice) => {
                 let (_, ty, _) = ty_slice.get_matched();
-                let ty = Self::from(ty, pcx);
+                let ty = Self::from(ty, pcx, meta_var_sym_tab);
                 pcx.mk_slice_ty(ty)
             },
             Choice14::_7(ty_tuple) => {
                 let (_, tys, _) = ty_tuple.get_matched();
                 let tys = if let Some(tys) = tys {
                     let tys = collect_elems_separated_by_comma!(tys).collect::<Vec<_>>();
-                    tys.iter().map(|ty| Self::from(ty, pcx)).collect::<Vec<_>>()
+                    tys.iter()
+                        .map(|ty| Self::from(ty, pcx, meta_var_sym_tab.clone()))
+                        .collect::<Vec<_>>()
                 } else {
                     vec![]
                 };
@@ -108,28 +112,41 @@ impl<'pcx> Ty<'pcx> {
             },
             Choice14::_8(ty_meta_var) => {
                 // FIXME: judge whether it is a type variable or a adt pattern;
-                todo!("implement `TyKind::TyVar`")
-                // pcx.mk_var_ty(ty_var)
+                let (ty, idx) = meta_var_sym_tab
+                    .get_type_and_idx_from_symbol(Symbol::intern(ty_meta_var.span.as_str()))
+                    .unwrap(); // unwrap should be safe here because of the meta pass.
+                               // FIXME: Information loss, the pred is not stored.
+                               // Solution:
+                               // Store the pred in the meta_pass.
+                let ty_meta_var = match ty {
+                    rpl_meta_pest::symbol_table::MetaVariableType::Type => TyVar {
+                        idx: idx.into(),
+                        name: Symbol::intern(ty_meta_var.span.as_str()),
+                        pred: None,
+                    },
+                    _ => panic!("A non-type meta variable used as a type variable"),
+                };
+                pcx.mk_var_ty(ty_meta_var)
             },
             Choice14::_9(_ty_self) => todo!(),
             Choice14::_10(primitive_types) => pcx.mk_ty(TyKind::from_primitive_type(primitive_types)),
             Choice14::_11(_place_holder) => pcx.mk_any_ty(),
             Choice14::_12(ty_path) => {
-                let path_with_args = PathWithArgs::from_type_path(ty_path, pcx);
+                let path_with_args = PathWithArgs::from_type_path(ty_path, pcx, meta_var_sym_tab);
                 pcx.mk_path_ty(path_with_args)
             },
             Choice14::_13(lang_item) => {
-                let lang_item = PathWithArgs::from_lang_item(lang_item, pcx);
+                let lang_item = PathWithArgs::from_lang_item(lang_item, pcx, meta_var_sym_tab);
                 pcx.mk_path_ty(lang_item)
             },
         }
     }
 
-    pub fn from_fn_ret(ty: &pairs::FnRet<'_>, pcx: PatCtxt<'pcx>) -> Self {
+    pub fn from_fn_ret(ty: &pairs::FnRet<'_>, pcx: PatCtxt<'pcx>, sym_tab: Arc<NonLocalMetaSymTab>) -> Self {
         let (_, placeholder_or_ty) = ty.get_matched();
         match placeholder_or_ty {
             Choice2::_0(_) => pcx.mk_any_ty(),
-            Choice2::_1(ty) => Self::from(ty, pcx),
+            Choice2::_1(ty) => Self::from(ty, pcx, sym_tab.clone()),
         }
     }
 }
@@ -256,10 +273,14 @@ pub enum GenericArgKind<'pcx> {
 }
 
 impl<'pcx> GenericArgKind<'pcx> {
-    fn from(arg: &pairs::GenericArgument<'_>, pcx: PatCtxt<'pcx>) -> GenericArgKind<'pcx> {
+    fn from(
+        arg: &pairs::GenericArgument<'_>,
+        pcx: PatCtxt<'pcx>,
+        sym_tab: Arc<NonLocalMetaSymTab>,
+    ) -> GenericArgKind<'pcx> {
         match arg.deref() {
             Choice3::_0(region) => RegionKind::from(region).into(),
-            Choice3::_1(ty) => GenericArgKind::Type(Ty::from(ty, pcx)),
+            Choice3::_1(ty) => GenericArgKind::Type(Ty::from(ty, pcx, sym_tab)),
             Choice3::_2(konst) => GenericArgKind::Const(Const::from_gconst(konst)),
         }
     }
@@ -333,13 +354,13 @@ impl<'pcx> From<(Ty<'pcx>, Symbol)> for Path<'pcx> {
 pub struct GenericArgsRef<'pcx>(pub &'pcx [GenericArgKind<'pcx>]);
 
 impl<'pcx> GenericArgsRef<'pcx> {
-    pub fn from_path(args: &pairs::Path<'_>, pcx: PatCtxt<'pcx>) -> Self {
+    pub fn from_path(args: &pairs::Path<'_>, pcx: PatCtxt<'pcx>, sym_tab: Arc<NonLocalMetaSymTab>) -> Self {
         let path: rpl_meta_pest::utils::Path<'_> = args.into();
         let mut items: Vec<GenericArgKind<'_>> = Vec::new();
         path.segments.iter().for_each(|seg| {
             let args = seg.get_matched().1;
             if let Some(args) = args {
-                Self::from_angle_bracketed_generic_arguments(args.deref(), pcx)
+                Self::from_angle_bracketed_generic_arguments(args.deref(), pcx, sym_tab.clone())
                     .iter()
                     .for_each(|arg| {
                         items.push(*arg);
@@ -352,12 +373,13 @@ impl<'pcx> GenericArgsRef<'pcx> {
     pub fn from_angle_bracketed_generic_arguments(
         args: &pairs::AngleBracketedGenericArguments<'_>,
         pcx: PatCtxt<'pcx>,
+        sym_tab: Arc<NonLocalMetaSymTab>,
     ) -> Self {
         let (_, _, args, _) = args.get_matched();
         let args = collect_elems_separated_by_comma!(args).collect::<Vec<_>>();
         let args = args
             .into_iter()
-            .map(|arg| GenericArgKind::from(arg, pcx))
+            .map(|arg| GenericArgKind::from(arg, pcx, sym_tab.clone()))
             .collect::<Vec<_>>();
         GenericArgsRef(pcx.mk_slice(&args))
     }
@@ -384,28 +406,32 @@ pub struct PathWithArgs<'pcx> {
 }
 
 impl<'pcx> PathWithArgs<'pcx> {
-    pub fn from_path(path: &pairs::Path<'_>, pcx: PatCtxt<'pcx>) -> Self {
-        let args = GenericArgsRef::from_path(path, pcx);
+    pub fn from_path(path: &pairs::Path<'_>, pcx: PatCtxt<'pcx>, sym_tab: Arc<NonLocalMetaSymTab>) -> Self {
+        let args = GenericArgsRef::from_path(path, pcx, sym_tab);
         let path = Path::from(path, pcx);
         Self { path, args }
     }
 
-    pub fn from_type_path(path: &pairs::TypePath<'_>, pcx: PatCtxt<'pcx>) -> Self {
+    pub fn from_type_path(path: &pairs::TypePath<'_>, pcx: PatCtxt<'pcx>, sym_tab: Arc<NonLocalMetaSymTab>) -> Self {
         let (qself, path) = path.get_matched();
         if qself.is_some() {
             todo!("qself is not supported yet");
         }
-        let args = GenericArgsRef::from_path(path, pcx);
+        let args = GenericArgsRef::from_path(path, pcx, sym_tab);
         let path = Path::from(path, pcx);
         Self { path, args }
     }
 
-    pub fn from_lang_item(lang_item: &pairs::LangItemWithArgs<'_>, pcx: PatCtxt<'pcx>) -> Self {
+    pub fn from_lang_item(
+        lang_item: &pairs::LangItemWithArgs<'_>,
+        pcx: PatCtxt<'pcx>,
+        sym_tab: Arc<NonLocalMetaSymTab>,
+    ) -> Self {
         let (_, _, _, _, lang_item, _, args) = lang_item.get_matched();
         let lang_item =
             LangItem::from_name(rustc_span::Symbol::intern(lang_item.span.as_str())).expect("Unknown lang item");
         let args = if let Some(args) = args {
-            GenericArgsRef::from_angle_bracketed_generic_arguments(args, pcx)
+            GenericArgsRef::from_angle_bracketed_generic_arguments(args, pcx, sym_tab.clone())
         } else {
             GenericArgsRef(&[])
         };
@@ -413,10 +439,14 @@ impl<'pcx> PathWithArgs<'pcx> {
         Self { path, args }
     }
 
-    pub fn from_path_or_lang_item(path_or_lang_item: &pairs::PathOrLangItem<'_>, pcx: PatCtxt<'pcx>) -> Self {
+    pub fn from_path_or_lang_item(
+        path_or_lang_item: &pairs::PathOrLangItem<'_>,
+        pcx: PatCtxt<'pcx>,
+        sym_tab: Arc<NonLocalMetaSymTab>,
+    ) -> Self {
         match path_or_lang_item.deref() {
-            Choice2::_0(path) => Self::from_path(path, pcx),
-            Choice2::_1(lang_item) => Self::from_lang_item(lang_item, pcx),
+            Choice2::_0(path) => Self::from_path(path, pcx, sym_tab.clone()),
+            Choice2::_1(lang_item) => Self::from_lang_item(lang_item, pcx, sym_tab),
         }
     }
 }

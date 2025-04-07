@@ -9,6 +9,7 @@
 #![feature(iter_chain)]
 #![feature(iterator_try_collect)]
 #![feature(cell_update)]
+#![recursion_limit = "256"]
 
 extern crate rustc_data_structures;
 extern crate rustc_span;
@@ -19,7 +20,7 @@ use std::num::NonZero;
 use rpl_meta_pest::cli::{read_file_from_path_buf, traverse_rpl};
 use rpl_meta_pest::RPLMetaError;
 use std::path::PathBuf;
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 pub fn collect_file_from_args_for_test() -> Vec<(PathBuf, String)> {
     let args = std::env::args();
@@ -56,7 +57,10 @@ fn main() {
     // Only for testing purposes
     Registry::new(NonZero::new(1).unwrap()).register();
     rustc_span::create_session_if_not_set_then(rustc_span::edition::LATEST_STABLE_EDITION, |_| {
-        let mctx_arena = WorkerLocal::<rpl_meta_pest::arena::Arena<'_>>::default();
-        let _mctx = rpl_meta_pest::parse_and_collect(&mctx_arena, &collect_file_from_args_for_test());
+        static MCTX_ARENA: OnceLock<rpl_meta_pest::arena::Arena<'_>> = OnceLock::new();
+        static MCTX: OnceLock<rpl_meta_pest::context::MetaContext<'_>> = OnceLock::new();
+        let mctx_arena = MCTX_ARENA.get_or_init(rpl_meta_pest::arena::Arena::default);
+        let patterns_and_paths = mctx_arena.alloc(collect_file_from_args_for_test());
+        let _mctx = MCTX.get_or_init(|| rpl_meta_pest::parse_and_collect(&mctx_arena, patterns_and_paths));
     });
 }
