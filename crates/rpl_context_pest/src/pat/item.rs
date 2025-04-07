@@ -1,20 +1,16 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
+use super::utils::mutability_from_pair_mutability;
+use super::{FnSymbolTable, MirPattern, NonLocalMetaVars, Path, RawDecleration, RawStatement, Ty};
+use crate::PatCtxt;
 use rpl_meta_pest::collect_elems_separated_by_comma;
-use rpl_meta_pest::utils::Ident;
-use rpl_parser::generics::{Choice4, Choice6};
+use rpl_parser::generics::Choice4;
 use rpl_parser::pairs;
 use rustc_data_structures::fx::{FxHashMap, FxIndexMap};
 use rustc_hir::Safety;
 use rustc_middle::mir;
 use rustc_span::Symbol;
-
-use crate::pat::StatementKind;
-use crate::PatCtxt;
-
-use super::utils::mutability_from_pair_mutability;
-use super::{FnSymbolTable, MirPattern, NonLocalMetaVars, Path, Pattern, RawDecleration, RawStatement, Ty};
 
 pub struct Adt<'pcx> {
     pub meta: NonLocalMetaVars<'pcx>,
@@ -146,11 +142,11 @@ impl<'pcx> Fn<'pcx> {
     pub fn from(
         pair: &pairs::Fn<'pcx>,
         pcx: PatCtxt<'pcx>,
-        sym_tab: &FnSymbolTable<'pcx>,
+        fn_sym_tab: &FnSymbolTable<'pcx>,
         meta: Arc<NonLocalMetaVars<'pcx>>,
     ) -> Self {
         let (sig, body) = pair.get_matched();
-        let (safety, visibility, name, params, ret) = Self::from_sig(sig, pcx);
+        let (safety, visibility, name, params, ret) = Self::from_sig(sig, pcx, fn_sym_tab);
 
         let (decls, stmts) = if let Some(body) = body.MirBody() {
             let (decls, stmts) = body.get_matched();
@@ -159,11 +155,13 @@ impl<'pcx> Fn<'pcx> {
             (Vec::new(), Vec::new())
         };
 
-        let raw_stmts = stmts.into_iter().map(|stmt| RawStatement::from(stmt, pcx, sym_tab));
-        let raw_decls = decls.into_iter().map(|decl| RawDecleration::from(decl, pcx, sym_tab));
+        let raw_stmts = stmts.into_iter().map(|stmt| RawStatement::from(stmt, pcx, fn_sym_tab));
+        let raw_decls = decls
+            .into_iter()
+            .map(|decl| RawDecleration::from(decl, pcx, fn_sym_tab));
 
         let mut builder = MirPattern::builder();
-        builder.mk_locals(sym_tab, pcx);
+        builder.mk_locals(fn_sym_tab, pcx);
         builder.mk_raw_decls(raw_decls);
         builder.mk_raw_stmts(raw_stmts);
         let mir = builder.build();
@@ -183,6 +181,7 @@ impl<'pcx> Fn<'pcx> {
     pub fn from_sig(
         sig: &pairs::FnSig<'_>,
         pcx: PatCtxt<'pcx>,
+        fn_sym_tab: &FnSymbolTable<'pcx>,
     ) -> (Safety, Visibility, Symbol, Params<'pcx>, Option<Ty<'pcx>>) {
         let (unsafety, visibility, _, fn_name, _, params_pair, _, ret) = sig.get_matched();
         let safety = if unsafety.is_some() {
@@ -197,12 +196,12 @@ impl<'pcx> Fn<'pcx> {
         };
         let fn_name = Symbol::intern(fn_name.span.as_str());
         let params = if let Some(params_pair) = params_pair {
-            Params::from(params_pair, pcx)
+            Params::from(params_pair, pcx, fn_sym_tab)
         } else {
             Params::default()
         };
         let ret = if let Some(ret) = ret {
-            Some(Ty::from_fn_ret(ret, pcx))
+            Some(Ty::from_fn_ret(ret, pcx, fn_sym_tab.meta_vars.clone()))
         } else {
             None
         };
@@ -236,7 +235,11 @@ pub struct Param<'pcx> {
 
 impl<'pcx> Param<'pcx> {
     /// The bool indicates whether the parameter is a `..`, which makes params non-
-    pub fn from(param: &pairs::FnParam<'_>, pcx: PatCtxt<'pcx>) -> (Option<Self>, bool) {
+    pub fn from(
+        param: &pairs::FnParam<'_>,
+        pcx: PatCtxt<'pcx>,
+        fn_sym_tab: &FnSymbolTable<'pcx>,
+    ) -> (Option<Self>, bool) {
         match param.deref() {
             Choice4::_0(_self_param) => {
                 // FIXME: implement self param
@@ -246,13 +249,13 @@ impl<'pcx> Param<'pcx> {
                 let (mutability, ident, _, ty) = normal.get_matched();
                 let mutability = mutability_from_pair_mutability(&mutability);
                 let ident = Symbol::intern(ident.span.as_str());
-                let ty = Ty::from(ty, pcx);
+                let ty = Ty::from(ty, pcx, fn_sym_tab.meta_vars.clone());
                 (Some(Self { mutability, ident, ty }), false)
             },
             Choice4::_2(place_holder_with_type) => {
                 let (mutability, placeholder, _, ty) = place_holder_with_type.get_matched();
                 let mutability = mutability_from_pair_mutability(&mutability);
-                let ty = Ty::from(ty, pcx);
+                let ty = Ty::from(ty, pcx, fn_sym_tab.meta_vars.clone());
                 (
                     Some(Self {
                         mutability,
@@ -313,13 +316,17 @@ impl<'pcx> Fn<'pcx> {
 }
 
 impl<'pcx> Params<'pcx> {
-    pub fn from(pair: &pairs::FnParamsSeparatedByComma<'_>, pcx: PatCtxt<'pcx>) -> Self {
+    pub fn from(
+        pair: &pairs::FnParamsSeparatedByComma<'_>,
+        pcx: PatCtxt<'pcx>,
+        fn_sym_tab: &FnSymbolTable<'pcx>,
+    ) -> Self {
         let params = collect_elems_separated_by_comma!(pair);
         let mut non_exhaustive: bool = false;
         let params = params
             .into_iter()
             .filter_map(|param| {
-                let (param, ne) = Param::from(param, pcx);
+                let (param, ne) = Param::from(param, pcx, fn_sym_tab);
                 non_exhaustive |= ne;
                 param
             })

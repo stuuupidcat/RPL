@@ -1,5 +1,5 @@
 use crate::context::MetaContext;
-use crate::symbol_table::{ident_is_primitive, EnumInner, FnInner, ImplInner, NonLocalMetaTable, SymbolTable, Variant};
+use crate::symbol_table::{ident_is_primitive, EnumInner, FnInner, ImplInner, NonLocalMetaSymTab, SymbolTable, Variant};
 use crate::utils::{Ident, Path};
 use crate::{collect_elems_separated_by_comma, RPLMetaError};
 use parser::generics::{Choice12, Choice14, Choice2, Choice3, Choice4, Choice5, Choice6};
@@ -124,7 +124,7 @@ impl<'i> CheckCtxt<'i> {
 }
 
 struct CheckFnCtxt<'i, 'r> {
-    meta_vars: Arc<NonLocalMetaTable>,
+    meta_vars: Arc<NonLocalMetaSymTab>,
     _impl_def: Option<&'r ImplInner<'i>>,
     fn_def: &'r mut FnInner<'i>,
     errors: &'r mut Vec<RPLMetaError<'i>>,
@@ -633,7 +633,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
 }
 
 struct CheckVariantCtxt<'i, 'r> {
-    _meta_vars: Arc<NonLocalMetaTable>,
+    _meta_vars: Arc<NonLocalMetaSymTab>,
     variant_def: &'r mut Variant<'i>,
     errors: &'r mut Vec<RPLMetaError<'i>>,
 }
@@ -667,7 +667,7 @@ impl<'i> CheckVariantCtxt<'i, '_> {
 }
 
 struct CheckEnumCtxt<'i, 'r> {
-    meta_vars: Arc<NonLocalMetaTable>,
+    meta_vars: Arc<NonLocalMetaSymTab>,
     enum_def: &'r mut EnumInner<'i>,
     errors: &'r mut Vec<RPLMetaError<'i>>,
 }

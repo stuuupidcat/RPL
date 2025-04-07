@@ -1,4 +1,5 @@
 use rpl_meta_pest::collect_elems_separated_by_comma;
+use rpl_meta_pest::symbol_table::NonLocalMetaSymTab;
 use rpl_meta_pest::utils::Ident;
 use rpl_parser::generics::{Choice2, Choice3, Choice4};
 use rpl_parser::pairs;
@@ -44,25 +45,39 @@ impl<'pcx> NonLocalMetaVars<'pcx> {
         self.place_vars.push(place_var);
     }
 
-    pub fn from_meta_decls(meta_decls: Option<&pairs::MetaVariableDeclList<'_>>, pcx: PatCtxt<'pcx>) -> Self {
+    pub fn from_meta_decls(
+        meta_decls: Option<&pairs::MetaVariableDeclList<'_>>,
+        pcx: PatCtxt<'pcx>,
+        sym_tab: Arc<NonLocalMetaSymTab>,
+    ) -> Self {
         let mut meta = Self::default();
         if let Some(decls) = meta_decls
             && let Some(decls) = decls.get_matched().1
         {
             let decls = collect_elems_separated_by_comma!(decls).collect::<Vec<_>>();
+            // handle the type meta variable first
+            let mut type_vars = Vec::new();
+            let mut konst_vars = Vec::new();
+            let mut place_vars = Vec::new();
             for decl in decls {
                 let (ident, _, ty) = decl.get_matched();
+                let ident = Symbol::intern(ident.span.as_str());
                 match ty.deref() {
-                    Choice3::_0(_ty) => meta.add_ty_var(Symbol::intern(ident.span.as_str()), None),
-                    Choice3::_1(konst) => {
-                        let ty = Ty::from(konst.get_matched().2, pcx);
-                        meta.add_const_var(Symbol::intern(ident.span.as_str()), ty);
-                    },
-                    Choice3::_2(place) => {
-                        let ty = Ty::from(place.get_matched().2, pcx);
-                        meta.add_place_var(Symbol::intern(ident.span.as_str()), ty);
-                    },
+                    Choice3::_0(_ty) => type_vars.push(ident),
+                    Choice3::_1(konst) => konst_vars.push((ident, konst)),
+                    Choice3::_2(place) => place_vars.push((ident, place)),
                 }
+            }
+            for ident in type_vars {
+                meta.add_ty_var(ident, None);
+            }
+            for (ident, konst) in konst_vars {
+                let ty = Ty::from(konst.get_matched().2, pcx, sym_tab.clone());
+                meta.add_const_var(ident, ty);
+            }
+            for (ident, place) in place_vars {
+                let ty = Ty::from(place.get_matched().2, pcx, sym_tab.clone());
+                meta.add_place_var(ident, ty);
             }
         }
         meta
@@ -113,7 +128,11 @@ impl<'pcx> Pattern<'pcx> {
     ) -> Self {
         let mut pattern = Self::new(pcx);
         let (_, meta_decls, _, _, item_or_patt_op, _) = pat_item.get_matched();
-        pattern.meta = Arc::new(NonLocalMetaVars::from_meta_decls(meta_decls.as_ref(), pcx));
+        pattern.meta = Arc::new(NonLocalMetaVars::from_meta_decls(
+            meta_decls.as_ref(),
+            pcx,
+            symbol_table.meta_vars.clone(),
+        ));
         pattern.add_item_or_patt_op(item_or_patt_op, symbol_table);
         pattern
     }
@@ -177,14 +196,14 @@ impl<'pcx> Pattern<'pcx> {
 
 // struct-related methods
 impl<'pcx> Pattern<'pcx> {
-    fn add_struct(&mut self, rust_struct: &pairs::Struct<'_>) {
+    fn add_struct(&mut self, _rust_struct: &pairs::Struct<'_>) {
         todo!()
     }
 }
 
 // enum-related methods
 impl<'pcx> Pattern<'pcx> {
-    fn add_enum(&mut self, rust_enum: &pairs::Enum<'_>) {
+    fn add_enum(&mut self, _rust_enum: &pairs::Enum<'_>) {
         todo!()
     }
 }
