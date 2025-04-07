@@ -15,7 +15,6 @@ rpl_mir_graph.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
-rpl_macros.workspace = true
 
 [features]
 
