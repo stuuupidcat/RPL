@@ -14,11 +14,11 @@
 extern crate rustc_data_structures;
 extern crate rustc_span;
 
-use rustc_data_structures::sync::{Registry, WorkerLocal};
+use rustc_data_structures::sync::Registry;
 use std::num::NonZero;
 
-use rpl_meta::cli::{read_file_from_path_buf, traverse_rpl};
 use rpl_meta::RPLMetaError;
+use rpl_meta::cli::{read_file_from_path_buf, traverse_rpl};
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 

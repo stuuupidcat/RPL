@@ -8,7 +8,7 @@ use pest_typed::tracker::Tracker;
 use std::path::Path;
 
 pub use error::ParseError;
-pub use parser::{generics, pairs, rules, Grammar, Rule};
+pub use parser::{Grammar, Rule, generics, pairs, rules};
 
 pub use position::PositionWrapper;
 pub use span::SpanWrapper;
