@@ -1,8 +1,8 @@
 use std::ops::Deref;
 use std::sync::Arc;
 
-use rpl_meta_pest::collect_elems_separated_by_comma;
-use rpl_meta_pest::symbol_table::NonLocalMetaSymTab;
+use rpl_meta::collect_elems_separated_by_comma;
+use rpl_meta::symbol_table::NonLocalMetaSymTab;
 use rpl_parser::generics::{Choice10, Choice12, Choice14, Choice2, Choice3, Choice4};
 use rpl_parser::pairs;
 use rustc_data_structures::packed::Pu128;
@@ -119,7 +119,7 @@ impl<'pcx> Ty<'pcx> {
                                // Solution:
                                // Store the pred in the meta_pass.
                 let ty_meta_var = match ty {
-                    rpl_meta_pest::symbol_table::MetaVariableType::Type => TyVar {
+                    rpl_meta::symbol_table::MetaVariableType::Type => TyVar {
                         idx: idx.into(),
                         name: Symbol::intern(ty_meta_var.span.as_str()),
                         pred: None,
@@ -317,7 +317,7 @@ pub enum Path<'pcx> {
 
 impl<'pcx> Path<'pcx> {
     pub fn from(path: &pairs::Path<'_>, pcx: PatCtxt<'pcx>) -> Self {
-        let path: rpl_meta_pest::utils::Path<'_> = path.into();
+        let path: rpl_meta::utils::Path<'_> = path.into();
         let mut items: Vec<Symbol> = Vec::new();
         if let Some(leading) = path.leading
             && leading.get_matched().0.is_some()
@@ -355,7 +355,7 @@ pub struct GenericArgsRef<'pcx>(pub &'pcx [GenericArgKind<'pcx>]);
 
 impl<'pcx> GenericArgsRef<'pcx> {
     pub fn from_path(args: &pairs::Path<'_>, pcx: PatCtxt<'pcx>, sym_tab: Arc<NonLocalMetaSymTab>) -> Self {
-        let path: rpl_meta_pest::utils::Path<'_> = args.into();
+        let path: rpl_meta::utils::Path<'_> = args.into();
         let mut items: Vec<GenericArgKind<'_>> = Vec::new();
         path.segments.iter().for_each(|seg| {
             let args = seg.get_matched().1;

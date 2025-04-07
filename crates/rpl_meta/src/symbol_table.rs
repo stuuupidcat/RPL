@@ -7,7 +7,6 @@ use derive_more::derive::From;
 use parser::generics::{Choice3, Choice4};
 use parser::{pairs, SpanWrapper};
 use pest_typed::Span;
-use rustc_data_structures::fx::FxHashSet;
 use rustc_hash::FxHashMap;
 use rustc_span::Symbol;
 use std::ops::Deref;
@@ -231,14 +230,12 @@ impl<'i> SymbolTable<'i> {
         }
     }
 
-    #[expect(unused)]
     pub fn add_impl(&mut self, impl_pat: &'i pairs::Impl<'i>) -> &mut Impl<'i> {
         self.impls
             .push((ImplInner::new(impl_pat), self.meta_vars.clone()).into());
         self.impls.last_mut().unwrap()
     }
 
-    #[expect(unused)]
     pub fn contains_adt(&self, ident: &Ident<'_>) -> bool {
         self.structs.contains_key(&ident.name) || self.enums.contains_key(&ident.name)
     }
@@ -347,7 +344,7 @@ impl<'i> Variant<'i> {
     }
 }
 
-pub(crate) type Struct<'i> = WithMetaTable<Variant<'i>>;
+pub type Struct<'i> = WithMetaTable<Variant<'i>>;
 
 pub type Fn<'i> = WithMetaTable<FnInner<'i>>;
 
@@ -559,9 +556,9 @@ impl<'i> FnInner<'i> {
     }
 }
 
-pub(crate) type Impl<'i> = WithMetaTable<ImplInner<'i>>;
+pub type Impl<'i> = WithMetaTable<ImplInner<'i>>;
 
-pub(crate) struct ImplInner<'i> {
+pub struct ImplInner<'i> {
     #[expect(unused)]
     trait_: Option<&'i pairs::Path<'i>>,
     #[expect(unused)]

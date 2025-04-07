@@ -1,5 +1,5 @@
 [package]
-name = "rpl_meta_pest"
+name = "rpl_meta"
 version.workspace = true
 description.workspace = true
 repository.workspace = true

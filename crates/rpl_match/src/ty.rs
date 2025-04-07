@@ -1,7 +1,7 @@
 use std::cell::RefCell;
 use std::iter::zip;
 
-use rpl_context_pest::{pat, PatCtxt};
+use rpl_context::{pat, PatCtxt};
 use rustc_data_structures::fx::{FxHashMap, FxIndexSet};
 use rustc_hir::def::Res;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};

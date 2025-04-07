@@ -1223,7 +1223,7 @@ dependencies = [
  "quote",
  "regex",
  "rpl_interface",
- "rpl_meta_pest",
+ "rpl_meta",
  "rustc_tools_util",
  "scoped_threadpool",
  "serde",
@@ -1240,10 +1240,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "rpl_context_pest"
+name = "rpl_context"
 version = "0.1.0"
 dependencies = [
- "rpl_meta_pest",
+ "rpl_meta",
  "rpl_parser",
 ]
 
@@ -1251,8 +1251,8 @@ dependencies = [
 name = "rpl_driver"
 version = "0.1.0"
 dependencies = [
- "rpl_context_pest",
- "rpl_meta_pest",
+ "rpl_context",
+ "rpl_meta",
  "rpl_mir",
  "rpl_utils",
 ]
@@ -1263,7 +1263,7 @@ version = "0.1.0"
 dependencies = [
  "gsgdt",
  "pretty_assertions",
- "rpl_context_pest",
+ "rpl_context",
  "rpl_macros",
  "rpl_mir",
  "rpl_mir_graph",
@@ -1273,9 +1273,9 @@ dependencies = [
 name = "rpl_interface"
 version = "0.1.0"
 dependencies = [
- "rpl_context_pest",
+ "rpl_context",
  "rpl_driver",
- "rpl_meta_pest",
+ "rpl_meta",
  "rpl_utils",
  "sync-arena",
 ]
@@ -1294,11 +1294,11 @@ dependencies = [
 name = "rpl_match"
 version = "0.1.0"
 dependencies = [
- "rpl_context_pest",
+ "rpl_context",
 ]
 
 [[package]]
-name = "rpl_meta_pest"
+name = "rpl_meta"
 version = "0.1.0"
 dependencies = [
  "colored 3.0.0",
@@ -1327,7 +1327,7 @@ dependencies = [
  "pretty_assertions",
  "proc-macro2",
  "quote",
- "rpl_context_pest",
+ "rpl_context",
  "rpl_macros",
  "rpl_match",
  "rpl_mir_graph",
