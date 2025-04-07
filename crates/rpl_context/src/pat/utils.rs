@@ -1,5 +1,5 @@
 use crate::pat::mir::Operand;
-use rpl_meta_pest::collect_elems_separated_by_comma;
+use rpl_meta::collect_elems_separated_by_comma;
 use rpl_parser::generics::{Choice12, Choice2, Choice3};
 use rpl_parser::pairs::{self};
 use rustc_middle::mir;

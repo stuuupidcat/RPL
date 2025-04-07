@@ -28,8 +28,8 @@ rpl_pat_expand = { path = "./crates/rpl_pat_expand" }
 rpl_pat_syntax = { path = "./crates/rpl_pat_syntax" }
 # rpl_patterns = { path = "./crates/rpl_patterns" }
 rpl_utils = { path = "./crates/rpl_utils" }
-rpl_meta_pest = { path = "./crates/rpl_meta_pest" }
-rpl_context_pest = { path = "./crates/rpl_context_pest" }
+rpl_meta = { path = "./crates/rpl_meta" }
+rpl_context = { path = "./crates/rpl_context" }
 rustc_tools_util = "0.3.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
@@ -86,7 +86,7 @@ path = "src/driver.rs"
 
 [dependencies]
 rpl_interface.workspace = true
-rpl_meta_pest.workspace = true
+rpl_meta.workspace = true
 rustc_tools_util.workspace = true
 color-print = "0.3.4"
 anstream = "0.6.0"

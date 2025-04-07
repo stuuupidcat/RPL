@@ -10,7 +10,7 @@ use std::fs::File;
 use std::io::{Read, Write};
 
 use pretty_assertions::assert_eq;
-use rpl_context_pest::{PatCtxt, PatternCtxt};
+use rpl_context::{PatCtxt, PatternCtxt};
 use rpl_graphviz::{pat_cfg_to_graphviz, pat_ddg_to_graphviz};
 use rpl_mir::pat::MirPattern;
 use rustc_span::Symbol;

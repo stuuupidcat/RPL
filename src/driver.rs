@@ -129,7 +129,7 @@ fn logger_config() -> rustc_log::LoggerConfig {
 pub fn main() {
     let early_dcx = EarlyDiagCtxt::new(ErrorOutputType::default());
 
-    rustc_driver::init_rustc_env_logger(&early_dcx);
+    rustc_driver::init_logger(&early_dcx, logger_config());
 
     rustc_driver::install_ice_hook(BUG_REPORT_URL, |handler| {
         // FIXME: this macro calls unwrap internally but is called in a panicking context!  It's not

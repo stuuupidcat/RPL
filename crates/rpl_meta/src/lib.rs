@@ -29,7 +29,6 @@ use arena::Arena;
 use context::MetaContext;
 pub use error::RPLMetaError;
 use meta::SymbolTables;
-use parser::pairs;
 use std::path::PathBuf;
 
 pub fn parse_and_collect<'mcx>(

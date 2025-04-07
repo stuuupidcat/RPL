@@ -13,8 +13,8 @@ extern crate rustc_span;
 
 rustc_fluent_macro::fluent_messages! { "../messages.en.ftl" }
 
-use rpl_context_pest::PatCtxt;
-use rpl_meta_pest::context::MetaContext;
+use rpl_context::PatCtxt;
+use rpl_meta::context::MetaContext;
 use rpl_mir::CheckMirCtxt;
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
@@ -107,8 +107,9 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     ) -> Self::Result {
         if self.tcx.is_mir_available(def_id) {
             let body = self.tcx.optimized_mir(def_id);
-            self.pcx.for_each_rpl_pattern(|id, pattern| {
-                for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern, &pattern.fns.unnamed_fns[0]).check()
+            self.pcx.for_each_rpl_pattern(|_id, pattern| {
+                for _matches in
+                    CheckMirCtxt::new(self.tcx, self.pcx, body, pattern, &pattern.fns.unnamed_fns[0]).check()
                 {
                     self.tcx.emit_node_span_lint(
                         ERROR_FOUND,

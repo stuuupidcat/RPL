@@ -19,7 +19,7 @@ use super::utils::{
 };
 pub use super::*;
 
-pub(crate) type FnSymbolTable<'i> = rpl_meta_pest::symbol_table::Fn<'i>;
+pub(crate) type FnSymbolTable<'i> = rpl_meta::symbol_table::Fn<'i>;
 
 rustc_index::newtype_index! {
     #[debug_format = "_?{}"]
@@ -987,12 +987,17 @@ impl<'pcx> MirPatternBuilder<'pcx> {
     fn mk_local(&mut self, ty: Ty<'pcx>) -> Local {
         self.pattern.locals.push(ty)
     }
+
+    #[allow(unused)]
     fn mk_return(&mut self, ty: Ty<'pcx>) -> Local {
         *self.pattern.return_idx.insert(self.pattern.locals.push(ty))
     }
+
+    #[allow(unused)]
     fn mk_self(&mut self, ty: Ty<'pcx>) -> Local {
         *self.pattern.self_idx.insert(self.pattern.locals.push(ty))
     }
+
     fn new_block_if_terminated(&mut self) {
         if self.pattern.basic_blocks[self.current].terminator.is_some() {
             self.current = self.pattern.basic_blocks.push(BasicBlockData::default());
@@ -1005,7 +1010,7 @@ impl<'pcx> MirPatternBuilder<'pcx> {
 
     pub fn mk_raw_stmts(&mut self, stmts: impl IntoIterator<Item = RawStatement<'pcx>>) {
         for stmt in stmts {
-            let loc = self.mk_raw_stmt(stmt);
+            let _loc = self.mk_raw_stmt(stmt);
         }
     }
 

@@ -3,7 +3,6 @@ use crate::idx::RPLIdx;
 use crate::meta::SymbolTables;
 use parser::pairs;
 use rustc_data_structures::fx::FxHashMap;
-use std::cell::Cell;
 use std::path::Path;
 use std::sync::RwLock;
 
@@ -19,13 +18,11 @@ pub struct MetaContext<'mcx> {
 }
 
 mod test {
-    use super::*;
-
     const fn _check_sync<T: Sync>() {}
 
     #[test]
     fn test_check_sync() {
-        _check_sync::<MetaContext<'_>>();
+        _check_sync::<super::MetaContext<'_>>();
     }
 }
 

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use super::utils::mutability_from_pair_mutability;
 use super::{FnSymbolTable, MirPattern, NonLocalMetaVars, Path, RawDecleration, RawStatement, Ty};
 use crate::PatCtxt;
-use rpl_meta_pest::collect_elems_separated_by_comma;
+use rpl_meta::collect_elems_separated_by_comma;
 use rpl_parser::generics::Choice4;
 use rpl_parser::pairs;
 use rustc_data_structures::fx::{FxHashMap, FxIndexMap};

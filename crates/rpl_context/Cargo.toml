@@ -1,5 +1,5 @@
 [package]
-name = "rpl_context_pest"
+name = "rpl_context"
 version.workspace = true
 description.workspace = true
 repository.workspace = true
@@ -8,7 +8,7 @@ keywords.workspace = true
 edition.workspace = true
 
 [dependencies]
-rpl_meta_pest.workspace = true
+rpl_meta.workspace = true
 rpl_parser.workspace = true
 
 [features]

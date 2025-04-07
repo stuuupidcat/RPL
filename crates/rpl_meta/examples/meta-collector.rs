@@ -17,8 +17,8 @@ extern crate rustc_span;
 use rustc_data_structures::sync::{Registry, WorkerLocal};
 use std::num::NonZero;
 
-use rpl_meta_pest::cli::{read_file_from_path_buf, traverse_rpl};
-use rpl_meta_pest::RPLMetaError;
+use rpl_meta::cli::{read_file_from_path_buf, traverse_rpl};
+use rpl_meta::RPLMetaError;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 
@@ -26,7 +26,7 @@ pub fn collect_file_from_args_for_test() -> Vec<(PathBuf, String)> {
     let args = std::env::args();
     let args = args.skip(1);
     if args.len() == 0 {
-        eprintln!("Usage: cargo run --package rpl_meta_pest --example meta-collector <file1> <file2> ...");
+        eprintln!("Usage: cargo run --package rpl_meta --example meta-collector <file1> <file2> ...");
         vec![]
     } else {
         let mut res = vec![];
@@ -57,10 +57,10 @@ fn main() {
     // Only for testing purposes
     Registry::new(NonZero::new(1).unwrap()).register();
     rustc_span::create_session_if_not_set_then(rustc_span::edition::LATEST_STABLE_EDITION, |_| {
-        static MCTX_ARENA: OnceLock<rpl_meta_pest::arena::Arena<'_>> = OnceLock::new();
-        static MCTX: OnceLock<rpl_meta_pest::context::MetaContext<'_>> = OnceLock::new();
-        let mctx_arena = MCTX_ARENA.get_or_init(rpl_meta_pest::arena::Arena::default);
+        static MCTX_ARENA: OnceLock<rpl_meta::arena::Arena<'_>> = OnceLock::new();
+        static MCTX: OnceLock<rpl_meta::context::MetaContext<'_>> = OnceLock::new();
+        let mctx_arena = MCTX_ARENA.get_or_init(rpl_meta::arena::Arena::default);
         let patterns_and_paths = mctx_arena.alloc(collect_file_from_args_for_test());
-        let _mctx = MCTX.get_or_init(|| rpl_meta_pest::parse_and_collect(&mctx_arena, patterns_and_paths));
+        let _mctx = MCTX.get_or_init(|| rpl_meta::parse_and_collect(&mctx_arena, patterns_and_paths));
     });
 }
