@@ -14,22 +14,17 @@ keywords = ["Bug detection"]
 repository = "https://github.com/stuuupidcat/RPL"
 
 [workspace.dependencies]
-# rpl_context = { path = "./crates/rpl_context" }
+rpl_context = { path = "./crates/rpl_context" }
 rpl_driver = { path = "./crates/rpl_driver" }
 rpl_parser = { path = "./crates/rpl_parser" }
 rpl_graphviz = { path = "./crates/rpl_graphviz" }
 rpl_interface = { path = "./crates/rpl_interface" }
-rpl_macros = { path = "./crates/rpl_macros" }
 rpl_match = { path = "./crates/rpl_match" }
 rpl_mir = { path = "./crates/rpl_mir" }
 rpl_mir_graph = { path = "./crates/rpl_mir_graph" }
 rpl_mir_transform = { path = "./crates/rpl_mir_transform" }
-rpl_pat_expand = { path = "./crates/rpl_pat_expand" }
-rpl_pat_syntax = { path = "./crates/rpl_pat_syntax" }
-# rpl_patterns = { path = "./crates/rpl_patterns" }
 rpl_utils = { path = "./crates/rpl_utils" }
 rpl_meta = { path = "./crates/rpl_meta" }
-rpl_context = { path = "./crates/rpl_context" }
 rustc_tools_util = "0.3.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
