@@ -209,26 +209,30 @@ impl<'pcx> Place<'pcx, PlaceBase> {
 
     pub fn from(place: &pairs::MirPlace<'pcx>, pcx: PatCtxt<'pcx>, sym_tab: &FnSymbolTable<'pcx>) -> Self {
         let (base, suffix) = place.get_matched();
-        let local = match base.deref() {
+        let (base, mut base_projections) = match base.deref() {
             Choice3::_0(local) => match local.deref() {
                 Choice4::_0(_place_holder) => {
                     panic!("expect a non-placeholder local");
                 },
                 _ => {
                     let local = sym_tab.inner.get_local_idx(Symbol::intern(local.span.as_str()));
-                    Local::from(local)
+                    (PlaceBase::Local(Local::from(local)), vec![])
                 },
             },
             Choice3::_1(paren) => {
                 let (_, place, _) = paren.get_matched();
-                return Place::from(place, pcx, sym_tab);
+                let Place { base, projection } = Place::from(place, pcx, sym_tab);
+                (base, projection.to_vec())
             },
             Choice3::_2(deref) => {
                 let (_, place) = deref.get_matched();
-                return Place::from(place, pcx, sym_tab);
+                let Place { base, projection } = Place::from(place, pcx, sym_tab);
+                let mut new_projection = vec![PlaceElem::Deref];
+                new_projection.extend(projection);
+                (base, new_projection)
             },
         };
-        let place_elems = suffix
+        let suffix_projections = suffix
             .iter_matched()
             .map(|suffix| match suffix.deref() {
                 Choice5::_0(field) => PlaceElem::from_field(field),
@@ -270,9 +274,10 @@ impl<'pcx> Place<'pcx, PlaceBase> {
                 },
             })
             .collect::<Vec<_>>();
+        base_projections.extend(suffix_projections);
         Self {
-            base: PlaceBase::Local(local),
-            projection: pcx.mk_slice(&place_elems),
+            base,
+            projection: pcx.mk_slice(&base_projections),
         }
     }
 }
@@ -721,6 +726,7 @@ impl<'pcx> Operand<'pcx> {
         pcx: PatCtxt<'pcx>,
         fn_sym_tab: &FnSymbolTable<'pcx>,
     ) -> Self {
+        println!("copy_: {:?}", copy_.span.as_str());
         Self::Copy(Place::from(copy_.MirPlace(), pcx, fn_sym_tab))
     }
 
