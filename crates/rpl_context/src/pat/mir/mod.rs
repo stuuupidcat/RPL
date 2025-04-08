@@ -726,7 +726,6 @@ impl<'pcx> Operand<'pcx> {
         pcx: PatCtxt<'pcx>,
         fn_sym_tab: &FnSymbolTable<'pcx>,
     ) -> Self {
-        println!("copy_: {:?}", copy_.span.as_str());
         Self::Copy(Place::from(copy_.MirPlace(), pcx, fn_sym_tab))
     }
 
@@ -885,9 +884,10 @@ impl<'pcx> AggKind<'pcx> {
                 (Self::Adt(path_or_lang_item, kind), op_list)
             },
             Choice6::_3(tuple) => {
-                let (_, _, _, _, _, _, operands, _) = tuple.get_matched();
+                let (_, _, _, _, path, _, operands, _) = tuple.get_matched();
+                let path = PathWithArgs::from_path(path, pcx, fn_sym_tab.meta_vars.clone());
                 let operands = collect_operands(operands, pcx, fn_sym_tab);
-                (Self::Tuple, operands.into_boxed_slice())
+                (Self::Adt(path, AggAdtKind::Tuple), operands.into_boxed_slice())
             },
             Choice6::_4(unit) => {
                 let path_or_lang_item =
