@@ -22,6 +22,9 @@ fn mir_rvalue_or_call() {
     full_test!(MirRvalueCast, "copy $x as isize (IntToInt)");
     full_test!(MirRvalue, "copy $x as isize (IntToInt)");
     full_test!(MirRvalueOrCall, "copy $x as isize (IntToInt)");
+    full_test!(MirRvalue, "copy (*$from_vec_mut_borrow).buf.inner.ptr.pointer");
+    full_test!(MirRvalue, "copy (((((*$from_vec_mut_borrow).buf).inner).ptr).pointer)");
+    full_test!(MirRvalue, "copy ((((*$x).0).0).0)");
 }
 #[test]
 fn cve_2018_21000() {
