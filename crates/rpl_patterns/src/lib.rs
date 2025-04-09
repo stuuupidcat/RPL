@@ -11,6 +11,7 @@ extern crate rustc_infer;
 extern crate rustc_lint_defs;
 extern crate rustc_macros;
 extern crate rustc_middle;
+extern crate rustc_passes;
 extern crate rustc_session;
 extern crate rustc_span;
 extern crate rustc_trait_selection;
@@ -25,6 +26,7 @@ use rustc_session::config::OptLevel;
 
 mod inline;
 mod normal;
+mod others;
 
 pub(crate) mod errors;
 pub(crate) mod lints;
@@ -63,6 +65,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     normal::cve_2021_29941_2::check_item,
     normal::cve_2022_23639::check_item,
     inline::cve_2024_27284::check_item,
+    others::private_function_marked_inline::check_item,
 ];
 
 #[instrument(level = "info", skip_all, fields(item = ?item.owner_id.def_id))]

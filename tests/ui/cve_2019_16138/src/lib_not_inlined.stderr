@@ -21,5 +21,73 @@ LL | ...                       buf.set_len(uszwidth);
    |
    = help: before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
 
-error: aborting due to 2 previous errors
+error: it usually isn’t necessary to apply #[inline] to private functions
+  --> tests/ui/cve_2019_16138/src/lib_not_inlined.rs:263:13
+   |
+LL | /             fn advance(&mut self) {
+LL | |
+LL | |                 self.col += 1;
+LL | |                 if self.col == self.buf.len() {
+...  |
+LL | |             }
+   | |_____________^ `#[inline]` applied here
+   |
+   = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
+   = note: `#[deny(rpl::private_and_inline)]` on by default
+
+error: it usually isn’t necessary to apply #[inline] to private functions
+  --> tests/ui/cve_2019_16138/src/lib_not_inlined.rs:347:9
+   |
+LL | /         fn read_byte<R: BufRead>(r: &mut R) -> io::Result<u8> {
+LL | |
+LL | |             let mut buf = [0u8];
+LL | |             r.read_exact(&mut buf[..])?;
+LL | |             Ok(buf[0])
+LL | |         }
+   | |_________^ `#[inline]` applied here
+   |
+   = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
+
+error: it usually isn’t necessary to apply #[inline] to private functions
+  --> tests/ui/cve_2019_16138/src/lib_not_inlined.rs:356:9
+   |
+LL | /         fn decode_component<R: BufRead, S: FnMut(usize, u8)>(
+LL | |
+LL | |             r: &mut R,
+LL | |             width: usize,
+...  |
+LL | |             Ok(())
+LL | |         }
+   | |_________^ `#[inline]` applied here
+   |
+   = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
+
+error: it usually isn’t necessary to apply #[inline] to private functions
+  --> tests/ui/cve_2019_16138/src/lib_not_inlined.rs:420:13
+   |
+LL | /             fn rl_marker(pix: RGBE8Pixel) -> Option<usize> {
+LL | |
+LL | |
+LL | |                 if pix.c == [1, 1, 1] {
+...  |
+LL | |             }
+   | |_____________^ `#[inline]` applied here
+   |
+   = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
+
+error: it usually isn’t necessary to apply #[inline] to private functions
+  --> tests/ui/cve_2019_16138/src/lib_not_inlined.rs:420:13
+   |
+LL | /             fn rl_marker(pix: RGBE8Pixel) -> Option<usize> {
+LL | |
+LL | |
+LL | |                 if pix.c == [1, 1, 1] {
+...  |
+LL | |             }
+   | |_____________^ `#[inline]` applied here
+   |
+   = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
+   = note: duplicate diagnostic emitted due to `-Z deduplicate-diagnostics=no`
+
+error: aborting due to 7 previous errors
 

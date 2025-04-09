@@ -265,6 +265,7 @@ mod hdr {
             // Advances counter to the next pixel
             #[inline]
             fn advance(&mut self) {
+                //~^ERROR: it usually isn’t necessary to apply #[inline] to private functions
                 self.col += 1;
                 if self.col == self.buf.len() {
                     self.col = 0;
@@ -348,6 +349,7 @@ mod hdr {
 
         #[inline(always)]
         fn read_byte<R: BufRead>(r: &mut R) -> io::Result<u8> {
+        //~^ERROR: it usually isn’t necessary to apply #[inline] to private functions
             let mut buf = [0u8];
             r.read_exact(&mut buf[..])?;
             Ok(buf[0])
@@ -356,6 +358,7 @@ mod hdr {
         // Guarantees that first parameter of set_component will be within pos .. pos+width
         #[inline]
         fn decode_component<R: BufRead, S: FnMut(usize, u8)>(
+        //~^ERROR: it usually isn’t necessary to apply #[inline] to private functions
             r: &mut R,
             width: usize,
             mut set_component: S,
@@ -419,6 +422,8 @@ mod hdr {
             // returns run length if pixel is a run length marker
             #[inline]
             fn rl_marker(pix: RGBE8Pixel) -> Option<usize> {
+            //~^ERROR: it usually isn’t necessary to apply #[inline] to private functions
+            //~|ERROR: it usually isn’t necessary to apply #[inline] to private functions
                 if pix.c == [1, 1, 1] {
                     Some(pix.e as usize)
                 } else {
