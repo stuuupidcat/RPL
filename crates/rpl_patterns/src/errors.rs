@@ -294,3 +294,11 @@ pub struct SliceFromRawPartsUninitialized_ {
     pub ptr: Span,
     pub fn_name: &'static str,
 }
+
+#[derive(LintDiagnostic)]
+#[diag(rpl_patterns_private_function_marked_inline)]
+#[help]
+pub struct PrivateFunctionMarkedInline {
+    #[label(rpl_patterns_label)]
+    pub span: Span,
+}

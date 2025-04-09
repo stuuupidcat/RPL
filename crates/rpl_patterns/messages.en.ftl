@@ -120,3 +120,8 @@ rpl_patterns_slice_from_raw_parts_uninitialized_ = it violates the precondition 
     .len_label   = slice created with this length
     .ptr_label   = slice created with this pointer
     .help        = See https://doc.rust-lang.org/std/slice/fn.{$fn_name}.html
+
+rpl_patterns_private_function_marked_inline =  it usually isn’t necessary to apply #[inline] to private functions
+    .label = `#[inline]` applied here
+    .note = within a crate, the compiler generally makes good inline decisions
+    .help = See https://matklad.github.io/2021/07/09/inline-in-rust.html

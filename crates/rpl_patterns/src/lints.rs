@@ -666,3 +666,25 @@ declare_tool_lint! {
     Deny,
     "detects unsound usage of `#[pin_project]`"
 }
+
+declare_tool_lint! {
+    /// The `rpl::private_and_inline` lint detects private functions that are marked with `#[inline]`.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #[inline]
+    /// fn foo() {
+    ///     println!("foo");
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// It is not necessary to apply `#[inline]` to private functions.
+    pub rpl::PRIVATE_AND_INLINE,
+    Deny,
+    "detects private functions that are marked with `#[inline]`"
+}
