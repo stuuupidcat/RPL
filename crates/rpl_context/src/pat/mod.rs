@@ -21,7 +21,7 @@ pub use item::*;
 pub use mir::*;
 pub use ty::*;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct NonLocalMetaVars<'pcx> {
     pub ty_vars: IndexVec<TyVarIdx, TyVar>,
     pub const_vars: IndexVec<ConstVarIdx, ConstVar<'pcx>>,

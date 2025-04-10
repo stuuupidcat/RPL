@@ -633,7 +633,7 @@ pub struct ConstVar<'pcx> {
     pub ty: Ty<'pcx>,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct PlaceVar<'pcx> {
     pub idx: PlaceVarIdx,
     pub name: Symbol,

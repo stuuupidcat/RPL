@@ -12,6 +12,7 @@ use rustc_hir::Safety;
 use rustc_middle::mir;
 use rustc_span::Symbol;
 
+#[derive(Debug)]
 pub struct Adt<'pcx> {
     pub meta: NonLocalMetaVars<'pcx>,
     pub kind: AdtKind<'pcx>,
@@ -73,12 +74,13 @@ impl<'pcx> Adt<'pcx> {
     }
 }
 
+#[derive(Debug)]
 pub enum AdtKind<'pcx> {
     Struct(Variant<'pcx>),
     Enum(FxIndexMap<Symbol, Variant<'pcx>>),
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Variant<'pcx> {
     pub fields: FxIndexMap<Symbol, Field<'pcx>>,
 }
@@ -102,6 +104,7 @@ impl<'pcx> Variant<'pcx> {
     }
 }
 
+#[derive(Debug)]
 pub struct Field<'pcx> {
     pub ty: Ty<'pcx>,
 }

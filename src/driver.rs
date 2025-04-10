@@ -18,7 +18,6 @@ extern crate tracing;
 
 use rpl_interface::{DefaultCallbacks, RplCallbacks, RustcCallbacks};
 use rustc_session::EarlyDiagCtxt;
-use rustc_data_structures::sync::WorkerLocal;
 use rustc_session::config::ErrorOutputType;
 
 use std::env;

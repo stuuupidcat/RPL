@@ -1195,28 +1195,6 @@ dependencies = [
 name = "rpl_context"
 version = "0.1.0"
 dependencies = [
- "derive_more",
-]
-dependencies = [
- "rpl_meta_pest",
- "rpl_parser",
-]
-
-[[package]]
-name = "rpl_context"
-version = "0.1.0"
-dependencies = [
- "derive_more",
-]
-dependencies = [
- "rpl_meta_pest",
- "rpl_parser",
-]
-
-[[package]]
-name = "rpl_context"
-version = "0.1.0"
-dependencies = [
  "rpl_meta",
  "rpl_parser",
 ]
@@ -1370,7 +1348,7 @@ checksum = "82fa69b198d894d84e23afde8e9ab2af4400b2cba20d6bf2b428a8b01c222c5a"
 dependencies = [
  "serde",
  "serde_json",
- "thiserror 1.0.69",
+ "thiserror",
  "tracing",
 ]
 
