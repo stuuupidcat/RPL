@@ -16,6 +16,7 @@
   "lldb.showDisassembly": "auto",
   "lldb.dereferencePointers": true,
   "lldb.consoleMode": "commands",
+  "editor.foldingMaximumRegions": 65000,
   "cSpell.words": [
     "anstyle",
     "balabala",
