@@ -103,7 +103,8 @@ fn pattern_thread_local_static(pcx: PatCtxt<'_>) -> PatternThreadLocalStatic<'_>
         fn $pattern(..) -> &'static $T = mir! {
             #[export(thread_local)]
             let $local_key: &std::thread::LocalKey::<std::cell::UnsafeCell<$T>> = _;
-            let $result: core::result::Result<&$T, _> = std::thread::LocalKey::<std::cell::UnsafeCell<$T>>::try_with::<_, _>(move $local_key, _);
+            let $result: core::result::Result<&$T, _> =
+                std::thread::LocalKey::<std::cell::UnsafeCell<$T>>::try_with::<_, _>(move $local_key, _);
             #[export(ret)]
             let $RET: &T = move (($result as Ok).0);
             // #[export(ret)]
