@@ -1,4 +1,6 @@
-//@ ignore-on-host
+//@compile-flags: -Zinline-mir-threshold=200
+//@compile-flags: -Zinline-mir-forwarder-threshold=200
+//@compile-flags: -Zinline-mir-hint-threshold=200
 
 use core::slice;
 use std::cell::Cell;
@@ -485,12 +487,15 @@ where
         out
     }
 
-    #[rpl::dump_mir(dump_cfg, dump_ddg)]
+    // #[rpl::dump_mir(dump_cfg, dump_ddg)]
     pub fn into_boxed_bitslice(self) -> BitBox<O, T> {
         let pointer = self.pointer;
         //  Convert the Vec allocation into a Box<[T]> allocation
         mem::forget(self.into_boxed_slice());
+        //~^NOTE: the `std::vec::Vec<T>` value may be moved here
         unsafe { BitBox::from_raw(pointer.as_mut_ptr()) }
+        //~^ERROR: use a pointer from `std::vec::Vec<T>` after it's moved
+        //~|NOTE: `#[deny(rpl::use_after_move)]` on by default
     }
 
     #[inline]

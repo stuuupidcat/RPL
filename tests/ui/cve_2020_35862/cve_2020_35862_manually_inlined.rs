@@ -1,4 +1,7 @@
 //@ignore-on-host
+//@compile-flags: -Zinline-mir-threshold=200
+//@compile-flags: -Zinline-mir-forwarder-threshold=200
+//@compile-flags: -Zinline-mir-hint-threshold=200
 use core::slice;
 use std::cell::Cell;
 use std::marker::PhantomData;

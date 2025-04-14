@@ -176,10 +176,12 @@ fn base_config(test_dir: &str) -> (Config, Args) {
         env.make_ascii_uppercase();
         let env = format!("RPL_TEST_{}", env);
         if let Some(threshold) = env::var_os(env) {
+            let threshold = threshold.into_string().unwrap();
             config
                 .program
                 .args
-                .push(format!("-Z{}={}", arg, threshold.into_string().unwrap()).into());
+                .push(format!("-Z{arg}={threshold}").into());
+            println!("set {arg} to {threshold}");
         }
     }
 
