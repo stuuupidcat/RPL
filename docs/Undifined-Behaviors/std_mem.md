@@ -29,12 +29,17 @@ fn invalid_value() -> bool {
 **(Integer-To-Pointer)** Transmuting integers to pointers is a largely unspecified operation. It is likely not equivalent to an `as` cast. Doing non-zero-sized memory accesses with a pointer constructed this way is currently considered undefined behavior.
 
 ```rust
-fn transmute_int_to_ptr() {
-    let x: usize = 0;
-    let ptr: *const usize = unsafe { transmute(x) };
-    unsafe {
-        println!("{}", *ptr);
-    }
+use std::mem::transmute;
+
+pub fn transmute_int_to_ptr(x: usize) {
+    let ptr: *const () = unsafe { transmute(x) };
+    let ptr_usize = ptr as *const usize;
+    println!("{}", unsafe { *ptr_usize });
+}
+
+fn main() {
+    let x = 0x8;
+    transmute_int_to_ptr(x);
 }
 ```
 

@@ -16,4 +16,5 @@ pub(crate) mod cve_2021_25905;
 pub(crate) mod cve_2021_29941_2;
 pub(crate) mod cve_2024_27284;
 
-pub(crate) mod std_mem_transmute;
+pub(crate) mod transmute_int_to_ptr;
+pub(crate) mod transmute_type_to_bool;

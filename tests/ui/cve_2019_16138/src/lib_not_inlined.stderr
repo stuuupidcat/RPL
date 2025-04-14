@@ -33,6 +33,7 @@ LL | |             }
    | |_____________^ `#[inline]` applied here
    |
    = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
+   = note: within a crate, the compiler generally makes good inline decisions
    = note: `#[deny(rpl::private_and_inline)]` on by default
 
 error: it usually isn’t necessary to apply #[inline] to private functions
@@ -47,6 +48,7 @@ LL | |         }
    | |_________^ `#[inline]` applied here
    |
    = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
+   = note: within a crate, the compiler generally makes good inline decisions
 
 error: it usually isn’t necessary to apply #[inline] to private functions
   --> tests/ui/cve_2019_16138/src/lib_not_inlined.rs:356:9
@@ -61,6 +63,7 @@ LL | |         }
    | |_________^ `#[inline]` applied here
    |
    = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
+   = note: within a crate, the compiler generally makes good inline decisions
 
 error: it usually isn’t necessary to apply #[inline] to private functions
   --> tests/ui/cve_2019_16138/src/lib_not_inlined.rs:420:13
@@ -74,6 +77,7 @@ LL | |             }
    | |_____________^ `#[inline]` applied here
    |
    = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
+   = note: within a crate, the compiler generally makes good inline decisions
 
 error: it usually isn’t necessary to apply #[inline] to private functions
   --> tests/ui/cve_2019_16138/src/lib_not_inlined.rs:420:13
@@ -87,6 +91,7 @@ LL | |             }
    | |_____________^ `#[inline]` applied here
    |
    = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
+   = note: within a crate, the compiler generally makes good inline decisions
    = note: duplicate diagnostic emitted due to `-Z deduplicate-diagnostics=no`
 
 error: aborting due to 7 previous errors

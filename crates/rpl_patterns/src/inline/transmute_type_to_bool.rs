@@ -53,24 +53,24 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             && self.tcx.is_mir_available(def_id)
         {
             let body = self.tcx.optimized_mir(def_id);
-            let pattern_transmute = pattern_transmute_to_bool(self.pcx);
+            let pattern_transmute_to_bool = pattern_transmute_to_bool(self.pcx);
             for matches in CheckMirCtxt::new(
                 self.tcx,
                 self.pcx,
                 body,
-                pattern_transmute.pattern,
-                pattern_transmute.fn_pat,
+                pattern_transmute_to_bool.pattern,
+                pattern_transmute_to_bool.fn_pat,
             )
             .check()
             {
-                let transmute_from = matches[pattern_transmute.transmute_from].span_no_inline(body);
-                let transmute_to = matches[pattern_transmute.transmute_to].span_no_inline(body);
+                let transmute_from = matches[pattern_transmute_to_bool.transmute_from].span_no_inline(body);
+                let transmute_to = matches[pattern_transmute_to_bool.transmute_to].span_no_inline(body);
                 debug!(?transmute_from, ?transmute_to);
                 self.tcx.emit_node_span_lint(
-                    crate::lints::UNSOUND_TRANSMUTE_TO_BOOL,
+                    crate::lints::TRANSMUTING_TYPE_TO_BOOL,
                     self.tcx.local_def_id_to_hir_id(def_id),
                     transmute_from,
-                    crate::errors::UnsoundTransmuteToBool {
+                    crate::errors::TransmutingTypeToBool {
                         from: transmute_from,
                         to: transmute_to,
                     },
@@ -88,6 +88,7 @@ struct PatternTransmute<'pcx> {
     transmute_to: pat::Location,
 }
 
+// The pattern for transmuting a type to a boolean
 #[rpl_macros::pattern_def]
 fn pattern_transmute_to_bool(pcx: PatCtxt<'_>) -> PatternTransmute<'_> {
     let transmute_from;
@@ -98,6 +99,7 @@ fn pattern_transmute_to_bool(pcx: PatCtxt<'_>) -> PatternTransmute<'_> {
             #[export(transmute_from)]
             let $transmute_from: $T = _;
             #[export(transmute_to)]
+            // FIXME: move and copy are both allowed here
             let $transmute_to: bool = move $transmute_from as bool (Transmute);
         }
     };

@@ -1,9 +1,0 @@
-pattern std_mem_uninitiallized 
-
-patt {
-    uninitialized[
-        $T: ty
-    ] = pub fn _ (..) -> _ {
-        let $uninit: $T = std::mem::uninitialized();
-    }
-}
