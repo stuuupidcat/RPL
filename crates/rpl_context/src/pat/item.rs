@@ -1,3 +1,4 @@
+use derive_more::Debug;
 use rustc_data_structures::fx::{FxHashMap, FxIndexMap};
 use rustc_middle::mir;
 use rustc_span::symbol::kw;
@@ -5,7 +6,10 @@ use rustc_span::Symbol;
 
 use super::{MetaVars, MirPattern, Path, Ty};
 
+#[derive(Debug)]
+#[debug("${name}")]
 pub struct Adt<'pcx> {
+    pub name: Symbol,
     pub meta: MetaVars<'pcx>,
     pub kind: AdtKind<'pcx>,
 }
@@ -20,6 +24,8 @@ pub struct Variant<'pcx> {
     pub fields: FxIndexMap<Symbol, Field<'pcx>>,
 }
 
+#[derive(Debug)]
+#[debug("{ty:?}")]
 pub struct Field<'pcx> {
     pub ty: Ty<'pcx>,
 }
@@ -76,14 +82,16 @@ pub enum FnBody<'pcx> {
 }
 
 impl<'pcx> Adt<'pcx> {
-    pub(crate) fn new_struct() -> Self {
+    pub(crate) fn new_struct(name: Symbol) -> Self {
         Self {
+            name,
             meta: MetaVars::default(),
             kind: AdtKind::Struct(Default::default()),
         }
     }
-    pub(crate) fn new_enum() -> Self {
+    pub(crate) fn new_enum(name: Symbol) -> Self {
         Self {
+            name,
             meta: MetaVars::default(),
             kind: AdtKind::Enum(Default::default()),
         }

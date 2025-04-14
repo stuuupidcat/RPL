@@ -165,7 +165,7 @@ pub fn lang_item_res<'pcx>(pcx: PatCtxt<'pcx>, tcx: TyCtxt<'_>, item: LangItem) 
 /// would have both a [`DefKind::Mod`] and [`DefKind::Macro`].
 ///
 /// This function is expensive and should be used sparingly.
-#[instrument(level = "debug", skip(tcx), ret)]
+#[instrument(level = "trace", skip(tcx), ret)]
 pub fn def_path_res(tcx: TyCtxt<'_>, path: &[Symbol], kind: PatItemKind) -> Vec<Res> {
     let (base, path) = match path {
         [primitive] => {
@@ -231,7 +231,7 @@ pub fn def_path_res_with_base(tcx: TyCtxt<'_>, mut base: Vec<Res>, mut path: &[S
             })
             .collect();
 
-        trace!(?segment, ?rest, ?base);
+        // trace!(?segment, ?rest, ?base);
     }
 
     // trace!(?base);

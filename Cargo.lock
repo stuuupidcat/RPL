@@ -1071,6 +1071,9 @@ dependencies = [
 [[package]]
 name = "rpl_context"
 version = "0.1.0"
+dependencies = [
+ "derive_more",
+]
 
 [[package]]
 name = "rpl_driver"
@@ -1117,6 +1120,7 @@ dependencies = [
 name = "rpl_match"
 version = "0.1.0"
 dependencies = [
+ "derive_more",
  "rpl_context",
 ]
 

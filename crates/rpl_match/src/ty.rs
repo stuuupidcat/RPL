@@ -160,6 +160,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
         matched
     }
 
+    #[instrument(level = "debug", skip(self), ret)]
     fn match_adt(&self, adt_pat: &pat::Adt<'pcx>, adt: ty::AdtDef<'tcx>) -> Option<AdtMatch<'tcx>> {
         MatchAdtCtxt::new(self.tcx, self.pcx, self.pat, adt_pat).match_adt(adt)
     }
