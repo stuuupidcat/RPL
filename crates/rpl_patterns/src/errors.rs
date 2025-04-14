@@ -337,3 +337,18 @@ pub struct TransmutingIntToPtr {
     #[label(rpl_patterns_to_label)]
     pub to: Span,
 }
+
+/// Bad operation sequence to [`std::mem::ManuallyDrop`].
+#[derive(LintDiagnostic)]
+#[diag(rpl_patterns_bad_manually_drop_operation_sequence)]
+#[help]
+pub struct BadManuallyDropOperationSequence {
+    #[label(rpl_patterns_create_label)]
+    pub create: Span,
+    pub fn_1: &'static str,
+    pub fn_2: &'static str,
+    #[label(rpl_patterns_call_1_label)]
+    pub call_1: Span,
+    #[label(rpl_patterns_call_2_label)]
+    pub call_2: Span,
+}

@@ -223,7 +223,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
         self.match_path(path_with_args.path, def_id) && self.match_generic_args(&path_with_args.args, args, generics)
     }
 
-    #[instrument(level = "trace", skip(self), ret)]
+    #[instrument(level = "debug", skip(self), ret)]
     pub fn match_path(&self, path: pat::Path<'pcx>, def_id: DefId) -> bool {
         let matched = match path {
             // pat::Path::Item(path) => matches!(self.match_item_path(path, def_id), Some([])),
@@ -237,7 +237,7 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
             },
             pat::Path::LangItem(lang_item) => self.tcx.is_lang_item(def_id, lang_item),
         };
-        debug!(?path, ?def_id, matched, "match_path");
+        // debug!(?path, ?def_id, matched, "match_path");
         matched
     }
 

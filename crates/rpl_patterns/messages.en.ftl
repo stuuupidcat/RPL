@@ -141,3 +141,9 @@ rpl_patterns_transmuting_int_to_ptr = it is unsound to transmute an integer type
     .to_label = transmuted to here
     .note = transmuting integers to pointers is a largely unspecified operation
     .help = See https://doc.rust-lang.org/std/mem/fn.transmute.html#transmutation-between-pointers-and-integers
+
+rpl_patterns_bad_manually_drop_operation_sequence = invalid sequence of operations on `core::mem::ManuallyDrop`: `{$fn_1}` and `{$fn_2}`
+    .create_label = created here
+    .call_1_label = first call here
+    .call_2_label = second call here
+    .help = See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.{$fn_2}

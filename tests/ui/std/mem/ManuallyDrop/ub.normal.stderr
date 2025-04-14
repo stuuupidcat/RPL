@@ -1,0 +1,281 @@
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:11:9
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         ManuallyDrop::drop(&mut s);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |         |
+   |         first call here
+   |         second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.drop
+   = note: `#[deny(rpl::bad_manually_drop_operation_sequence)]` on by default
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:14:9
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         ManuallyDrop::drop(&mut s);
+   |         -------------------------- first call here
+...
+LL |         ManuallyDrop::drop(&mut s);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.drop
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:11:9
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         ManuallyDrop::drop(&mut s);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ second call here
+...
+LL |         ManuallyDrop::drop(&mut s);
+   |         -------------------------- first call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.drop
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:14:9
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+...
+LL |         ManuallyDrop::drop(&mut s);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |         |
+   |         first call here
+   |         second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.drop
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `take`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:24:18
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         let t1 = ManuallyDrop::take(&mut s);
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                  |
+   |                  first call here
+   |                  second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.take
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `take`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:27:18
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         let t1 = ManuallyDrop::take(&mut s);
+   |                  -------------------------- first call here
+...
+LL |         let t2 = ManuallyDrop::take(&mut s);
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^ second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.take
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `take`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:24:18
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         let t1 = ManuallyDrop::take(&mut s);
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^ second call here
+...
+LL |         let t2 = ManuallyDrop::take(&mut s);
+   |                  -------------------------- first call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.take
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `take`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:27:18
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+...
+LL |         let t2 = ManuallyDrop::take(&mut s);
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                  |
+   |                  first call here
+   |                  second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.take
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:40:9
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+...
+LL |         ManuallyDrop::drop(&mut s);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |         |
+   |         first call here
+   |         second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.drop
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `take`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:37:17
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         let t = ManuallyDrop::take(&mut s);
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                 |
+   |                 first call here
+   |                 second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.take
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `drop`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:40:9
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         let t = ManuallyDrop::take(&mut s);
+   |                 -------------------------- first call here
+...
+LL |         ManuallyDrop::drop(&mut s);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.drop
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `take`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:37:17
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         let t = ManuallyDrop::take(&mut s);
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^ second call here
+...
+LL |         ManuallyDrop::drop(&mut s);
+   |         -------------------------- first call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.take
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:50:9
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         ManuallyDrop::drop(&mut s);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |         |
+   |         first call here
+   |         second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.drop
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `take`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:53:17
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+...
+LL |         let t = ManuallyDrop::take(&mut s);
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |                 |
+   |                 first call here
+   |                 second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.take
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `drop`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:50:9
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         ManuallyDrop::drop(&mut s);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^ second call here
+...
+LL |         let t = ManuallyDrop::take(&mut s);
+   |                 -------------------------- first call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.drop
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `take`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:53:17
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         ManuallyDrop::drop(&mut s);
+   |         -------------------------- first call here
+...
+LL |         let t = ManuallyDrop::take(&mut s);
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^ second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.take
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `into_inner` and `drop`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:64:18
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         ManuallyDrop::drop(&mut s);
+   |         -------------------------- first call here
+LL |         let t2 = ManuallyDrop::into_inner(s);
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^ second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.drop
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `into_inner` and `take`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:74:18
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         let t1 = ManuallyDrop::take(&mut s);
+   |                  -------------------------- first call here
+LL |         let t2 = ManuallyDrop::into_inner(s);
+   |                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^ second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.take
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:82:9
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+LL |     unsafe {
+LL |         ManuallyDrop::drop(&mut s);
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |         |
+   |         first call here
+   |         second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.drop
+
+error: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
+  --> tests/ui/std/mem/ManuallyDrop/ub.rs:91:13
+   |
+LL |     let mut s = ManuallyDrop::new("1".to_owned());
+   |                 --------------------------------- created here
+...
+LL |             ManuallyDrop::drop(&mut s);
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |             |
+   |             first call here
+   |             second call here
+   |
+   = help: See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.drop
+
+error: aborting due to 20 previous errors
+

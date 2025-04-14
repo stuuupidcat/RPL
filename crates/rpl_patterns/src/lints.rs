@@ -765,3 +765,35 @@ declare_tool_lint! {
     Warn,
     "detects a transmute from an integer type to a pointer type"
 }
+
+declare_tool_lint! {
+    /// The `rpl::bad_manually_drop_operation_sequence` lint detects a sequence of operations
+    /// that are not allowed on a `ManuallyDrop` type.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// use std::mem::ManuallyDrop;
+    ///
+    /// fn double_drop<T>(x: T) {
+    ///     let mut s = ManuallyDrop::new(x);
+    ///     unsafe {
+    ///         ManuallyDrop::drop(&mut s);
+    ///         ManuallyDrop::drop(&mut s); // double drop
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// The `ManuallyDrop` type is used to prevent the automatic dropping of a value.
+    /// However, it is not allowed to drop a `ManuallyDrop` value twice,
+    /// as it can lead to undefined behavior.
+    ///
+    /// The same applies to calling `ManuallyDrop::take` after dropping the value.
+    pub rpl::BAD_MANUALLY_DROP_OPERATION_SEQUENCE,
+    Deny,
+    "detects a sequence of operations that are not allowed on a `ManuallyDrop` type"
+}
