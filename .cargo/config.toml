@@ -1,0 +1,15 @@
+[alias]
+tests = "test --all"
+uitest = "test --test compile-test"
+uibless = "test --test compile-test -- -- --bless"
+
+[build]
+# -Zbinary-dep-depinfo allows us to track which rlib files to use for compiling UI tests
+rustflags = ["-Zunstable-options", "-Zbinary-dep-depinfo"]
+target-dir = "target"
+
+[unstable]
+binary-dep-depinfo = true
+
+[profile.dev]
+split-debuginfo = "unpacked"
