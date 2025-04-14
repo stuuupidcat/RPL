@@ -1,11 +1,11 @@
 error: use a pointer from `std::vec::Vec<T>` after it's moved
-  --> tests/ui/cve_2020_35862/cve_2020_35862.rs:496:43
+  --> tests/ui/cve_2020_35862/cve_2020_35862.rs:493:43
    |
 LL |         unsafe { BitBox::from_raw(pointer.as_mut_ptr()) }
    |                                           ^^^^^^^^^^^^ used here
    |
 note: the `std::vec::Vec<T>` value may be moved here
-  --> tests/ui/cve_2020_35862/cve_2020_35862.rs:494:26
+  --> tests/ui/cve_2020_35862/cve_2020_35862.rs:491:26
    |
 LL |         mem::forget(self.into_boxed_slice());
    |                          ^^^^^^^^^^^^^^^^^^
