@@ -1,8 +1,13 @@
 name: Deploy RPL Reference
 on:
   pull_request:
-    branches:
-      - master
+    branches: [ master ]
+    paths: 
+      - 'docs/reference/**'
+  push:
+    branches: [ dev ]
+    paths:
+      - 'docs/reference/**'
 
 jobs:
   deploy:
