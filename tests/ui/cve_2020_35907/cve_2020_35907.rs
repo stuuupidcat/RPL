@@ -1,5 +1,6 @@
-//@ revisions: inline regular
+//@revisions: inline regular inline100
 //@[inline] compile-flags: -Z inline-mir=true
+//@[inline100] compile-flags: -Z inline-mir=true -Z inline-mir-threshold=100
 //@[regular] compile-flags: -Z inline-mir=false
 
 use core::task::{RawWaker, RawWakerVTable, Waker};

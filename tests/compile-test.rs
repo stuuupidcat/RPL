@@ -177,10 +177,7 @@ fn base_config(test_dir: &str) -> (Config, Args) {
         let env = format!("RPL_TEST_{}", env);
         if let Some(threshold) = env::var_os(env) {
             let threshold = threshold.into_string().unwrap();
-            config
-                .program
-                .args
-                .push(format!("-Z{arg}={threshold}").into());
+            config.program.args.push(format!("-Z{arg}={threshold}").into());
             println!("set {arg} to {threshold}");
         }
     }

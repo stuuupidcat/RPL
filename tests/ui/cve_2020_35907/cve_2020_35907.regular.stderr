@@ -1,5 +1,5 @@
 error: it is unsound to expose a `&'static std::task::Waker` from a thread-local where `std::task::Waker` is `Sync`
-  --> tests/ui/cve_2020_35907/cve_2020_35907.rs:25:28
+  --> tests/ui/cve_2020_35907/cve_2020_35907.rs:26:28
    |
 LL | pub fn noop_waker_ref() -> &'static Waker {
    |                            ^^^^^^^^^^^^^^ function returning `&'static std::task::Waker` here

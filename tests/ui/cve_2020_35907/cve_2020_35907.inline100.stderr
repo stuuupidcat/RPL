@@ -5,10 +5,9 @@ LL | pub fn noop_waker_ref() -> &'static Waker {
    |                            ^^^^^^^^^^^^^^ function returning `&'static std::task::Waker` here
 ...
 LL |     NOOP_WAKER_INSTANCE.with(|l| unsafe { &*l.get() })
-   |     --------------------------------------------------
+   |     ------------------- ------------------------------ `&'static std::task::Waker` returned here
    |     |
    |     thread local used here
-   |     `&'static std::task::Waker` returned here
    |
    = help: `std::task::Waker` is `Sync` so that it can shared among threads
    = help: the thread local is destroyed after the thread has been destroyed, and the exposed `&'static std::task::Waker` may outlive the thread it is exposed to
