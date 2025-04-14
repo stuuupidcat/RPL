@@ -130,7 +130,6 @@ impl<T> Pointer<T>
 where
     T: BitStore,
 {
-    #[inline]
     pub(crate) fn w(self) -> *mut T {
         unsafe { self.w }
     }
@@ -360,7 +359,6 @@ impl<T> BitIdx<T>
 where
     T: BitStore,
 {
-    #[inline]
     pub(crate) fn span(self, len: usize) -> (usize, BitTail<T>) {
         unsafe { BitTail::new_unchecked(*self) }.span(len)
     }
@@ -444,7 +442,6 @@ where
     O: BitOrder,
     T: BitStore,
 {
-    #[inline]
     pub(crate) fn bitptr(&self) -> BitPtr<T> {
         BitPtr::from_bitslice(self)
     }
