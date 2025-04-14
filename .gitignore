@@ -19,3 +19,6 @@
 
 mir_dump
 *.rlib
+
+# mdbook
+/docs/reference/book
