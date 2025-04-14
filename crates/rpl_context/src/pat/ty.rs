@@ -209,6 +209,7 @@ impl From<LangItem> for Path<'_> {
 
 #[derive(Clone, Copy)]
 pub struct PathWithArgs<'pcx> {
+    //FIXME: handle type alias correctly.
     pub path: Path<'pcx>,
     pub args: GenericArgsRef<'pcx>,
 }
