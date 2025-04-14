@@ -688,3 +688,55 @@ declare_tool_lint! {
     Deny,
     "detects private functions that are marked with `#[inline]`"
 }
+
+declare_tool_lint! {
+    /// The `rpl::transmuting_type_to_bool` lint detects a transmute from a type to a boolean.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    ///
+    /// use std::mem::transmute;
+    ///
+    /// fn invalid_value() -> bool {
+    ///     let x: u8 = 10;
+    ///     unsafe { transmute::<u8, bool>(x) }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// Transmuting integers to booleans is highly unsound,
+    /// probably producing a boolean value with an invalid state.
+    pub rpl::TRANSMUTING_TYPE_TO_BOOL,
+    Warn,
+    "detects a transmute from a type to a boolean"
+}
+
+declare_tool_lint! {
+    /// The `rpl::transmuting_int_to_ptr` lint detects a transmute from an integer type to a pointer type.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// use std::mem::transmute;
+    ///
+    /// fn transmute_int_to_ptr(x: usize) {
+    ///     let ptr: *const () = unsafe { transmute(x) };
+    ///     let ptr_usize = ptr as *const usize;
+    ///     println!("{}", unsafe { *ptr_usize });
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// Transmuting integers to pointers is a largely unspecified operation.
+    /// It is likely not equivalent to an as cast.
+    pub rpl::TRANSMUTING_INT_TO_PTR,
+    Warn,
+    "detects a transmute from an integer type to a pointer type"
+}

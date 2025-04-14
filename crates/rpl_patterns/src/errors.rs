@@ -298,7 +298,32 @@ pub struct SliceFromRawPartsUninitialized_ {
 #[derive(LintDiagnostic)]
 #[diag(rpl_patterns_private_function_marked_inline)]
 #[help]
+#[note]
 pub struct PrivateFunctionMarkedInline {
     #[label(rpl_patterns_label)]
     pub span: Span,
+}
+
+// for std::mem::transmute : transmuting a type to a boolean
+#[derive(LintDiagnostic)]
+#[diag(rpl_patterns_transmuting_type_to_bool)]
+#[help]
+#[note]
+pub struct TransmutingTypeToBool {
+    #[label(rpl_patterns_from_label)]
+    pub from: Span,
+    #[label(rpl_patterns_to_label)]
+    pub to: Span,
+}
+
+// for std::mem::transmute: transmuting an integer_type to a pointer_type
+#[derive(LintDiagnostic)]
+#[diag(rpl_patterns_transmuting_int_to_ptr)]
+#[help]
+#[note]
+pub struct TransmutingIntToPtr {
+    #[label(rpl_patterns_from_label)]
+    pub from: Span,
+    #[label(rpl_patterns_to_label)]
+    pub to: Span,
 }
