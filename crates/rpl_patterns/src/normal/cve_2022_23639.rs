@@ -6,7 +6,7 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::{Span, Symbol};
 
-use rpl_mir::{pat, CheckMirCtxt};
+use rpl_mir::{CheckMirCtxt, pat};
 
 use crate::lints::UNSOUND_CAST_BETWEEN_U64_AND_ATOMIC_U64;
 

@@ -7,7 +7,7 @@ pub mod u8_to_t {
     use rustc_middle::ty::TyCtxt;
     use rustc_span::{Span, Symbol};
 
-    use rpl_mir::{pat, CheckMirCtxt};
+    use rpl_mir::{CheckMirCtxt, pat};
 
     use crate::lints::MISORDERED_PARAMETERS;
 
@@ -116,7 +116,7 @@ pub mod t_to_u8 {
     use rustc_middle::ty::TyCtxt;
     use rustc_span::{Span, Symbol};
 
-    use rpl_mir::{pat, CheckMirCtxt};
+    use rpl_mir::{CheckMirCtxt, pat};
 
     use crate::lints::MISORDERED_PARAMETERS;
 

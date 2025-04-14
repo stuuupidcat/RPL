@@ -1,13 +1,13 @@
 use std::ops::Not;
 
 use rpl_context::PatCtxt;
-use rpl_mir::{pat, CheckMirCtxt};
+use rpl_mir::{CheckMirCtxt, pat};
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::{self, Ty, TyCtxt};
-use rustc_span::{sym, Span, Symbol};
+use rustc_span::{Span, Symbol, sym};
 
 use crate::lints::UNSOUND_SLICE_CAST;
 

@@ -1,8 +1,8 @@
 use proc_macro2::TokenStream;
-use quote::{format_ident, quote, quote_each_token, quote_token, ToTokens};
+use quote::{ToTokens, format_ident, quote, quote_each_token, quote_token};
+use syn::Ident;
 use syn::parse::{Parse, ParseStream};
 use syn::punctuated::{Pair, Pairs, Punctuated};
-use syn::Ident;
 use syntax::*;
 
 use crate::SymbolTable;
@@ -883,7 +883,7 @@ impl ToTokens for ExpandPat<'_, &Drop> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
         let ExpandPatCtxt { pat, .. } = self.ecx;
         let mir_pat = pat.expect_mir();
-        let Drop { ref place, .. } = self.value;
+        let Drop { place, .. } = self.value;
         let place = self.ecx.expand(place);
         quote_each_token!(tokens #mir_pat.mk_drop(#place); );
     }

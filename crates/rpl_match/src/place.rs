@@ -1,4 +1,4 @@
-use rpl_context::{pat, PatCtxt};
+use rpl_context::{PatCtxt, pat};
 use rustc_index::IndexVec;
 use rustc_middle::ty::TyCtxt;
 

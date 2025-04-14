@@ -1,7 +1,7 @@
 use crate::lints::{DEREF_UNCHECKED_PTR_OFFSET, UNCHECKED_POINTER_OFFSET};
 use rpl_context::PatCtxt;
 use rpl_mir::pat::Location;
-use rpl_mir::{pat, CheckMirCtxt, Matched};
+use rpl_mir::{CheckMirCtxt, Matched, pat};
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_hir::{self as hir};

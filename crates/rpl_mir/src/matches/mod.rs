@@ -13,7 +13,7 @@ use rustc_middle::mir::{self, PlaceRef};
 use rustc_middle::ty::Ty;
 use rustc_span::Span;
 
-use crate::{pat, CheckMirCtxt};
+use crate::{CheckMirCtxt, pat};
 
 pub struct Matched<'tcx> {
     pub basic_blocks: IndexVec<pat::BasicBlock, MatchedBlock>,
@@ -739,13 +739,10 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             },
             (
                 AssignOnReturn {
-                    return_: box ref return_pat,
+                    return_: box return_pat,
                     cleanup: cleanup_pat,
                 },
-                AssignOnReturn {
-                    box ref return_,
-                    cleanup,
-                },
+                AssignOnReturn { box return_, cleanup },
             ) => {
                 return_pat.len() == return_.len()
                     && core::iter::zip(return_pat, return_)

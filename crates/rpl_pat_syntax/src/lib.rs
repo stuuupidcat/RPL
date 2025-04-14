@@ -6,7 +6,7 @@ use proc_macro2::Span;
 use std::borrow::Borrow;
 use std::marker::PhantomData;
 use syn::punctuated::Punctuated;
-use syn::{token, Ident, Token};
+use syn::{Ident, Token, token};
 use syn_derive::{Parse, ToTokens};
 
 #[macro_use]

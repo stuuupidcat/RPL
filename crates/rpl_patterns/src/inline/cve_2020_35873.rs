@@ -3,9 +3,9 @@ use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
-use rustc_span::{sym, Span, Symbol};
+use rustc_span::{Span, Symbol, sym};
 
-use rpl_context::{pat, PatCtxt};
+use rpl_context::{PatCtxt, pat};
 use rpl_mir::CheckMirCtxt;
 
 use crate::lints::USE_AFTER_DROP;

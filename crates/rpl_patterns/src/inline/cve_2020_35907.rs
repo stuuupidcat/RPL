@@ -1,6 +1,6 @@
 use rpl_context::PatCtxt;
-use rpl_mir::{pat, CheckMirCtxt};
-use rustc_hir::def_id::{LocalDefId, CRATE_DEF_ID};
+use rpl_mir::{CheckMirCtxt, pat};
+use rustc_hir::def_id::{CRATE_DEF_ID, LocalDefId};
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_hir::{self as hir};
 use rustc_middle::hir::nested_filter::All;

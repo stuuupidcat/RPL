@@ -8,7 +8,7 @@ pub mod const_const_Transmute_ver {
     use rustc_middle::ty::TyCtxt;
     use rustc_span::{Span, Symbol};
 
-    use rpl_mir::{pat, CheckMirCtxt};
+    use rpl_mir::{CheckMirCtxt, pat};
 
     use crate::lints::WRONG_ASSUMPTION_OF_FAT_POINTER_LAYOUT;
 
@@ -117,7 +117,7 @@ pub mod mut_mut_Transmute_ver {
     use rustc_middle::ty::TyCtxt;
     use rustc_span::{Span, Symbol};
 
-    use rpl_mir::{pat, CheckMirCtxt};
+    use rpl_mir::{CheckMirCtxt, pat};
 
     use crate::lints::WRONG_ASSUMPTION_OF_FAT_POINTER_LAYOUT;
 
@@ -227,7 +227,7 @@ pub mod mut_const_PtrToPtr_ver {
     use rustc_middle::ty::TyCtxt;
     use rustc_span::{Span, Symbol};
 
-    use rpl_mir::{pat, CheckMirCtxt};
+    use rpl_mir::{CheckMirCtxt, pat};
 
     use crate::lints::WRONG_ASSUMPTION_OF_FAT_POINTER_LAYOUT;
 
