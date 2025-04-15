@@ -265,8 +265,8 @@ fn into_inner_after_take(pcx: PatCtxt<'_>) -> BadManuallyOperation<'_> {
         create,
         call_1,
         call_2,
-        fn_1: "into_inner",
-        fn_2: "take",
+        fn_1: "take",
+        fn_2: "into_inner",
     }
 }
 
@@ -298,7 +298,7 @@ fn into_inner_after_drop(pcx: PatCtxt<'_>) -> BadManuallyOperation<'_> {
         create,
         call_1,
         call_2,
-        fn_1: "into_inner",
-        fn_2: "drop",
+        fn_1: "drop",
+        fn_2: "into_inner",
     }
 }
