@@ -1,0 +1,52 @@
+<?xml version="1.0" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="467pt" height="365pt" viewBox="0.00 0.00 467.00 364.60">
+<g id="graph0" class="graph" transform="translate(25.132318576257944,342.0263115269039) scale(0.9041818850010703)" data-name="ControlFlowGraph">
+
+<polygon fill="white" stroke="none" points="-4,4 -4,-360.6 463,-360.6 463,4 -4,4" style=""/>
+<!-- bb0 -->
+<g id="node1" class="node" pointer-events="visible" data-name="bb0">
+
+<polygon fill="none" stroke="black" points="8.5,-330.6 8.5,-352.6 451.5,-352.6 451.5,-330.6 8.5,-330.6" style=""/>
+<text text-anchor="start" x="219.5" y="-337" font-family="Times,serif" font-size="14.00" style="">bb0</text>
+<polygon fill="none" stroke="black" points="8.5,-274.6 8.5,-330.6 451.5,-330.6 451.5,-274.6 8.5,-274.6" style=""/>
+<text text-anchor="start" x="11.5" y="-315" font-family="Times,serif" font-size="14.00" style="">_2 = std::mem::ManuallyDrop::&lt;T&gt; { value: copy _1 }</text>
+<text text-anchor="start" x="11.5" y="-298.2" font-family="Times,serif" font-size="14.00" style="">_4 = &amp;mut _2</text>
+<text text-anchor="start" x="11.5" y="-281.4" font-family="Times,serif" font-size="14.00" style="">_7 = &amp;raw mut ((*_4).0: T)</text>
+<polygon fill="none" stroke="black" points="8.5,-252.6 8.5,-274.6 451.5,-274.6 451.5,-252.6 8.5,-252.6" style=""/>
+<text text-anchor="start" x="11.06" y="-259" font-family="Times,serif" font-size="14.00" style="">_3 = std::ptr::drop_in_place::&lt;T&gt;(move _7) -&gt; [return: bb1, unwind continue]</text>
+</g>
+<!-- bb1 -->
+<g id="node2" class="node" pointer-events="visible" data-name="bb1">
+
+<polygon fill="none" stroke="black" points="8.5,-169.3 8.5,-191.3 451.5,-191.3 451.5,-169.3 8.5,-169.3" style=""/>
+<text text-anchor="start" x="219.5" y="-175.7" font-family="Times,serif" font-size="14.00" style="">bb1</text>
+<polygon fill="none" stroke="black" points="8.5,-130.3 8.5,-169.3 451.5,-169.3 451.5,-130.3 8.5,-130.3" style=""/>
+<text text-anchor="start" x="11.5" y="-153.7" font-family="Times,serif" font-size="14.00" style="">_6 = &amp;mut _2</text>
+<text text-anchor="start" x="11.5" y="-136.9" font-family="Times,serif" font-size="14.00" style="">_8 = &amp;raw mut ((*_6).0: T)</text>
+<polygon fill="none" stroke="black" points="8.5,-108.3 8.5,-130.3 451.5,-130.3 451.5,-108.3 8.5,-108.3" style=""/>
+<text text-anchor="start" x="11.06" y="-114.7" font-family="Times,serif" font-size="14.00" style="">_5 = std::ptr::drop_in_place::&lt;T&gt;(move _8) -&gt; [return: bb2, unwind continue]</text>
+</g>
+<!-- bb0&#45;&gt;bb1 -->
+<g id="edge1" class="edge" data-name="bb0-&gt;bb1">
+
+<path fill="none" stroke="black" d="M229.5,-248.61C229.5,-235.01 229.5,-220.34 229.5,-206.63" style=""/>
+<polygon fill="black" stroke="black" points="233,-206.89 229.5,-196.89 226,-206.89 233,-206.89" style=""/>
+<text text-anchor="middle" x="246.21" y="-218" font-family="Times,serif" font-size="14.00" style="">return</text>
+</g>
+<!-- bb2 -->
+<g id="node3" class="node" pointer-events="visible" data-name="bb2">
+
+<polygon fill="none" stroke="black" points="210.5,-26 210.5,-48 249.5,-48 249.5,-26 210.5,-26" style=""/>
+<text text-anchor="start" x="219.5" y="-32.4" font-family="Times,serif" font-size="14.00" style="">bb2</text>
+<polygon fill="none" stroke="black" points="210.5,-4 210.5,-26 249.5,-26 249.5,-4 210.5,-4" style=""/>
+<text text-anchor="start" x="213.29" y="-10.4" font-family="Times,serif" font-size="14.00" style="">return</text>
+</g>
+<!-- bb1&#45;&gt;bb2 -->
+<g id="edge2" class="edge" data-name="bb1-&gt;bb2">
+
+<path fill="none" stroke="black" d="M229.5,-104.8C229.5,-91.1 229.5,-76.19 229.5,-63.13" style=""/>
+<polygon fill="black" stroke="black" points="233,-63.25 229.5,-53.25 226,-63.25 233,-63.25" style=""/>
+<text text-anchor="middle" x="246.21" y="-74.2" font-family="Times,serif" font-size="14.00" style="">return</text>
+</g>
+</g>
+</svg>

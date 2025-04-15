@@ -12,8 +12,8 @@ use rpl_mir::CheckMirCtxt;
 use crate::lints::USE_AFTER_MOVE;
 
 /// - `INLINE_MIR_THRESHOLD = 200`
-/// - `RPL_TEST_INLINE_MIR_FORWARDER_THRESHOLD = 200`
-/// - `RPL_TEST_INLINE_MIR_HINT_THRESHOLD = 200`
+/// - `INLINE_MIR_FORWARDER_THRESHOLD = 200`
+/// - `INLINE_MIR_HINT_THRESHOLD = 200`
 #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);

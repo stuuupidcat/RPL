@@ -1,0 +1,71 @@
+<?xml version="1.0" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="819pt" height="525pt" viewBox="0.00 0.00 819.00 525.40">
+<g id="graph0" class="graph" transform="translate(4,521.4000244140625) scale(1)" data-name="ControlFlowGraph">
+
+<polygon fill="white" stroke="none" points="-4,4 -4,-521.4 815,-521.4 815,4 -4,4" style=""/>
+<!-- bb0 -->
+<g id="node1" class="node" pointer-events="visible" data-name="bb0">
+
+<polygon fill="none" stroke="black" points="8.5,-490.9 8.5,-512.9 803.5,-512.9 803.5,-490.9 8.5,-490.9" style=""/>
+<text text-anchor="start" x="395.5" y="-497.3" font-family="Times,serif" font-size="14.00" style="">bb0</text>
+<polygon fill="none" stroke="black" points="8.5,-451.9 8.5,-490.9 803.5,-490.9 803.5,-451.9 8.5,-451.9" style=""/>
+<text text-anchor="start" x="11.5" y="-475.3" font-family="Times,serif" font-size="14.00" style="">_3 = const "1"</text>
+<text text-anchor="start" x="11.5" y="-458.5" font-family="Times,serif" font-size="14.00" style="">_7 = copy _3 as &amp;[u8] (Transmute)</text>
+<polygon fill="none" stroke="black" points="8.5,-429.9 8.5,-451.9 803.5,-451.9 803.5,-429.9 8.5,-429.9" style=""/>
+<text text-anchor="start" x="11.39" y="-436.3" font-family="Times,serif" font-size="14.00" style="">_6 = &lt;u8 as std::slice::hack::ConvertVec&gt;::to_vec::&lt;std::alloc::Global&gt;(move _7, const std::alloc::Global) -&gt; [return: bb1, unwind continue]</text>
+</g>
+<!-- bb1 -->
+<g id="node2" class="node" pointer-events="visible" data-name="bb1">
+
+<polygon fill="none" stroke="black" points="203.5,-347.1 203.5,-369.1 608.5,-369.1 608.5,-347.1 203.5,-347.1" style=""/>
+<text text-anchor="start" x="395.5" y="-353.5" font-family="Times,serif" font-size="14.00" style="">bb1</text>
+<polygon fill="none" stroke="black" points="203.5,-274.1 203.5,-347.1 608.5,-347.1 608.5,-274.1 203.5,-274.1" style=""/>
+<text text-anchor="start" x="206.5" y="-331.5" font-family="Times,serif" font-size="14.00" style="">_2 = std::string::String { vec: copy _6 }</text>
+<text text-anchor="start" x="206.5" y="-314.7" font-family="Times,serif" font-size="14.00" style="">_1 = std::mem::ManuallyDrop::&lt;std::string::String&gt; { value: copy _2 }</text>
+<text text-anchor="start" x="206.5" y="-297.9" font-family="Times,serif" font-size="14.00" style="">_4 = &amp;mut _1</text>
+<text text-anchor="start" x="206.5" y="-281.1" font-family="Times,serif" font-size="14.00" style="">_8 = &amp;raw mut ((*_4).0: std::string::String)</text>
+<polygon fill="none" stroke="black" points="203.5,-252.1 203.5,-274.1 608.5,-274.1 608.5,-252.1 203.5,-252.1" style=""/>
+<text text-anchor="start" x="206.5" y="-258.5" font-family="Times,serif" font-size="14.00" style="">drop(((*_8).0: std::vec::Vec&lt;u8&gt;)) -&gt; [return: bb2, unwind continue]</text>
+</g>
+<!-- bb0&#45;&gt;bb1 -->
+<g id="edge1" class="edge" data-name="bb0-&gt;bb1">
+
+<path fill="none" stroke="black" d="M405.5,-426.67C405.5,-413.63 405.5,-399.01 405.5,-384.69" style=""/>
+<polygon fill="black" stroke="black" points="409,-384.82 405.5,-374.82 402,-384.82 409,-384.82" style=""/>
+<text text-anchor="middle" x="422.21" y="-395.8" font-family="Times,serif" font-size="14.00" style="">return</text>
+</g>
+<!-- bb2 -->
+<g id="node3" class="node" pointer-events="visible" data-name="bb2">
+
+<polygon fill="none" stroke="black" points="209.5,-169.3 209.5,-191.3 602.5,-191.3 602.5,-169.3 209.5,-169.3" style=""/>
+<text text-anchor="start" x="395.5" y="-175.7" font-family="Times,serif" font-size="14.00" style="">bb2</text>
+<polygon fill="none" stroke="black" points="209.5,-130.3 209.5,-169.3 602.5,-169.3 602.5,-130.3 209.5,-130.3" style=""/>
+<text text-anchor="start" x="212.5" y="-153.7" font-family="Times,serif" font-size="14.00" style="">_5 = &amp;mut _1</text>
+<text text-anchor="start" x="212.5" y="-136.9" font-family="Times,serif" font-size="14.00" style="">_9 = &amp;raw mut ((*_5).0: std::string::String)</text>
+<polygon fill="none" stroke="black" points="209.5,-108.3 209.5,-130.3 602.5,-130.3 602.5,-108.3 209.5,-108.3" style=""/>
+<text text-anchor="start" x="212.21" y="-114.7" font-family="Times,serif" font-size="14.00" style="">drop(((*_9).0: std::vec::Vec&lt;u8&gt;)) -&gt; [return: bb3, unwind continue]</text>
+</g>
+<!-- bb1&#45;&gt;bb2 -->
+<g id="edge2" class="edge" data-name="bb1-&gt;bb2">
+
+<path fill="none" stroke="black" d="M405.5,-248.7C405.5,-235.07 405.5,-220.68 405.5,-207.28" style=""/>
+<polygon fill="black" stroke="black" points="409,-207.31 405.5,-197.31 402,-207.31 409,-207.31" style=""/>
+<text text-anchor="middle" x="417.94" y="-218" font-family="Times,serif" font-size="14.00" style="">goto</text>
+</g>
+<!-- bb3 -->
+<g id="node4" class="node" pointer-events="visible" data-name="bb3">
+
+<polygon fill="none" stroke="black" points="386.5,-26 386.5,-48 425.5,-48 425.5,-26 386.5,-26" style=""/>
+<text text-anchor="start" x="395.5" y="-32.4" font-family="Times,serif" font-size="14.00" style="">bb3</text>
+<polygon fill="none" stroke="black" points="386.5,-4 386.5,-26 425.5,-26 425.5,-4 386.5,-4" style=""/>
+<text text-anchor="start" x="389.29" y="-10.4" font-family="Times,serif" font-size="14.00" style="">return</text>
+</g>
+<!-- bb2&#45;&gt;bb3 -->
+<g id="edge3" class="edge" data-name="bb2-&gt;bb3">
+
+<path fill="none" stroke="black" d="M405.5,-104.8C405.5,-91.1 405.5,-76.19 405.5,-63.13" style=""/>
+<polygon fill="black" stroke="black" points="409,-63.25 405.5,-53.25 402,-63.25 409,-63.25" style=""/>
+<text text-anchor="middle" x="417.94" y="-74.2" font-family="Times,serif" font-size="14.00" style="">goto</text>
+</g>
+</g>
+</svg>
