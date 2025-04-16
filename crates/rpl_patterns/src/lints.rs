@@ -805,7 +805,7 @@ declare_tool_lint! {
     ///
     /// ```rust
     /// use std::alloc::{alloc, dealloc, Layout};
-    /// 
+    ///
     /// fn main() {
     ///     let layout = Layout::new::<u8>();
     ///     unsafe {
@@ -819,7 +819,7 @@ declare_tool_lint! {
     /// {{produces}}
     ///
     /// ### Explanation
-    /// 
+    ///
     /// The `alloc` function returns a pointer to the allocated memory,
     /// but it does not check if the allocation was successful.
     /// If the allocation fails, it returns a null pointer,
