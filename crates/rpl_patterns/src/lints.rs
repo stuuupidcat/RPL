@@ -797,3 +797,35 @@ declare_tool_lint! {
     Deny,
     "detects a sequence of operations that are not allowed on a `ManuallyDrop` type"
 }
+
+declare_tool_lint! {
+    /// The `rpl::unchecked_allocated_pointer` lint detects that a pointer allocated through [`std::alloc::alloc`] is not checked for null.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// use std::alloc::{alloc, dealloc, Layout};
+    /// 
+    /// fn main() {
+    ///     let layout = Layout::new::<u8>();
+    ///     unsafe {
+    ///         let ptr = alloc(layout) as *mut u8;
+    ///         ptr.write(42);
+    ///         dealloc(ptr as *mut u8, layout);
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    /// 
+    /// The `alloc` function returns a pointer to the allocated memory,
+    /// but it does not check if the allocation was successful.
+    /// If the allocation fails, it returns a null pointer,
+    /// which can lead to undefined behavior if dereferenced.
+    /// To avoid this, you should always check the pointer for null before using it.
+    pub rpl::UNCHECKED_ALLOCATED_POINTER,
+    Warn,
+    "detects that a pointer allocated through `std::alloc::alloc` is not checked for null"
+}

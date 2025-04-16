@@ -49,6 +49,17 @@ pub struct UseAfterMove<'tcx> {
 }
 
 #[derive(LintDiagnostic)]
+#[diag(rpl_patterns_unchecked_allocated_pointer)]
+#[note]
+pub struct UncheckedAllocatedPointer<'tcx> {
+    #[label(rpl_patterns_alloc_label)]
+    pub alloc: Span,
+    #[label(rpl_patterns_write_label)]
+    pub write: Span,
+    pub ty: Ty<'tcx>,
+}
+
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_offset_by_one)]
 pub struct OffsetByOne {
     #[label(rpl_patterns_read_label)]

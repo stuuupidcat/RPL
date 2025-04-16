@@ -71,6 +71,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     inline::transmute_type_to_bool::check_item,
     inline::transmute_int_to_ptr::check_item,
     normal::manually_drop::check_item,
+    inline::alloc_unchecked::check_item,
 ];
 
 #[instrument(level = "info", skip_all, fields(item = ?item.owner_id.def_id))]

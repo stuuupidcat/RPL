@@ -114,6 +114,12 @@ rpl_patterns_unchecked_ptr_offset = it is an undefined behavior to offset a poin
     .help = check whether it's in bound before offsetting
     .note = See the safety section in https://doc.rust-lang.org/std/primitive.pointer.html#method.offset
 
+rpl_patterns_unchecked_allocated_pointer = it is an undefined behavior to dereference a null pointer, and `std::alloc::alloc` may return a null pointer
+    .alloc_label = pointer created here
+    .write_label = pointer used here
+    .note = See https://doc.rust-lang.org/std/alloc/fn.alloc.html and https://doc.rust-lang.org/std/alloc/trait.GlobalAlloc.html#tymethod.alloc
+    .help = check whether it's null before dereferencing
+
 rpl_patterns_cassandra_iter_next_ptr_passed_to_cass_iter_get = it will be an undefined behavior to pass a pointer returned by `cass_iterator_next` to `cass_iterator_get_*` in a `std::iter::Iterator` implementation
     .cass_iter_next_label = `cass_iterator_next` called here
     .note = `cass_iterator_next` will invalidate the current item when called

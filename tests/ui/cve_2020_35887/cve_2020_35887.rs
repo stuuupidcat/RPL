@@ -57,7 +57,7 @@ where
             unsafe {
                 (*(ptr.wrapping_offset(i as isize))) = template.clone();
                 //~^ ERROR: Possibly dropping an uninitialized value
-                //FIXME: check if this is a false positive
+                // Not a false positive
             }
         }
         Self { size, ptr }
