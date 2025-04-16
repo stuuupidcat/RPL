@@ -9,7 +9,8 @@ use rustc_span::{Span, Symbol};
 
 use crate::lints::THREAD_LOCAL_STATIC_REF;
 
-/// `-Z inline-mir-threshold=100`
+/// This pattern works no matter if `-Z inline-mir` is on,
+/// so it's put inside normal pattern group.
 #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item_id: hir::ItemId) {
     let item = tcx.hir().item(item_id);
@@ -103,13 +104,9 @@ fn pattern_thread_local_static(pcx: PatCtxt<'_>) -> PatternThreadLocalStatic<'_>
         fn $pattern(..) -> &'static $T = mir! {
             #[export(thread_local)]
             let $local_key: &std::thread::LocalKey::<std::cell::UnsafeCell<$T>> = _;
-            let $result: core::result::Result<&$T, _> =
-                std::thread::LocalKey::<std::cell::UnsafeCell<$T>>::try_with::<_, _>(move $local_key, _);
             #[export(ret)]
-            let $RET: &T = move (($result as Ok).0);
-            // #[export(ret)]
-            // let $RET: &T =
-            //     std::thread::LocalKey::<std::cell::UnsafeCell<$T>>::with::<_, _>(move $local_key, _);
+            let $RET: &T =
+                std::thread::LocalKey::<std::cell::UnsafeCell<$T>>::with::<_, _>(move $local_key, _);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

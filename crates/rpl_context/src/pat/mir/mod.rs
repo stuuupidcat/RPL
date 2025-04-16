@@ -77,6 +77,7 @@ pub struct BasicBlockData<'pcx> {
 }
 
 impl<'pcx> BasicBlockData<'pcx> {
+    /// Check whether the block is the end of a pattern.
     pub fn has_pat_end(&self) -> bool {
         matches!(self.terminator(), TerminatorKind::PatEnd)
     }

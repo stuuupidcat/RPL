@@ -1,3 +1,4 @@
+use derive_more::derive::Debug;
 use rpl_context::pat::{self};
 use rpl_context::PatCtxt;
 use rustc_abi::FieldIdx;
@@ -25,6 +26,7 @@ impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
         Self { ty, adt_pat }
     }
 
+    #[instrument(level = "debug", skip(self))]
     pub fn match_adt(&self, adt: ty::AdtDef<'tcx>) -> Option<AdtMatch<'tcx>> {
         match (&self.adt_pat.kind, adt.adt_kind()) {
             (pat::AdtKind::Struct(variant_pat), ty::AdtKind::Struct) => Some(AdtMatch::new_struct(
@@ -68,6 +70,7 @@ impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
     //         })
     // }
 
+    #[instrument(level = "debug", skip(self), ret)]
     fn match_fields(
         &self,
         fields_pat: &FxIndexMap<Symbol, pat::Field<'pcx>>,
@@ -84,6 +87,7 @@ impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
         candidates.candidates_not_empty().then_some(candidates)
     }
 
+    #[instrument(level = "debug", skip(self), ret)]
     fn match_field(&self, field_pat: &pat::Field<'pcx>, field: &'tcx ty::FieldDef) -> bool {
         let pat_ty = field_pat.ty;
         let ty = self.ty.tcx.type_of(field.did).instantiate_identity();
@@ -91,6 +95,8 @@ impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
     }
 }
 
+#[derive(Debug)]
+#[debug("{adt:?}")]
 pub struct AdtMatch<'tcx> {
     pub adt: ty::AdtDef<'tcx>,
     kind: AdtMatchKind<'tcx>,
@@ -128,6 +134,8 @@ impl<'tcx> AdtMatch<'tcx> {
     // }
 }
 
+#[derive(Debug)]
+#[debug("{candidates:?}")]
 pub struct Candidates<I: Idx> {
     pub candidates: FxIndexMap<Symbol, MixedBitSet<I>>,
     matches: FxIndexMap<Symbol, CountedMatch<I>>,
@@ -164,6 +172,8 @@ impl<I: Idx> Candidates<I> {
     }
 }
 
+#[derive(Debug)]
+#[debug("{candidates:?}")]
 pub struct FieldCandidates<'tcx> {
     pub fields: &'tcx IndexSlice<FieldIdx, ty::FieldDef>,
     pub candidates: Candidates<FieldIdx>,

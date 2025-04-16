@@ -975,6 +975,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "radium"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "def50a86306165861203e7f84ecffbbdfdea79f0e51039b33de1e952358c47ac"
+
+[[package]]
 name = "redox_syscall"
 version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1044,6 +1050,7 @@ dependencies = [
  "parking_lot",
  "pin-project",
  "quote",
+ "radium",
  "regex",
  "rpl_interface",
  "rustc_tools_util",
@@ -1064,6 +1071,9 @@ dependencies = [
 [[package]]
 name = "rpl_context"
 version = "0.1.0"
+dependencies = [
+ "derive_more",
+]
 
 [[package]]
 name = "rpl_driver"
@@ -1110,6 +1120,7 @@ dependencies = [
 name = "rpl_match"
 version = "0.1.0"
 dependencies = [
+ "derive_more",
  "rpl_context",
 ]
 

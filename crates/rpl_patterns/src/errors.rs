@@ -39,6 +39,27 @@ pub struct UseAfterDrop<'tcx> {
 }
 
 #[derive(LintDiagnostic)]
+#[diag(rpl_patterns_use_after_move)]
+pub struct UseAfterMove<'tcx> {
+    #[note]
+    pub move_span: Span,
+    #[label(rpl_patterns_use_label)]
+    pub use_span: Span,
+    pub ty: Ty<'tcx>,
+}
+
+#[derive(LintDiagnostic)]
+#[diag(rpl_patterns_unchecked_allocated_pointer)]
+#[note]
+pub struct UncheckedAllocatedPointer<'tcx> {
+    #[label(rpl_patterns_alloc_label)]
+    pub alloc: Span,
+    #[label(rpl_patterns_write_label)]
+    pub write: Span,
+    pub ty: Ty<'tcx>,
+}
+
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_offset_by_one)]
 pub struct OffsetByOne {
     #[label(rpl_patterns_read_label)]
@@ -326,4 +347,19 @@ pub struct TransmutingIntToPtr {
     pub from: Span,
     #[label(rpl_patterns_to_label)]
     pub to: Span,
+}
+
+/// Bad operation sequence to [`std::mem::ManuallyDrop`].
+#[derive(LintDiagnostic)]
+#[diag(rpl_patterns_bad_manually_drop_operation_sequence)]
+#[help]
+pub struct BadManuallyDropOperationSequence {
+    #[label(rpl_patterns_create_label)]
+    pub create: Span,
+    pub fn_1: &'static str,
+    pub fn_2: &'static str,
+    #[label(rpl_patterns_call_1_label)]
+    pub call_1: Span,
+    #[label(rpl_patterns_call_2_label)]
+    pub call_2: Span,
 }

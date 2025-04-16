@@ -55,6 +55,15 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         _span: Span,
         def_id: LocalDefId,
     ) -> Self::Result {
+        // let attrs: Vec<_> = self
+        //     .tcx
+        //     .get_attrs_by_path(def_id.to_def_id(), &[Symbol::intern("rpl"), Symbol::intern("check")])
+        //     .collect();
+        // info!("attrs: {:?}", attrs);
+        // if attrs.is_empty() {
+        //     return;
+        // }
+
         if kind.header().is_none_or(|header| header.is_unsafe().not()) && self.tcx.is_mir_available(def_id) {
             let body = self.tcx.optimized_mir(def_id);
 
@@ -212,9 +221,8 @@ fn pattern_unchecked_ptr_offset_(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffsetG
         fn $pattern(..) -> _ = mir! {
             #[export(ptr)]
             let $ptr: *const $T = _;
-            let $ptr_1: *const $T = _;
             #[export(offset)]
-            $ptr_1 = Offset(copy $ptr, _);
+            let $ptr_1: *const $T = Offset(copy $ptr, _);
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

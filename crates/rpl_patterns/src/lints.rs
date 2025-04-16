@@ -668,6 +668,31 @@ declare_tool_lint! {
 }
 
 declare_tool_lint! {
+    /// The `rpl::use_after_move` lint detects using a value after it has been moved to another location.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// let mut v = vec![1, 2, 3];
+    /// v.reserve(10);
+    /// let p = v.as_mut_ptr();
+    /// let b = v.into_boxed_slice();
+    /// unsafe {
+    ///     *p = 4; // undefined behavior
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// Using a value after it has been moved to another location is undefined behavior.
+    pub rpl::USE_AFTER_MOVE,
+    Deny,
+    "detects using a value after it has been moved to another location"
+}
+
+declare_tool_lint! {
     /// The `rpl::private_and_inline` lint detects private functions that are marked with `#[inline]`.
     ///
     /// ### Example
@@ -739,4 +764,68 @@ declare_tool_lint! {
     pub rpl::TRANSMUTING_INT_TO_PTR,
     Warn,
     "detects a transmute from an integer type to a pointer type"
+}
+
+declare_tool_lint! {
+    /// The `rpl::bad_manually_drop_operation_sequence` lint detects a sequence of operations
+    /// that are not allowed on a `ManuallyDrop` type.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// use std::mem::ManuallyDrop;
+    ///
+    /// fn double_drop<T>(x: T) {
+    ///     let mut s = ManuallyDrop::new(x);
+    ///     unsafe {
+    ///         ManuallyDrop::drop(&mut s);
+    ///         ManuallyDrop::drop(&mut s); // double drop
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// The `ManuallyDrop` type is used to prevent the automatic dropping of a value.
+    /// However, it is not allowed to drop a `ManuallyDrop` value twice,
+    /// as it can lead to undefined behavior.
+    ///
+    /// The same applies to calling `ManuallyDrop::take` after dropping the value.
+    pub rpl::BAD_MANUALLY_DROP_OPERATION_SEQUENCE,
+    Deny,
+    "detects a sequence of operations that are not allowed on a `ManuallyDrop` type"
+}
+
+declare_tool_lint! {
+    /// The `rpl::unchecked_allocated_pointer` lint detects that a pointer allocated through [`std::alloc::alloc`] is not checked for null.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// use std::alloc::{alloc, dealloc, Layout};
+    ///
+    /// fn main() {
+    ///     let layout = Layout::new::<u8>();
+    ///     unsafe {
+    ///         let ptr = alloc(layout) as *mut u8;
+    ///         ptr.write(42);
+    ///         dealloc(ptr as *mut u8, layout);
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// The `alloc` function returns a pointer to the allocated memory,
+    /// but it does not check if the allocation was successful.
+    /// If the allocation fails, it returns a null pointer,
+    /// which can lead to undefined behavior if dereferenced.
+    /// To avoid this, you should always check the pointer for null before using it.
+    pub rpl::UNCHECKED_ALLOCATED_POINTER,
+    Warn,
+    "detects that a pointer allocated through `std::alloc::alloc` is not checked for null"
 }

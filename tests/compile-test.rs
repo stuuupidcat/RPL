@@ -165,6 +165,23 @@ fn base_config(test_dir: &str) -> (Config, Args) {
         .map(OsString::from),
     );
 
+    for arg in [
+        "inline-mir-threshold",
+        "inline-mir-forwarder-threshold",
+        "inline-mir-hint-threshold",
+        "cross-crate-inline-threshold",
+        "threads",
+    ] {
+        let mut env = arg.replace('-', "_");
+        env.make_ascii_uppercase();
+        let env = format!("RPL_TEST_{}", env);
+        if let Some(threshold) = env::var_os(env) {
+            let threshold = threshold.into_string().unwrap();
+            config.program.args.push(format!("-Z{arg}={threshold}").into());
+            println!("set {arg} to {threshold}");
+        }
+    }
+
     config.program.args.extend(EXTERN_FLAGS.iter().map(OsString::from));
 
     if let Some(host_libs) = option_env!("HOST_LIBS") {

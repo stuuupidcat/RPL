@@ -12,6 +12,10 @@ rpl_patterns_use_after_drop = use a pointer from `{$ty}` after dropped
     .use_label = used here
     .note = the `{$ty}` value is dropped here
 
+rpl_patterns_use_after_move = use a pointer from `{$ty}` after it's moved
+    .use_label = used here
+    .note = the `{$ty}` value may be moved here
+
 rpl_patterns_misordered_parameters = misordered parameters `len` and `cap` in `Vec::from_raw_parts`
     .label = `Vec::from_raw_parts` called here
     .help = the correct order is `Vec::from_raw_parts(ptr, len, cap)`
@@ -110,6 +114,12 @@ rpl_patterns_unchecked_ptr_offset = it is an undefined behavior to offset a poin
     .help = check whether it's in bound before offsetting
     .note = See the safety section in https://doc.rust-lang.org/std/primitive.pointer.html#method.offset
 
+rpl_patterns_unchecked_allocated_pointer = it is an undefined behavior to dereference a null pointer, and `std::alloc::alloc` may return a null pointer
+    .alloc_label = pointer created here
+    .write_label = pointer used here
+    .note = See https://doc.rust-lang.org/std/alloc/fn.alloc.html and https://doc.rust-lang.org/std/alloc/trait.GlobalAlloc.html#tymethod.alloc
+    .help = check whether it's null before dereferencing
+
 rpl_patterns_cassandra_iter_next_ptr_passed_to_cass_iter_get = it will be an undefined behavior to pass a pointer returned by `cass_iterator_next` to `cass_iterator_get_*` in a `std::iter::Iterator` implementation
     .cass_iter_next_label = `cass_iterator_next` called here
     .note = `cass_iterator_next` will invalidate the current item when called
@@ -137,3 +147,9 @@ rpl_patterns_transmuting_int_to_ptr = it is unsound to transmute an integer type
     .to_label = transmuted to here
     .note = transmuting integers to pointers is a largely unspecified operation
     .help = See https://doc.rust-lang.org/std/mem/fn.transmute.html#transmutation-between-pointers-and-integers
+
+rpl_patterns_bad_manually_drop_operation_sequence = invalid sequence of operations on `core::mem::ManuallyDrop`: `{$fn_1}` and `{$fn_2}`
+    .create_label = created here
+    .call_1_label = first call here
+    .call_2_label = second call here
+    .help = See https://doc.rust-lang.org/std/mem/struct.ManuallyDrop.html#method.{$fn_2}

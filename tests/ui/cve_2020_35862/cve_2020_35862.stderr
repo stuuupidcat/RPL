@@ -1,0 +1,15 @@
+error: use a pointer from `std::vec::Vec<T>` after it's moved
+  --> tests/ui/cve_2020_35862/cve_2020_35862.rs:493:43
+   |
+LL |         unsafe { BitBox::from_raw(pointer.as_mut_ptr()) }
+   |                                           ^^^^^^^^^^^^ used here
+   |
+note: the `std::vec::Vec<T>` value may be moved here
+  --> tests/ui/cve_2020_35862/cve_2020_35862.rs:491:26
+   |
+LL |         mem::forget(self.into_boxed_slice());
+   |                          ^^^^^^^^^^^^^^^^^^
+   = note: `#[deny(rpl::use_after_move)]` on by default
+
+error: aborting due to 1 previous error
+

@@ -9,6 +9,7 @@ keywords.workspace = true
 repository.workspace = true
 
 [dependencies]
+derive_more.workspace = true
 rpl_context.workspace = true
 
 [package.metadata.rust-analyzer]

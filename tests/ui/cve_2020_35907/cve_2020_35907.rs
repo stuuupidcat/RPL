@@ -1,3 +1,8 @@
+//@revisions: inline regular inline100
+//@[inline] compile-flags: -Z inline-mir=true
+//@[inline100] compile-flags: -Z inline-mir=true -Z inline-mir-threshold=100
+//@[regular] compile-flags: -Z inline-mir=false
+
 use core::task::{RawWaker, RawWakerVTable, Waker};
 use std::cell::UnsafeCell;
 
@@ -19,7 +24,7 @@ fn noop_waker() -> Waker {
 
 // #[rpl::dump_mir(dump_cfg, dump_ddg)]
 pub fn noop_waker_ref() -> &'static Waker {
-    //~^ ERROR: it is unsound to expose a `&'static std::task::Waker` from a thread-local where `std::task::Waker` is `Sync`
+    //~^ERROR: it is unsound to expose a `&'static std::task::Waker` from a thread-local where `std::task::Waker` is `Sync`
     thread_local! {
         static NOOP_WAKER_INSTANCE: UnsafeCell<Waker> =
             UnsafeCell::new(noop_waker());

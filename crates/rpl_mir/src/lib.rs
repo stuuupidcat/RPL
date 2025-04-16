@@ -264,10 +264,10 @@ type PlaceElemPair<'pcx, 'tcx> = (
 );
 
 impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
-    #[instrument(level = "trace", skip(self), ret)]
+    #[instrument(level = "debug", skip(self), ret)]
     pub fn match_local(&self, pat: pat::Local, local: mir::Local) -> bool {
         let mut locals = self.locals[pat].borrow_mut();
-        trace!(?locals, ?pat, ?local, "match_local");
+        debug!(?locals, ?pat, ?local, "match_local");
         if locals.contains(local) {
             return true;
         }

@@ -46,6 +46,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     normal::cve_2019_16138::check_item,
     inline::cve_2020_25016::check_item,
     normal::cve_2020_35860::check_item,
+    inline::cve_2020_35862::check_item,
     inline::cve_2020_35873::check_item,
     inline::cve_2020_35877::check_item,
     inline::cve_2020_35881::const_const_Transmute_ver::check_item,
@@ -56,6 +57,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     inline::cve_2020_35898_9::check_item,
     inline::cve_2020_35901_2::check_item,
     inline::cve_2020_35907::check_item,
+    normal::cve_2020_35907::check_item,
     inline::cve_2021_25904::check_item,
     normal::cve_2021_25904::check_item,
     inline::cve_2021_25905::check_item,
@@ -68,6 +70,8 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     others::private_function_marked_inline::check_item,
     inline::transmute_type_to_bool::check_item,
     inline::transmute_int_to_ptr::check_item,
+    normal::manually_drop::check_item,
+    inline::alloc_unchecked::check_item,
 ];
 
 #[instrument(level = "info", skip_all, fields(item = ?item.owner_id.def_id))]

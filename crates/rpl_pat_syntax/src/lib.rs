@@ -52,6 +52,7 @@ pub(crate) mod kw {
     syn::custom_keyword!(PtrToPtr);
     syn::custom_keyword!(IntToInt);
     syn::custom_keyword!(Transmute);
+    syn::custom_keyword!(PointerExposeProvenance);
 
     // BinOp
     syn::custom_keyword!(Add);
@@ -59,6 +60,8 @@ pub(crate) mod kw {
     syn::custom_keyword!(Mul);
     syn::custom_keyword!(Div);
     syn::custom_keyword!(Rem);
+    syn::custom_keyword!(BitAnd);
+    syn::custom_keyword!(BitOr);
     syn::custom_keyword!(Lt);
     syn::custom_keyword!(Gt);
     syn::custom_keyword!(Le);
@@ -688,6 +691,8 @@ pub enum CastKind {
     IntToInt(kw::IntToInt),
     #[parse(peek = kw::Transmute)]
     Transmute(kw::Transmute),
+    #[parse(peek = kw::PointerExposeProvenance)]
+    PointerExposeProvenance(kw::PointerExposeProvenance),
 }
 
 #[derive(ToTokens, Parse)]
@@ -709,6 +714,8 @@ pub enum BinOp {
     #[parse(peek = kw::Mul)] Mul(kw::Mul),
     #[parse(peek = kw::Div)] Div(kw::Div),
     #[parse(peek = kw::Rem)] Rem(kw::Rem),
+    #[parse(peek = kw::BitAnd)] BitAnd(kw::BitAnd),
+    #[parse(peek = kw::BitOr)] BitOr(kw::BitOr),
     #[parse(peek = kw::Lt)] Lt(kw::Lt),
     #[parse(peek = kw::Gt)] Gt(kw::Gt),
     #[parse(peek = kw::Le)] Le(kw::Le),
