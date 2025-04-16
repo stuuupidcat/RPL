@@ -32,6 +32,8 @@ impl<T: Copy + PartialEq> CountedMatch<T> {
         true
     }
     pub fn unmatch(&self) {
+        // We can only decrement if we have a value
+        debug_assert!(self.0.get().is_some());
         self.0.update(|m| m.and_then(Counted::dec));
     }
     pub fn try_take(&self) -> Option<T> {
@@ -62,6 +64,8 @@ impl<T> Counted<T> {
         }
     }
     pub fn dec(self) -> Option<Self> {
+        // We can only decrement if we have a value
+        debug_assert!(self.count.get() > 0);
         Some(Self {
             count: NonZero::new(self.count.get().wrapping_sub(1))?,
             ..self

@@ -10,10 +10,8 @@ fn double_drop() {
     unsafe {
         ManuallyDrop::drop(&mut s);
         //~^ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
-        //~|ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
         ManuallyDrop::drop(&mut s);
         //~^ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
-        //~|ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
     }
 }
 
@@ -23,10 +21,8 @@ fn double_take() {
     unsafe {
         let t1 = ManuallyDrop::take(&mut s);
         //~^ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `take`
-        //~|ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `take`
         let t2 = ManuallyDrop::take(&mut s);
         //~^ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `take`
-        //~|ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `take`
     }
 }
 
@@ -35,11 +31,9 @@ fn drop_after_take() {
     let mut s = ManuallyDrop::new("1".to_owned());
     unsafe {
         let t = ManuallyDrop::take(&mut s);
-        //~^ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `take`
-        //~|ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `take`
+        //~^ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `take`
         ManuallyDrop::drop(&mut s);
-        //~^ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
-        //~|ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `drop`
+        //~^ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `drop`
     }
 }
 
@@ -48,11 +42,9 @@ fn take_after_drop() {
     let mut s = ManuallyDrop::new("1".to_owned());
     unsafe {
         ManuallyDrop::drop(&mut s);
-        //~^ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
-        //~|ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `drop`
+        //~^ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `drop`
         let t = ManuallyDrop::take(&mut s);
         //~^ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `take`
-        //~|ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `take` and `take`
     }
 }
 
@@ -80,7 +72,6 @@ fn single_drop() {
     let mut s = ManuallyDrop::new("1".to_owned());
     unsafe {
         ManuallyDrop::drop(&mut s);
-        //~^ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
     }
 }
 
@@ -89,7 +80,6 @@ fn drop_in_loop() {
     for _ in 0..10 {
         unsafe {
             ManuallyDrop::drop(&mut s);
-            //~^ERROR: invalid sequence of operations on `core::mem::ManuallyDrop`: `drop` and `drop`
             //FIXME: detect this
         }
     }

@@ -13,20 +13,6 @@ LL |             &*p
    = help: check whether it's in bound before dereferencing
    = note: `#[deny(rpl::deref_unchecked_ptr_offset)]` on by default
 
-error: it is unsound to dereference a pointer that is offset using an unchecked integer
-  --> tests/ui/cve_2020_35877/cve_2020_35877.rs:49:13
-   |
-LL |     fn index(&self, idx: usize) -> &Self::Output {
-   |                     --- offset passed in here
-...
-LL |                 p = p.offset(1);
-   |                 --------------- pointer created here
-...
-LL |             &*p
-   |             ^^^ dereferenced here
-   |
-   = help: check whether it's in bound before dereferencing
-
 error: it is an undefined behavior to offset a pointer using an unchecked integer
   --> tests/ui/cve_2020_35877/cve_2020_35877.rs:46:23
    |
@@ -40,5 +26,5 @@ LL |                 p = p.offset(1);
    = note: `-D rpl::unchecked-pointer-offset` implied by `-D warnings`
    = help: to override `-D warnings` add `#[allow(rpl::unchecked_pointer_offset)]`
 
-error: aborting due to 3 previous errors
+error: aborting due to 2 previous errors
 

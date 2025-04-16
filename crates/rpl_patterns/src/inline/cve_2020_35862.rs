@@ -136,15 +136,8 @@ fn pattern(pcx: PatCtxt<'_>) -> Pattern<'_> {
             let $vec: $Vec /* alloc::vec::Vec<$T> */ = alloc::vec::Vec<$T> { buf: move $raw_vec, len: _ }; // _5 bb3[6]
             #[export(vec_move)]
             let $boxed_slice: alloc::boxed::Box<[$T]> = alloc::vec::Vec::into_boxed_slice(move $vec); // _3 bb3[7]
-            // let $boxed_slice: alloc::boxed::Box<[$T]> = _; // _3 bb3[7]
             #[export(ptr_use)]
             let $non_null_2: core::ptr::NonNull<u8> = copy ($bit_ptr.$ptr); // _37 bb1[0]
-            // let $non_null_2: core::ptr::NonNull<u8> = _; // _37 bb1[0]
-            // let $vec_1_ref: &mut $Vec = &mut $vec_1; // _48
-            // let $unit: () = alloc::vec::Vec::shrink_to_fit(move $vec_1_ref); // _47
-            // let $vec_2: $Vec = move $vec_1; // _50
-            // let $manually_drop: core::mem::ManuallyDrop<$Vec> = core::mem::ManuallyDrop<$Vec> { value: move $vec_2 }; // _49
-            // _ = alloc::vec::Vec::shrink_to_fit(move $vec); // _47
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

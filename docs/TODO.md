@@ -10,7 +10,7 @@
 
     For example, there are two Rust code snippets that contain double `drop` on a `ManuallyDrop`, and we'd like to write a pattern to match both of them:
 
-    - One is a `String` type：
+    - One is a `String` type:
 
         ```rust
         #[rpl::dump_mir(dump_cfg, dump_ddg)]

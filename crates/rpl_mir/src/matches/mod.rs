@@ -22,6 +22,31 @@ pub struct Matched<'tcx> {
     pub place_vars: IndexVec<pat::PlaceVarIdx, PlaceRef<'tcx>>,
 }
 
+impl Matched<'_> {
+    pub(crate) fn log_matched(&self) {
+        use tracing::debug as info;
+        info!("pat block <-> mir candidate blocks");
+        for (bb, block) in self.basic_blocks.iter_enumerated() {
+            info!("pat stmt <-> mir candidate statements");
+            for (index, stmt) in block.statements.iter().enumerate() {
+                info!("    {bb:?}[{index}]: {:?}", stmt);
+            }
+        }
+        info!("pat local <-> mir candidate locals");
+        for (local, matches) in self.locals.iter_enumerated() {
+            info!("{local:?}: {:?}", matches);
+        }
+        info!("pat ty metavar <-> mir candidate types");
+        for (ty_var, matches) in self.ty_vars.iter_enumerated() {
+            info!("{ty_var:?}: {:?}", matches);
+        }
+        info!("pat place metavar <-> mir candidate places");
+        for (place_var, matches) in self.place_vars.iter_enumerated() {
+            info!("{place_var:?}: {:?}", matches);
+        }
+    }
+}
+
 pub struct MatchedBlock {
     pub statements: Vec<StatementMatch>,
     pub start: Option<mir::BasicBlock>,
@@ -72,6 +97,8 @@ struct Matching<'tcx> {
     locals: IndexVec<pat::Local, LocalMatches>,
     place_vars: IndexVec<pat::PlaceVarIdx, PlaceVarMatches<'tcx>>,
     ty_vars: IndexVec<pat::TyVarIdx, TyVarMatches<'tcx>>,
+    /// Track which pattern statement the statement is matched to.
+    mir_statements: IndexVec<mir::BasicBlock, MirStatementBackMatch>,
 }
 
 impl Index<pat::BasicBlock> for Matching<'_> {
@@ -125,9 +152,46 @@ impl<'tcx> Index<pat::PlaceVarIdx> for Matching<'tcx> {
 //     }
 // }
 
+#[derive(Debug)]
+struct MirStatementBackMatch {
+    matched: IndexVec<usize, CountedMatch<pat::Location>>,
+}
+
+impl MirStatementBackMatch {
+    fn new(n: usize) -> Self {
+        Self {
+            matched: IndexVec::from_elem_n(CountedMatch::new(), n),
+        }
+    }
+    fn r#match(&self, loc_pat: pat::Location, loc: mir::Location) -> bool {
+        debug_assert!(loc.statement_index <= self.matched.len());
+        if loc.statement_index < self.matched.len() {
+            let matcher = &self.matched[loc.statement_index];
+            let matched = matcher.r#match(loc_pat);
+            debug!("match_stmt {loc:?} ({matcher:?}) <-> {loc_pat:?}");
+            if !matched {
+                debug!(?loc_pat, ?loc, ?matched, ?matcher, "match_stmt conflicted");
+            }
+            matched
+        } else {
+            true
+        }
+    }
+    fn unmatch(&self, loc_pat: pat::Location, loc: mir::Location) {
+        debug_assert!(loc.statement_index <= self.matched.len());
+        if loc.statement_index < self.matched.len() {
+            let matcher = &self.matched[loc.statement_index];
+            matcher.unmatch();
+            debug!("unmatch_stmt {loc_pat:?} <-> {loc:?} ({matcher:?})");
+        }
+    }
+}
+
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum StatementMatch {
+    /// An argument of the function.
     Arg(mir::Local),
+    /// A statement or terminator in the MIR graph.
     Location(mir::Location),
 }
 
@@ -223,6 +287,10 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     fn new_checking(cx: &'a CheckMirCtxt<'a, 'pcx, 'tcx>) -> Matching<'tcx> {
         let num_blocks = cx.mir_pat.basic_blocks.len();
         let num_locals = cx.mir_pat.locals.len();
+        let mir_statements = IndexVec::from_fn_n(
+            |bb| MirStatementBackMatch::new(cx.body[bb].statements.len()),
+            cx.body.basic_blocks.len(),
+        );
         Matching {
             basic_blocks: IndexVec::from_fn_n(
                 |bb_pat| {
@@ -239,6 +307,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             locals: IndexVec::from_fn_n(|_| LocalMatches::new(cx.body.local_decls.len()), num_locals),
             ty_vars: IndexVec::from_fn_n(|_| TyVarMatches::new(), cx.fn_pat.meta.ty_vars.len()),
             place_vars: IndexVec::from_fn_n(|_| PlaceVarMatches::new(), cx.fn_pat.meta.place_vars.len()),
+            mir_statements,
         }
     }
     #[instrument(level = "debug", skip(self))]
@@ -348,17 +417,50 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             return;
         }
         self.match_candidates();
+        self.log_matched();
+    }
+    fn log_matched(&self) {
+        let matched = self.matched.take();
+        debug!("log matched candidates: {}", matched.len());
+        for (index, matched) in matched.iter().enumerate() {
+            debug!("candidate {index}");
+            matched.log_matched();
+        }
+        self.matched.set(matched);
+    }
+    #[cfg(debug_assertions)]
+    fn ty_var_free(&self) -> bool {
+        self.matching.ty_vars.iter().all(|c| c.get().is_none())
+    }
+    #[cfg(debug_assertions)]
+    fn place_var_free(&self) -> bool {
+        self.matching.place_vars.iter().all(|c| c.get().is_none())
+    }
+    #[cfg(debug_assertions)]
+    fn local_free(&self) -> bool {
+        self.matching.locals.iter().all(|c| c.get().is_none())
+    }
+    #[cfg(debug_assertions)]
+    fn stmt_free(&self) -> bool {
+        self.matching
+            .mir_statements
+            .iter()
+            .all(|s| s.matched.iter().all(|c| c.get().is_none()))
     }
     // Recursively traverse all candidates of type variables, local variables, and statements, and then
     // match the graph.
     #[instrument(level = "info", skip(self))]
     fn match_candidates(&self) {
         let loc_pats = self.loc_pats().collect::<Vec<_>>();
+        debug_assert!(self.ty_var_free());
         self.match_ty_var_candidates(pat::TyVarIdx::ZERO, &loc_pats);
+        debug_assert!(self.ty_var_free());
     }
     fn match_ty_var_candidates(&self, ty_var: pat::TyVarIdx, loc_pats: &[pat::Location]) {
         if ty_var == self.cx.fn_pat.meta.ty_vars.next_index() {
+            debug_assert!(self.place_var_free());
             self.match_place_var_candidates(pat::PlaceVarIdx::ZERO, loc_pats);
+            debug_assert!(self.place_var_free());
             return;
         }
         for &cand in &self.matching[ty_var].candidates {
@@ -366,14 +468,16 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             if self.match_ty_var(ty_var, cand) {
                 // recursion
                 ensure_sufficient_stack(|| self.match_ty_var_candidates(ty_var.plus(1), loc_pats));
+                // backtrack, clear status
+                self.unmatch_ty_var(ty_var);
             }
-            // backtrack, clear status
-            self.unmatch_ty_var(ty_var);
         }
     }
     fn match_place_var_candidates(&self, place_var: pat::PlaceVarIdx, loc_pats: &[pat::Location]) {
         if place_var == self.cx.fn_pat.meta.place_vars.next_index() {
+            debug_assert!(self.local_free());
             self.match_local_candidates(pat::Local::ZERO, loc_pats);
+            debug_assert!(self.local_free());
             return;
         }
         for &cand in &self.matching[place_var].candidates {
@@ -381,14 +485,16 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             if self.match_place_var(place_var, cand) {
                 // recursion
                 ensure_sufficient_stack(|| self.match_place_var_candidates(place_var.plus(1), loc_pats));
+                // backtrack, clear status
+                self.unmatch_place_var(place_var);
             }
-            // backtrack, clear status
-            self.unmatch_place_var(place_var);
         }
     }
     fn match_local_candidates(&self, local: pat::Local, loc_pats: &[pat::Location]) {
         if local == self.cx.mir_pat.locals.next_index() {
+            debug_assert!(self.stmt_free());
             self.match_stmt_candidates(loc_pats);
+            debug_assert!(self.stmt_free());
             return;
         }
         for cand in self.matching[local].candidates.iter() {
@@ -396,9 +502,9 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             if self.match_local(local, cand) {
                 // recursion
                 ensure_sufficient_stack(|| self.match_local_candidates(local.plus(1), loc_pats));
+                // backtrack, clear status
+                self.unmatch_local(local);
             }
-            // backtrack, clear status
-            self.unmatch_local(local);
         }
     }
     fn match_stmt_candidates(&self, loc_pats: &[pat::Location]) {
@@ -416,9 +522,9 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             if self.match_stmt(loc_pat, cand) {
                 // recursion
                 ensure_sufficient_stack(|| self.match_stmt_candidates(loc_pats));
+                // backtrack, clear status
+                self.unmatch_stmt(loc_pat);
             }
-            // backtrack, clear status
-            self.unmatch_stmt(loc_pat);
         }
     }
 
@@ -662,15 +768,37 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         }
     }
 
+    /// Used in [`MatchCtxt::match_candidates`].
+    ///
+    /// # Returns
+    ///
+    /// - `true` if the statement is matched. The `matched` field of the [`StatementMatches`] is set
+    ///   to the matched statement.
+    /// - `false` if the statement is not matched. Nothing should be changed.
+    #[instrument(level = "debug", skip(self), ret)]
     fn match_stmt(&self, loc_pat: pat::Location, stmt_match: StatementMatch) -> bool {
-        self.match_stmt_locals(loc_pat, stmt_match) && {
-            self.matching[loc_pat].matched.set(Some(stmt_match));
-            true
-        }
+        self.match_stmt_locals(loc_pat, stmt_match)
+            && if let StatementMatch::Location(loc) = stmt_match {
+                let bb = &self.matching.mir_statements[loc.block];
+                bb.r#match(loc_pat, loc)
+            } else {
+                true
+            }
+            && {
+                self.matching[loc_pat].matched.set(Some(stmt_match));
+                true
+            }
     }
+    #[instrument(level = "debug", skip(self))]
     fn unmatch_stmt(&self, loc_pat: pat::Location) {
         self.unmatch_stmt_adt_matches(loc_pat);
         // self.unmatch_stmt_locals(loc_pat);
+
+        debug_assert!(self.matching[loc_pat].matched.get().is_some());
+        if let Some(StatementMatch::Location(loc)) = self.matching[loc_pat].matched.get() {
+            let bb = &self.matching.mir_statements[loc.block];
+            bb.unmatch(loc_pat, loc);
+        }
         self.matching[loc_pat].matched.set(None);
     }
     #[instrument(level = "debug", skip(self), ret)]
@@ -705,6 +833,14 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                 .is_some_and(|&(local, _)| self.matching[local_pat].force_get_matched() == local)
         })
     }
+    /// Match a local variable in the pattern graph with a local variable in the MIR graph.
+    ///
+    /// # Returns
+    ///
+    /// - `true` if the local variable in the pattern graph matches the local variable in the MIR
+    ///   graph.
+    /// - `false` if the local variable in the pattern graph has already been matched with another
+    /// local variable in the MIR graph.
     // Note this is different from `self.cx.match_local`, because we would store the matched result in
     // this method.
     #[instrument(level = "debug", skip(self), ret)]
@@ -715,7 +851,13 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             self.log_local_conflicted(local_pat, local);
             return false;
         }
-        self.match_local_ty(self.cx.mir_pat.locals[local_pat], self.cx.body.local_decls[local].ty)
+        //FIXME: use a more elegant way to ensure that we reset the matching state when failing
+        if self.match_local_ty(self.cx.mir_pat.locals[local_pat], self.cx.body.local_decls[local].ty) {
+            true
+        } else {
+            self.matching[local_pat].matched.unmatch();
+            false
+        }
     }
     #[instrument(level = "debug", skip(self), ret)]
     fn match_local_ty(&self, ty_pat: pat::Ty<'pcx>, ty: Ty<'tcx>) -> bool {
@@ -926,6 +1068,7 @@ impl<'tcx> Matching<'tcx> {
                     .unwrap_or_else(|| panic!("bug: place variable {place_var:?} not matched"))
             })
             .collect();
+
         Matched {
             basic_blocks,
             locals,
