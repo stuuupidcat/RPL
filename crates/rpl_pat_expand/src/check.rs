@@ -1,10 +1,10 @@
-use crate::symbol_table::{CheckError, Enum, ExportKind, FnInner, ImplInner, MetaTable, Variant};
 use crate::SymbolTable;
+use crate::symbol_table::{CheckError, Enum, ExportKind, FnInner, ImplInner, MetaTable, Variant};
 use quote::ToTokens;
 use rpl_pat_syntax::*;
 use rustc_span::Symbol;
-use syn::parse::Parse;
 use syn::Ident;
+use syn::parse::Parse;
 
 pub(crate) fn check_pattern(pattern: &Pattern) -> syn::Result<SymbolTable<'_>> {
     rustc_span::create_session_if_not_set_then(rustc_span::edition::LATEST_STABLE_EDITION, |_| {
@@ -589,10 +589,7 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
         self.check_operand(&switch_int.operand)?;
         let mut has_otherwise = false;
         for SwitchTarget {
-            ref value,
-            ref body,
-            ref export,
-            ..
+            value, body, export, ..
         } in &switch_int.targets
         {
             if let Some(export) = export {

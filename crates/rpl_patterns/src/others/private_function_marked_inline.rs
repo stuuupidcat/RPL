@@ -4,7 +4,7 @@ use rustc_hir::intravisit::{self, Visitor};
 use rustc_hir::{self as hir};
 use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
-use rustc_span::{sym, Span};
+use rustc_span::{Span, sym};
 
 #[instrument(level = "info", skip_all)]
 pub fn check_item(tcx: TyCtxt<'_>, _pcx: PatCtxt<'_>, item_id: hir::ItemId) {

@@ -3,7 +3,7 @@ use crate::*;
 use crate::parse::ParseError;
 
 use pretty_assertions::assert_eq;
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::parse::Parse;
 
 #[track_caller]

@@ -67,9 +67,12 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     normal::cve_2021_29941_2::check_item,
     normal::cve_2022_23639::check_item,
     inline::cve_2024_27284::check_item,
+    // FIXME: Judge whether the function signature contains generic parameters
     others::private_function_marked_inline::check_item,
-    inline::transmute_type_to_bool::check_item,
-    inline::transmute_int_to_ptr::check_item,
+    // FIXME: Too loose
+    // inline::transmute_type_to_bool::check_item,
+    // FIXME: Too loose
+    // inline::transmute_int_to_ptr::check_item,s
     normal::manually_drop::check_item,
     inline::alloc_unchecked::check_item,
 ];

@@ -10,7 +10,7 @@ use rustc_middle::ty::TyCtxt;
 use rustc_span::{Span, Symbol};
 
 use rpl_context::pat::Location;
-use rpl_context::{pat, PatCtxt};
+use rpl_context::{PatCtxt, pat};
 use rpl_mir::{CheckMirCtxt, Matched};
 
 use crate::lints::UNCHECKED_ALLOCATED_POINTER;

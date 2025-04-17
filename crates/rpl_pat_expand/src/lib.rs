@@ -32,5 +32,5 @@ pub(crate) mod symbol_table;
 mod tests;
 
 pub(crate) use check::check_pattern;
-pub use expand::{expand, expand_pattern, PatternDefFn};
-pub(crate) use symbol_table::{is_primitive, SymbolTable};
+pub use expand::{PatternDefFn, expand, expand_pattern};
+pub(crate) use symbol_table::{SymbolTable, is_primitive};

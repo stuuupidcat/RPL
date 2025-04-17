@@ -1,5 +1,5 @@
 use rpl_context::PatCtxt;
-use rpl_mir::{pat, CheckMirCtxt};
+use rpl_mir::{CheckMirCtxt, pat};
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_hir::{self as hir};

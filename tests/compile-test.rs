@@ -2,7 +2,7 @@
 #![allow(unused_extern_crates)]
 
 use ui_test::spanned::Spanned;
-use ui_test::{status_emitter, Args, Config, Mode, OutputConflictHandling};
+use ui_test::{Args, Config, Mode, OutputConflictHandling, status_emitter};
 
 use std::collections::BTreeMap;
 use std::env::{self, var_os};

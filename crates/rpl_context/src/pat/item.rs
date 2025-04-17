@@ -1,8 +1,8 @@
 use derive_more::Debug;
 use rustc_data_structures::fx::{FxHashMap, FxIndexMap};
 use rustc_middle::mir;
-use rustc_span::symbol::kw;
 use rustc_span::Symbol;
+use rustc_span::symbol::kw;
 
 use super::{MetaVars, MirPattern, Path, Ty};
 

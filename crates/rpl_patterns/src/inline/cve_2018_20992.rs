@@ -7,7 +7,7 @@ pub mod extend {
     use rustc_middle::ty::TyCtxt;
     use rustc_span::{Span, Symbol};
 
-    use rpl_mir::{pat, CheckMirCtxt};
+    use rpl_mir::{CheckMirCtxt, pat};
 
     use crate::lints::SET_LEN_TO_EXTEND;
 
@@ -115,7 +115,7 @@ pub mod truncate {
     use rustc_middle::ty::TyCtxt;
     use rustc_span::{Span, Symbol};
 
-    use rpl_mir::{pat, CheckMirCtxt};
+    use rpl_mir::{CheckMirCtxt, pat};
 
     use crate::lints::SET_LEN_TO_TRUNCATE;
 
