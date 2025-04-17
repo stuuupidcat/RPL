@@ -35,7 +35,7 @@ See [this website](https://stuuupidcat.github.io/RPL/) for the language referenc
 
 ## Getting Help
 
-Feel free to open an issue or contact us via [email](stuuupidcat@163.com) if you have any questions.
+Feel free to open an issue or contact us via email (stuuupidcat@163.com) if you have any questions.
 
 ## Contributing
 
