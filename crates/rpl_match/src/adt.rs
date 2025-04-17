@@ -1,5 +1,5 @@
-use rpl_context::PatCtxt;
 use derive_more::derive::Debug;
+use rpl_context::PatCtxt;
 use rpl_context::pat::{self};
 use rustc_abi::FieldIdx;
 use rustc_data_structures::fx::FxIndexMap;

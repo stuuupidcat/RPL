@@ -1,3 +1,4 @@
+#![allow(unused)]
 use std::ops::Not;
 
 use rpl_context::PatCtxt;

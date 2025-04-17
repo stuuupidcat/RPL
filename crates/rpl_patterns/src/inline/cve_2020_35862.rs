@@ -6,7 +6,7 @@ use rustc_middle::hir::nested_filter::All;
 use rustc_middle::ty::TyCtxt;
 use rustc_span::{Span, Symbol};
 
-use rpl_context::{pat, PatCtxt};
+use rpl_context::{PatCtxt, pat};
 use rpl_mir::CheckMirCtxt;
 
 use crate::lints::USE_AFTER_MOVE;

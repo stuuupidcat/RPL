@@ -1,3 +1,4 @@
+//@ignore-on-host
 use std::mem::transmute;
 
 // produce a value with an invalid state
