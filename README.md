@@ -27,7 +27,7 @@ The toolchain of RPL, which is a custom configuration of Rust compiler, enables 
 
 -   Clone the repository and enter the directory: `git clone https://github.com/stuuupidcat/RPL.git && cd RPL`
 
--   Install RPL as a cargo subcommand: `cargo install --path . --debug`
+-   Install RPL as a cargo subcommand: `cargo install --path .`
 
 -   Run RPL analysis on your Rust project:
     -   `cargo +nightly-2025-02-14 rpl` (using built-in RPL pattern definitions based on inline MIR)
