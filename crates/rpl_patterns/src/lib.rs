@@ -34,8 +34,7 @@ pub(crate) mod lints;
 rustc_fluent_macro::fluent_messages! { "../messages.en.ftl" }
 
 static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
-    inline::cve_2018_20992::truncate::check_item,
-    inline::cve_2018_20992::extend::check_item,
+    normal::cve_2018_20992::check_item,
     inline::cve_2018_21000::t_to_u8::check_item,
     inline::cve_2018_21000::u8_to_t::check_item,
     normal::cve_2018_21000::t_to_u8::check_item,
@@ -77,10 +76,13 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     inline::alloc_unchecked::check_item,
 ];
 
+#[allow(unused)]
+static DEBUG_PATTERN: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[normal::cve_2018_20992::check_item];
+
 #[instrument(level = "info", skip_all, fields(item = ?item.owner_id.def_id))]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item: ItemId) {
     rustc_data_structures::sync::par_for_each_in(ALL_PATTERNS, |check| check(tcx, pcx, item))
-    // ALL_PATTERNS.iter().for_each(|check| check(tcx, item))
+    // rustc_data_structures::sync::par_for_each_in(DEBUG_PATTERN, |check| check(tcx, pcx, item));
 }
 
 #[allow(unused)]

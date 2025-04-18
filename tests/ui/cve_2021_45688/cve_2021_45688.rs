@@ -21,8 +21,7 @@ pub fn read_spv<R: io::Read + io::Seek>(x: &mut R) -> io::Result<Vec<u32>> {
             words * 4,
         ))?;
         result.set_len(words);
-        //~^ ERROR: Use `Vec::set_len` to extend the length of a `Vec`, potentially including uninitialized elements
-        //~| ERROR: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
+        //~^ ERROR: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
     }
     const MAGIC_NUMBER: u32 = 0x0723_0203;
     if !result.is_empty() && result[0] == MAGIC_NUMBER.swap_bytes() {

@@ -43,10 +43,6 @@ rpl_patterns_vec_set_len_to_extend = Use `Vec::set_len` to extend the length of 
     .vec_label = `Vec` created here
     .note = make sure all elements are initialized before using them
 
-rpl_patterns_vec_set_len_to_truncate = Use `Vec::set_len` to truncate the length of a `Vec`
-    .set_len_label = `Vec::set_len` called here
-    .help = Consider using `Vec::truncate` instead
-
 rpl_patterns_trust_exact_size_iterator = it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
     .label = length used here in `{$fn_name}`
     .note = `std::iter::ExactSizeIterator::len` may not be implemented correctly, and it should be used as a hint rather than a fact

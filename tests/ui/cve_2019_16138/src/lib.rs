@@ -199,7 +199,6 @@ mod hdr {
                     // RGBE8Pixel doesn't implement Drop, so it's Ok to drop half-initialized ret
                     ret.set_len(pixel_count);
                     //~^ERROR: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
-                    //~|ERROR: Use `Vec::set_len` to extend the length of a `Vec`, potentially including uninitialized elements
                 } // ret contains uninitialized data, so now it's my responsibility to return fully initialized ret
 
                 {

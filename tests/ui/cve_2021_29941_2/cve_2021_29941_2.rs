@@ -10,8 +10,7 @@ pub fn swap_index(bla: impl ExactSizeIterator<Item = u32>) -> Vec<u32> {
 
     unsafe {
         vec.set_len(len);
-        //~^ ERROR: Use `Vec::set_len` to extend the length of a `Vec`, potentially including uninitialized elements
-        //~| ERROR: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
+        //~^ ERROR: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
         //~| ERROR: it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
     }
     vec
