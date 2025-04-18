@@ -164,17 +164,6 @@ pub struct VecSetLenToExtend {
     pub vec: Span,
 }
 
-// for cve_2018_20992
-// a workaround for without `#without!`
-#[derive(LintDiagnostic)]
-// use `Vec::set_len` to truncate the length of a `Vec`
-#[diag(rpl_patterns_vec_set_len_to_truncate)]
-pub struct VecSetLenToTruncate {
-    #[label(rpl_patterns_set_len_label)]
-    #[help]
-    pub span: Span,
-}
-
 // for cve_2019_16138
 #[derive(LintDiagnostic)]
 #[diag(rpl_patterns_set_len_uninitialized)]
@@ -200,9 +189,16 @@ pub struct GetMutInRcUnsafeCell {
 // for cve_2020_35888
 #[derive(LintDiagnostic)]
 #[diag(rpl_patterns_drop_uninit_value)]
+#[help]
 pub struct DropUninitValue {
     #[label(rpl_patterns_drop_label)]
     pub drop: Span,
+    #[label(rpl_patterns_alloc_label)]
+    pub alloc: Span,
+    #[label(rpl_patterns_ptr_label)]
+    pub ptr: Span,
+    #[label(rpl_patterns_assign_label)]
+    pub assign: Span,
 }
 
 // for cve_2020_35907

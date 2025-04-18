@@ -43,10 +43,6 @@ rpl_patterns_vec_set_len_to_extend = Use `Vec::set_len` to extend the length of 
     .vec_label = `Vec` created here
     .note = make sure all elements are initialized before using them
 
-rpl_patterns_vec_set_len_to_truncate = Use `Vec::set_len` to truncate the length of a `Vec`
-    .set_len_label = `Vec::set_len` called here
-    .help = Consider using `Vec::truncate` instead
-
 rpl_patterns_trust_exact_size_iterator = it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
     .label = length used here in `{$fn_name}`
     .note = `std::iter::ExactSizeIterator::len` may not be implemented correctly, and it should be used as a hint rather than a fact
@@ -70,8 +66,11 @@ rpl_patterns_get_mut_in_rc_unsafecell = Obtaining a mutable reference to the val
     .note = there will be multiple mutable references to the value at the same time
     .help = use `std::cell::RefCell` instead
 
-rpl_patterns_drop_uninit_value = Possibly dropping an uninitialized value
-    .drop_label = dropped here
+rpl_patterns_drop_uninit_value = dropped an possibly-uninitialized value
+    .alloc_label = memory allocated here
+    .ptr_label = a maybe-relative pointer created here
+    .drop_label = original value is dropped here
+    .assign_label = the new value is assigned to here
     .help = assigning to a dereferenced pointer will cause previous value to be dropped, and try using `ptr::write` instead
 
 rpl_patterns_unvalidated_slice_from_raw_parts = it is unsound to trust pointers from passed-in iterators in a public safe function

@@ -1,15 +1,3 @@
-error: Use `Vec::set_len` to extend the length of a `Vec`, potentially including uninitialized elements
-  --> tests/ui/cve_2021_29941_2/cve_2021_29941_2_trust_len.rs:12:13
-   |
-LL |     let mut vec = Vec::new();
-   |                   ---------- `Vec` created here
-...
-LL |         vec.set_len(len);
-   |             ^^^^^^^^^^^^ `Vec::set_len` called here
-   |
-   = note: make sure all elements are initialized before using them
-   = note: `#[deny(rpl::set_len_to_extend)]` on by default
-
 error: it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
   --> tests/ui/cve_2021_29941_2/cve_2021_29941_2_trust_len.rs:12:13
    |
@@ -22,5 +10,5 @@ LL |         vec.set_len(len);
    = help: incorrect implementation of `std::iter::ExactSizeIterator::len` must not cause safety issues, and consider using `std::iter::TrustedLen` instead if it's stabilized
    = note: `#[deny(rpl::trust_exact_size_iterator)]` on by default
 
-error: aborting due to 2 previous errors
+error: aborting due to 1 previous error
 

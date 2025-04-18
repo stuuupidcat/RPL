@@ -428,19 +428,15 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         }
         self.matched.set(matched);
     }
-    #[cfg(debug_assertions)]
     fn ty_var_free(&self) -> bool {
         self.matching.ty_vars.iter().all(|c| c.get().is_none())
     }
-    #[cfg(debug_assertions)]
     fn place_var_free(&self) -> bool {
         self.matching.place_vars.iter().all(|c| c.get().is_none())
     }
-    #[cfg(debug_assertions)]
     fn local_free(&self) -> bool {
         self.matching.locals.iter().all(|c| c.get().is_none())
     }
-    #[cfg(debug_assertions)]
     fn stmt_free(&self) -> bool {
         self.matching
             .mir_statements

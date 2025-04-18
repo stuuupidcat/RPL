@@ -12,6 +12,10 @@ RPL is a domain-specific language for modeling Rust code patterns.
 
 The toolchain of RPL, which is a custom configuration of Rust compiler, enables accurate identification of code instances that demonstrate semantic equivalence to existing patterns.
 
+<p align="center">
+  <img src="./icons/RPL.gif" width="90%"/>
+</p>
+
 ## Features
 
 -   Model Rust code patterns based on MIR, just like writing real Rust code.✨
@@ -25,7 +29,9 @@ The toolchain of RPL, which is a custom configuration of Rust compiler, enables 
 
 -   Install RPL as a cargo subcommand: `cargo install --path .`
 
--   Run RPL in your own Rust project: `cargo +nightly-2025-02-14 rpl`
+-   Run RPL analysis on your Rust project:
+    -   `cargo +nightly-2025-02-14 rpl` (using built-in RPL pattern definitions based on inline MIR)
+    -   `RUSTFLAGS="-Zinline-mir=false" cargo +nightly-2025-02-14 rpl` (using built-in RPL pattern definitions based on MIR)
 
 > Just like using `cargo clippy` to check your Rust code.
 

@@ -1,3 +1,4 @@
+pub(crate) mod cve_2018_20992;
 pub(crate) mod cve_2018_21000;
 pub(crate) mod cve_2019_15548;
 pub(crate) mod cve_2019_16138;
