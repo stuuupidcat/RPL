@@ -189,9 +189,16 @@ pub struct GetMutInRcUnsafeCell {
 // for cve_2020_35888
 #[derive(LintDiagnostic)]
 #[diag(rpl_patterns_drop_uninit_value)]
+#[help]
 pub struct DropUninitValue {
     #[label(rpl_patterns_drop_label)]
     pub drop: Span,
+    #[label(rpl_patterns_alloc_label)]
+    pub alloc: Span,
+    #[label(rpl_patterns_ptr_label)]
+    pub ptr: Span,
+    #[label(rpl_patterns_assign_label)]
+    pub assign: Span,
 }
 
 // for cve_2020_35907

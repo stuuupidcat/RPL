@@ -53,12 +53,19 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let pattern = pattern_drop_unit_value(self.pcx);
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                 let drop = matches[pattern.drop].span_no_inline(body);
-                debug!(?drop);
+                let alloc = matches[pattern.alloc].span_no_inline(body);
+                let ptr = matches[pattern.ptr].span_no_inline(body);
+                let assign = matches[pattern.assign].span_no_inline(body);
                 self.tcx.emit_node_span_lint(
                     DROP_UNINIT_VALUE,
                     self.tcx.local_def_id_to_hir_id(def_id),
                     drop,
-                    crate::errors::DropUninitValue { drop },
+                    crate::errors::DropUninitValue {
+                        drop,
+                        alloc,
+                        ptr,
+                        assign,
+                    },
                 );
             }
         }
@@ -70,30 +77,41 @@ struct Pattern<'pcx> {
     pattern: &'pcx pat::Pattern<'pcx>,
     fn_pat: &'pcx pat::Fn<'pcx>,
     drop: pat::Location,
+    alloc: pat::Location,
+    ptr: pat::Location,
+    assign: pat::Location,
 }
 
 #[rpl_macros::pattern_def]
 fn pattern_drop_unit_value(pcx: PatCtxt<'_>) -> Pattern<'_> {
+    let alloc;
+    let ptr;
+    let assign;
     let drop;
     let pattern = rpl! {
-        /*fn $pattern (..) -> _ = mir! {
-            let raw_ptr: *mut $crate::DropDetector = _;
-            let value: $crate::DropDetector = _;
-            #[export(drop)]
-            drop((*raw_ptr));
-            (*raw_ptr) = move value;
-        }*/
-
         #[meta($T:ty)]
         fn $pattern (..) -> _ = mir! {
-            let $raw_ptr: *mut $T = _;
+            let $size: usize = _;
+            let $align: usize = _;
+            #[export(alloc)]
+            let $alloc_ptr: *mut u8 = alloc::alloc::__rust_alloc(move $size, move $align);
+            #[export(ptr)]
+            let $raw_ptr: *mut $T = _; // FIXME: related to $alloc_ptr
             let $value: $T = _;
             #[export(drop)]
             drop((*$raw_ptr));
+            #[export(assign)]
             (*$raw_ptr) = move $value;
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-    Pattern { pattern, fn_pat, drop }
+    Pattern {
+        pattern,
+        fn_pat,
+        drop,
+        alloc,
+        ptr,
+        assign,
+    }
 }

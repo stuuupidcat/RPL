@@ -76,7 +76,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
 ];
 
 #[allow(unused)]
-static DEBUG_PATTERN: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[normal::cve_2018_20992::check_item];
+static DEBUG_PATTERN: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[inline::cve_2020_35888::check_item];
 
 #[instrument(level = "info", skip_all, fields(item = ?item.owner_id.def_id))]
 pub fn check_item(tcx: TyCtxt<'_>, pcx: PatCtxt<'_>, item: ItemId) {

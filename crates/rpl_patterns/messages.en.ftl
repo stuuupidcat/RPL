@@ -66,8 +66,11 @@ rpl_patterns_get_mut_in_rc_unsafecell = Obtaining a mutable reference to the val
     .note = there will be multiple mutable references to the value at the same time
     .help = use `std::cell::RefCell` instead
 
-rpl_patterns_drop_uninit_value = Possibly dropping an uninitialized value
-    .drop_label = dropped here
+rpl_patterns_drop_uninit_value = dropped an possibly-uninitialized value
+    .alloc_label = memory allocated here
+    .ptr_label = a maybe-relative pointer created here
+    .drop_label = original value is dropped here
+    .assign_label = the new value is assigned to here
     .help = assigning to a dereferenced pointer will cause previous value to be dropped, and try using `ptr::write` instead
 
 rpl_patterns_unvalidated_slice_from_raw_parts = it is unsound to trust pointers from passed-in iterators in a public safe function

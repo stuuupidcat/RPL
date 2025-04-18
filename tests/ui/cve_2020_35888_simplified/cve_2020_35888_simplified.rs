@@ -1,4 +1,4 @@
-use std::alloc::{alloc, Layout};
+use std::alloc::{Layout, alloc};
 
 struct DropDetector(u32);
 
@@ -8,7 +8,6 @@ impl Drop for DropDetector {
     }
 }
 
-// #[rpl::dump_mir(dump_cfg, dump_ddg)]
 fn main() {
     let layout = Layout::new::<DropDetector>();
 
@@ -16,7 +15,7 @@ fn main() {
 
     unsafe {
         (*ptr) = DropDetector(12345);
-        //~^ ERROR: Possibly dropping an uninitialized value
+        //~^ ERROR: dropped an possibly-uninitialized value
         std::ptr::drop_in_place(ptr);
     }
 }
