@@ -46,7 +46,7 @@ LL |                     let chunks_iter = ret.chunks_mut(uszwidth);
    |                                       slice created with this length
    |                                       slice created with this pointer
    |
-   = help: See https://doc.rust-lang.org/std/slice/fn.std::slice::from_raw_parts_mut.html
+   = help: See https://doc.rust-lang.org/std/slice/fn.from_raw_parts_mut.html#safety
    = note: `#[deny(rpl::slice_from_raw_parts_uninitialized)]` on by default
 
 error: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
@@ -62,7 +62,7 @@ LL | ...                   (read_scanline(&mut self.r, &mut buf[..]))?;
    |                                                           slice created with this length
    |                                                           slice created with this pointer
    |
-   = help: See https://doc.rust-lang.org/std/slice/fn.std::slice::from_raw_parts_mut.html
+   = help: See https://doc.rust-lang.org/std/slice/fn.from_raw_parts_mut.html#safety
 
 error: it usually isn’t necessary to apply #[inline] to private functions
   --> tests/ui/cve_2019_16138/src/lib.rs:267:13

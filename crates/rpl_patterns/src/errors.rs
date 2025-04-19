@@ -136,7 +136,7 @@ pub struct TrustExactSizeIterator {
     pub fn_name: &'static str,
 }
 
-// for cve_2021_27376
+// for CVE-2021-29941 and CVE-2021-29942
 #[derive(LintDiagnostic)]
 #[diag(rpl_patterns_slice_from_raw_parts_uninitialized)]
 #[help]

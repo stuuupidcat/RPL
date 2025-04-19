@@ -1,5 +1,6 @@
 //@ revisions: inline regular
 //@[inline] compile-flags: -Z inline-mir=true
+//@[inline] ignore-on-host
 //@[regular] compile-flags: -Z inline-mir=false
 
 use std::io::{BufRead, Error as IoError, ErrorKind as IoErrorKind, Read, Result as IoResult};
