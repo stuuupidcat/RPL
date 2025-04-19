@@ -49,10 +49,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
         _span: Span,
         def_id: LocalDefId,
     ) -> Self::Result {
-        if self.tcx.visibility(def_id).is_public()
-            && kind.header().is_none_or(|header| header.is_unsafe().not())
-            && self.tcx.is_mir_available(def_id)
-        {
+        if kind.header().is_none_or(|header| header.is_unsafe().not()) && self.tcx.is_mir_available(def_id) {
             let body = self.tcx.optimized_mir(def_id);
             let pattern = pattern_from_raw_parts_iter_inlined(self.pcx);
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
