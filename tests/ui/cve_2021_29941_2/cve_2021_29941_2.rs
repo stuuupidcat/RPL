@@ -66,7 +66,7 @@ pub fn swap_index_for_enumerate(bla: impl ExactSizeIterator<Item = u32>) -> Vec<
 }
 
 // #[rpl::dump_mir(dump_cfg, dump_ddg)]
-pub fn swap_index(bla: impl ExactSizeIterator<Item = u32>) -> Vec<u32> {
+pub fn set_len(bla: impl ExactSizeIterator<Item = u32>) -> Vec<u32> {
     let mut vec = Vec::new();
     let len = bla.len();
     // vec.reserve(len);
@@ -80,6 +80,32 @@ pub fn swap_index(bla: impl ExactSizeIterator<Item = u32>) -> Vec<u32> {
         //~^ERROR: it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
         //~[inline]|ERROR: Use `Vec::set_len` to extend the length of a `Vec`, potentially including uninitialized elements
     }
+    vec
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+pub fn clear(bla: impl ExactSizeIterator<Item = u32>) -> Vec<u32> {
+    let mut vec = Vec::new();
+
+    vec.clear();
+    vec
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+pub fn resize(bla: impl ExactSizeIterator<Item = u32>) -> Vec<u32> {
+    let mut vec = Vec::new();
+    let len = bla.len();
+
+    vec.resize(len, 0);
+    vec
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+pub fn reserve(bla: impl ExactSizeIterator<Item = u32>) -> Vec<u32> {
+    let mut vec = Vec::new();
+    let len = bla.len();
+
+    vec.reserve(len);
     vec
 }
 
