@@ -1,8 +1,8 @@
 error: it is unsound to trust pointers from passed-in iterators in a public safe function
-  --> tests/ui/cve_2021_25904/cve_2021_25904_src_only.rs:4:35
+  --> tests/ui/cve_2021_25904/cve_2021_25904_src_only.rs:8:49
    |
-LL | pub fn copy_from_raw_parts<I, IU>(mut src: I, mut src_linesize: IU)
-   |                                   ^^^^^^^ source iterator found here
+LL | pub fn copy_from_raw_parts_iterator_next<I, IU>(mut src: I, mut src_linesize: IU)
+   |                                                 ^^^^^^^ source iterator found here
 ...
 LL |     let rr = src.next().unwrap();
    |                         -------- pointer created here

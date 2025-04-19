@@ -1,3 +1,7 @@
+//@ revisions: inline regular
+//@[inline] compile-flags: -Z inline-mir=true
+//@[regular] compile-flags: -Z inline-mir=false
+
 #![allow(non_local_definitions)]
 use crate::{rational::Rational64, FrameError::InvalidConversion};
 use byte_slice_cast::{AsMutSliceOf, AsSliceOf};
