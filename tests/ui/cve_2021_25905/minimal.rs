@@ -10,4 +10,7 @@ fn main() {
         std::slice::from_raw_parts_mut(buf.as_mut_ptr().offset(b as isize), buf.capacity() - b)
         //~^ ERROR: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
     };
+    let buf1 = &buf[..];
+    let buf2 = &buf[0..];
+    let buf2 = &buf[b..];
 }
