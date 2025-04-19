@@ -86,7 +86,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                         ptr,
                         vec,
                         slice,
-                        fn_name: "std::slice::from_raw_parts",
+                        fn_name: "from_raw_parts",
                     },
                 );
             }
@@ -109,7 +109,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                         ptr,
                         vec,
                         slice,
-                        fn_name: "std::slice::from_raw_parts_mut",
+                        fn_name: "from_raw_parts_mut",
                     },
                 );
             }
