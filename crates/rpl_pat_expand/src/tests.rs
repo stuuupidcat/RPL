@@ -340,6 +340,116 @@ fn test_cve_2020_25016() {
 }
 
 #[test]
+fn test_cve_2020_35877_unchecked_offset_const() {
+    mir_test_case!(
+        #[meta($T:ty, $size: const(usize), $offset: const(usize))]
+        pat! {
+            let $array: &[$T; $size] = _; // _1
+            let $slice_ref: &[$T] = copy $array as &[$T] (PointerCoercion(Unsize, Implicit)); // _3 bb0[0]
+            let $slice_ptr: *const [$T] = &raw const (*$slice_ref); // _5 bb0[1]
+            #[export(ptr)]
+            let $ptr: *const $T = move $slice_ptr as *const $T (PtrToPtr); // _2 bb0[2]
+            let $offset: usize = const $offset; // _6 bb0[3]
+            #[export(offset)]
+            let $ptr_1: *const $T = Offset(copy $ptr, copy $offset); // _4 bb0[4]
+            let $value: &$T = &(*$ptr_1); // _0 bb0[5]
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T_ty_var = pattern_fn.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T_ty = pcx.mk_var_ty(T_ty_var);
+                #[allow(non_snake_case)]
+                let size_const_var = pattern_fn.meta.new_const_var(pcx.primitive_types.usize);
+                #[allow(non_snake_case)]
+                #[allow (unused_variables)]
+                let size_const = pcx.mk_var_const(size_const_var);
+                #[allow(non_snake_case)]
+                let offset_const_var = pattern_fn.meta.new_const_var(pcx.primitive_types.usize);
+                #[allow(non_snake_case)]
+                #[allow(unused_variables)]
+                let offset_const = pcx.mk_var_const(offset_const_var);
+            }
+            let array_local = mir_pat.mk_local(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReAny,
+                pcx.mk_array_ty(T_ty, size_const),
+                ::rustc_middle::mir::Mutability::Not
+            ));
+            mir_pat.mk_assign(array_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            let slice_ref_local = mir_pat.mk_local(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReAny,
+                pcx.mk_slice_ty(T_ty),
+                ::rustc_middle::mir::Mutability::Not
+            ));
+            mir_pat.mk_assign(
+                slice_ref_local.into_place(),
+                ::rpl_context::pat::Rvalue::Cast(
+                    ::rustc_middle::mir::CastKind::PointerCoercion(
+                        rustc_middle::ty::adjustment::PointerCoercion::Unsize,
+                        ::rustc_middle::mir::CoercionSource::Implicit
+                    ),
+                    ::rpl_context::pat::Operand::Copy(array_local.into_place()),
+                    pcx.mk_ref_ty(
+                        ::rpl_context::pat::RegionKind::ReAny,
+                        pcx.mk_slice_ty(T_ty),
+                        ::rustc_middle::mir::Mutability::Not
+                    )
+                )
+            );
+            let slice_ptr_local =
+                mir_pat.mk_local(pcx.mk_raw_ptr_ty(pcx.mk_slice_ty(T_ty), ::rustc_middle::mir::Mutability::Not));
+            mir_pat.mk_assign(
+                slice_ptr_local.into_place(),
+                ::rpl_context::pat::Rvalue::RawPtr(
+                    ::rustc_middle::mir::Mutability::Not,
+                    ::rpl_context::pat::Place::new(slice_ref_local, pcx.mk_slice(&[::rpl_context::pat::PlaceElem::Deref, ]))
+                )
+            );
+            let ptr_local = mir_pat.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Not));
+            ptr = mir_pat.mk_assign(
+                ptr_local.into_place(),
+                ::rpl_context::pat::Rvalue::Cast(
+                    ::rustc_middle::mir::CastKind::PtrToPtr,
+                    ::rpl_context::pat::Operand::Move(slice_ptr_local.into_place()),
+                    pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Not)
+                )
+            );
+            let offset_local = mir_pat.mk_local(pcx.primitive_types.usize);
+            mir_pat.mk_assign(
+                offset_local.into_place(),
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Constant(
+                    mir_pat.mk_const_var(offset_const_var)
+                ))
+            );
+            let ptr_1_local = mir_pat.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Not));
+            offset = mir_pat.mk_assign(
+                ptr_1_local.into_place(),
+                ::rpl_context::pat::Rvalue::BinaryOp(
+                    ::rustc_middle::mir::BinOp::Offset,
+                    Box::new([
+                        ::rpl_context::pat::Operand::Copy(ptr_local.into_place()),
+                        ::rpl_context::pat::Operand::Copy(offset_local.into_place())
+                    ])
+                )
+            );
+            let value_local = mir_pat.mk_local(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReAny,
+                T_ty,
+                ::rustc_middle::mir::Mutability::Not
+            ));
+            mir_pat.mk_assign(
+                value_local.into_place(),
+                ::rpl_context::pat::Rvalue::Ref(
+                    ::rpl_context::pat::RegionKind::ReAny,
+                    ::rustc_middle::mir::BorrowKind::Shared,
+                    ::rpl_context::pat::Place::new(ptr_1_local, pcx.mk_slice(&[::rpl_context::pat::PlaceElem::Deref, ]))
+                )
+            );
+        }
+    );
+}
+
+#[test]
 fn test_cve_2020_35892_revised() {
     mir_test_case!(
         #[meta($T:ty, $SlabT:ty)]

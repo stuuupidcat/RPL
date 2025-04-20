@@ -19,7 +19,7 @@ pub struct Matched<'tcx> {
     pub basic_blocks: IndexVec<pat::BasicBlock, MatchedBlock>,
     pub locals: IndexVec<pat::Local, mir::Local>,
     pub ty_vars: IndexVec<pat::TyVarIdx, Ty<'tcx>>,
-    pub const_vars: IndexVec<pat::TyVarIdx, Const<'tcx>>,
+    pub const_vars: IndexVec<pat::ConstVarIdx, Const<'tcx>>,
     pub place_vars: IndexVec<pat::PlaceVarIdx, PlaceRef<'tcx>>,
 }
 

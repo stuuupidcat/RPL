@@ -108,12 +108,12 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 offset: Location,
                 body: &Body<'_>,
             ) -> (StatementMatch, StatementMatch) {
-                let ptr = matched[ptr];
-                let offset = matched[offset];
-                let span_ptr = ptr.span_no_inline(body);
-                let span_offset = offset.span_no_inline(body);
-                trace!(?ptr, ?offset, ?span_ptr, ?span_offset, "checked offset found");
-                (ptr, offset)
+                let ptr_ = matched[ptr];
+                let offset_ = matched[offset];
+                let span_ptr = ptr_.span_no_inline(body);
+                let span_offset = offset_.span_no_inline(body);
+                trace!(ptr = ?ptr_, offset = ?offset_, pattern.ptr = ?ptr, pattern.offset = ?offset, ?span_ptr, ?span_offset, "checked offset found");
+                (ptr_, offset_)
             }
             let locations: BTreeSet<_> = matches_2
                 .iter()
@@ -131,7 +131,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 .chain(
                     matches_5
                         .iter()
-                        .map(|matches| collect_matched(matches, pattern_4.ptr, pattern_4.offset, body)),
+                        .map(|matches| collect_matched(matches, pattern_5.ptr, pattern_5.offset, body)),
                 )
                 .collect();
 
@@ -144,7 +144,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 }
                 let span_ptr = ptr.span_no_inline(body);
                 let span_offset = offset.span_no_inline(body);
-                debug!(?ptr, ?offset, ?span_ptr, ?span_offset, "unchecked offset found");
+                debug!(?ptr, ?offset, ?pattern.ptr, ?pattern.offset, ?span_ptr, ?span_offset, "unchecked offset found");
                 let ptr = span_ptr;
                 let offset = span_offset;
                 self.tcx.emit_node_span_lint(
