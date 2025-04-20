@@ -57,6 +57,7 @@ fn alloc_check_as_cast_write<T: Default>() {
     }
 }
 
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
 fn alloc_maybe_misaligned_and_write<T: Default>() {
     let layout = Layout::from_size_align(size_of::<T>(), 8).unwrap();
     unsafe {

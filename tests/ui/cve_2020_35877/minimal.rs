@@ -47,6 +47,7 @@ fn checked_le_1<T>(ptr: *const T, index: usize, right: usize) -> *const T {
     }
 }
 
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
 fn safe_unchecked_slice<T>(slice: &[T; 2]) -> &T {
     let ptr = slice.as_ptr();
     unsafe { &*ptr.add(1) }
