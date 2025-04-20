@@ -95,10 +95,12 @@ fn test_const_var() {
                 #[allow(non_snake_case)]
                 let size_const_var = pattern_fn.meta.new_const_var(pcx.primitive_types.usize);
                 #[allow(non_snake_case)]
+                #[allow(unused_variables)]
                 let size_const = pcx.mk_var_const(size_const_var);
                 #[allow(non_snake_case)]
                 let src_const_var = pattern_fn.meta.new_const_var(T_ty);
                 #[allow(non_snake_case)]
+                #[allow(unused_variables)]
                 let src_const = pcx.mk_var_const(src_const_var);
             }
             let array_local = mir_pat.mk_local(pcx.mk_array_ty(T_ty, size_const));
@@ -126,14 +128,14 @@ fn test_const_var() {
                         )
                 ),
                 mir_pat.mk_list([
-                    ::rpl_context::pat::Operand::Constant(mir_pat.mk_const(size_const)),
-                    ::rpl_context::pat::Operand::Constant(mir_pat.mk_const(size_const))
+                    ::rpl_context::pat::Operand::Constant(mir_pat.mk_const_var(size_const_var)),
+                    ::rpl_context::pat::Operand::Constant(mir_pat.mk_const_var(size_const_var))
                 ]),
                 Some(buffer_local.into_place())
             );
             mir_pat.mk_assign(
                 ::rpl_context::pat::Place::new(buffer_local, pcx.mk_slice(&[::rpl_context::pat::PlaceElem::Deref, ])),
-                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Constant(mir_pat.mk_const(src_const)))
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Constant(mir_pat.mk_const_var(src_const_var)))
             );
         }
     );
@@ -189,25 +191,42 @@ fn test_coercion() {
                 let T_ty_var = pattern_fn.meta.new_ty_var(None);
                 #[allow(non_snake_case)]
                 let T_ty = pcx.mk_var_ty(T_ty_var);
-                #[allow(non_snake_case)]
-                let src_place_var = pattern_fn.meta.new_place_var(T_ty);
-                #[allow(non_snake_case)]
-                let src_local = pcx.mk_var_place(src_place_var);
             }
             let reference_local = mir_pat.mk_local(
-                pcx
-                    .mk_ref_ty(
-                        ::rpl_context::pat::RegionKind::ReAny,
-                        T_ty,
+                pcx.mk_ref_ty(
+                    ::rpl_context::pat::RegionKind::ReAny,
+                    pcx.mk_array_ty(
+                        T_ty, 
+                        ::rpl_context::pat::ConstOperand::ScalarInt(2.into())),
                         ::rustc_middle::mir::Mutability::Not
                     )
+                );
+            mir_pat.mk_assign(
+                reference_local.into_place(), 
+                ::rpl_context::pat::Rvalue::Any
+            );
+            let reference_local = mir_pat.mk_local(
+                pcx.mk_ref_ty(
+                    ::rpl_context::pat::RegionKind::ReAny, 
+                    pcx.mk_slice_ty(T_ty), 
+                    ::rustc_middle::mir::Mutability::Not
+                )
             );
             mir_pat.mk_assign(
-                reference_local.into_place(),
-                ::rpl_context::pat::Rvalue::Ref(
-                    ::rpl_context::pat::RegionKind::ReAny,
-                    ::rustc_middle::mir::BorrowKind::Shared,
-                    src_local.into_place()
+                reference_local.into_place(), 
+                ::rpl_context::pat::Rvalue::Cast(
+                    ::rustc_middle::mir::CastKind::PointerCoercion(
+                        rustc_middle::ty::adjustment::PointerCoercion::Unsize, 
+                        ::rustc_middle::mir::CoercionSource::Implicit
+                    ), 
+                    ::rpl_context::pat::Operand::Copy(
+                        reference_local.into_place()
+                    ), 
+                    pcx.mk_ref_ty(
+                        ::rpl_context::pat::RegionKind::ReAny, 
+                        pcx.mk_slice_ty(T_ty), 
+                        ::rustc_middle::mir::Mutability::Not
+                    )
                 )
             );
         }

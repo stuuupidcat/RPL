@@ -1,7 +1,7 @@
 use crate::lints::{DEREF_UNCHECKED_PTR_OFFSET, UNCHECKED_POINTER_OFFSET};
 use rpl_context::PatCtxt;
 use rpl_mir::pat::Location;
-use rpl_mir::{CheckMirCtxt, Matched, pat};
+use rpl_mir::{CheckMirCtxt, Matched, StatementMatch, pat};
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_hir::{self as hir};
@@ -334,9 +334,8 @@ fn pattern_checked_ptr_offset_const(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffs
             let $slice_ptr: *const [$T] = &raw const (*$slice_ref); // _5 bb0[1]
             #[export(ptr)]
             let $ptr: *const $T = move $slice_ptr as *const $T (PtrToPtr); // _2 bb0[2]
-            let $offset: usize = const $offset; // _6 bb0[3]
             #[export(offset)]
-            let $ptr_1: *const $T = Offset(copy $ptr, copy $offset); // _4 bb0[4]
+            let $ptr_1: *const $T = Offset(copy $ptr, const $offset); // _4 bb0[4]
             let $value: &$T = &(*$ptr_1); // _0 bb0[5]
         }
     };

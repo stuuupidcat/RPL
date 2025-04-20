@@ -74,16 +74,11 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let pattern_4 = alloc_cast_check_as_write(self.pcx);
             let matches_4 = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_4.pattern, pattern_4.fn_pat).check();
 
-            fn collect_matched(
-                matched: &Matched<'_>,
-                ptr: Location,
-                offset: Location,
-                body: &Body<'_>,
-            ) -> (Span, Span) {
-                let span_ptr = matched[ptr].span_no_inline(body);
-                let span_offset = matched[offset].span_no_inline(body);
-                trace!(?span_ptr, ?span_offset, "checked offset found");
-                (span_ptr, span_offset)
+            fn collect_matched(matched: &Matched<'_>, ptr: Location, write: Location, body: &Body<'_>) -> (Span, Span) {
+                let span_alloc = matched[ptr].span_no_inline(body);
+                let span_write = matched[write].span_no_inline(body);
+                trace!(?span_alloc, ?span_write, "checked write found");
+                (span_alloc, span_write)
             }
             let locations: BTreeSet<_> = matches_2
                 .iter()
