@@ -399,17 +399,17 @@ impl<'pat> CheckFnCtxt<'_, 'pat> {
     }
 
     fn check_const_operand(&self, konst: &ConstOperand) -> syn::Result<()> {
-        match konst.kind {
+        match &konst.kind {
             ConstOperandKind::Lit(_) => Ok(()),
-            ConstOperandKind::ConstVar(ref const_var) => self.check_const_var(&const_var),
-            ConstOperandKind::Type(ref type_path) => {
+            ConstOperandKind::ConstVar(const_var) => self.check_const_var(const_var),
+            ConstOperandKind::Type(type_path) => {
                 if let Some(qself) = &type_path.qself {
                     self.check_type(&qself.ty)?;
                 }
                 self.check_path(&type_path.path)?;
                 Ok(())
             },
-            ConstOperandKind::LangItem(ref lang_item) => self.check_lang_item_with_args(lang_item),
+            ConstOperandKind::LangItem(lang_item) => self.check_lang_item_with_args(lang_item),
         }
     }
 
