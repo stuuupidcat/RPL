@@ -1508,7 +1508,12 @@ impl ToTokens for Expand<'_, CastKind> {
             CastKind::PointerCoercion {
                 kw, coercion, source, ..
             } => {
-                quote_each_token!(tokens ::rustc_middle::mir::CastKind::#kw(rustc_middle::ty::adjustment::PointerCoercion::#coercion, ::rustc_middle::mir::CoercionSource::#source));
+                quote_each_token!(tokens
+                    ::rustc_middle::mir::CastKind::#kw(
+                        rustc_middle::ty::adjustment::PointerCoercion::#coercion,
+                        ::rustc_middle::mir::CoercionSource::#source
+                    )
+                );
             },
         }
     }

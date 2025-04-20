@@ -402,7 +402,12 @@ fn test_cve_2020_35877_unchecked_offset_const() {
                 slice_ptr_local.into_place(),
                 ::rpl_context::pat::Rvalue::RawPtr(
                     ::rustc_middle::mir::Mutability::Not,
-                    ::rpl_context::pat::Place::new(slice_ref_local, pcx.mk_slice(&[::rpl_context::pat::PlaceElem::Deref, ]))
+                    ::rpl_context::pat::Place::new(
+                        slice_ref_local,
+                        pcx.mk_slice(&[
+                            ::rpl_context::pat::PlaceElem::Deref,
+                        ])
+                    )
                 )
             );
             let ptr_local = mir_pat.mk_local(pcx.mk_raw_ptr_ty(T_ty, ::rustc_middle::mir::Mutability::Not));
