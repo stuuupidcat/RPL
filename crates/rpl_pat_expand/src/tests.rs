@@ -135,7 +135,11 @@ fn test_const_var() {
             );
             mir_pat.mk_assign(
                 ::rpl_context::pat::Place::new(buffer_local, pcx.mk_slice(&[::rpl_context::pat::PlaceElem::Deref, ])),
-                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Constant(mir_pat.mk_const_var(src_const_var)))
+                ::rpl_context::pat::Rvalue::Use(
+                    ::rpl_context::pat::Operand::Constant(
+                        mir_pat.mk_const_var(src_const_var)
+                    )
+                )
             );
         }
     );
@@ -196,35 +200,35 @@ fn test_coercion() {
                 pcx.mk_ref_ty(
                     ::rpl_context::pat::RegionKind::ReAny,
                     pcx.mk_array_ty(
-                        T_ty, 
+                        T_ty,
                         ::rpl_context::pat::ConstOperand::ScalarInt(2.into())),
                         ::rustc_middle::mir::Mutability::Not
                     )
                 );
             mir_pat.mk_assign(
-                reference_local.into_place(), 
+                reference_local.into_place(),
                 ::rpl_context::pat::Rvalue::Any
             );
             let reference_local = mir_pat.mk_local(
                 pcx.mk_ref_ty(
-                    ::rpl_context::pat::RegionKind::ReAny, 
-                    pcx.mk_slice_ty(T_ty), 
+                    ::rpl_context::pat::RegionKind::ReAny,
+                    pcx.mk_slice_ty(T_ty),
                     ::rustc_middle::mir::Mutability::Not
                 )
             );
             mir_pat.mk_assign(
-                reference_local.into_place(), 
+                reference_local.into_place(),
                 ::rpl_context::pat::Rvalue::Cast(
                     ::rustc_middle::mir::CastKind::PointerCoercion(
-                        rustc_middle::ty::adjustment::PointerCoercion::Unsize, 
+                        rustc_middle::ty::adjustment::PointerCoercion::Unsize,
                         ::rustc_middle::mir::CoercionSource::Implicit
-                    ), 
+                    ),
                     ::rpl_context::pat::Operand::Copy(
                         reference_local.into_place()
-                    ), 
+                    ),
                     pcx.mk_ref_ty(
-                        ::rpl_context::pat::RegionKind::ReAny, 
-                        pcx.mk_slice_ty(T_ty), 
+                        ::rpl_context::pat::RegionKind::ReAny,
+                        pcx.mk_slice_ty(T_ty),
                         ::rustc_middle::mir::Mutability::Not
                     )
                 )
