@@ -51,8 +51,8 @@ fn checked_le_1<T>(ptr: *const T, index: usize, right: usize) -> *const T {
 fn safe_unchecked_slice<T>(slice: &[T; 2]) -> &T {
     let ptr = slice.as_ptr();
     unsafe { &*ptr.add(1) }
-    //~^ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
-    //FIXME: this is a false positive
+    // This is safe because the length of the slice is known at compile time
+    // and the index is guaranteed to be less than the length.
 }
 
 fn safe_unchecked_2_const<T, const N: usize>(slice: &[T; N], index: usize) -> &T {

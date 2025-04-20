@@ -492,9 +492,9 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     }
     fn match_const_var_candidates(&self, const_var: pat::ConstVarIdx, loc_pats: &[pat::Location]) {
         if const_var == self.cx.fn_pat.meta.const_vars.next_index() {
-            debug_assert!(self.local_free());
-            self.match_local_candidates(pat::Local::ZERO, loc_pats);
-            debug_assert!(self.local_free());
+            debug_assert!(self.place_var_free());
+            self.match_place_var_candidates(pat::PlaceVarIdx::ZERO, loc_pats);
+            debug_assert!(self.place_var_free());
             return;
         }
         for &cand in &self.matching[const_var].candidates {
