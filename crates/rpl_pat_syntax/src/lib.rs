@@ -53,6 +53,14 @@ pub(crate) mod kw {
     syn::custom_keyword!(IntToInt);
     syn::custom_keyword!(Transmute);
     syn::custom_keyword!(PointerExposeProvenance);
+    syn::custom_keyword!(PointerCoercion);
+
+    syn::custom_keyword!(MutToConstPointer);
+    syn::custom_keyword!(ArrayToPointer);
+    syn::custom_keyword!(Unsize);
+
+    syn::custom_keyword!(AsCast);
+    syn::custom_keyword!(Implicit);
 
     // BinOp
     syn::custom_keyword!(Add);
@@ -137,7 +145,7 @@ pub struct TypeArray {
     #[syn(in = bracket)]
     tk_semi: Token![;],
     #[syn(in = bracket)]
-    pub len: syn::LitInt,
+    pub len: Const,
 }
 
 /*
@@ -320,6 +328,12 @@ pub struct TypeTuple {
 
 #[derive(ToTokens, Parse)]
 pub struct TypeVar {
+    tk_dollar: Token![$],
+    pub ident: Ident,
+}
+
+#[derive(ToTokens, Parse)]
+pub struct ConstVar {
     tk_dollar: Token![$],
     pub ident: Ident,
 }
@@ -542,6 +556,8 @@ impl Place {
 pub enum Const {
     #[parse(peek = syn::Lit)]
     Lit(syn::Lit),
+    #[parse(peek = Token![$])]
+    ConstVar(ConstVar),
     Path(TypePath),
 }
 
@@ -566,6 +582,8 @@ pub enum ConstOperandKind {
     Lit(syn::Lit),
     #[parse(peek = Token![#])]
     LangItem(LangItemWithArgs),
+    #[parse(peek = Token![$])]
+    ConstVar(ConstVar),
     Type(TypePath),
 }
 
@@ -683,6 +701,37 @@ pub struct RvalueLen {
     pub place: Place,
 }
 
+// /// See [`rustc_hir::hir::Safety`]
+// #[derive(ToTokens, Parse)]
+// pub enum Safety {
+//     Unsafe,
+//     Safe,
+// }
+
+/// See [`rustc_middle::ty::adjustment::PointerCoercion`]
+#[derive(Clone, Copy, ToTokens, Parse)]
+pub enum PointerCoercion {
+    // ReifyFnPointer,
+    // UnsafeFnPointer,
+    // ClosureFnPointer(Safety),
+    #[parse(peek = kw::MutToConstPointer)]
+    MutToConstPointer(kw::MutToConstPointer),
+    #[parse(peek = kw::ArrayToPointer)]
+    ArrayToPointer(kw::ArrayToPointer),
+    #[parse(peek = kw::Unsize)]
+    Unsize(kw::Unsize),
+    // DynStar,
+}
+
+/// See [`rustc_middle::mir::CoercionSource`]
+#[derive(Clone, Copy, ToTokens, Parse)]
+pub enum CoercionSource {
+    #[parse(peek = kw::AsCast)]
+    AsCast(kw::AsCast),
+    #[parse(peek = kw::Implicit)]
+    Implicit(kw::Implicit),
+}
+
 #[derive(Clone, Copy, ToTokens, Parse, From)]
 pub enum CastKind {
     #[parse(peek = kw::PtrToPtr)]
@@ -693,6 +742,20 @@ pub enum CastKind {
     Transmute(kw::Transmute),
     #[parse(peek = kw::PointerExposeProvenance)]
     PointerExposeProvenance(kw::PointerExposeProvenance),
+    /// See [`rustc_middle::mir::CastKind::PointerCoercion`]
+    /// See <https://doc.rust-lang.org/nightly/nightly-rustc/rustc_middle/mir/enum.CastKind.html#variant.PointerCoercion>
+    #[parse(peek = kw::PointerCoercion)]
+    PointerCoercion {
+        kw: kw::PointerCoercion,
+        #[syn(parenthesized)]
+        paren: token::Paren,
+        #[syn(in = paren)]
+        coercion: PointerCoercion,
+        #[syn(in = paren)]
+        comma: Token![,],
+        #[syn(in = paren)]
+        source: CoercionSource,
+    },
 }
 
 #[derive(ToTokens, Parse)]
@@ -1081,7 +1144,7 @@ pub struct Statement {
     pub kind: StatementKind,
 }
 
-/// A type variable from `#[meta($T:ty)]` or other pattern.
+/// A type variable from `#[meta($T:ty)]`, `#[meta($T:ty = pred)]` or other pattern.
 #[derive(ToTokens, Parse)]
 pub struct TyVar {
     kw_ty: kw::ty,
@@ -1089,7 +1152,19 @@ pub struct TyVar {
     pub ty_pred: Option<PunctAnd<Token![=], syn::Expr>>,
 }
 
-/// A place variable from `#[meta($p:place)]` or other pattern.
+/// A type variable from `#[meta($c:const(ty))]`, `#[meta($c:const(ty) = pred)]` or other pattern.
+#[derive(ToTokens, Parse)]
+pub struct ConstMetaVar {
+    kw_const: Token![const],
+    #[syn(parenthesized)]
+    paren: token::Paren,
+    #[syn(in = paren)]
+    pub ty: Type,
+    #[parse(PunctAnd::parse_opt)]
+    pub const_pred: Option<PunctAnd<Token![=], syn::Expr>>,
+}
+
+/// A place variable from `#[meta($p:place(ty))]` or other pattern.
 #[derive(ToTokens, Parse)]
 pub struct PlaceMetaVar {
     kw_ty: kw::place,
@@ -1103,6 +1178,8 @@ pub struct PlaceMetaVar {
 pub enum MetaKind {
     #[parse(peek = kw::ty)]
     Ty(TyVar),
+    #[parse(peek = Token![const])]
+    Const(ConstMetaVar),
     #[parse(peek = kw::place)]
     Place(PlaceMetaVar),
 }

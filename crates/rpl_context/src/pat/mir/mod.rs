@@ -644,6 +644,9 @@ impl<'pcx> MirPattern<'pcx> {
     pub fn mk_zeroed(&self, path_with_args: PathWithArgs<'pcx>) -> ConstOperand<'pcx> {
         ConstOperand::ZeroSized(path_with_args)
     }
+    pub fn mk_const_var(&self, const_var: ConstVar<'pcx>) -> ConstOperand<'pcx> {
+        ConstOperand::ConstVar(const_var)
+    }
     pub fn mk_list<T>(&self, items: impl IntoIterator<Item = T>) -> List<T> {
         items.into_iter().collect()
     }

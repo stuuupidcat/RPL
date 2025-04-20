@@ -295,6 +295,12 @@ pub enum Const<'pcx> {
     Value(IntValue),
 }
 
+impl<'pcx> From<ConstVar<'pcx>> for Const<'pcx> {
+    fn from(konst: ConstVar<'pcx>) -> Self {
+        Const::ConstVar(konst)
+    }
+}
+
 #[derive(Clone, Copy)]
 pub struct TyVar {
     pub idx: TyVarIdx,
@@ -324,4 +330,10 @@ impl Debug for PlaceVar<'_> {
 pub struct ConstVar<'pcx> {
     pub idx: ConstVarIdx,
     pub ty: Ty<'pcx>,
+}
+
+impl<'pcx> ConstVar<'pcx> {
+    pub fn into_const(self) -> Const<'pcx> {
+        Const::ConstVar(self)
+    }
 }

@@ -78,11 +78,111 @@ fn test_ty_var() {
 }
 
 #[test]
+fn test_const_var() {
+    mir_test_case!(
+        #[meta($T:ty, $size: const(usize), $src: const($T))]
+        pat! {
+            let $array: [$T; $size] = _;
+            let $slice: &[$T; $size] = &$array;
+            let $buffer: std::alloc::Layout = std::alloc::Layout::new_unchecked(const $size, const $size);
+            (*$buffer) = const $src;
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T_ty_var = pattern_fn.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T_ty = pcx.mk_var_ty(T_ty_var);
+                #[allow(non_snake_case)]
+                let size_const_var = pattern_fn.meta.new_const_var(pcx.primitive_types.usize);
+                #[allow(non_snake_case)]
+                let size_const = pcx.mk_var_const(size_const_var);
+                #[allow(non_snake_case)]
+                let src_const_var = pattern_fn.meta.new_const_var(T_ty);
+                #[allow(non_snake_case)]
+                let src_const = pcx.mk_var_const(src_const_var);
+            }
+            let array_local = mir_pat.mk_local(pcx.mk_array_ty(T_ty, size_const));
+            mir_pat.mk_assign(array_local.into_place(), ::rpl_context::pat::Rvalue::Any);
+            let slice_local = mir_pat.mk_local(pcx.mk_ref_ty(
+                ::rpl_context::pat::RegionKind::ReAny,
+                pcx.mk_array_ty(T_ty, size_const),
+                ::rustc_middle::mir::Mutability::Not
+            ));
+            mir_pat.mk_assign(
+                slice_local.into_place(),
+                ::rpl_context::pat::Rvalue::Ref(
+                    ::rpl_context::pat::RegionKind::ReAny,
+                    ::rustc_middle::mir::BorrowKind::Shared,
+                    array_local.into_place()
+                )
+            );
+            let buffer_local =
+                mir_pat.mk_local(pcx.mk_path_ty(pcx.mk_path_with_args(pcx.mk_item_path(&["std", "alloc", "Layout", ]), &[])));
+            mir_pat.mk_fn_call(
+                ::rpl_context::pat::Operand::Constant(
+                    mir_pat
+                        .mk_zeroed(
+                            pcx.mk_path_with_args(pcx.mk_item_path(&["std", "alloc", "Layout", "new_unchecked", ]), &[])
+                        )
+                ),
+                mir_pat.mk_list([
+                    ::rpl_context::pat::Operand::Constant(mir_pat.mk_const(size_const)),
+                    ::rpl_context::pat::Operand::Constant(mir_pat.mk_const(size_const))
+                ]),
+                Some(buffer_local.into_place())
+            );
+            mir_pat.mk_assign(
+                ::rpl_context::pat::Place::new(buffer_local, pcx.mk_slice(&[::rpl_context::pat::PlaceElem::Deref, ])),
+                ::rpl_context::pat::Rvalue::Use(::rpl_context::pat::Operand::Constant(mir_pat.mk_const(src_const)))
+            );
+        }
+    );
+}
+
+#[test]
 fn test_place_var() {
     mir_test_case!(
         #[meta($T: ty, $src: place($T))]
         pat! {
             let $reference: &$T = &$src;
+        } => {
+            meta! {
+                #[allow(non_snake_case)]
+                let T_ty_var = pattern_fn.meta.new_ty_var(None);
+                #[allow(non_snake_case)]
+                let T_ty = pcx.mk_var_ty(T_ty_var);
+                #[allow(non_snake_case)]
+                let src_place_var = pattern_fn.meta.new_place_var(T_ty);
+                #[allow(non_snake_case)]
+                let src_local = pcx.mk_var_place(src_place_var);
+            }
+            let reference_local = mir_pat.mk_local(
+                pcx
+                    .mk_ref_ty(
+                        ::rpl_context::pat::RegionKind::ReAny,
+                        T_ty,
+                        ::rustc_middle::mir::Mutability::Not
+                    )
+            );
+            mir_pat.mk_assign(
+                reference_local.into_place(),
+                ::rpl_context::pat::Rvalue::Ref(
+                    ::rpl_context::pat::RegionKind::ReAny,
+                    ::rustc_middle::mir::BorrowKind::Shared,
+                    src_local.into_place()
+                )
+            );
+        }
+    );
+}
+
+#[test]
+fn test_coercion() {
+    mir_test_case!(
+        #[meta($T: ty)]
+        pat! {
+            let $reference: &[$T; 2] = _;
+            let $reference: &[$T] = copy $reference as &[$T] (PointerCoercion(Unsize, Implicit));
         } => {
             meta! {
                 #[allow(non_snake_case)]

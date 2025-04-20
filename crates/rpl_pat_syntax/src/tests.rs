@@ -119,8 +119,16 @@ fn test_place() {
 #[test]
 fn test_operand() {
     pass!(Operand!(const std::mem::take));
+    pass!(Operand!(const $size));
+    pass!(Operand!(const 1_usize));
     pass!(Operand!(move $y));
     fail!(Operand!(copy $from_ptr as), "unexpected token");
+}
+
+#[test]
+fn test_const_operand() {
+    pass!(ConstOperand!(const 1_usize));
+    pass!(ConstOperand!(const $size));
 }
 
 #[test]
@@ -131,9 +139,32 @@ fn test_fn_operand() {
 }
 
 #[test]
-fn test_rvalue() {
+fn test_pointer_coercion() {
+    pass!(PointerCoercion!(MutToConstPointer));
+    pass!(PointerCoercion!(ArrayToPointer));
+    pass!(PointerCoercion!(Unsize));
+}
+
+#[test]
+fn test_coercion_source() {
+    pass!(CoercionSource!(AsCast));
+    pass!(CoercionSource!(Implicit));
+}
+
+#[test]
+fn test_cast_kind() {
+    pass!(CastKind!(IntToInt));
     pass!(CastKind!(PtrToPtr));
+    pass!(CastKind!(Transmute));
+    pass!(CastKind!(PointerExposeProvenance));
+    pass!(CastKind!(PointerCoercion(Unsize, Implicit)));
+}
+
+#[test]
+fn test_rvalue() {
     pass!(RvalueCast!(copy $from_ptr as *const u8(PtrToPtr)));
+    pass!(RvalueCast!(copy $array as $T (Transmute)));
+    pass!(RvalueCast!(copy $array as &[$T] (PointerCoercion(Unsize, Implicit))));
 
     pass!(RvalueOrCall!(&$x));
     pass!(RvalueOrCall!(&mut $y));
@@ -181,11 +212,14 @@ fn test_call() {
     pass!(Call!( $crate::ffi::sqlite3session_attach(move $s, move $iptr) ));
     pass!(RvalueOrCall!( $crate::ffi::sqlite3session_attach(move $s, move $iptr) ));
     pass!(RvalueOrCall!( $ffi_call(move $s, move $iptr) ));
+    pass!(RvalueOrCall!( $ffi_call(const $s, const $iptr) ));
 }
 
 #[test]
 fn test_assign() {
     pass!(Assign!( *$x = std::mem::take(move $y) ));
+    pass!(Assign!( *$x = std::mem::take(const 1) ));
+    pass!(Assign!( *$x = std::mem::take(const $y) ));
     pass!(Assign!( $opt = #[lang = "None"] ));
 }
 
@@ -195,6 +229,9 @@ fn test_meta() {
     pass!(Meta!(#[meta($T:ty, $U:ty)]));
     pass!(Meta!(#[meta( #[export(ty_var)] $T:ty, )]));
     pass!(Meta!(#[meta($T:ty = is_all_safe_trait)]));
+    pass!(Meta!(#[meta($T:ty, $p:place(alloc::vec::Vec<$T>))]));
+    pass!(Meta!(#[meta($T:ty, $c:const($T))]));
+    pass!(Meta!(#[meta($T:ty, $c:const(&$T))]));
 }
 
 #[test]

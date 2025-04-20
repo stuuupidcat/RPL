@@ -161,6 +161,9 @@ trait ExpandIdent: Sized {
     fn as_ty(&self) -> Ident {
         self.with_suffix("_ty")
     }
+    fn as_const(&self) -> Ident {
+        self.with_suffix("_const")
+    }
     fn as_place(&self) -> Ident {
         //FIXME: use suffix "_place"?
         self.with_suffix("_local")
@@ -173,6 +176,9 @@ trait ExpandIdent: Sized {
     }
     fn as_ty_var(&self) -> Ident {
         self.with_suffix("_ty_var")
+    }
+    fn as_const_var(&self) -> Ident {
+        self.with_suffix("_const_var")
     }
     fn as_place_var(&self) -> Ident {
         self.with_suffix("_place_var")
@@ -625,6 +631,18 @@ impl ToTokens for ExpandPat<'_, &MetaItem> {
                     quote_each_token!(tokens #ident = #ty_var_ident;);
                 }
             },
+            MetaKind::Const(const_var) => {
+                let const_ident = ident.as_const();
+                let const_var_ident = ident.as_const_var();
+                let ty = self.ecx.expand(&const_var.ty);
+                quote_each_token!(tokens
+                    #[allow(non_snake_case)]
+                    let #const_var_ident = #pat.meta.new_const_var(#ty);
+                    #[allow(non_snake_case)]
+                    let #const_ident = #pcx.mk_var_const(#const_var_ident);
+                );
+                // quote_each_token!(tokens #ident = #place_var_ident;);
+            },
             MetaKind::Place(place_var) => {
                 let place_ident = ident.as_place();
                 let place_var_ident = ident.as_place_var();
@@ -946,6 +964,7 @@ impl ToTokens for Expand<'_, &Type> {
         match self.value {
             Type::Array(TypeArray { box ty, len, .. }) => {
                 let ty = self.ecx.expand(ty);
+                let len = self.ecx.expand(len);
                 quote_each_token!(tokens #pcx.mk_array_ty(#ty, #len));
             },
             Type::Group(TypeGroup { box ty, .. }) | Type::Paren(TypeParen { value: box ty, .. }) => {
@@ -1163,6 +1182,10 @@ impl ToTokens for ExpandPat<'_, &ConstOperandKind> {
         let mir_pat = pat.expect_mir();
         match self.value {
             ConstOperandKind::Lit(lit) => self.ecx.expand(lit).to_tokens(tokens),
+            ConstOperandKind::ConstVar(const_var) => {
+                let konst = const_var.ident.as_const_var();
+                quote_each_token!(tokens #mir_pat.mk_const_var(#konst));
+            },
             ConstOperandKind::Type(TypePath { qself: None, path }) => {
                 // todo!();
                 let path = self.ecx.expand(path);
@@ -1186,6 +1209,7 @@ impl ToTokens for Expand<'_, &Const> {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         match self.value {
             Const::Lit(lit) => self.ecx.expand(lit).to_tokens(tokens),
+            Const::ConstVar(const_var) => const_var.ident.as_const().to_tokens(tokens),
             Const::Path(TypePath { qself: None, path }) => {
                 todo!("{}", path.to_token_stream());
                 // let path = self.expand(path);
@@ -1467,8 +1491,25 @@ impl ToTokens for Expand<'_, PtrMutability> {
 
 impl ToTokens for Expand<'_, CastKind> {
     fn to_tokens(&self, mut tokens: &mut TokenStream) {
-        let value = self.value;
-        quote_each_token!(tokens ::rustc_middle::mir::CastKind::#value);
+        match self.value {
+            CastKind::PtrToPtr(kw) => {
+                quote_each_token!(tokens ::rustc_middle::mir::CastKind::#kw);
+            },
+            CastKind::IntToInt(kw) => {
+                quote_each_token!(tokens ::rustc_middle::mir::CastKind::#kw);
+            },
+            CastKind::Transmute(kw) => {
+                quote_each_token!(tokens ::rustc_middle::mir::CastKind::#kw);
+            },
+            CastKind::PointerExposeProvenance(kw) => {
+                quote_each_token!(tokens ::rustc_middle::mir::CastKind::#kw);
+            },
+            CastKind::PointerCoercion {
+                kw, coercion, source, ..
+            } => {
+                quote_each_token!(tokens ::rustc_middle::mir::CastKind::#kw(rustc_middle::ty::adjustment::PointerCoercion::#coercion, ::rustc_middle::mir::CoercionSource::#source));
+            },
+        }
     }
 }
 

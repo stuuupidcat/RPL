@@ -99,17 +99,21 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let matches_3 = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_3.pattern, pattern_3.fn_pat).check();
             let pattern_4 = pattern_checked_ptr_offset_rem(self.pcx);
             let matches_4 = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_4.pattern, pattern_4.fn_pat).check();
+            let pattern_5 = pattern_checked_ptr_offset_const(self.pcx);
+            let matches_5 = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_5.pattern, pattern_5.fn_pat).check();
 
             fn collect_matched(
                 matched: &Matched<'_>,
                 ptr: Location,
                 offset: Location,
                 body: &Body<'_>,
-            ) -> (Span, Span) {
-                let span_ptr = matched[ptr].span_no_inline(body);
-                let span_offset = matched[offset].span_no_inline(body);
-                trace!(?span_ptr, ?span_offset, "checked offset found");
-                (span_ptr, span_offset)
+            ) -> (StatementMatch, StatementMatch) {
+                let ptr = matched[ptr];
+                let offset = matched[offset];
+                let span_ptr = ptr.span_no_inline(body);
+                let span_offset = offset.span_no_inline(body);
+                trace!(?ptr, ?offset, ?span_ptr, ?span_offset, "checked offset found");
+                (ptr, offset)
             }
             let locations: BTreeSet<_> = matches_2
                 .iter()
@@ -124,16 +128,25 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                         .iter()
                         .map(|matches| collect_matched(matches, pattern_4.ptr, pattern_4.offset, body)),
                 )
+                .chain(
+                    matches_5
+                        .iter()
+                        .map(|matches| collect_matched(matches, pattern_4.ptr, pattern_4.offset, body)),
+                )
                 .collect();
 
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_1.pattern, pattern_1.fn_pat).check() {
-                let ptr = matches[pattern_1.ptr].span_no_inline(body);
-                let offset = matches[pattern_1.offset].span_no_inline(body);
+                let ptr = matches[pattern_1.ptr];
+                let offset = matches[pattern_1.offset];
                 if locations.contains(&(ptr, offset)) {
                     // The offset is checked, so don't emit an error
                     continue;
                 }
-                debug!(?ptr, ?offset);
+                let span_ptr = ptr.span_no_inline(body);
+                let span_offset = offset.span_no_inline(body);
+                debug!(?ptr, ?offset, ?span_ptr, ?span_offset, "unchecked offset found");
+                let ptr = span_ptr;
+                let offset = span_offset;
                 self.tcx.emit_node_span_lint(
                     UNCHECKED_POINTER_OFFSET,
                     self.tcx.local_def_id_to_hir_id(def_id),
@@ -297,6 +310,34 @@ fn pattern_checked_ptr_offset_rem(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffset
             let $index: $U = Rem(_, _);
             #[export(offset)]
             let $ptr_1: *const $T = Offset(copy $ptr, copy $index);
+        }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
+
+    PatternUncheckedPtrOffsetGeneral {
+        pattern,
+        fn_pat,
+        ptr,
+        offset,
+    }
+}
+
+#[rpl_macros::pattern_def]
+fn pattern_checked_ptr_offset_const(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffsetGeneral<'_> {
+    let ptr;
+    let offset;
+    let pattern = rpl! {
+        #[meta($T:ty, $size: const(usize), $offset: const(usize))]
+        fn $pattern(..) -> _ = mir! {
+            let $array: &[$T; $size] = _; // _1
+            let $slice_ref: &[$T] = copy $array as &[$T] (PointerCoercion(Unsize, Implicit)); // _3 bb0[0]
+            let $slice_ptr: *const [$T] = &raw const (*$slice_ref); // _5 bb0[1]
+            #[export(ptr)]
+            let $ptr: *const $T = move $slice_ptr as *const $T (PtrToPtr); // _2 bb0[2]
+            let $offset: usize = const $offset; // _6 bb0[3]
+            #[export(offset)]
+            let $ptr_1: *const $T = Offset(copy $ptr, copy $offset); // _4 bb0[4]
+            let $value: &$T = &(*$ptr_1); // _0 bb0[5]
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
