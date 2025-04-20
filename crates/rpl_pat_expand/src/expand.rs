@@ -639,6 +639,7 @@ impl ToTokens for ExpandPat<'_, &MetaItem> {
                     #[allow(non_snake_case)]
                     let #const_var_ident = #pat.meta.new_const_var(#ty);
                     #[allow(non_snake_case)]
+                    #[allow(unused_variables)]
                     let #const_ident = #pcx.mk_var_const(#const_var_ident);
                 );
                 // quote_each_token!(tokens #ident = #place_var_ident;);
