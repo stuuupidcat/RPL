@@ -639,10 +639,12 @@ impl ToTokens for ExpandPat<'_, &MetaItem> {
                     #[allow(non_snake_case)]
                     let #const_var_ident = #pat.meta.new_const_var(#ty);
                     #[allow(non_snake_case)]
-                    #[allow(unused_variables)]
                     let #const_ident = #pcx.mk_var_const(#const_var_ident);
                 );
-                // quote_each_token!(tokens #ident = #place_var_ident;);
+                if let Some(Export { inner, .. }) = export {
+                    let ident = &inner.ident;
+                    quote_each_token!(tokens #ident = #const_var_ident;);
+                }
             },
             MetaKind::Place(place_var) => {
                 let place_ident = ident.as_place();
@@ -654,7 +656,10 @@ impl ToTokens for ExpandPat<'_, &MetaItem> {
                     #[allow(non_snake_case)]
                     let #place_ident = #pcx.mk_var_place(#place_var_ident);
                 );
-                // quote_each_token!(tokens #ident = #place_var_ident;);
+                if let Some(Export { inner, .. }) = export {
+                    let ident = &inner.ident;
+                    quote_each_token!(tokens #ident = #place_var_ident;);
+                }
             },
         }
     }

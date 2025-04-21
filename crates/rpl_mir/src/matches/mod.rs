@@ -90,6 +90,14 @@ impl<'tcx> Index<pat::TyVarIdx> for Matched<'tcx> {
     }
 }
 
+impl<'tcx> Index<pat::ConstVarIdx> for Matched<'tcx> {
+    type Output = Const<'tcx>;
+
+    fn index(&self, ty_var: pat::ConstVarIdx) -> &Self::Output {
+        &self.const_vars[ty_var]
+    }
+}
+
 pub fn matches<'tcx>(cx: &CheckMirCtxt<'_, '_, 'tcx>) -> Vec<Matched<'tcx>> {
     let mut matching = MatchCtxt::new(cx);
     matching.do_match();
