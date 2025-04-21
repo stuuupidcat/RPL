@@ -693,7 +693,7 @@ declare_tool_lint! {
 }
 
 declare_tool_lint! {
-    /// The `rpl::private_and_inline` lint detects private functions that are marked with `#[inline]`.
+    /// The `rpl::private_function_marked_inline` lint detects private functions that are marked with `#[inline]`.
     ///
     /// ### Example
     ///
@@ -709,11 +709,32 @@ declare_tool_lint! {
     /// ### Explanation
     ///
     /// It is not necessary to apply `#[inline]` to private functions.
-    pub rpl::PRIVATE_AND_INLINE,
-    Deny,
+    pub rpl::PRIVATE_FUNCTION_MARKED_INLINE,
+    Warn,
     "detects private functions that are marked with `#[inline]`"
 }
 
+declare_tool_lint! {
+    /// The `rpl::generic_function_marked_inline` lint detects generic functions that are marked with `#[inline]`.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// #[inline]
+    /// pub fn foo<T>(x: T) -> T {
+    ///     x
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// `#[inline]` has no effect because generic functions are always `#[inline]` (monomorphization).
+    pub rpl::GENERIC_FUNCTION_MARKED_INLINE,
+    Warn,
+    "detects generic functions that are marked with `#[inline]`"
+}
 declare_tool_lint! {
     /// The `rpl::transmuting_type_to_bool` lint detects a transmute from a type to a boolean.
     ///

@@ -18,7 +18,7 @@ struct CheckAttrCtxt<'tcx> {
 }
 
 impl CheckAttrCtxt<'_> {
-    fn check_inline(&self, def_id: LocalDefId) -> bool {
+    fn has_inline_attr(&self, def_id: LocalDefId) -> bool {
         let hir_id = self.tcx.local_def_id_to_hir_id(def_id);
         let attrs = self.tcx.hir().attrs(hir_id);
         for attr in attrs {
@@ -62,13 +62,23 @@ impl<'tcx> Visitor<'tcx> for CheckAttrCtxt<'tcx> {
         _span: Span,
         def_id: LocalDefId,
     ) -> Self::Result {
-        if !self.tcx.visibility(def_id).is_public() && self.check_inline(def_id) {
-            self.tcx.emit_node_span_lint(
-                crate::lints::PRIVATE_AND_INLINE,
-                self.tcx.local_def_id_to_hir_id(def_id),
-                _span,
-                crate::errors::PrivateFunctionMarkedInline { span: _span },
-            );
+        if self.has_inline_attr(def_id) {
+            if !self.tcx.visibility(def_id).is_public() {
+                self.tcx.emit_node_span_lint(
+                    crate::lints::PRIVATE_FUNCTION_MARKED_INLINE,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    _span,
+                    crate::errors::PrivateFunctionMarkedInline { span: _span },
+                );
+            }
+            if self.tcx.generics_of(def_id).requires_monomorphization(self.tcx) {
+                self.tcx.emit_node_span_lint(
+                    crate::lints::GENERIC_FUNCTION_MARKED_INLINE,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    _span,
+                    crate::errors::GenericFunctionMarkedInline { span: _span },
+                );
+            }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
     }

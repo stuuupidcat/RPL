@@ -33,6 +33,9 @@ impl<T> Index<usize> for Slab<T> {
 impl<T> Slab<T> {
     #[inline]
     pub fn remove(&mut self, offset: usize) -> T {
+        //~^ ERROR: it usually isn't necessary to apply #[inline] to generic functions
+        //~| HELP: See https://matklad.github.io/2021/07/09/inline-in-rust.html and https://rustc-dev-guide.rust-lang.org/backend/monomorph.html
+        //~| HELP: to override `-D warnings` add `#[allow(rpl::generic_function_marked_inline)]`
         assert!(offset < self.len, "Offset out of bounds");
 
         let elem: T;

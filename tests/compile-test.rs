@@ -2,7 +2,7 @@
 #![allow(unused_extern_crates)]
 
 use ui_test::spanned::Spanned;
-use ui_test::{Args, Config, Mode, OutputConflictHandling, status_emitter};
+use ui_test::{Args, Config, OutputConflictHandling, status_emitter};
 
 use std::collections::BTreeMap;
 use std::env::{self, var_os};
@@ -140,11 +140,11 @@ fn base_config(test_dir: &str) -> (Config, Args) {
         out_dir: target_dir.join("ui_test"),
         ..Config::rustc(Path::new("tests").join(test_dir))
     };
-    config.comment_defaults.base().mode = Some(Spanned::dummy(Mode::Fail {
-        require_patterns: false,
-        rustfix: ui_test::RustfixMode::Everything,
-    }))
-    .into();
+    // config.comment_defaults.base().mode = Some(Spanned::dummy(Mode::Fail {
+    //     require_patterns: false,
+    //     rustfix: ui_test::RustfixMode::Everything,
+    // }))
+    // .into();
     config.comment_defaults.base().diagnostic_code_prefix = Some(Spanned::dummy("rpl::".into())).into();
     config.with_args(&args);
     let current_exe_path = env::current_exe().unwrap();

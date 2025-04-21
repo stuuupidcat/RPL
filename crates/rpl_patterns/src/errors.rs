@@ -321,6 +321,15 @@ pub struct PrivateFunctionMarkedInline {
     pub span: Span,
 }
 
+#[derive(LintDiagnostic)]
+#[diag(rpl_patterns_generic_function_marked_inline)]
+#[help]
+#[note]
+pub struct GenericFunctionMarkedInline {
+    #[label(rpl_patterns_label)]
+    pub span: Span,
+}
+
 // for std::mem::transmute : transmuting a type to a boolean
 #[derive(LintDiagnostic)]
 #[diag(rpl_patterns_transmuting_type_to_bool)]

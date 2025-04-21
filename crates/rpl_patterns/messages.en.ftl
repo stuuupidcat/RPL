@@ -130,10 +130,15 @@ rpl_patterns_slice_from_raw_parts_uninitialized_ = it violates the precondition 
     .ptr_label   = slice created with this pointer
     .help        = See https://doc.rust-lang.org/std/slice/fn.{$fn_name}.html
 
-rpl_patterns_private_function_marked_inline =  it usually isn’t necessary to apply #[inline] to private functions
+rpl_patterns_private_function_marked_inline = it usually isn't necessary to apply #[inline] to private functions
     .label = `#[inline]` applied here
-    .note = within a crate, the compiler generally makes good inline decisions
+    .note = the compiler generally makes good inline decisions about private functions
     .help = See https://matklad.github.io/2021/07/09/inline-in-rust.html
+
+rpl_patterns_generic_function_marked_inline = it usually isn't necessary to apply #[inline] to generic functions
+    .label = `#[inline]` applied here
+    .note = generic functions are always `#[inline]` (monomorphization)
+    .help = See https://matklad.github.io/2021/07/09/inline-in-rust.html and https://rustc-dev-guide.rust-lang.org/backend/monomorph.html
 
 rpl_patterns_transmuting_type_to_bool = it is unsound to transmute a type to a boolean
     .from_label = transmuted from here

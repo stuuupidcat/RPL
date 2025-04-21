@@ -31,16 +31,19 @@ where
     #[inline(always)]
     /// Wrap the pointer in a `CBox`.
     pub fn new(ptr: *mut D::RefTo) -> Self {
+        //~^ ERROR: it usually isn't necessary to apply #[inline] to generic functions
         CBox { ptr }
     }
     #[inline(always)]
     /// Returns the internal pointer.
     pub unsafe fn as_ptr(&self) -> *mut D::RefTo {
+        //~^ ERROR: it usually isn't necessary to apply #[inline] to generic functions
         self.ptr
     }
     #[inline(always)]
     /// Returns the internal pointer.
     pub unsafe fn unwrap(self) -> *mut D::RefTo {
+        //~^ ERROR: it usually isn't necessary to apply #[inline] to generic functions
         let ptr = self.ptr;
         std::mem::forget(self);
         ptr
