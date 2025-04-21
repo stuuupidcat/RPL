@@ -154,8 +154,6 @@ where
 
     fn data_to_read(&self) -> &[u8] {
         &self.buf[self.consumed..]
-        //~[inline]^ ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
-        // Seems to be a false positive, as the offset is checked in the `read` method
     }
 
     fn prefetch_up_to(&mut self, i: usize) -> IoResult<()> {

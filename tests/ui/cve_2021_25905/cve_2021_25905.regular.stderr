@@ -1,5 +1,5 @@
 error: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
-  --> tests/ui/cve_2021_25905/cve_2021_25905.rs:211:13
+  --> tests/ui/cve_2021_25905/cve_2021_25905.rs:209:13
    |
 LL |           let b = self.buf.len();
    |                   -------------- slice created with this length
