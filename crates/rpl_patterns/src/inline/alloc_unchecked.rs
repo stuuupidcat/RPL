@@ -262,36 +262,3 @@ fn alloc_cast_check_as_write(pcx: PatCtxt<'_>) -> Pattern<'_> {
         ty,
     }
 }
-
-// struct Pattern2<'pcx> {
-//     pattern: &'pcx pat::Pattern<'pcx>,
-//     fn_pat: &'pcx pat::Fn<'pcx>,
-//     alloc: pat::Location,
-//     cast: pat::Location,
-// }
-
-// #[rpl_macros::pattern_def]
-// fn alloc_misaligned_cast(pcx: PatCtxt<'_>) -> Pattern2<'_> {
-//     let alloc;
-//     let cast;
-//     let pattern = rpl! {
-//         #[meta($T:ty, $alignment: const(usize))]
-//         fn $pattern(..) -> _ = mir! {
-//             let $align_usize: usize = const $alignment;
-//             let $align: core::ptr::Alignment = copy $align as core::ptr::Alignment (Transmute);
-// // _12             let $layout: core::alloc::Layout = alloc::alloc::Layout { size: _, align: move
-// $align }; // _11             #[export(alloc)]
-//             let $ptr_1: *mut u8 = alloc::alloc::__rust_alloc(_, const $alignment); // _3
-//             #[export(cast)]
-//             let $ptr_2: *mut $T = move $ptr_1 as *mut $T (PtrToPtr); // _2
-//         }
-//     };
-//     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
-
-//     Pattern2 {
-//         pattern,
-//         fn_pat,
-//         alloc,
-//         cast,
-//     }
-// }

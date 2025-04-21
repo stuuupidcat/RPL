@@ -48,6 +48,18 @@ fn checked_le_1<T>(ptr: *const T, index: usize, right: usize) -> *const T {
 }
 
 // #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_slice_range_from<T>(slice: &[T]) -> &[T] {
+    &slice[1..]
+    // This is safe because the length will be checked at runtime
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_slice_range_full<T>(slice: &[T]) -> &[T] {
+    &slice[..]
+    // This is safe as there is no out-of-bounds access
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
 fn safe_array_in_bound<T>(slice: &[T; 2]) -> &T {
     let ptr = slice.as_ptr();
     unsafe { &*ptr.add(1) }
