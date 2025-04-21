@@ -6,7 +6,7 @@ use std::mem;
 mod ll {
     use libc::{c_char, c_int};
 
-    extern "C" {
+    unsafe extern "C" {
         pub fn instr(_: *const c_char) -> c_int;
     }
 }
