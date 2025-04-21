@@ -128,11 +128,24 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                         .iter()
                         .map(|matches| collect_matched(matches, pattern_4.ptr, pattern_4.offset, body)),
                 )
-                .chain(
-                    matches_5
-                        .iter()
-                        .map(|matches| collect_matched(matches, pattern_5.ptr, pattern_5.offset, body)),
-                )
+                .chain(matches_5.iter().filter_map(|matches| {
+                    let const_size = matches[pattern_5.const_size.idx];
+                    let const_size = const_size
+                        .try_to_scalar_int()
+                        .unwrap_or_else(|| bug!("{const_size} is not a scalar int"))
+                        .to_target_usize(self.tcx);
+                    let const_offset = matches[pattern_5.const_offset.idx];
+                    let const_offset = const_offset
+                        .try_to_scalar_int()
+                        .unwrap_or_else(|| bug!("{const_offset} is not a scalar int"))
+                        .to_target_usize(self.tcx);
+                    if const_offset < const_size {
+                        Some(collect_matched(matches, pattern_5.ptr, pattern_5.offset, body))
+                    } else {
+                        // The offset is out of bounds, so this is not a valid negative case
+                        None
+                    }
+                }))
                 .collect();
 
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_1.pattern, pattern_1.fn_pat).check() {
@@ -322,12 +335,23 @@ fn pattern_checked_ptr_offset_rem(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffset
     }
 }
 
+struct PatternUncheckedPtrOffsetConst<'pcx> {
+    pattern: &'pcx pat::Pattern<'pcx>,
+    fn_pat: &'pcx pat::Fn<'pcx>,
+    ptr: pat::Location,
+    offset: pat::Location,
+    const_size: pat::ConstVar<'pcx>,
+    const_offset: pat::ConstVar<'pcx>,
+}
+
 #[rpl_macros::pattern_def]
-fn pattern_checked_ptr_offset_const(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffsetGeneral<'_> {
+fn pattern_checked_ptr_offset_const(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffsetConst<'_> {
     let ptr;
     let offset;
+    let const_size;
+    let const_offset;
     let pattern = rpl! {
-        #[meta($T:ty, $size: const(usize), $offset: const(usize))]
+        #[meta($T:ty, #[export(const_size)] $size: const(usize), #[export(const_offset)] $offset: const(usize))]
         fn $pattern(..) -> _ = mir! {
             let $array: &[$T; $size] = _; // _1
             let $slice_ref: &[$T] = copy $array as &[$T] (PointerCoercion(Unsize, Implicit)); // _3 bb0[0]
@@ -341,10 +365,12 @@ fn pattern_checked_ptr_offset_const(pcx: PatCtxt<'_>) -> PatternUncheckedPtrOffs
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
 
-    PatternUncheckedPtrOffsetGeneral {
+    PatternUncheckedPtrOffsetConst {
         pattern,
         fn_pat,
         ptr,
         offset,
+        const_size,
+        const_offset,
     }
 }

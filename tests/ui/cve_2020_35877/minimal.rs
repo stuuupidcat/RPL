@@ -48,16 +48,36 @@ fn checked_le_1<T>(ptr: *const T, index: usize, right: usize) -> *const T {
 }
 
 // #[rpl::dump_mir(dump_cfg, dump_ddg)]
-fn safe_unchecked_slice<T>(slice: &[T; 2]) -> &T {
+fn safe_array_in_bound<T>(slice: &[T; 2]) -> &T {
     let ptr = slice.as_ptr();
     unsafe { &*ptr.add(1) }
     // This is safe because the length of the slice is known at compile time
     // and the index is guaranteed to be less than the length.
 }
 
-fn safe_unchecked_2_const<T, const N: usize>(slice: &[T; N], index: usize) -> &T {
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn unsafe_array_out_of_bound_1<T>(slice: &[T; 2]) -> &T {
+    let ptr = slice.as_ptr();
+    unsafe { &*ptr.add(2) }
+    //~^ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn unsafe_array_out_of_bound_2<T>(slice: &[T; 2]) -> &T {
+    let ptr = slice.as_ptr();
+    unsafe { &*ptr.add(4) }
+    //~^ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
+}
+
+fn safe_unchecked_2_const_rem<T, const N: usize>(slice: &[T; N], index: usize) -> &T {
     let ptr = slice.as_ptr();
     unsafe { &*ptr.add(index % N) }
+}
+
+fn safe_unchecked_2_const<T, const N: usize>(slice: &[T; N]) -> &T {
+    let ptr = slice.as_ptr();
+    unsafe { &*ptr.add(N) }
+    //~^ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
 }
 
 fn safe_unchecked_2_const_literal_2<T>(slice: &[T; 2], index: usize) -> &T {
