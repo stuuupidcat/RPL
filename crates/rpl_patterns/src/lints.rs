@@ -12,7 +12,7 @@ declare_tool_lint! {
     ///     0
     /// }
     ///
-    /// fn main() {
+    /// fn pass_buffer_pointer_without_length() {
     ///     let mut p = [8u8; 64];
     ///     unsafe {
     ///         gets(&p as *const u8 as *const c_char);
@@ -47,7 +47,7 @@ declare_tool_lint! {
     ///     0
     /// }
     ///
-    /// fn main() {
+    /// fn cast_rust_string_pointer_to_c_string_pointer() {
     ///     let mut p = String::from("hello");
     ///     let p = p.as_bytes().as_ptr();
     ///     unsafe {
@@ -101,8 +101,8 @@ declare_tool_lint! {
     ///
     /// ### Example
     ///
-    /// ```rust
-    /// /* extern crate cassandra_cpp_sys;
+    /// ```rust,ignore
+    /// extern crate cassandra_cpp_sys;
     /// use cassandra_cpp_sys::CassIterator as _CassIterator;
     /// use cassandra_cpp_sys::{
     ///     cass_false, cass_iterator_get_aggregate_meta, cass_iterator_next, cass_true,
@@ -122,7 +122,7 @@ declare_tool_lint! {
     /// pub struct AggregateIterator(*mut _CassIterator);
     /// impl Iterator for AggregateIterator {
     ///     type Item = AggregateMeta;
-    ///     #![deny(cassandra_iter_next_ptr_passed_to_cass_iter_get)]
+    ///     #[deny(rpl::cassandra_iter_next_ptr_passed_to_cass_iter_get)]
     ///     fn next(&mut self) -> Option<<Self as Iterator>::Item> {
     ///         unsafe {
     ///             match cass_iterator_next(self.0) {
@@ -134,7 +134,7 @@ declare_tool_lint! {
     ///             }
     ///         }
     ///     }
-    /// } */
+    /// }
     /// ```
     ///
     /// {{produces}}
@@ -157,11 +157,13 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// let mut v = vec![1, 2, 3];
-    /// unsafe {
-    ///    v.set_len(5);
+    /// fn set_len_to_extend() {
+    ///     let mut v = vec![1, 2, 3];
+    ///     unsafe {
+    ///         v.set_len(5);
+    ///     }
+    ///     v[4]; // undefined behavior
     /// }
-    /// v[4]; // undefined behavior
     /// ```
     ///
     /// {{produces}}
@@ -184,9 +186,11 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// let mut v = vec![Box::new(1), Box::new(2), Box::new(3)];
-    /// unsafe {
-    ///   v.set_len(2); // memory leak
+    /// fn set_len_to_truncate() {
+    ///     let mut v = vec![Box::new(1), Box::new(2), Box::new(3)];
+    ///     unsafe {
+    ///         v.set_len(2); // memory leak
+    ///     }
     /// }
     /// ```
     ///
@@ -208,9 +212,11 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// let mut v: Vec<i32> = Vec::with_capacity(3);
-    /// unsafe {
-    ///   v.set_len(3);
+    /// fn set_len_to_uninitialized() {
+    ///     let mut v: Vec<i32> = Vec::with_capacity(3);
+    ///     unsafe {
+    ///         v.set_len(3);
+    ///     }
     /// }
     /// ```
     ///
@@ -233,13 +239,16 @@ declare_tool_lint! {
     ///
     /// ```rust
     /// use core::{mem::size_of, slice::from_raw_parts};
-    /// let v: Vec<usize> = vec![1, 2, 3];
-    /// let slice: &[usize] = v.as_slice();
-    /// let slice: &[u8] = unsafe { from_raw_parts(
-    ///   slice.as_ptr() as *const u8,
-    ///   slice.len() * size_of::<usize>()
-    /// ) };
-    /// // undefined behavior
+    ///
+    /// fn unsound_slice_cast() {
+    ///     let v: Vec<usize> = vec![1, 2, 3];
+    ///     let slice: &[usize] = v.as_slice();
+    ///     let slice: &[u8] = unsafe { from_raw_parts(
+    ///         slice.as_ptr() as *const u8,
+    ///         slice.len() * size_of::<usize>()
+    ///     ) };
+    ///     // undefined behavior
+    /// }
     /// ```
     ///
     /// {{produces}}
@@ -258,11 +267,13 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// let x: Box<i32> = Box::new(42);
-    /// let y: *const i32 = Box::as_ref(&x) as *const i32;
-    /// drop(x);
-    /// unsafe {
-    ///   *y; // undefined behavior
+    /// fn use_after_drop() {
+    ///     let x: Box<i32> = Box::new(42);
+    ///     let y: *const i32 = Box::as_ref(&x) as *const i32;
+    ///     drop(x);
+    ///     unsafe {
+    ///         *y; // undefined behavior
+    ///     }
     /// }
     /// ```
     ///
@@ -282,10 +293,12 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// let mut v = vec![1, 2, 3];
-    /// let p = v.as_mut_ptr();
-    /// unsafe {
-    ///   *p.offset(3) = 4; // undefined behavior
+    /// fn out_of_bounds() {
+    ///     let mut v = vec![1, 2, 3];
+    ///     let p = v.as_mut_ptr();
+    ///     unsafe {
+    ///         *p.offset(3) = 4; // undefined behavior
+    ///     }
     /// }
     /// ```
     ///
@@ -307,14 +320,16 @@ declare_tool_lint! {
     /// ```rust
     /// use std::mem::forget;
     ///
-    /// let mut v = vec![1, 2, 3];
-    /// let ptr = v.as_mut_ptr();
-    /// let len = v.len();
-    /// let cap = v.capacity();
-    /// forget(v);
-    /// let v = unsafe {
-    ///   Vec::from_raw_parts(ptr, cap, len) // misordered parameters
-    /// };
+    /// fn from_raw_parts_misordered() {
+    ///     let mut v = vec![1, 2, 3];
+    ///     let ptr = v.as_mut_ptr();
+    ///     let len = v.len();
+    ///     let cap = v.capacity();
+    ///     forget(v);
+    ///     let v = unsafe {
+    ///         Vec::from_raw_parts(ptr, cap, len) // misordered parameters
+    ///     };
+    /// }
     /// ```
     ///
     /// {{produces}}
@@ -334,8 +349,10 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// let p = &mut [1, 2, 3] as *mut [i32];
-    /// let p = p as *mut i32; // undefined behavior
+    /// fn cast_fat_pointer() {
+    ///     let p = &mut [1, 2, 3] as *mut [i32];
+    ///     let p = p as *mut i32; // undefined behavior
+    /// }
     /// ```
     ///
     /// {{produces}}
@@ -356,9 +373,12 @@ declare_tool_lint! {
     /// ```rust
     /// use core::net::{SocketAddrV4, Ipv4Addr};
     /// use libc::sockaddr;
-    /// let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080);
-    /// let p: *const sockaddr = &socket as *const SocketAddrV4 as *const sockaddr;
-    /// // p may not be a valid sockaddr pointer
+    ///
+    /// fn cast_to_sockaddr() {
+    ///     let socket = SocketAddrV4::new(Ipv4Addr::new(127, 0, 0, 1), 8080);
+    ///     let p: *const sockaddr = &socket as *const SocketAddrV4 as *const sockaddr;
+    ///     // p may not be a valid sockaddr pointer
+    /// }
     /// ```
     ///
     /// {{produces}}
@@ -381,17 +401,17 @@ declare_tool_lint! {
     /// ```rust
     /// use core::iter::ExactSizeIterator;
     /// fn foo<T, I: Iterator<Item = T> + ExactSizeIterator>(iter: I) {
-    ///   let len = iter.len();
-    ///   let mut v: Vec<T> = Vec::with_capacity(len);
-    ///   let p = v.as_mut_ptr();
-    ///   for x in iter {
-    ///     unsafe {
-    ///       p.write(x);
+    ///     let len = iter.len();
+    ///     let mut v: Vec<T> = Vec::with_capacity(len);
+    ///     let p = v.as_mut_ptr();
+    ///     for x in iter {
+    ///         unsafe {
+    ///             p.write(x);
+    ///         }
     ///     }
-    ///   }
-    ///   unsafe {
-    ///     v.set_len(len);
-    ///   }
+    ///     unsafe {
+    ///         v.set_len(len);
+    ///     }
     /// }
     /// ```
     ///
@@ -412,12 +432,14 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// let mut v: Vec<i32> = Vec::with_capacity(3);
-    /// let p = v.as_ptr();
-    /// let cap = v.capacity();
-    /// let slice = unsafe {
-    ///   std::slice::from_raw_parts(p, cap)
-    /// };
+    /// fn slice_from_raw_parts_uninitialized() {
+    ///     let mut v: Vec<i32> = Vec::with_capacity(3);
+    ///     let p = v.as_ptr();
+    ///     let cap = v.capacity();
+    ///     let slice = unsafe {
+    ///         std::slice::from_raw_parts(p, cap)
+    ///     };
+    /// }
     /// ```
     ///
     /// {{produces}}
@@ -439,14 +461,16 @@ declare_tool_lint! {
     /// use std::cell::UnsafeCell;
     /// use std::rc::Rc;
     ///
-    /// let rc = Rc::new(UnsafeCell::new(42));
+    /// fn aliasing_mut() {
+    ///     let rc = Rc::new(UnsafeCell::new(42));
     ///
-    /// let p1: &mut i32 = unsafe { &mut *rc.as_ref().get() };
-    /// let p2: &mut i32 = unsafe { &mut *rc.as_ref().get() };
+    ///     let p1: &mut i32 = unsafe { &mut *rc.as_ref().get() };
+    ///     let p2: &mut i32 = unsafe { &mut *rc.as_ref().get() };
     ///
-    /// // p1 and p2 may point to the same memory
-    /// println!("{:p} {:p}", p1, p2);
-    /// assert_eq!(p1, p2);
+    ///     // p1 and p2 may point to the same memory
+    ///     println!("{:p} {:p}", p1, p2);
+    ///     assert_eq!(p1, p2);
+    /// }
     /// ```
     ///
     /// {{produces}}
@@ -548,8 +572,10 @@ declare_tool_lint! {
     /// ```rust
     /// use std::sync::atomic::AtomicU64;
     ///
-    /// let x = &1u64;
-    /// let y = x as *const u64 as *const AtomicU64; // may cause undefined behavior if AtomicU64 has larger alignment
+    /// fn cast_between_u64_and_atomic_u64() {
+    ///     let x = &1u64;
+    ///     let y = x as *const u64 as *const AtomicU64; // may cause undefined behavior if AtomicU64 has larger alignment
+    /// }
     /// ```
     ///
     /// {{produces}}
@@ -673,12 +699,14 @@ declare_tool_lint! {
     /// ### Example
     ///
     /// ```rust
-    /// let mut v = vec![1, 2, 3];
-    /// v.reserve(10);
-    /// let p = v.as_mut_ptr();
-    /// let b = v.into_boxed_slice();
-    /// unsafe {
-    ///     *p = 4; // undefined behavior
+    /// fn use_after_move() {
+    ///     let mut v = vec![1, 2, 3];
+    ///     v.reserve(10);
+    ///     let p = v.as_mut_ptr();
+    ///     let b = v.into_boxed_slice();
+    ///     unsafe {
+    ///         *p = 4; // undefined behavior
+    ///     }
     /// }
     /// ```
     ///
@@ -827,7 +855,7 @@ declare_tool_lint! {
     /// ```rust
     /// use std::alloc::{alloc, dealloc, Layout};
     ///
-    /// fn main() {
+    /// fn alloc_unchecked() {
     ///     let layout = Layout::new::<u8>();
     ///     unsafe {
     ///         let ptr = alloc(layout) as *mut u8;
