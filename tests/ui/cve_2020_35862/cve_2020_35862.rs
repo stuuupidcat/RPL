@@ -164,6 +164,11 @@ where
 
     #[inline]
     pub fn as_slice<'a>(&self) -> &'a [T] {
+        //~^ ERROR: it usually isn't necessary to apply #[inline] to generic functions
+        //~| HELP: See https://matklad.github.io/2021/07/09/inline-in-rust.html and https://rustc-dev-guide.rust-lang.org/backend/monomorph.html
+        //~| NOTE: generic functions are always `#[inline]` (monomorphization)
+        //~| NOTE: `-D rpl::generic-function-marked-inline` implied by `-D warnings`
+        //~| HELP: to override `-D warnings` add `#[allow(rpl::generic_function_marked_inline)]`
         unsafe { slice::from_raw_parts(self.pointer().r, self.elements()) }
     }
 
@@ -182,6 +187,9 @@ where
     /// - `'a`: Lifetime for which the data behind the pointer is live.
     #[inline]
     pub fn as_mut_slice<'a>(&self) -> &'a mut [T] {
+        //~^ ERROR: it usually isn't necessary to apply #[inline] to generic functions
+        //~| HELP: See https://matklad.github.io/2021/07/09/inline-in-rust.html and https://rustc-dev-guide.rust-lang.org/backend/monomorph.html
+        //~| NOTE: generic functions are always `#[inline]` (monomorphization)
         unsafe { slice::from_raw_parts_mut(self.pointer().w, self.elements()) }
     }
 
@@ -191,6 +199,9 @@ where
 
     #[inline]
     pub fn head(&self) -> BitIdx<T> {
+        //~^ ERROR: it usually isn't necessary to apply #[inline] to generic functions
+        //~| HELP: See https://matklad.github.io/2021/07/09/inline-in-rust.html and https://rustc-dev-guide.rust-lang.org/backend/monomorph.html
+        //~| NOTE: generic functions are always `#[inline]` (monomorphization)
         let ptr = self.ptr.as_ptr() as usize;
         let ptr_head = (ptr & Self::PTR_HEAD_MASK) << Self::LEN_HEAD_BITS;
         let len_head = self.len & Self::LEN_HEAD_MASK;
@@ -203,6 +214,9 @@ where
 
     #[inline]
     pub fn len(&self) -> usize {
+        //~^ ERROR: it usually isn't necessary to apply #[inline] to generic functions
+        //~| HELP: See https://matklad.github.io/2021/07/09/inline-in-rust.html and https://rustc-dev-guide.rust-lang.org/backend/monomorph.html
+        //~| NOTE: generic functions are always `#[inline]` (monomorphization)
         self.len >> Self::LEN_HEAD_BITS
     }
 
@@ -468,6 +482,9 @@ where
 {
     #[inline]
     pub unsafe fn from_raw_parts(pointer: BitPtr<T>, capacity: usize) -> Self {
+        //~^ ERROR: it usually isn't necessary to apply #[inline] to generic functions
+        //~| HELP: See https://matklad.github.io/2021/07/09/inline-in-rust.html and https://rustc-dev-guide.rust-lang.org/backend/monomorph.html
+        //~| NOTE: generic functions are always `#[inline]` (monomorphization)
         Self {
             _order: PhantomData,
             pointer,
@@ -478,6 +495,9 @@ where
     // #[rpl::dump_mir(dump_cfg, dump_ddg)]
     #[inline(always)]
     pub fn into_vec(self) -> Vec<T> {
+        //~^ ERROR: it usually isn't necessary to apply #[inline] to generic functions
+        //~| HELP: See https://matklad.github.io/2021/07/09/inline-in-rust.html and https://rustc-dev-guide.rust-lang.org/backend/monomorph.html
+        //~| NOTE: generic functions are always `#[inline]` (monomorphization)
         let slice = self.pointer.as_mut_slice();
         let out = unsafe { Vec::from_raw_parts(slice.as_mut_ptr(), slice.len(), self.capacity) };
         mem::forget(self);
@@ -497,6 +517,9 @@ where
 
     #[inline]
     pub fn into_boxed_slice(self) -> Box<[T]> {
+        //~^ ERROR: it usually isn't necessary to apply #[inline] to generic functions
+        //~| HELP: See https://matklad.github.io/2021/07/09/inline-in-rust.html and https://rustc-dev-guide.rust-lang.org/backend/monomorph.html
+        //~| NOTE: generic functions are always `#[inline]` (monomorphization)
         self.into_vec().into_boxed_slice()
     }
 }

@@ -16,6 +16,11 @@ where
     /// The components interpreted as raw bytes, in machine's native endian. In `RGB` bytes of the red component are first.
     #[inline]
     fn as_bytes(&self) -> &[u8] {
+        //~^ ERROR: it usually isn't necessary to apply #[inline] to generic functions
+        //~| HELP: See https://matklad.github.io/2021/07/09/inline-in-rust.html and https://rustc-dev-guide.rust-lang.org/backend/monomorph.html
+        //~| NOTE: generic functions are always `#[inline]` (monomorphization)
+        //~| NOTE: `-D rpl::generic-function-marked-inline` implied by `-D warnings`
+        //~| HELP: to override `-D warnings` add `#[allow(rpl::generic_function_marked_inline)]`
         let slice = self.as_slice();
         //~^ NOTE: trying to cast from this value of `&[T]` type
         unsafe {
@@ -30,6 +35,9 @@ where
     /// The components interpreted as raw bytes, in machine's native endian. In `RGB` bytes of the red component are first.
     #[inline]
     fn as_bytes_mut(&mut self) -> &mut [u8] {
+        //~^ ERROR: it usually isn't necessary to apply #[inline] to generic functions
+        //~| HELP: See https://matklad.github.io/2021/07/09/inline-in-rust.html and https://rustc-dev-guide.rust-lang.org/backend/monomorph.html
+        //~| NOTE: generic functions are always `#[inline]` (monomorphization)
         let slice = self.as_mut_slice();
         //~^ NOTE: trying to cast from this value of `&mut [T]` type
         unsafe {

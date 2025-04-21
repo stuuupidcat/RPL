@@ -1,15 +1,17 @@
 #![warn(rust_2018_idioms, unused_lifetimes)]
 #![allow(unused_extern_crates)]
+#![feature(let_chains)]
 
+use ui_test::custom_flags::edition::Edition;
+use ui_test::custom_flags::rustfix::RustfixMode;
 use ui_test::spanned::Spanned;
-use ui_test::{Args, Config, Mode, OutputConflictHandling, status_emitter};
+use ui_test::{Args, Config, error_on_output_conflict, status_emitter};
 
 use std::collections::BTreeMap;
 use std::env::{self, var_os};
 use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::LazyLock;
 
 // Test dependencies may need an `extern crate` here to ensure that they show up
 // in the depinfo file (otherwise cargo thinks they are unused)
@@ -75,7 +77,7 @@ static TEST_DEPENDENCIES: &[&str] = &[
 /// dependencies must be added to Cargo.toml at the project root. Test
 /// dependencies that are not *directly* used by this test module require an
 /// `extern crate` declaration.
-static EXTERN_FLAGS: LazyLock<Vec<String>> = LazyLock::new(|| {
+fn extern_flags() -> Vec<String> {
     let current_exe_depinfo = {
         let mut path = env::current_exe().unwrap();
         path.set_extension("d");
@@ -98,13 +100,13 @@ static EXTERN_FLAGS: LazyLock<Vec<String>> = LazyLock::new(|| {
             let name = name.strip_prefix("lib").unwrap_or(name);
             Some((name, path_str))
         };
-        if let Some((name, path)) = parse_name_path() {
-            if TEST_DEPENDENCIES.contains(&name) {
-                // A dependency may be listed twice if it is available in sysroot,
-                // and the sysroot dependencies are listed first. As of the writing,
-                // this only seems to apply to if_chain.
-                crates.insert(name, path);
-            }
+        if let Some((name, path)) = parse_name_path()
+            && TEST_DEPENDENCIES.contains(&name)
+        {
+            // A dependency may be listed twice if it is available in sysroot,
+            // and the sysroot dependencies are listed first. As of the writing,
+            // this only seems to apply to if_chain.
+            crates.insert(name, path);
         }
     }
     let not_found: Vec<&str> = TEST_DEPENDENCIES
@@ -123,104 +125,99 @@ static EXTERN_FLAGS: LazyLock<Vec<String>> = LazyLock::new(|| {
         .into_iter()
         .map(|(name, path)| format!("--extern={name}={path}"))
         .collect()
-});
+}
 
-fn base_config(test_dir: &str) -> (Config, Args) {
-    let mut args = Args::test().unwrap();
-    args.bless |= var_os("RUSTC_BLESS").is_some_and(|v| v != "0");
+struct TestContext {
+    args: Args,
+    extern_flags: Vec<String>,
+}
 
-    let target_dir = PathBuf::from(var_os("CARGO_TARGET_DIR").unwrap_or_else(|| "target".into()));
-    let mut config = Config {
-        output_conflict_handling: OutputConflictHandling::Error,
-        filter_files: env::var("TESTNAME")
-            .map(|filters| filters.split(',').map(str::to_string).collect())
-            .unwrap_or_default(),
-        target: None,
-        bless_command: Some("cargo uibless".into()),
-        out_dir: target_dir.join("ui_test"),
-        ..Config::rustc(Path::new("tests").join(test_dir))
-    };
-    config.comment_defaults.base().mode = Some(Spanned::dummy(Mode::Fail {
-        require_patterns: false,
-        rustfix: ui_test::RustfixMode::Everything,
-    }))
-    .into();
-    config.comment_defaults.base().diagnostic_code_prefix = Some(Spanned::dummy("rpl::".into())).into();
-    config.with_args(&args);
-    let current_exe_path = env::current_exe().unwrap();
-    let deps_path = current_exe_path.parent().unwrap();
-    let profile_path = deps_path.parent().unwrap();
-
-    config.program.args.extend(
-        [
-            "--emit=metadata",
-            "-Aunused",
-            "-Ainternal_features",
-            "-Zui-testing",
-            "-Zdeduplicate-diagnostics=no",
-            "-Dwarnings",
-            "-Adeprecated",
-            &format!("-Ldependency={}", deps_path.display()),
-        ]
-        .map(OsString::from),
-    );
-
-    for arg in [
-        "inline-mir-threshold",
-        "inline-mir-forwarder-threshold",
-        "inline-mir-hint-threshold",
-        "cross-crate-inline-threshold",
-        "threads",
-    ] {
-        let mut env = arg.replace('-', "_");
-        env.make_ascii_uppercase();
-        let env = format!("RPL_TEST_{}", env);
-        if let Some(threshold) = env::var_os(env) {
-            let threshold = threshold.into_string().unwrap();
-            config.program.args.push(format!("-Z{arg}={threshold}").into());
-            println!("set {arg} to {threshold}");
+impl TestContext {
+    fn new() -> Self {
+        let mut args = Args::test().unwrap();
+        args.bless |= var_os("RUSTC_BLESS").is_some_and(|v| v != "0");
+        Self {
+            args,
+            extern_flags: extern_flags(),
         }
     }
 
-    config.program.args.extend(EXTERN_FLAGS.iter().map(OsString::from));
+    fn base_config(&self, test_dir: &str, mandatory_annotations: bool) -> Config {
+        let target_dir = PathBuf::from(var_os("CARGO_TARGET_DIR").unwrap_or_else(|| "target".into()));
+        let mut config = Config {
+            output_conflict_handling: error_on_output_conflict,
+            filter_files: env::var("TESTNAME")
+                .map(|filters| filters.split(',').map(str::to_string).collect())
+                .unwrap_or_default(),
+            target: None,
+            bless_command: Some("cargo uibless".into()),
+            out_dir: target_dir.join("ui_test"),
+            ..Config::rustc(Path::new("tests").join(test_dir))
+        };
+        let defaults = config.comment_defaults.base();
+        defaults.set_custom("edition", Edition("2024".into()));
+        defaults.exit_status = None.into();
+        if mandatory_annotations {
+            defaults.require_annotations = Some(Spanned::dummy(true)).into();
+        } else {
+            defaults.require_annotations = None.into();
+        }
+        defaults.diagnostic_code_prefix = Some(Spanned::dummy("rpl::".into())).into();
+        // Disable rustfix for now.
+        defaults.set_custom("rustfix", RustfixMode::Disabled);
+        config.with_args(&self.args);
+        let current_exe_path = env::current_exe().unwrap();
+        let deps_path = current_exe_path.parent().unwrap();
+        let profile_path = deps_path.parent().unwrap();
 
-    if let Some(host_libs) = option_env!("HOST_LIBS") {
-        let dep = format!("-Ldependency={}", Path::new(host_libs).join("deps").display());
-        config.program.args.push(dep.into());
+        config.program.args.extend(
+            [
+                "--emit=metadata",
+                "-Aunused",
+                "-Ainternal_features",
+                "-Zui-testing",
+                "-Zdeduplicate-diagnostics=no",
+                "-Dwarnings",
+                &format!("-Ldependency={}", deps_path.display()),
+            ]
+            .map(OsString::from),
+        );
+
+        config.program.args.extend(self.extern_flags.iter().map(OsString::from));
+        // Prevent rustc from creating `rustc-ice-*` files the console output is enough.
+        config.program.envs.push(("RUSTC_ICE".into(), Some("0".into())));
+
+        if let Some(host_libs) = option_env!("HOST_LIBS") {
+            let dep = format!("-Ldependency={}", Path::new(host_libs).join("deps").display());
+            config.program.args.push(dep.into());
+        }
+
+        config.program.program = profile_path.join(if cfg!(windows) { "rpl-driver.exe" } else { "rpl-driver" });
+
+        config
     }
-
-    config.program.program = profile_path.join(if cfg!(windows) { "rpl-driver.exe" } else { "rpl-driver" });
-    (config, args)
 }
 
-fn run_ui() {
-    let (config, args) = base_config("ui");
+fn run_ui(cx: &TestContext) {
+    let config = cx.base_config("ui", true);
 
     ui_test::run_tests_generic(
         vec![config],
         ui_test::default_file_filter,
         ui_test::default_per_file_config,
-        status_emitter::Text::from(args.format),
+        status_emitter::Text::from(cx.args.format),
     )
     .unwrap();
 }
 
 fn main() {
-    // Support being run by cargo nextest - https://nexte.st/book/custom-test-harnesses.html
-    if env::args().any(|arg| arg == "--list") {
-        if !env::args().any(|arg| arg == "--ignored") {
-            println!("compile_test: test");
-        }
-
-        return;
-    }
-
+    let cx = TestContext::new();
     // The SPEEDTEST_* env variables can be used to check RPL's performance on your PR. It runs the
     // affected test 1000 times and gets the average.
     if let Ok(speedtest) = std::env::var("SPEEDTEST") {
         println!("----------- STARTING SPEEDTEST -----------");
         let f = match speedtest.as_str() {
-            "ui" => run_ui as fn(),
+            "ui" => run_ui,
             _ => panic!("unknown speedtest: {speedtest} || accepted speedtests are: [ui]"),
         };
 
@@ -236,7 +233,7 @@ fn main() {
         let mut sum = 0;
         for _ in 0..iterations {
             let start = std::time::Instant::now();
-            f();
+            f(&cx);
             sum += start.elapsed().as_millis();
         }
         println!(
@@ -245,6 +242,6 @@ fn main() {
             sum / u128::from(iterations)
         );
     } else {
-        run_ui();
+        run_ui(&cx);
     }
 }

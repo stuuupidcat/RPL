@@ -25,8 +25,8 @@ impl Session<'_> {
         let table = if let Some(table) = table {
             #[allow(dangling_pointers_from_temporaries)]
             str_to_cstring(table)?.as_ptr()
-        } else {
             //~^ NOTE: the `std::ffi::CString` value is dropped here
+        } else {
             std::ptr::null()
         };
         unsafe { check!(ffi::sqlite3session_attach(self.sess, table)) };
@@ -38,7 +38,7 @@ impl Session<'_> {
 
 mod ffi {
     pub type Session = std::ffi::c_void;
-    extern "C" {
+    unsafe extern "C" {
         pub fn sqlite3session_attach(s: *mut Session, table: *const std::ffi::c_char) -> i32;
     }
 }

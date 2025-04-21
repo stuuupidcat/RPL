@@ -32,13 +32,15 @@ impl Addr {
     /// Creates an `Addr` from its raw parts.
     unsafe fn from_raw_parts(addr: *const sockaddr, len: socklen_t) -> Self {
         let mut storage = MaybeUninit::<sockaddr_storage>::uninit();
-        ptr::copy_nonoverlapping(
-            addr as *const u8,
-            &mut storage as *mut MaybeUninit<sockaddr_storage> as *mut u8,
-            len as usize,
-        );
+        unsafe {
+            ptr::copy_nonoverlapping(
+                addr as *const u8,
+                &mut storage as *mut MaybeUninit<sockaddr_storage> as *mut u8,
+                len as usize,
+            );
+        }
         Self {
-            storage: storage.assume_init(),
+            storage: unsafe { storage.assume_init() },
             len,
         }
     }

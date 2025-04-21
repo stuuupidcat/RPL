@@ -1,57 +1,69 @@
-error: it usually isn’t necessary to apply #[inline] to private functions
+error: it usually isn't necessary to apply #[inline] to private functions
   --> tests/ui/private_function_marked_inline/private_function_marked_inline.rs:2:1
    |
 LL | fn foo11() {}
    | ^^^^^^^^^^^^^ `#[inline]` applied here
    |
    = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
-   = note: within a crate, the compiler generally makes good inline decisions
-   = note: `#[deny(rpl::private_and_inline)]` on by default
+   = note: the compiler generally makes good inline decisions about private functions
+   = note: `-D rpl::private-function-marked-inline` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(rpl::private_function_marked_inline)]`
 
-error: it usually isn’t necessary to apply #[inline] to private functions
+error: it usually isn't necessary to apply #[inline] to private functions
   --> tests/ui/private_function_marked_inline/private_function_marked_inline.rs:6:1
    |
 LL | pub(crate) fn foo12() {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^ `#[inline]` applied here
    |
    = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
-   = note: within a crate, the compiler generally makes good inline decisions
+   = note: the compiler generally makes good inline decisions about private functions
 
-error: it usually isn’t necessary to apply #[inline] to private functions
+error: it usually isn't necessary to apply #[inline] to private functions
   --> tests/ui/private_function_marked_inline/private_function_marked_inline.rs:12:1
    |
 LL | fn foo21() {}
    | ^^^^^^^^^^^^^ `#[inline]` applied here
    |
    = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
-   = note: within a crate, the compiler generally makes good inline decisions
+   = note: the compiler generally makes good inline decisions about private functions
 
-error: it usually isn’t necessary to apply #[inline] to private functions
+error: it usually isn't necessary to apply #[inline] to private functions
   --> tests/ui/private_function_marked_inline/private_function_marked_inline.rs:16:1
    |
 LL | pub(crate) fn foo22() {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^ `#[inline]` applied here
    |
    = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
-   = note: within a crate, the compiler generally makes good inline decisions
+   = note: the compiler generally makes good inline decisions about private functions
 
-error: it usually isn’t necessary to apply #[inline] to private functions
+error: it usually isn't necessary to apply #[inline] to private functions
   --> tests/ui/private_function_marked_inline/private_function_marked_inline.rs:33:5
    |
 LL |     fn foo_in_trait() {}
    |     ^^^^^^^^^^^^^^^^^^^^ `#[inline]` applied here
    |
    = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
-   = note: within a crate, the compiler generally makes good inline decisions
+   = note: the compiler generally makes good inline decisions about private functions
 
-error: it usually isn’t necessary to apply #[inline] to private functions
-  --> tests/ui/private_function_marked_inline/private_function_marked_inline.rs:41:5
+error: it usually isn't necessary to apply #[inline] to generic functions
+  --> tests/ui/private_function_marked_inline/private_function_marked_inline.rs:33:5
+   |
+LL |     fn foo_in_trait() {}
+   |     ^^^^^^^^^^^^^^^^^^^^ `#[inline]` applied here
+   |
+   = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html and https://rustc-dev-guide.rust-lang.org/backend/monomorph.html
+   = note: generic functions are always `#[inline]` (monomorphization)
+   = note: `-D rpl::generic-function-marked-inline` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(rpl::generic_function_marked_inline)]`
+
+error: it usually isn't necessary to apply #[inline] to private functions
+  --> tests/ui/private_function_marked_inline/private_function_marked_inline.rs:42:5
    |
 LL |     fn foo_in_impl() {}
    |     ^^^^^^^^^^^^^^^^^^^ `#[inline]` applied here
    |
    = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
-   = note: within a crate, the compiler generally makes good inline decisions
+   = note: the compiler generally makes good inline decisions about private functions
 
-error: aborting due to 6 previous errors
+error: aborting due to 7 previous errors
 
