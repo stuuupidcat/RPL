@@ -57,10 +57,12 @@ fn alloc_check_as_cast_write<T: Default>() {
     }
 }
 
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
 fn alloc_maybe_misaligned_and_write<T: Default>() {
     let layout = Layout::from_size_align(size_of::<T>(), 8).unwrap();
     unsafe {
         let ptr = unsafe { alloc(layout) as *mut T };
+        //FIXME: the alignment may be wrong, try checking this case
         assert!(!ptr.is_null());
         ptr.write(T::default());
         dealloc(ptr as *mut u8, layout)

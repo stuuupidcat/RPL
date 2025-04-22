@@ -19,3 +19,9 @@ derive_more.workspace = true
 pretty_assertions.workspace = true
 
 [features]
+
+[package.metadata.rust-analyzer]
+# This crate does not use #[feature(rustc_private)],
+# but adding this to the metadata can help rust-analyzer
+# to find some of mentioned types.
+rustc_private = true

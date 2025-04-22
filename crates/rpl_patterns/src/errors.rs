@@ -60,6 +60,17 @@ pub struct UncheckedAllocatedPointer<'tcx> {
 }
 
 #[derive(LintDiagnostic)]
+#[diag(rpl_patterns_use_after_realloc)]
+#[note]
+pub struct UseAfterRealloc<'tcx> {
+    #[label(rpl_patterns_realloc_label)]
+    pub realloc: Span,
+    #[label(rpl_patterns_use_label)]
+    pub r#use: Span,
+    pub ty: Ty<'tcx>,
+}
+
+#[derive(LintDiagnostic)]
 #[diag(rpl_patterns_offset_by_one)]
 pub struct OffsetByOne {
     #[label(rpl_patterns_read_label)]
@@ -136,7 +147,7 @@ pub struct TrustExactSizeIterator {
     pub fn_name: &'static str,
 }
 
-// for cve_2021_27376
+// for CVE-2021-29941 and CVE-2021-29942
 #[derive(LintDiagnostic)]
 #[diag(rpl_patterns_slice_from_raw_parts_uninitialized)]
 #[help]

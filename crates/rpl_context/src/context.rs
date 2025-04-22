@@ -7,7 +7,7 @@ use rustc_hir as hir;
 use rustc_middle::{mir, ty};
 use rustc_span::Symbol;
 
-use crate::pat::{self, Place, Ty, TyKind};
+use crate::pat::{self, Const, Place, Ty, TyKind};
 
 pub struct PrimitiveTypes<'pcx> {
     pub u8: Ty<'pcx>,
@@ -148,6 +148,9 @@ impl<'pcx> PatCtxt<'pcx> {
     }
     pub fn mk_var_ty(self, ty_var: pat::TyVar) -> Ty<'pcx> {
         self.mk_ty(TyKind::TyVar(ty_var))
+    }
+    pub fn mk_var_const(self, const_var: pat::ConstVar<'pcx>) -> Const<'pcx> {
+        const_var.into_const()
     }
     pub fn mk_var_place(self, place_var: pat::PlaceVar<'pcx>) -> Place<'pcx> {
         place_var.idx.into_place()

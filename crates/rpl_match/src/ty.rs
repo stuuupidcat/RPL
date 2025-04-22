@@ -7,6 +7,7 @@ use rustc_hir::def::Res;
 use rustc_hir::def_id::{DefId, LOCAL_CRATE};
 use rustc_hir::definitions::DefPathData;
 use rustc_index::IndexVec;
+use rustc_middle::mir;
 use rustc_middle::ty::{self, TyCtxt, ValTreeKind};
 use rustc_span::Symbol;
 use rustc_span::symbol::kw;
@@ -19,6 +20,7 @@ pub struct MatchTyCtxt<'pcx, 'tcx> {
     pub pcx: PatCtxt<'pcx>,
     pub pat: &'pcx pat::Pattern<'pcx>,
     pub typing_env: ty::TypingEnv<'tcx>,
+    pub const_vars: IndexVec<pat::ConstVarIdx, RefCell<FxIndexSet<mir::Const<'tcx>>>>,
     pub ty_vars: IndexVec<pat::TyVarIdx, RefCell<FxIndexSet<ty::Ty<'tcx>>>>,
     pub adt_matches: RefCell<FxHashMap<Symbol, FxHashMap<DefId, AdtMatch<'tcx>>>>,
 }
@@ -37,10 +39,12 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
             pat,
             typing_env,
             ty_vars: IndexVec::from_elem(RefCell::new(FxIndexSet::default()), &meta.ty_vars),
+            const_vars: IndexVec::from_elem(RefCell::new(FxIndexSet::default()), &meta.const_vars),
             adt_matches: Default::default(),
         }
     }
 
+    #[instrument(level = "trace", skip(self), ret)]
     pub fn match_ty(&self, ty_pat: pat::Ty<'pcx>, ty: ty::Ty<'tcx>) -> bool {
         let ty_pat_kind = *ty_pat.kind();
         let ty_kind = *ty.kind();
@@ -156,18 +160,19 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
                 | ty::UnsafeBinder(_),
             ) => false,
         };
-        debug!(?ty_pat, ?ty, matched, "match_ty");
+        // debug!(?ty_pat, ?ty, matched, "match_ty");
         matched
     }
 
-    #[instrument(level = "debug", skip(self), ret)]
+    #[instrument(level = "trace", skip(self), ret)]
     fn match_adt(&self, adt_pat: &pat::Adt<'pcx>, adt: ty::AdtDef<'tcx>) -> Option<AdtMatch<'tcx>> {
         MatchAdtCtxt::new(self.tcx, self.pcx, self.pat, adt_pat).match_adt(adt)
     }
 
+    #[instrument(level = "trace", skip(self), ret)]
     pub fn match_const(&self, konst_pat: pat::Const<'pcx>, konst: ty::Const<'tcx>) -> bool {
         match (konst_pat, konst.kind()) {
-            (pat::Const::ConstVar(const_var), _) => self.match_const_var(const_var, konst),
+            (pat::Const::ConstVar(const_var), _) => self.match_ty_const_var(const_var, konst),
             //(pat::Const::Value(_value_pat), ty::Value(_ty, ty::ValTree::Leaf(_value))) => todo!(),
             (
                 pat::Const::Value(_value_pat),
@@ -193,11 +198,25 @@ impl<'pcx, 'tcx> MatchTyCtxt<'pcx, 'tcx> {
         }
     }
 
-    pub fn match_const_var(&self, const_var: pat::ConstVar<'pcx>, konst: ty::Const<'tcx>) -> bool {
+    #[instrument(level = "trace", skip(self), ret)]
+    pub fn match_ty_const_var(&self, const_var: pat::ConstVar<'pcx>, konst: ty::Const<'tcx>) -> bool {
+        //FIXME: handle more cases of `ty::ConstKind`
         if let ty::ConstKind::Value(value) = konst.kind()
             && self.match_ty(const_var.ty, value.ty)
         {
-            // self.const_vars[const_var].borrow_mut().push(konst);
+            let const_value = self.tcx.valtree_to_const_val(konst.to_value());
+            self.const_vars[const_var.idx]
+                .borrow_mut()
+                .insert(mir::Const::from_value(const_value, value.ty));
+            return true;
+        }
+        false
+    }
+
+    #[instrument(level = "trace", skip(self), ret)]
+    pub fn match_const_var(&self, const_var: pat::ConstVar<'pcx>, konst: mir::Const<'tcx>) -> bool {
+        if self.match_ty(const_var.ty, konst.ty()) {
+            self.const_vars[const_var.idx].borrow_mut().insert(konst);
             return true;
         }
         false

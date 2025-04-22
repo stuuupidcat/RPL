@@ -162,7 +162,7 @@ impl fmt::Display for TyVar {
 
 impl fmt::Debug for ConstVar<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "const {:?}: {:?};", self.idx, self.ty)
+        write!(f, "({:?}: {:?})", self.idx, self.ty)
     }
 }
 

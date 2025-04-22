@@ -189,7 +189,7 @@ pub fn def_path_res(tcx: TyCtxt<'_>, path: &[Symbol], kind: PatItemKind) -> Vec<
         .chain(find_crates(tcx, *base))
         .collect();
 
-    trace!(?crates);
+    // trace!(?crates);
 
     def_path_res_with_base(tcx, crates, path, kind)
 }
@@ -273,10 +273,10 @@ fn local_item_children_by_name(tcx: TyCtxt<'_>, local_id: LocalDefId, name: Symb
         _ => return Vec::new(),
     };
 
-    trace!(?item_kind);
+    // trace!(?item_kind);
 
     let res = |ident: Ident, owner_id: OwnerId| {
-        trace!(?ident, ?name, ?owner_id);
+        // trace!(?ident, ?name, ?owner_id);
         if ident.name == name {
             let def_id = owner_id.to_def_id();
             Some(Res::Def(tcx.def_kind(def_id), def_id))

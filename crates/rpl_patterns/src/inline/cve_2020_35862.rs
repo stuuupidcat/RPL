@@ -1,4 +1,3 @@
-use rpl_mir::pat::TyVarIdx;
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
@@ -67,7 +66,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                 let use_span = matches[pattern.ptr_use].span_no_inline(body);
                 let move_span = matches[pattern.vec_move].span_no_inline(body);
-                let ty = matches[VEC];
+                let ty = matches[pattern.ty.idx];
                 // let global = self.tcx.type_of(global_did).instantiate_identity();
                 self.tcx.emit_node_span_lint(
                     USE_AFTER_MOVE,
@@ -90,17 +89,14 @@ struct Pattern<'pcx> {
     fn_pat: &'pcx pat::Fn<'pcx>,
     vec_move: pat::Location,
     ptr_use: pat::Location,
+    ty: pat::TyVar,
 }
-
-#[allow(dead_code)]
-const T: TyVarIdx = TyVarIdx::from_u16(0);
-#[allow(dead_code)]
-const VEC: TyVarIdx = TyVarIdx::from_u16(1);
 
 #[rpl_macros::pattern_def]
 fn pattern(pcx: PatCtxt<'_>) -> Pattern<'_> {
     let vec_move;
     let ptr_use;
+    let ty;
     let pattern = rpl! {
         #[meta($T:ty)]
         struct $Ptr {
@@ -111,7 +107,7 @@ fn pattern(pcx: PatCtxt<'_>) -> Pattern<'_> {
             $ptr: $Ptr,
         }
 
-        #[meta($T:ty, $Vec:ty)]
+        #[meta($T:ty, #[export(ty)] $Vec:ty)]
         fn $pattern(..) -> _ = mir! {
             let $bit_vec_1: $BitVec = _; // _1
             let $bit_ptr: $Ptr = copy ($bit_vec_1.$ptr); // _2 bb0[0]
@@ -148,5 +144,6 @@ fn pattern(pcx: PatCtxt<'_>) -> Pattern<'_> {
         fn_pat,
         vec_move,
         ptr_use,
+        ty,
     }
 }

@@ -16,6 +16,11 @@ rpl_patterns_use_after_move = use a pointer from `{$ty}` after it's moved
     .use_label = used here
     .note = the `{$ty}` value may be moved here
 
+rpl_patterns_use_after_realloc = use a pointer from `{$ty}` after it's reallocated
+    .realloc_label = `realloc` called here
+    .use_label = used here
+    .note = the `{$ty}` buffer may be reallocated here
+
 rpl_patterns_misordered_parameters = misordered parameters `len` and `cap` in `Vec::from_raw_parts`
     .label = `Vec::from_raw_parts` called here
     .help = the correct order is `Vec::from_raw_parts(ptr, len, cap)`
@@ -49,12 +54,12 @@ rpl_patterns_trust_exact_size_iterator = it is unsound to trust return value of 
     .len_label = `std::iter::ExactSizeIterator::len` used here
     .help = incorrect implementation of `std::iter::ExactSizeIterator::len` must not cause safety issues, and consider using `std::iter::TrustedLen` instead if it's stabilized
 
-rpl_patterns_slice_from_raw_parts_uninitialized = it violates the precondition of `{$fn_name}` to create a slice from uninitialized data
+rpl_patterns_slice_from_raw_parts_uninitialized = it violates the precondition of `std::slice::{$fn_name}` to create a slice from uninitialized data
     .slice_label = slice created here
     .vec_label   = `std::vec::Vec` created but not initialized
     .len_label   = slice created with this length
     .ptr_label   = slice created with this pointer
-    .help        = See https://doc.rust-lang.org/std/slice/fn.{$fn_name}.html
+    .help        = See https://doc.rust-lang.org/std/slice/fn.{$fn_name}.html#safety
 
 rpl_patterns_set_len_uninitialized = it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
     .set_len_label = `Vec::set_len` called here
@@ -124,11 +129,11 @@ rpl_patterns_cassandra_iter_next_ptr_passed_to_cass_iter_get = it will be an und
     .note = `cass_iterator_next` will invalidate the current item when called
     .help = consider implementing a `LendingIterator` instead
 
-rpl_patterns_slice_from_raw_parts_uninitialized_ = it violates the precondition of `{$fn_name}` to create a slice from uninitialized data
+rpl_patterns_slice_from_raw_parts_uninitialized_ = it violates the precondition of `std::slice::{$fn_name}` to create a slice from uninitialized data
     .slice_label = slice created here
     .len_label   = slice created with this length
     .ptr_label   = slice created with this pointer
-    .help        = See https://doc.rust-lang.org/std/slice/fn.{$fn_name}.html
+    .help        = See https://doc.rust-lang.org/std/slice/fn.{$fn_name}.html#safety
 
 rpl_patterns_private_function_marked_inline = it usually isn't necessary to apply #[inline] to private functions
     .label = `#[inline]` applied here

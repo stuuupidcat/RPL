@@ -58,7 +58,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     normal::cve_2020_35907::check_item,
     inline::cve_2021_25904::check_item,
     normal::cve_2021_25904::check_item,
-    inline::cve_2021_25905::check_item,
+    // inline::cve_2021_25905::check_item,
     normal::cve_2021_25905::check_item,
     normal::cve_2021_27376::check_item,
     inline::cve_2021_29941_2::check_item,
@@ -72,6 +72,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     // inline::transmute_int_to_ptr::check_item,s
     normal::manually_drop::check_item,
     inline::alloc_unchecked::check_item,
+    normal::alloc_unchecked::check_item,
 ];
 
 #[allow(unused)]

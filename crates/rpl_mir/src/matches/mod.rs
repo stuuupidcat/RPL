@@ -9,7 +9,7 @@ use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_index::bit_set::MixedBitSet;
 use rustc_index::{Idx, IndexVec};
 use rustc_middle::mir::visit::{MutatingUseContext, PlaceContext};
-use rustc_middle::mir::{self, PlaceRef};
+use rustc_middle::mir::{self, Const, PlaceRef};
 use rustc_middle::ty::Ty;
 use rustc_span::Span;
 
@@ -19,6 +19,7 @@ pub struct Matched<'tcx> {
     pub basic_blocks: IndexVec<pat::BasicBlock, MatchedBlock>,
     pub locals: IndexVec<pat::Local, mir::Local>,
     pub ty_vars: IndexVec<pat::TyVarIdx, Ty<'tcx>>,
+    pub const_vars: IndexVec<pat::ConstVarIdx, Const<'tcx>>,
     pub place_vars: IndexVec<pat::PlaceVarIdx, PlaceRef<'tcx>>,
 }
 
@@ -39,6 +40,10 @@ impl Matched<'_> {
         info!("pat ty metavar <-> mir candidate types");
         for (ty_var, matches) in self.ty_vars.iter_enumerated() {
             info!("{ty_var:?}: {:?}", matches);
+        }
+        info!("pat const metavar <-> mir candidate constants");
+        for (const_var, matches) in self.const_vars.iter_enumerated() {
+            info!("{const_var:?}: {:?}", matches);
         }
         info!("pat place metavar <-> mir candidate places");
         for (place_var, matches) in self.place_vars.iter_enumerated() {
@@ -85,6 +90,14 @@ impl<'tcx> Index<pat::TyVarIdx> for Matched<'tcx> {
     }
 }
 
+impl<'tcx> Index<pat::ConstVarIdx> for Matched<'tcx> {
+    type Output = Const<'tcx>;
+
+    fn index(&self, ty_var: pat::ConstVarIdx) -> &Self::Output {
+        &self.const_vars[ty_var]
+    }
+}
+
 pub fn matches<'tcx>(cx: &CheckMirCtxt<'_, '_, 'tcx>) -> Vec<Matched<'tcx>> {
     let mut matching = MatchCtxt::new(cx);
     matching.do_match();
@@ -95,8 +108,9 @@ pub fn matches<'tcx>(cx: &CheckMirCtxt<'_, '_, 'tcx>) -> Vec<Matched<'tcx>> {
 struct Matching<'tcx> {
     basic_blocks: IndexVec<pat::BasicBlock, MatchingBlock>,
     locals: IndexVec<pat::Local, LocalMatches>,
-    place_vars: IndexVec<pat::PlaceVarIdx, PlaceVarMatches<'tcx>>,
     ty_vars: IndexVec<pat::TyVarIdx, TyVarMatches<'tcx>>,
+    const_vars: IndexVec<pat::ConstVarIdx, ConstVarMatches<'tcx>>,
+    place_vars: IndexVec<pat::PlaceVarIdx, PlaceVarMatches<'tcx>>,
     /// Track which pattern statement the statement is matched to.
     mir_statements: IndexVec<mir::BasicBlock, MirStatementBackMatch>,
 }
@@ -130,6 +144,14 @@ impl<'tcx> Index<pat::TyVarIdx> for Matching<'tcx> {
 
     fn index(&self, ty_var: pat::TyVarIdx) -> &Self::Output {
         &self.ty_vars[ty_var]
+    }
+}
+
+impl<'tcx> Index<pat::ConstVarIdx> for Matching<'tcx> {
+    type Output = ConstVarMatches<'tcx>;
+
+    fn index(&self, const_var: pat::ConstVarIdx) -> &Self::Output {
+        &self.const_vars[const_var]
     }
 }
 
@@ -187,7 +209,7 @@ impl MirStatementBackMatch {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum StatementMatch {
     /// An argument of the function.
     Arg(mir::Local),
@@ -306,6 +328,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             ),
             locals: IndexVec::from_fn_n(|_| LocalMatches::new(cx.body.local_decls.len()), num_locals),
             ty_vars: IndexVec::from_fn_n(|_| TyVarMatches::new(), cx.fn_pat.meta.ty_vars.len()),
+            const_vars: IndexVec::from_fn_n(|_| ConstVarMatches::new(), cx.fn_pat.meta.const_vars.len()),
             place_vars: IndexVec::from_fn_n(|_| PlaceVarMatches::new(), cx.fn_pat.meta.place_vars.len()),
             mir_statements,
         }
@@ -405,6 +428,9 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         for (candidates, matches) in core::iter::zip(&self.cx.ty.ty_vars, &mut self.matching.ty_vars) {
             matches.candidates = std::mem::take(&mut *candidates.borrow_mut());
         }
+        for (candidates, matches) in core::iter::zip(&self.cx.ty.const_vars, &mut self.matching.const_vars) {
+            matches.candidates = std::mem::take(&mut *candidates.borrow_mut());
+        }
         for (candidates, matches) in core::iter::zip(&self.cx.places, &mut self.matching.place_vars) {
             matches.candidates = std::mem::take(&mut *candidates.borrow_mut());
         }
@@ -431,6 +457,9 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     fn ty_var_free(&self) -> bool {
         self.matching.ty_vars.iter().all(|c| c.get().is_none())
     }
+    fn const_var_free(&self) -> bool {
+        self.matching.const_vars.iter().all(|c| c.get().is_none())
+    }
     fn place_var_free(&self) -> bool {
         self.matching.place_vars.iter().all(|c| c.get().is_none())
     }
@@ -454,9 +483,9 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     }
     fn match_ty_var_candidates(&self, ty_var: pat::TyVarIdx, loc_pats: &[pat::Location]) {
         if ty_var == self.cx.fn_pat.meta.ty_vars.next_index() {
-            debug_assert!(self.place_var_free());
-            self.match_place_var_candidates(pat::PlaceVarIdx::ZERO, loc_pats);
-            debug_assert!(self.place_var_free());
+            debug_assert!(self.const_var_free());
+            self.match_const_var_candidates(pat::ConstVarIdx::ZERO, loc_pats);
+            debug_assert!(self.const_var_free());
             return;
         }
         for &cand in &self.matching[ty_var].candidates {
@@ -466,6 +495,23 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                 ensure_sufficient_stack(|| self.match_ty_var_candidates(ty_var.plus(1), loc_pats));
                 // backtrack, clear status
                 self.unmatch_ty_var(ty_var);
+            }
+        }
+    }
+    fn match_const_var_candidates(&self, const_var: pat::ConstVarIdx, loc_pats: &[pat::Location]) {
+        if const_var == self.cx.fn_pat.meta.const_vars.next_index() {
+            debug_assert!(self.place_var_free());
+            self.match_place_var_candidates(pat::PlaceVarIdx::ZERO, loc_pats);
+            debug_assert!(self.place_var_free());
+            return;
+        }
+        for &cand in &self.matching[const_var].candidates {
+            let _span = debug_span!("match_const_var_candidates", ?const_var, ?cand).entered();
+            if self.match_const_var(const_var, cand) {
+                // recursion
+                ensure_sufficient_stack(|| self.match_const_var_candidates(const_var.plus(1), loc_pats));
+                // backtrack, clear status
+                self.unmatch_const_var(const_var);
             }
         }
     }
@@ -877,6 +923,10 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         self.matching[ty_var].matched.r#match(ty)
     }
     #[instrument(level = "debug", skip(self), ret)]
+    fn match_const_var(&self, const_var: pat::ConstVarIdx, ty: Const<'tcx>) -> bool {
+        self.matching[const_var].matched.r#match(ty)
+    }
+    #[instrument(level = "debug", skip(self), ret)]
     fn match_place_var(&self, place_var: pat::PlaceVarIdx, place: PlaceRef<'tcx>) -> bool {
         self.matching[place_var].matched.r#match(place)
     }
@@ -932,6 +982,11 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     #[instrument(level = "debug", skip(self))]
     fn unmatch_ty_var(&self, ty_var: pat::TyVarIdx) {
         self.matching[ty_var].matched.unmatch();
+    }
+
+    #[instrument(level = "debug", skip(self))]
+    fn unmatch_const_var(&self, const_var: pat::ConstVarIdx) {
+        self.matching[const_var].matched.unmatch();
     }
 
     #[instrument(level = "debug", skip(self))]
@@ -1000,6 +1055,10 @@ impl<'tcx> Matching<'tcx> {
         for (ty_var, matches) in self.ty_vars.iter_enumerated() {
             info!("{ty_var:?}: {:?}", matches.candidates);
         }
+        info!("pat const metavar <-> mir candidate constants");
+        for (const_var, matches) in self.const_vars.iter_enumerated() {
+            info!("{const_var:?}: {:?}", matches.candidates);
+        }
         info!("pat place metavar <-> mir candidate places");
         for (place_var, matches) in self.place_vars.iter_enumerated() {
             info!("{place_var:?}: {:?}", matches.candidates);
@@ -1022,6 +1081,9 @@ impl<'tcx> Matching<'tcx> {
         }
         for (ty_var, matches) in self.ty_vars.iter_enumerated() {
             info!("{ty_var:?}: {:?}", matches.matched.get());
+        }
+        for (const_var, matches) in self.const_vars.iter_enumerated() {
+            info!("{const_var:?}: {:?}", matches.matched.get());
         }
         for (place_var, matches) in self.place_vars.iter_enumerated() {
             info!("{place_var:?}: {:?}", matches.matched.get());
@@ -1052,6 +1114,15 @@ impl<'tcx> Matching<'tcx> {
                     .unwrap_or_else(|| panic!("bug: type variable {ty_var:?} not matched"))
             })
             .collect();
+        let const_vars = self
+            .const_vars
+            .iter_enumerated()
+            .map(|(const_var, matching)| {
+                matching
+                    .get()
+                    .unwrap_or_else(|| panic!("bug: type variable {const_var:?} not matched"))
+            })
+            .collect();
         let place_vars = self
             .place_vars
             .iter_enumerated()
@@ -1066,6 +1137,7 @@ impl<'tcx> Matching<'tcx> {
             basic_blocks,
             locals,
             ty_vars,
+            const_vars,
             place_vars,
         }
     }
@@ -1207,6 +1279,35 @@ impl<'tcx> TyVarMatches<'tcx> {
     fn force_get_matched(&self) -> Ty<'tcx> {
         self.matched.get().expect("bug: type variable not matched")
     }
+}
+
+#[derive(Default, Debug)]
+struct ConstVarMatches<'tcx> {
+    matched: CountedMatch<Const<'tcx>>,
+    candidates: FxIndexSet<Const<'tcx>>,
+}
+
+impl<'tcx> ConstVarMatches<'tcx> {
+    fn new() -> Self {
+        Self::default()
+    }
+
+    fn get(&self) -> Option<Const<'tcx>> {
+        self.matched.get()
+    }
+
+    /// Test if there are any empty candidates in the matches.
+    #[allow(unused)]
+    fn has_empty_candidates(&self) -> bool {
+        self.candidates.is_empty()
+    }
+
+    // // After `match_const_var_candidates`, all const variables are supposed to be matched,
+    // // so we can assume that `self.matched` is `Some`.
+    // #[track_caller]
+    // fn force_get_matched(&self) -> Const<'tcx> {
+    //     self.matched.get().expect("bug: type variable not matched")
+    // }
 }
 
 #[derive(Default, Debug)]

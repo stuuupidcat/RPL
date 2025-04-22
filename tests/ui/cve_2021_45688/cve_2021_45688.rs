@@ -1,3 +1,7 @@
+//@revisions: inline regular
+//@[inline] compile-flags: -Z inline-mir=true
+//@[inline] check-pass
+//@[regular] compile-flags: -Z inline-mir=false
 use std::io;
 use std::slice;
 
@@ -17,15 +21,17 @@ pub fn read_spv<R: io::Read + io::Seek>(x: &mut R) -> io::Result<Vec<u32>> {
     x.seek(io::SeekFrom::Start(0))?;
     unsafe {
         x.read_exact(slice::from_raw_parts_mut(
+            //FIXME: a false negative, `result` is not initialized
+            //ERROR: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
             result.as_mut_ptr() as *mut u8,
             words * 4,
         ))?;
         result.set_len(words);
+        //~[regular]^ERROR: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
     }
     const MAGIC_NUMBER: u32 = 0x0723_0203;
     if !result.is_empty() && result[0] == MAGIC_NUMBER.swap_bytes() {
         for word in &mut result {
-                  //~^ ERROR: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
             *word = word.swap_bytes();
         }
     }

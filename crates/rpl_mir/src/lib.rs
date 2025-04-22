@@ -1020,9 +1020,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
     #[instrument(level = "trace", skip(self), ret)]
     fn match_const_operand(&self, pat: &pat::ConstOperand<'pcx>, konst: mir::Const<'tcx>) -> bool {
         let matched = match (pat, konst) {
-            (&pat::ConstOperand::ConstVar(const_var), mir::Const::Ty(_, konst)) => {
-                self.ty.match_const_var(const_var, konst)
-            },
+            (&pat::ConstOperand::ConstVar(const_var), konst) => self.ty.match_const_var(const_var, konst),
             (&pat::ConstOperand::ScalarInt(value_pat), mir::Const::Val(mir::ConstValue::Scalar(value), ty)) => {
                 (match (value_pat.ty, *ty.kind()) {
                     (pat::IntTy::NegInt(ty_pat), ty::Int(ty)) => ty_pat == ty,
@@ -1043,7 +1041,7 @@ impl<'pcx, 'tcx> CheckMirCtxt<'_, 'pcx, 'tcx> {
                 self.ty.match_path_with_args(path_with_args, def_id, args)
             },
             (
-                pat::ConstOperand::ConstVar(_) | pat::ConstOperand::ScalarInt(_) | pat::ConstOperand::ZeroSized(_),
+                pat::ConstOperand::ScalarInt(_) | pat::ConstOperand::ZeroSized(_),
                 mir::Const::Ty(..) | mir::Const::Unevaluated(..) | mir::Const::Val(..),
             ) => false,
         };

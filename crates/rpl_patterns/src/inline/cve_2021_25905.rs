@@ -120,7 +120,7 @@ fn pattern_from_raw_parts_iter(pcx: PatCtxt<'_>) -> PatternFromRawParts<'_> {
     PatternFromRawParts {
         pattern,
         fn_pat,
-        fn_name: "std::slice::from_raw_parts_mut",
+        fn_name: "from_raw_parts_mut",
         len,
         ptr,
         slice,

@@ -1,6 +1,5 @@
 use std::collections::BTreeSet;
 
-use rpl_mir::pat::TyVarIdx;
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
@@ -74,16 +73,11 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             let pattern_4 = alloc_cast_check_as_write(self.pcx);
             let matches_4 = CheckMirCtxt::new(self.tcx, self.pcx, body, pattern_4.pattern, pattern_4.fn_pat).check();
 
-            fn collect_matched(
-                matched: &Matched<'_>,
-                ptr: Location,
-                offset: Location,
-                body: &Body<'_>,
-            ) -> (Span, Span) {
-                let span_ptr = matched[ptr].span_no_inline(body);
-                let span_offset = matched[offset].span_no_inline(body);
-                trace!(?span_ptr, ?span_offset, "checked offset found");
-                (span_ptr, span_offset)
+            fn collect_matched(matched: &Matched<'_>, ptr: Location, write: Location, body: &Body<'_>) -> (Span, Span) {
+                let span_alloc = matched[ptr].span_no_inline(body);
+                let span_write = matched[write].span_no_inline(body);
+                trace!(?span_alloc, ?span_write, "checked write found");
+                (span_alloc, span_write)
             }
             let locations: BTreeSet<_> = matches_2
                 .iter()
@@ -103,12 +97,12 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                 let alloc = matches[pattern.alloc].span_no_inline(body);
                 let write = matches[pattern.write].span_no_inline(body);
+                let ty = matches[pattern.ty.idx];
 
                 if locations.contains(&(alloc, write)) {
                     // The returned pointer is checked, so don't emit an error
                     continue;
                 }
-                let ty = matches[T];
                 // let global = self.tcx.type_of(global_did).instantiate_identity();
                 self.tcx.emit_node_span_lint(
                     UNCHECKED_ALLOCATED_POINTER,
@@ -117,6 +111,23 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     crate::errors::UncheckedAllocatedPointer { alloc, write, ty },
                 );
             }
+
+            // let pattern = alloc_misaligned_cast(self.pcx);
+
+            // for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern,
+            // pattern.fn_pat).check() {     let alloc =
+            // matches[pattern.alloc].span_no_inline(body);     let write =
+            // matches[pattern.cast].span_no_inline(body);
+
+            //     let ty = matches[T];
+            //     // let global = self.tcx.type_of(global_did).instantiate_identity();
+            //     self.tcx.emit_node_span_lint(
+            //         UNCHECKED_ALLOCATED_POINTER,
+            //         self.tcx.local_def_id_to_hir_id(def_id),
+            //         write,
+            //         crate::errors::UncheckedAllocatedPointer { alloc, write, ty },
+            //     );
+            // }
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
     }
@@ -127,17 +138,16 @@ struct Pattern<'pcx> {
     fn_pat: &'pcx pat::Fn<'pcx>,
     alloc: pat::Location,
     write: pat::Location,
+    ty: pat::TyVar,
 }
-
-#[allow(dead_code)]
-const T: TyVarIdx = TyVarIdx::from_u16(0);
 
 #[rpl_macros::pattern_def]
 fn alloc_cast_write(pcx: PatCtxt<'_>) -> Pattern<'_> {
     let alloc;
     let write;
+    let ty;
     let pattern = rpl! {
-        #[meta($T:ty)]
+        #[meta(#[export(ty)] $T:ty)]
         fn $pattern(..) -> _ = mir! {
             #[export(alloc)]
             let $ptr_1: *mut u8 = alloc::alloc::__rust_alloc(_, _); // _3
@@ -153,6 +163,7 @@ fn alloc_cast_write(pcx: PatCtxt<'_>) -> Pattern<'_> {
         fn_pat,
         alloc,
         write,
+        ty,
     }
 }
 
@@ -160,8 +171,9 @@ fn alloc_cast_write(pcx: PatCtxt<'_>) -> Pattern<'_> {
 fn alloc_check_cast_write(pcx: PatCtxt<'_>) -> Pattern<'_> {
     let alloc;
     let write;
+    let ty;
     let pattern = rpl! {
-        #[meta($T:ty)]
+        #[meta(#[export(ty)] $T:ty)]
         fn $pattern(..) -> _ = mir! {
             #[export(alloc)]
             let $ptr_1: *mut u8 = alloc::alloc::__rust_alloc(_, _); // _2
@@ -184,6 +196,7 @@ fn alloc_check_cast_write(pcx: PatCtxt<'_>) -> Pattern<'_> {
         fn_pat,
         alloc,
         write,
+        ty,
     }
 }
 
@@ -191,8 +204,9 @@ fn alloc_check_cast_write(pcx: PatCtxt<'_>) -> Pattern<'_> {
 fn alloc_cast_check_write(pcx: PatCtxt<'_>) -> Pattern<'_> {
     let alloc;
     let write;
+    let ty;
     let pattern = rpl! {
-        #[meta($T:ty)]
+        #[meta(#[export(ty)] $T:ty)]
         fn $pattern(..) -> _ = mir! {
             #[export(alloc)]
             let $ptr_1: *mut u8 = alloc::alloc::__rust_alloc(_, _); // _3
@@ -214,6 +228,7 @@ fn alloc_cast_check_write(pcx: PatCtxt<'_>) -> Pattern<'_> {
         fn_pat,
         alloc,
         write,
+        ty,
     }
 }
 
@@ -221,8 +236,9 @@ fn alloc_cast_check_write(pcx: PatCtxt<'_>) -> Pattern<'_> {
 fn alloc_cast_check_as_write(pcx: PatCtxt<'_>) -> Pattern<'_> {
     let alloc;
     let write;
+    let ty;
     let pattern = rpl! {
-        #[meta($T:ty)]
+        #[meta(#[export(ty)] $T:ty)]
         fn $pattern(..) -> _ = mir! {
             #[export(alloc)]
             let $ptr_1: *mut u8 = alloc::alloc::__rust_alloc(_, _); // _3
@@ -243,5 +259,6 @@ fn alloc_cast_check_as_write(pcx: PatCtxt<'_>) -> Pattern<'_> {
         fn_pat,
         alloc,
         write,
+        ty,
     }
 }

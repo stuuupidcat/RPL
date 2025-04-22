@@ -47,16 +47,111 @@ fn checked_le_1<T>(ptr: *const T, index: usize, right: usize) -> *const T {
     }
 }
 
-fn safe_unchecked_slice<T>(slice: &[T; 2]) -> &T {
-    let ptr = slice.as_ptr();
-    unsafe { &*ptr.add(1) }
-    //~^ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
-    //FIXME: this is a false positive
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_vec_deref<T>(slice: &Vec<T>) -> &[T] {
+    &*slice
+    // This is safe because the length will be checked at runtime
 }
 
-fn safe_unchecked_2_const<T, const N: usize>(slice: &[T; N], index: usize) -> &T {
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_vec_deref_mut<T>(slice: &mut Vec<T>) -> &mut [T] {
+    &mut *slice
+    // This is safe because the length will be checked at runtime
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_slice_range_from<T>(slice: &[T]) -> &[T] {
+    &slice[1..]
+    // This is safe because the length will be checked at runtime
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_slice_mut_range_from<T>(slice: &mut [T]) -> &mut [T] {
+    &mut slice[1..]
+    // This is safe because the length will be checked at runtime
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_slice_range_to<T>(slice: &[T]) -> &[T] {
+    &slice[..2]
+    // This is safe because the length will be checked at runtime
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_slice_mut_range_to<T>(slice: &mut [T]) -> &mut [T] {
+    &mut slice[..2]
+    // This is safe because the length will be checked at runtime
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_slice_range_full<T>(slice: &[T]) -> &[T] {
+    &slice[..]
+    // This is safe as there is no out-of-bounds access
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_slice_mut_range_full<T>(slice: &mut [T]) -> &mut [T] {
+    &mut slice[..]
+    // This is safe as there is no out-of-bounds access
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_vec_ref_range_full<T>(slice: &Vec<T>) -> &[T] {
+    &slice[..]
+    // This is safe as there is no out-of-bounds access
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_vec_ref_mut_range_full<T>(slice: &mut Vec<T>) -> &mut [T] {
+    &mut slice[..]
+    // This is safe as there is no out-of-bounds access
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_vec_range_full<T>() {
+    let v = Vec::new();
+    let slice: &[T] = &v[..];
+    // This is safe as there is no out-of-bounds access
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_vec_mut_range_full<T>() {
+    let mut v = Vec::new();
+    let slice: &mut [T] = &mut v[..];
+    // This is safe as there is no out-of-bounds access
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn safe_array_in_bound<T>(slice: &[T; 2]) -> &T {
+    let ptr = slice.as_ptr();
+    unsafe { &*ptr.add(1) }
+    // This is safe because the length of the slice is known at compile time
+    // and the index is guaranteed to be less than the length.
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn unsafe_array_out_of_bound_1<T>(slice: &[T; 2]) -> &T {
+    let ptr = slice.as_ptr();
+    unsafe { &*ptr.add(2) }
+    //~^ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
+}
+
+// #[rpl::dump_mir(dump_cfg, dump_ddg)]
+fn unsafe_array_out_of_bound_2<T>(slice: &[T; 2]) -> &T {
+    let ptr = slice.as_ptr();
+    unsafe { &*ptr.add(4) }
+    //~^ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
+}
+
+fn safe_unchecked_2_const_rem<T, const N: usize>(slice: &[T; N], index: usize) -> &T {
     let ptr = slice.as_ptr();
     unsafe { &*ptr.add(index % N) }
+}
+
+fn safe_unchecked_2_const<T, const N: usize>(slice: &[T; N]) -> &T {
+    let ptr = slice.as_ptr();
+    unsafe { &*ptr.add(N) }
+    //~^ERROR: it is an undefined behavior to offset a pointer using an unchecked integer
 }
 
 fn safe_unchecked_2_const_literal_2<T>(slice: &[T; 2], index: usize) -> &T {
