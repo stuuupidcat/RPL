@@ -1,6 +1,6 @@
 //@ revisions: inline regular
 //@[inline] compile-flags: -Z inline-mir=true
-//@[inline] ignore-on-host
+//@[inline] check-pass
 //@[regular] compile-flags: -Z inline-mir=false
 
 use std::io::{BufRead, Error as IoError, ErrorKind as IoErrorKind, Read, Result as IoResult};
@@ -207,7 +207,7 @@ where
             // safe because it's within the buffer's limits
             // and we won't be reading uninitialized memory
             std::slice::from_raw_parts_mut(
-                //~^ ERROR: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
+                //~[regular]^ ERROR: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
                 self.buf.as_mut_ptr().offset(b as isize),
                 self.buf.capacity() - b,
             )

@@ -1,5 +1,3 @@
-//@ ignore-on-host
-
 use std::alloc::{alloc, alloc_zeroed, dealloc, Layout};
 use std::ops::{Index, IndexMut, Range};
 
@@ -56,7 +54,7 @@ where
         for i in 0..size {
             unsafe {
                 (*(ptr.wrapping_offset(i as isize))) = template.clone();
-                //~^ ERROR: Possibly dropping an uninitialized value
+                //~^ ERROR: dropped an possibly-uninitialized value
                 // Not a false positive
             }
         }

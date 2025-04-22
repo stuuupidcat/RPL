@@ -1,0 +1,49 @@
+error: it usually isn’t necessary to apply #[inline] to private functions
+  --> tests/ui/cve_2020_25795/cve_2020_25795.rs:81:5
+   |
+LL | /     unsafe fn force_write(index: usize, value: A, chunk: &mut Self) {
+LL | |         chunk.mut_ptr(index).write(value)
+LL | |     }
+   | |_____^ `#[inline]` applied here
+   |
+   = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
+   = note: within a crate, the compiler generally makes good inline decisions
+   = note: `#[deny(rpl::private_and_inline)]` on by default
+
+error: it usually isn’t necessary to apply #[inline] to private functions
+  --> tests/ui/cve_2020_25795/cve_2020_25795.rs:86:5
+   |
+LL | /     unsafe fn mut_ptr(&mut self, index: usize) -> *mut A {
+LL | |         (&mut self.data as *mut _ as *mut A).add(index)
+LL | |     }
+   | |_____^ `#[inline]` applied here
+   |
+   = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
+   = note: within a crate, the compiler generally makes good inline decisions
+
+error: it usually isn’t necessary to apply #[inline] to private functions
+  --> tests/ui/cve_2020_25795/cve_2020_25795.rs:91:5
+   |
+LL | /     unsafe fn ptr(&self, index: usize) -> *const A {
+LL | |         (&self.data as *const _ as *const A).add(index)
+LL | |     }
+   | |_____^ `#[inline]` applied here
+   |
+   = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
+   = note: within a crate, the compiler generally makes good inline decisions
+
+error: it usually isn’t necessary to apply #[inline] to private functions
+  --> tests/ui/cve_2020_25795/cve_2020_25795.rs:96:5
+   |
+LL | /     unsafe fn force_copy(from: usize, to: usize, count: usize, chunk: &mut Self) {
+LL | |         if count > 0 {
+LL | |             ptr::copy(chunk.ptr(from), chunk.mut_ptr(to), count)
+LL | |         }
+LL | |     }
+   | |_____^ `#[inline]` applied here
+   |
+   = help: See https://matklad.github.io/2021/07/09/inline-in-rust.html
+   = note: within a crate, the compiler generally makes good inline decisions
+
+error: aborting due to 4 previous errors
+

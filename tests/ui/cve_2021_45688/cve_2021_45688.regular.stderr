@@ -1,0 +1,14 @@
+error: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
+  --> tests/ui/cve_2021_45688/cve_2021_45688.rs:29:9
+   |
+LL |     let mut result = Vec::<u32>::with_capacity(words);
+   |                      -------------------------------- `Vec` created here
+...
+LL |         result.set_len(words);
+   |         ^^^^^^^^^^^^^^^^^^^^^ `Vec::set_len` called here
+   |
+   = help: before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
+   = note: `#[deny(rpl::set_len_uninitialized)]` on by default
+
+error: aborting due to 1 previous error
+

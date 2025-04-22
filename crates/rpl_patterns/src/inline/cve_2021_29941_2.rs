@@ -1,3 +1,4 @@
+#![allow(unused)] //FIXME: fix or remove unused items
 use rpl_context::PatCtxt;
 use rpl_mir::{CheckMirCtxt, pat};
 use rustc_hir as hir;
@@ -68,6 +69,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 );
             }
 
+            /*
             let pattern = pattern_uninitialized_slice_inlined(self.pcx);
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                 let len = matches[pattern.len].span_no_inline(body);
@@ -111,6 +113,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     },
                 );
             }
+             */
         }
         intravisit::walk_fn(self, kind, decl, body_id, def_id);
     }

@@ -38,7 +38,7 @@ LL |     let arr: &mut [u32] = unsafe { std::slice::from_raw_parts_mut(vec.as_mu
    = note: `#[deny(rpl::slice_from_raw_parts_uninitialized)]` on by default
 
 error: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
-  --> tests/ui/cve_2021_29941_2/cve_2021_29941_2.rs:57:9
+  --> tests/ui/cve_2021_29941_2/cve_2021_29941_2.rs:58:9
    |
 LL |     let mut vec = Vec::with_capacity(len);
    |                   ----------------------- `Vec` created here
@@ -49,7 +49,7 @@ LL |         vec.set_len(len);
    = help: before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
 
 error: it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
-  --> tests/ui/cve_2021_29941_2/cve_2021_29941_2.rs:57:9
+  --> tests/ui/cve_2021_29941_2/cve_2021_29941_2.rs:58:9
    |
 LL |     let len = bla.len();
    |               --------- `std::iter::ExactSizeIterator::len` used here
@@ -60,7 +60,7 @@ LL |         vec.set_len(len);
    = help: incorrect implementation of `std::iter::ExactSizeIterator::len` must not cause safety issues, and consider using `std::iter::TrustedLen` instead if it's stabilized
 
 error: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
-  --> tests/ui/cve_2021_29941_2/cve_2021_29941_2.rs:41:36
+  --> tests/ui/cve_2021_29941_2/cve_2021_29941_2.rs:42:36
    |
 LL |     let mut vec = Vec::with_capacity(len);
    |                   ----------------------- `std::vec::Vec` created but not initialized
@@ -74,7 +74,7 @@ LL |     let arr: &mut [u32] = unsafe { std::slice::from_raw_parts_mut(vec.as_mu
    = help: See https://doc.rust-lang.org/std/slice/fn.from_raw_parts_mut.html#safety
 
 error: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
-  --> tests/ui/cve_2021_29941_2/cve_2021_29941_2.rs:75:9
+  --> tests/ui/cve_2021_29941_2/cve_2021_29941_2.rs:77:9
    |
 LL |     let mut vec = Vec::with_capacity(len);
    |                   ----------------------- `Vec` created here
@@ -85,7 +85,7 @@ LL |         vec.set_len(len);
    = help: before calling `set_len` to extend its length, make sure all elements are initialized, using such as `spare_capacity_mut` or `as_mut_ptr`
 
 error: it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
-  --> tests/ui/cve_2021_29941_2/cve_2021_29941_2.rs:75:9
+  --> tests/ui/cve_2021_29941_2/cve_2021_29941_2.rs:77:9
    |
 LL |     let len = bla.len();
    |               --------- `std::iter::ExactSizeIterator::len` used here
@@ -96,7 +96,7 @@ LL |         vec.set_len(len);
    = help: incorrect implementation of `std::iter::ExactSizeIterator::len` must not cause safety issues, and consider using `std::iter::TrustedLen` instead if it's stabilized
 
 error: it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
-  --> tests/ui/cve_2021_29941_2/cve_2021_29941_2.rs:93:9
+  --> tests/ui/cve_2021_29941_2/cve_2021_29941_2.rs:95:9
    |
 LL |     let len = bla.len();
    |               --------- `std::iter::ExactSizeIterator::len` used here

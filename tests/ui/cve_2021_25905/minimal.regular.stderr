@@ -33,6 +33,26 @@ LL | |                     buf.capacity() - b,
 LL | |                 )
    | |_________________^ slice created here
 ...
+LL |       cases!(vec![1, 2, 3]);
+   |       --------------------- in this macro invocation
+   |
+   = help: See https://doc.rust-lang.org/std/slice/fn.from_raw_parts_mut.html#safety
+   = note: this error originates in the macro `cases` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized data
+  --> tests/ui/cve_2021_25905/minimal.rs:14:17
+   |
+LL |               let b = buf.len();
+   |                       --------- slice created with this length
+...
+LL | /                 std::slice::from_raw_parts_mut(
+...  |
+LL | |                     buf.as_mut_ptr().offset(b as isize),
+   | |                     ---------------- slice created with this pointer
+LL | |                     buf.capacity() - b,
+LL | |                 )
+   | |_________________^ slice created here
+...
 LL |       cases!(Vec::with_capacity(0));
    |       ----------------------------- in this macro invocation
    |
@@ -59,5 +79,5 @@ LL |       cases!(Vec::with_capacity(1));
    = help: See https://doc.rust-lang.org/std/slice/fn.from_raw_parts_mut.html#safety
    = note: this error originates in the macro `cases` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error: aborting due to 3 previous errors
+error: aborting due to 4 previous errors
 

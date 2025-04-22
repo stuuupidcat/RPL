@@ -72,6 +72,7 @@ static ALL_PATTERNS: &[fn(TyCtxt<'_>, PatCtxt<'_>, ItemId)] = &[
     // inline::transmute_int_to_ptr::check_item,s
     normal::manually_drop::check_item,
     inline::alloc_unchecked::check_item,
+    normal::alloc_unchecked::check_item,
 ];
 
 #[allow(unused)]

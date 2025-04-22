@@ -878,3 +878,36 @@ declare_tool_lint! {
     Warn,
     "detects that a pointer allocated through `std::alloc::alloc` is not checked for null"
 }
+
+declare_tool_lint! {
+    /// The `rpl::use_after_realloc` lint detects using a pointer after it has been reallocated.
+    ///
+    /// ### Example
+    ///
+    /// ```rust
+    /// use std::alloc::{alloc, dealloc, realloc, Layout};
+    ///
+    /// fn alloc_unchecked() {
+    ///     let layout = Layout::array::<u8>(16).unwrap();
+    ///     unsafe {
+    ///         let ptr = alloc(layout) as *mut u8;
+    ///         assert!(!ptr.is_null());
+    ///         ptr.write(42);
+    ///         let new_ptr = realloc(ptr as *mut u8, layout, layout.size() * 2) as *mut u8;
+    ///         assert!(!new_ptr.is_null());
+    ///         // use the old pointer after realloc
+    ///         dealloc(ptr as *mut u8, layout);
+    ///     }
+    /// }
+    /// ```
+    ///
+    /// {{produces}}
+    ///
+    /// ### Explanation
+    ///
+    /// The `realloc` function may move the memory to a new location,
+    /// and the old pointer may no longer be valid.
+    pub rpl::USE_AFTER_REALLOC,
+    Warn,
+    "detects using a pointer after it has been reallocated"
+}
