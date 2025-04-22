@@ -1,4 +1,3 @@
-
 use rustc_hir as hir;
 use rustc_hir::def_id::LocalDefId;
 use rustc_hir::intravisit::{self, Visitor};
@@ -87,7 +86,11 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     USE_AFTER_REALLOC,
                     self.tcx.local_def_id_to_hir_id(def_id),
                     deref,
-                    crate::errors::UseAfterRealloc { realloc, r#use:deref, ty },
+                    crate::errors::UseAfterRealloc {
+                        realloc,
+                        r#use: deref,
+                        ty,
+                    },
                 );
             }
 
@@ -102,7 +105,11 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                     USE_AFTER_REALLOC,
                     self.tcx.local_def_id_to_hir_id(def_id),
                     deref,
-                    crate::errors::UseAfterRealloc { realloc, r#use:deref, ty },
+                    crate::errors::UseAfterRealloc {
+                        realloc,
+                        r#use: deref,
+                        ty,
+                    },
                 );
             }
         }
@@ -126,7 +133,10 @@ fn alloc_misaligned_cast(pcx: PatCtxt<'_>) -> Pattern2<'_> {
     let pattern = rpl! {
         #[meta(#[export(ty)] $T:ty, $alignment: const(usize))]
         fn $pattern(..) -> _ = mir! {
-            let $layout_result: core::result::Result<core::alloc::Layout, _> = alloc::alloc::Layout::from_size_align(_, const $alignment);
+            let $layout_result: core::result::Result<core::alloc::Layout, _> = alloc::alloc::Layout::from_size_align(
+                _,
+                const $alignment
+            );
             let $layout: core::alloc::Layout = _;
             #[export(alloc)]
             let $ptr_1: *mut u8 = alloc::alloc::alloc(move $layout);
