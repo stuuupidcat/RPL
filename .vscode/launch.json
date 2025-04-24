@@ -1,0 +1,34 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'rpl-driver'",
+            "cargo": {
+                "args": ["build", "--bin=rpl-driver", "--package=rpl"],
+                "filter": {
+                    "name": "rpl-driver",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "-Z",
+                "no-codegen",
+                "--crate-type",
+                "lib",
+                // You can also use the following line to specify the path to the rlib file.
+                // But I'm not sure how to get the path to the rlib file,
+                // as it uses a hash in the file name.
+                // "--extern",
+                // "libc=${workspaceFolder}/target/debug/deps/liblibc-f5b3b8a882fe8188.rlib",
+                "tests/ui/cve_2020_35888_simplified/cve_2020_35888_simplified.rs"
+            ],
+            "env": {
+                "DYLD_LIBRARY_PATH": "${env:HOME}/.rustup/toolchains/nightly-2025-02-14-aarch64-apple-darwin/lib",
+                "LD_LIBRARY_PATH": "${env:HOME}/.rustup/toolchains/nightly-2025-02-14-aarch64-unknown-linux-gnu/lib"
+            },
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
