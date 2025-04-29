@@ -910,6 +910,6 @@ declare_tool_lint! {
     /// The `realloc` function may move the memory to a new location,
     /// and the old pointer may no longer be valid.
     pub rpl::USE_AFTER_REALLOC,
-    Warn,
+    Deny,
     "detects using a pointer after it has been reallocated"
 }
