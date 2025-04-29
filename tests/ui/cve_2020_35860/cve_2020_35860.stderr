@@ -1,6 +1,9 @@
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2020_35860/cve_2020_35860.rs:33:5
    |
+LL |       #[inline(always)]
+   |       ----------------- `#[inline]` here
+LL |       /// Wrap the pointer in a `CBox`.
 LL | /     pub fn new(ptr: *mut D::RefTo) -> Self {
 LL | |
 LL | |         CBox { ptr }
@@ -15,6 +18,9 @@ LL | |     }
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2020_35860/cve_2020_35860.rs:39:5
    |
+LL |       #[inline(always)]
+   |       ----------------- `#[inline]` here
+LL |       /// Returns the internal pointer.
 LL | /     pub unsafe fn as_ptr(&self) -> *mut D::RefTo {
 LL | |
 LL | |         self.ptr
@@ -27,6 +33,9 @@ LL | |     }
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2020_35860/cve_2020_35860.rs:45:5
    |
+LL |       #[inline(always)]
+   |       ----------------- `#[inline]` here
+LL |       /// Returns the internal pointer.
 LL | /     pub unsafe fn unwrap(self) -> *mut D::RefTo {
 LL | |
 LL | |         let ptr = self.ptr;

@@ -43,4 +43,20 @@ impl Struct {
     //~^ERROR: it usually isn't necessary to apply #[inline] to private functions
 }
 
+macro_rules! private_inline {
+    ($ident:ident) => {
+        #[inline]
+        fn $ident() {}
+        //~^ERROR: it usually isn't necessary to apply #[inline] to private functions
+    };
+    (#[$meta:meta] $ident:ident) => {
+        #[$meta]
+        fn $ident() {}
+        //~^ERROR: it usually isn't necessary to apply #[inline] to private functions
+    };
+}
+
+private_inline!(bar1);
+private_inline!(#[inline] bar2);
+
 fn main() {}

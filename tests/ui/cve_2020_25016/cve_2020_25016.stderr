@@ -35,6 +35,8 @@ LL |         let slice = self.as_mut_slice();
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2020_25016/cve_2020_25016.rs:18:5
    |
+LL |       #[inline]
+   |       --------- `#[inline]` here
 LL | /     fn as_bytes(&self) -> &[u8] {
 ...  |
 LL | |     }
@@ -48,6 +50,8 @@ LL | |     }
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2020_25016/cve_2020_25016.rs:37:5
    |
+LL |       #[inline]
+   |       --------- `#[inline]` here
 LL | /     fn as_bytes_mut(&mut self) -> &mut [u8] {
 ...  |
 LL | |     }

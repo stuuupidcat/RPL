@@ -20,6 +20,8 @@ LL |             last_elem_ptr = self.mem.offset(self.len as isize);
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2020_35892_3/cve_2020_35892_3.rs:35:5
    |
+LL |       #[inline]
+   |       --------- `#[inline]` here
 LL | /     pub fn remove(&mut self, offset: usize) -> T {
 ...  |
 LL | |         return elem;
