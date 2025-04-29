@@ -1,6 +1,8 @@
 error: it usually isn't necessary to apply #[inline] to private functions
   --> tests/ui/cve_2019_16138/src/lib.rs:265:13
    |
+LL |               #[inline]
+   |               --------- `#[inline]` here
 LL | /             fn advance(&mut self) {
 LL | |
 LL | |
@@ -17,6 +19,8 @@ LL | |             }
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2019_16138/src/lib.rs:265:13
    |
+LL |               #[inline]
+   |               --------- `#[inline]` here
 LL | /             fn advance(&mut self) {
 LL | |
 LL | |
@@ -33,6 +37,8 @@ LL | |             }
 error: it usually isn't necessary to apply #[inline] to private functions
   --> tests/ui/cve_2019_16138/src/lib.rs:350:9
    |
+LL |           #[inline(always)]
+   |           ----------------- `#[inline]` here
 LL | /         fn read_byte<R: BufRead>(r: &mut R) -> io::Result<u8> {
 LL | |
 LL | |
@@ -48,6 +54,8 @@ LL | |         }
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2019_16138/src/lib.rs:350:9
    |
+LL |           #[inline(always)]
+   |           ----------------- `#[inline]` here
 LL | /         fn read_byte<R: BufRead>(r: &mut R) -> io::Result<u8> {
 LL | |
 LL | |
@@ -63,6 +71,8 @@ LL | |         }
 error: it usually isn't necessary to apply #[inline] to private functions
   --> tests/ui/cve_2019_16138/src/lib.rs:360:9
    |
+LL |           #[inline]
+   |           --------- `#[inline]` here
 LL | /         fn decode_component<R: BufRead, S: FnMut(usize, u8)>(
 LL | |
 LL | |
@@ -78,6 +88,8 @@ LL | |         }
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2019_16138/src/lib.rs:360:9
    |
+LL |           #[inline]
+   |           --------- `#[inline]` here
 LL | /         fn decode_component<R: BufRead, S: FnMut(usize, u8)>(
 LL | |
 LL | |
@@ -93,6 +105,8 @@ LL | |         }
 error: it usually isn't necessary to apply #[inline] to private functions
   --> tests/ui/cve_2019_16138/src/lib.rs:425:13
    |
+LL |               #[inline]
+   |               --------- `#[inline]` here
 LL | /             fn rl_marker(pix: RGBE8Pixel) -> Option<usize> {
 LL | |
 LL | |
@@ -107,6 +121,8 @@ LL | |             }
 error: it usually isn't necessary to apply #[inline] to private functions
   --> tests/ui/cve_2019_16138/src/lib.rs:425:13
    |
+LL |               #[inline]
+   |               --------- `#[inline]` here
 LL | /             fn rl_marker(pix: RGBE8Pixel) -> Option<usize> {
 LL | |
 LL | |

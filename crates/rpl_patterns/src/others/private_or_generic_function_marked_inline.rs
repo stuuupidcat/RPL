@@ -18,7 +18,7 @@ struct CheckAttrCtxt<'tcx> {
 }
 
 impl CheckAttrCtxt<'_> {
-    fn has_inline_attr(&self, def_id: LocalDefId) -> bool {
+    fn has_inline_attr(&self, def_id: LocalDefId) -> Option<Span> {
         let hir_id = self.tcx.local_def_id_to_hir_id(def_id);
         let attrs = self.tcx.hir().attrs(hir_id);
         for attr in attrs {
@@ -30,11 +30,11 @@ impl CheckAttrCtxt<'_> {
                         .any(|meta_item| meta_item.ident().is_some_and(|ident| ident.name == sym::never))
                 });
                 if is_inline && !is_never {
-                    return true;
+                    return Some(attr.span);
                 }
             }
         }
-        false
+        None
     }
 }
 
@@ -59,24 +59,24 @@ impl<'tcx> Visitor<'tcx> for CheckAttrCtxt<'tcx> {
         kind: intravisit::FnKind<'tcx>,
         decl: &'tcx hir::FnDecl<'tcx>,
         body_id: hir::BodyId,
-        _span: Span,
+        span: Span,
         def_id: LocalDefId,
     ) -> Self::Result {
-        if self.has_inline_attr(def_id) {
+        if let Some(attr) = self.has_inline_attr(def_id) {
             if !self.tcx.visibility(def_id).is_public() {
                 self.tcx.emit_node_span_lint(
                     crate::lints::PRIVATE_FUNCTION_MARKED_INLINE,
                     self.tcx.local_def_id_to_hir_id(def_id),
-                    _span,
-                    crate::errors::PrivateFunctionMarkedInline { span: _span },
+                    span,
+                    crate::errors::PrivateFunctionMarkedInline { span, attr },
                 );
             }
             if self.tcx.generics_of(def_id).requires_monomorphization(self.tcx) {
                 self.tcx.emit_node_span_lint(
                     crate::lints::GENERIC_FUNCTION_MARKED_INLINE,
                     self.tcx.local_def_id_to_hir_id(def_id),
-                    _span,
-                    crate::errors::GenericFunctionMarkedInline { span: _span },
+                    span,
+                    crate::errors::GenericFunctionMarkedInline { span, attr },
                 );
             }
         }

@@ -1,6 +1,8 @@
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2020_35862/cve_2020_35862.rs:166:5
    |
+LL |       #[inline]
+   |       --------- `#[inline]` here
 LL | /     pub fn as_slice<'a>(&self) -> &'a [T] {
 ...  |
 LL | |         unsafe { slice::from_raw_parts(self.pointer().r, self.elements()) }
@@ -15,6 +17,8 @@ LL | |     }
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2020_35862/cve_2020_35862.rs:189:5
    |
+LL |       #[inline]
+   |       --------- `#[inline]` here
 LL | /     pub fn as_mut_slice<'a>(&self) -> &'a mut [T] {
 ...  |
 LL | |     }
@@ -26,6 +30,8 @@ LL | |     }
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2020_35862/cve_2020_35862.rs:201:5
    |
+LL |       #[inline]
+   |       --------- `#[inline]` here
 LL | /     pub fn head(&self) -> BitIdx<T> {
 ...  |
 LL | |     }
@@ -37,6 +43,8 @@ LL | |     }
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2020_35862/cve_2020_35862.rs:216:5
    |
+LL |       #[inline]
+   |       --------- `#[inline]` here
 LL | /     pub fn len(&self) -> usize {
 ...  |
 LL | |     }
@@ -61,6 +69,8 @@ LL |         mem::forget(self.into_boxed_slice());
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2020_35862/cve_2020_35862.rs:484:5
    |
+LL |       #[inline]
+   |       --------- `#[inline]` here
 LL | /     pub unsafe fn from_raw_parts(pointer: BitPtr<T>, capacity: usize) -> Self {
 ...  |
 LL | |     }
@@ -72,6 +82,8 @@ LL | |     }
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2020_35862/cve_2020_35862.rs:497:5
    |
+LL |       #[inline(always)]
+   |       ----------------- `#[inline]` here
 LL | /     pub fn into_vec(self) -> Vec<T> {
 ...  |
 LL | |         out
@@ -84,6 +96,8 @@ LL | |     }
 error: it usually isn't necessary to apply #[inline] to generic functions
   --> tests/ui/cve_2020_35862/cve_2020_35862.rs:519:5
    |
+LL |       #[inline]
+   |       --------- `#[inline]` here
 LL | /     pub fn into_boxed_slice(self) -> Box<[T]> {
 ...  |
 LL | |     }

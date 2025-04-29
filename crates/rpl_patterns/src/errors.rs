@@ -330,6 +330,8 @@ pub struct SliceFromRawPartsUninitialized_ {
 pub struct PrivateFunctionMarkedInline {
     #[label(rpl_patterns_label)]
     pub span: Span,
+    #[label(rpl_patterns_attr_label)]
+    pub attr: Span,
 }
 
 #[derive(LintDiagnostic)]
@@ -339,6 +341,8 @@ pub struct PrivateFunctionMarkedInline {
 pub struct GenericFunctionMarkedInline {
     #[label(rpl_patterns_label)]
     pub span: Span,
+    #[label(rpl_patterns_attr_label)]
+    pub attr: Span,
 }
 
 // for std::mem::transmute : transmuting a type to a boolean
