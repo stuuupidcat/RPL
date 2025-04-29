@@ -75,7 +75,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 );
             }
 
-            let pattern = use_after_realloc_const(self.pcx);
+            let pattern = use_after_realloc_deref_const(self.pcx);
 
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                 let realloc = matches[pattern.realloc].span_no_inline(body);
@@ -94,7 +94,45 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 );
             }
 
-            let pattern = use_after_realloc_mut(self.pcx);
+            let pattern = use_after_realloc_deref_mut(self.pcx);
+
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let realloc = matches[pattern.realloc].span_no_inline(body);
+                let deref = matches[pattern.deref].span_no_inline(body);
+                let ty = matches[pattern.ty.idx];
+
+                self.tcx.emit_node_span_lint(
+                    USE_AFTER_REALLOC,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    deref,
+                    crate::errors::UseAfterRealloc {
+                        realloc,
+                        r#use: deref,
+                        ty,
+                    },
+                );
+            }
+
+            let pattern = use_after_realloc_read_const(self.pcx);
+
+            for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
+                let realloc = matches[pattern.realloc].span_no_inline(body);
+                let deref = matches[pattern.deref].span_no_inline(body);
+                let ty = matches[pattern.ty.idx];
+
+                self.tcx.emit_node_span_lint(
+                    USE_AFTER_REALLOC,
+                    self.tcx.local_def_id_to_hir_id(def_id),
+                    deref,
+                    crate::errors::UseAfterRealloc {
+                        realloc,
+                        r#use: deref,
+                        ty,
+                    },
+                );
+            }
+
+            let pattern = use_after_realloc_read_mut(self.pcx);
 
             for matches in CheckMirCtxt::new(self.tcx, self.pcx, body, pattern.pattern, pattern.fn_pat).check() {
                 let realloc = matches[pattern.realloc].span_no_inline(body);
@@ -164,7 +202,7 @@ struct Pattern3<'pcx> {
 }
 
 #[rpl_macros::pattern_def]
-fn use_after_realloc_const(pcx: PatCtxt<'_>) -> Pattern3<'_> {
+fn use_after_realloc_deref_const(pcx: PatCtxt<'_>) -> Pattern3<'_> {
     let realloc;
     let deref;
     let ty;
@@ -172,9 +210,9 @@ fn use_after_realloc_const(pcx: PatCtxt<'_>) -> Pattern3<'_> {
         #[meta(#[export(ty)] $T:ty)]
         fn $pattern(..) -> _ = mir! {
             let $old_ptr: *const $T = _;
-            let $old_ptr_u8: *mut u8 = move $old_ptr as *mut u8 (PtrToPtr);
+            let $old_ptr_u8: *mut u8 = copy $old_ptr as *mut u8 (PtrToPtr);
             #[export(realloc)]
-            let $new_ptr_u8: *mut u8 = alloc::alloc::realloc(move $old_ptr, _, _);
+            let $new_ptr_u8: *mut u8 = alloc::alloc::realloc(move $old_ptr_u8, _, _);
             #[export(deref)]
             let $ref_old: &$T = &*$old_ptr;
         }
@@ -191,7 +229,7 @@ fn use_after_realloc_const(pcx: PatCtxt<'_>) -> Pattern3<'_> {
 }
 
 #[rpl_macros::pattern_def]
-fn use_after_realloc_mut(pcx: PatCtxt<'_>) -> Pattern3<'_> {
+fn use_after_realloc_deref_mut(pcx: PatCtxt<'_>) -> Pattern3<'_> {
     let realloc;
     let deref;
     let ty;
@@ -199,11 +237,67 @@ fn use_after_realloc_mut(pcx: PatCtxt<'_>) -> Pattern3<'_> {
         #[meta(#[export(ty)] $T:ty)]
         fn $pattern(..) -> _ = mir! {
             let $old_ptr: *mut $T = _;
-            let $old_ptr_u8: *mut u8 = move $old_ptr as *mut u8 (PtrToPtr);
+            let $old_ptr_u8: *mut u8 = copy $old_ptr as *mut u8 (PtrToPtr);
             #[export(realloc)]
-            let $new_ptr_u8: *mut u8 = alloc::alloc::realloc(move $old_ptr, _, _);
+            let $new_ptr_u8: *mut u8 = alloc::alloc::realloc(move $old_ptr_u8, _, _);
             #[export(deref)]
             let $ref_old: &mut $T = &mut *$old_ptr;
+        }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
+
+    Pattern3 {
+        pattern,
+        fn_pat,
+        realloc,
+        deref,
+        ty,
+    }
+}
+
+#[rpl_macros::pattern_def]
+fn use_after_realloc_read_const(pcx: PatCtxt<'_>) -> Pattern3<'_> {
+    let realloc;
+    let deref;
+    let ty;
+    let pattern = rpl! {
+        #[meta(#[export(ty)] $T:ty)]
+        fn $pattern(..) -> _ = mir! {
+            let $old_ptr: *const $T = _;
+            let $old_ptr_u8: *mut u8 = copy $old_ptr as *mut u8 (PtrToPtr);
+            #[export(realloc)]
+            let $new_ptr_u8: *mut u8 = alloc::alloc::realloc(move $old_ptr_u8, _, _);
+            #[export(deref)]
+            let $ref_old: $T = copy *$old_ptr;
+        }
+    };
+    let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();
+
+    Pattern3 {
+        pattern,
+        fn_pat,
+        realloc,
+        deref,
+        ty,
+    }
+}
+
+#[rpl_macros::pattern_def]
+fn use_after_realloc_read_mut(pcx: PatCtxt<'_>) -> Pattern3<'_> {
+    let realloc;
+    let deref;
+    let ty;
+    let pattern = rpl! {
+        #[meta(#[export(ty)] $T:ty)]
+        fn $pattern(..) -> _ = mir! {
+            let $old_ptr: *mut $T = _;
+            let $old_ptr_u8: *mut u8 = copy $old_ptr as *mut u8 (PtrToPtr);
+            // let $old_ptr_u8: *mut u8 = _;
+            #[export(realloc)]
+            let $new_ptr_u8: *mut u8 = alloc::alloc::realloc(move $old_ptr_u8, _, _);
+            #[export(deref)]
+            // let $ref_old: $T = copy *$old_ptr;
+            let $ref_old: $T = _;
         }
     };
     let fn_pat = pattern.fns.get_fn_pat(Symbol::intern("pattern")).unwrap();

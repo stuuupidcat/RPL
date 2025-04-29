@@ -1,0 +1,15 @@
+error: use a pointer from `u32` after it's reallocated
+  --> tests/ui/std/alloc/realloc.rs:33:17
+   |
+LL |         let new_ptr = realloc(ptr as *mut u8, layout, layout.size() * 2) as *mut u32;
+   |                       -------------------------------------------------- `realloc` called here
+...
+LL |         let x = *ptr;
+   |                 ^^^^ used here
+   |
+   = note: the `u32` buffer may be reallocated here
+   = note: `-D rpl::use-after-realloc` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(rpl::use_after_realloc)]`
+
+error: aborting due to 1 previous error
+
