@@ -1,6 +1,5 @@
 //@ revisions: inline regular
 //@[inline] compile-flags: -Z inline-mir=true
-//@[inline] check-pass
 //@[regular] compile-flags: -Z inline-mir=false
 
 macro_rules! cases {
@@ -18,6 +17,10 @@ macro_rules! cases {
                     //~[regular]| ERROR: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized part of a `Vec`
                     //~[regular]| ERROR: it violates the precondition of `std::slice::from_raw_parts_mut` to create a slice from uninitialized part of a `Vec`
                     buf.as_mut_ptr().offset(b as isize),
+                    //~[inline]^ ptr_offset_with_cast
+                    //~[inline]| ptr_offset_with_cast
+                    //~[inline]| ptr_offset_with_cast
+                    //~[inline]| ptr_offset_with_cast
                     buf.capacity() - b,
                 )
             };

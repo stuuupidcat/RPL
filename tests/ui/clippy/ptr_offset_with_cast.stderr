@@ -1,0 +1,82 @@
+error: usage of the `offset` pointer method with a usize casted to an isize.
+  --> tests/ui/clippy/ptr_offset_with_cast.rs:19:21
+   |
+LL |         let _ = ptr.wrapping_offset(offset_usize as isize);
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: if you’re always increasing the pointer address, you can avoid the numeric cast by using the `add` method instead.
+   = note: `-D rpl::ptr-offset-with-cast` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(rpl::ptr_offset_with_cast)]`
+
+error: usage of the `offset` pointer method with a usize casted to an isize.
+  --> tests/ui/clippy/ptr_offset_with_cast.rs:30:24
+   |
+LL |         let _ = (&ptr).wrapping_offset(offset_usize as isize);
+   |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: if you’re always increasing the pointer address, you can avoid the numeric cast by using the `add` method instead.
+
+error: usage of the `offset` pointer method with a usize casted to an isize.
+  --> tests/ui/clippy/ptr_offset_with_cast.rs:11:21
+   |
+LL |         let _ = ptr.offset(offset_usize as isize);
+   |                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: if you’re always increasing the pointer address, you can avoid the numeric cast by using the `add` method instead.
+
+error: usage of the `offset` pointer method with a usize casted to an isize.
+  --> tests/ui/clippy/ptr_offset_with_cast.rs:27:24
+   |
+LL |         let _ = (&ptr).offset(offset_usize as isize);
+   |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: if you’re always increasing the pointer address, you can avoid the numeric cast by using the `add` method instead.
+
+error: it is an undefined behavior to offset a pointer using an unchecked integer
+  --> tests/ui/clippy/ptr_offset_with_cast.rs:11:21
+   |
+LL |         let _ = ptr.offset(offset_usize as isize);
+   |                 --- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ offset here
+   |                 |
+   |                 pointer used here
+   |
+   = help: check whether it's in bound before offsetting
+   = note: See the safety section in https://doc.rust-lang.org/std/primitive.pointer.html#method.offset
+   = note: `-D rpl::unchecked-pointer-offset` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(rpl::unchecked_pointer_offset)]`
+
+error: it is an undefined behavior to offset a pointer using an unchecked integer
+  --> tests/ui/clippy/ptr_offset_with_cast.rs:14:21
+   |
+LL |         let _ = ptr.offset(offset_isize as isize);
+   |                 --- ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ offset here
+   |                 |
+   |                 pointer used here
+   |
+   = help: check whether it's in bound before offsetting
+   = note: See the safety section in https://doc.rust-lang.org/std/primitive.pointer.html#method.offset
+
+error: it is an undefined behavior to offset a pointer using an unchecked integer
+  --> tests/ui/clippy/ptr_offset_with_cast.rs:16:21
+   |
+LL |         let _ = ptr.offset(offset_u8 as isize);
+   |                 --- ^^^^^^^^^^^^^^^^^^^^^^^^^^ offset here
+   |                 |
+   |                 pointer used here
+   |
+   = help: check whether it's in bound before offsetting
+   = note: See the safety section in https://doc.rust-lang.org/std/primitive.pointer.html#method.offset
+
+error: it is an undefined behavior to offset a pointer using an unchecked integer
+  --> tests/ui/clippy/ptr_offset_with_cast.rs:27:24
+   |
+LL |         let _ = (&ptr).offset(offset_usize as isize);
+   |                 ------ ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ offset here
+   |                 |
+   |                 pointer used here
+   |
+   = help: check whether it's in bound before offsetting
+   = note: See the safety section in https://doc.rust-lang.org/std/primitive.pointer.html#method.offset
+
+error: aborting due to 8 previous errors
+

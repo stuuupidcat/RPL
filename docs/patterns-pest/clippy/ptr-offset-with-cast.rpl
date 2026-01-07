@@ -1,0 +1,35 @@
+pattern ptr-offset-with-cast
+
+patt {
+    #[diag = "ptr-offset-with-cast"]
+    p_offset[
+        $PTR: type where is_ptr(self),
+    ] = fn _ (..) -> _ {
+        let $ptr: $PTR = _;
+        let $offset_usize: usize = _;
+        let $offset_isize: isize = copy $offset_usize as isize (IntToInt);
+        'ptr_offset_call:
+        _ = std::intrinsics::arith_offset::<u8>(copy $ptr, copy $offset_isize);
+    }
+
+    #[diag = "ptr-offset-with-cast"]
+    p_wrapping_offset[
+        $PTR: type where is_ptr(self),
+    ] = fn _ (..) -> _ {
+        let $ptr: $PTR = _;
+        let $offset_usize: usize = _;
+        let $offset_isize: isize = copy $offset_usize as isize (IntToInt);
+        'ptr_offset_call:
+        _ = Offset(copy $ptr, copy $offset_isize);
+    }
+
+}
+
+diag {
+    ptr-offset-with-cast = {
+        primary(ptr_offset_call) = "usage of the `offset` pointer method with a usize casted to an isize.",
+        help = "if you’re always increasing the pointer address, you can avoid the numeric cast by using the `add` method instead.",
+        name = "ptr_offset_with_cast",
+        level = "warn",
+    }
+}

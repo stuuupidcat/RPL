@@ -73,6 +73,7 @@ fn main() {
 
     unsafe { y.as_ptr().offset(size_of::<u16>() as isize) };
     //~^ size_of_in_element_count
+    //~| ptr_offset_with_cast
 
     y.as_mut_ptr().wrapping_offset(size_of::<u16>() as isize);
     //~^ size_of_in_element_count

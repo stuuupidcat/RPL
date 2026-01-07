@@ -1,3 +1,13 @@
+error: usage of the `offset` pointer method with a usize casted to an isize.
+  --> tests/ui/clippy/size_of_in_element_count/functions.rs:74:25
+   |
+LL |     unsafe { y.as_ptr().offset(size_of::<u16>() as isize) };
+   |                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: if you’re always increasing the pointer address, you can avoid the numeric cast by using the `add` method instead.
+   = note: `-D rpl::ptr-offset-with-cast` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(rpl::ptr_offset_with_cast)]`
+
 error: found a count of bytes instead of a count of elements of `u16`
   --> tests/ui/clippy/size_of_in_element_count/functions.rs:20:62
    |
@@ -104,7 +114,7 @@ LL |     y.as_mut_ptr().wrapping_add(size_of::<u16>());
    = help: use a count of elements instead of a count of bytes, it already gets multiplied by the size of the type
 
 error: found a count of bytes instead of a count of elements of `u16`
-  --> tests/ui/clippy/size_of_in_element_count/functions.rs:77:36
+  --> tests/ui/clippy/size_of_in_element_count/functions.rs:78:36
    |
 LL |     y.as_mut_ptr().wrapping_offset(size_of::<u16>() as isize);
    |                                    ^^^^^^^^^^^^^^^^
@@ -151,5 +161,5 @@ LL |     unsafe { swap_nonoverlapping(y.as_mut_ptr(), x.as_mut_ptr(), size_of::<
    |
    = help: use a count of elements instead of a count of bytes, it already gets multiplied by the size of the type
 
-error: aborting due to 19 previous errors
+error: aborting due to 20 previous errors
 

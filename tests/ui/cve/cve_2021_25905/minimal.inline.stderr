@@ -1,0 +1,52 @@
+error: usage of the `offset` pointer method with a usize casted to an isize.
+  --> tests/ui/cve/cve_2021_25905/minimal.rs:19:38
+   |
+LL |                     buf.as_mut_ptr().offset(b as isize),
+   |                                      ^^^^^^^^^^^^^^^^^^
+...
+LL |     cases!(Vec::new());
+   |     ------------------ in this macro invocation
+   |
+   = help: if you’re always increasing the pointer address, you can avoid the numeric cast by using the `add` method instead.
+   = note: `-D rpl::ptr-offset-with-cast` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(rpl::ptr_offset_with_cast)]`
+   = note: this error originates in the macro `cases` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: usage of the `offset` pointer method with a usize casted to an isize.
+  --> tests/ui/cve/cve_2021_25905/minimal.rs:19:38
+   |
+LL |                     buf.as_mut_ptr().offset(b as isize),
+   |                                      ^^^^^^^^^^^^^^^^^^
+...
+LL |     cases!(vec![1, 2, 3]);
+   |     --------------------- in this macro invocation
+   |
+   = help: if you’re always increasing the pointer address, you can avoid the numeric cast by using the `add` method instead.
+   = note: this error originates in the macro `cases` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: usage of the `offset` pointer method with a usize casted to an isize.
+  --> tests/ui/cve/cve_2021_25905/minimal.rs:19:38
+   |
+LL |                     buf.as_mut_ptr().offset(b as isize),
+   |                                      ^^^^^^^^^^^^^^^^^^
+...
+LL |     cases!(Vec::with_capacity(0));
+   |     ----------------------------- in this macro invocation
+   |
+   = help: if you’re always increasing the pointer address, you can avoid the numeric cast by using the `add` method instead.
+   = note: this error originates in the macro `cases` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: usage of the `offset` pointer method with a usize casted to an isize.
+  --> tests/ui/cve/cve_2021_25905/minimal.rs:19:38
+   |
+LL |                     buf.as_mut_ptr().offset(b as isize),
+   |                                      ^^^^^^^^^^^^^^^^^^
+...
+LL |     cases!(Vec::with_capacity(1));
+   |     ----------------------------- in this macro invocation
+   |
+   = help: if you’re always increasing the pointer address, you can avoid the numeric cast by using the `add` method instead.
+   = note: this error originates in the macro `cases` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error: aborting due to 4 previous errors
+

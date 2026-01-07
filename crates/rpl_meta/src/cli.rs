@@ -37,6 +37,9 @@ pub fn collect_default_patterns() -> Vec<(PathBuf, String)> {
     }
 
     default_patterns!(
+        // When you add a pattern to the list below,
+        // ensure that its order matches the file system's order.
+        // (To ensure consistency of output information during testing)
         // Clippy lints
         "clippy/cast-slice-different-sizes.rpl",
         "clippy/cast-slice-from-raw-parts.rpl",
@@ -45,6 +48,7 @@ pub fn collect_default_patterns() -> Vec<(PathBuf, String)> {
         "clippy/mem-replace-with-uninit.rpl",
         "clippy/mut-from-ref.rpl",
         "clippy/not-unsafe-ptr-arg-deref.rpl",
+        "clippy/ptr-offset-with-cast.rpl",
         "clippy/size-of-in-element-count.rpl",
         "clippy/swap-ptr-to-ref.rpl",
         "clippy/transmute-int-to-non-zero.rpl",
