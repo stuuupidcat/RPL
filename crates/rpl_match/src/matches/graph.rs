@@ -40,7 +40,7 @@ impl<'a, 'pcx, 'tcx> GraphValidator<'a, 'pcx, 'tcx> {
 
     #[instrument(level = "info", skip(self), ret)]
     fn validate_ddg(&self) -> bool {
-        self.loc_pats().all(|loc_pat| {
+        self.matching.loc_pats().all(|loc_pat| {
             let StatementMatch::Location(loc) = self.matching[loc_pat].force_get_matched() else {
                 return true;
             };
@@ -58,13 +58,6 @@ impl<'a, 'pcx, 'tcx> GraphValidator<'a, 'pcx, 'tcx> {
             debug!(?loc_pat, ?loc, ?matched, "validate_stmt_deps");
             matched
         })
-    }
-
-    fn loc_pats(&self) -> impl Iterator<Item = pat::Location> + use<'_> {
-        self.matching
-            .basic_blocks
-            .iter_enumerated()
-            .flat_map(|(bb, block)| (0..block.statements.len()).map(move |stmt| (bb, stmt).into_location()))
     }
 
     #[instrument(level = "debug", skip(self), ret)]

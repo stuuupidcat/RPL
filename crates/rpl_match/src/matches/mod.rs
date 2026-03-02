@@ -536,11 +536,10 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     // match the graph.
     #[instrument(level = "info", skip(self))]
     fn match_candidates(&self) {
-        let loc_pats = self.loc_pats().collect::<Vec<_>>();
+        let loc_pats = self.matching.loc_pats().collect::<Vec<_>>();
         self.assert_ty_var_free();
         self.matching.ty_vars.backtrack(
             pat::TyVarIdx::ZERO,
-            // CountedMatch is managed internally by VarDomain::backtrack
             &|_ty_var, _cand| true,
             &|_ty_var| {},
             &mut || {
@@ -562,7 +561,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                                 self.assert_local_free();
                                 self.matching.locals.backtrack(
                                     pat::Local::ZERO,
-                                    &|local, cand| self.match_local_ty(
+                                    &|local, cand| self.match_ty(
                                         self.cx.mir_pat.locals[local],
                                         self.cx.body.local_decls[cand].ty,
                                     ),
@@ -597,19 +596,10 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         for &cand in &self.matching[loc_pat].candidates {
             let _span = debug_span!("match_stmt_candidate", ?loc_pat, ?cand).entered();
             if self.match_stmt(loc_pat, cand) {
-                // recursion
                 ensure_sufficient_stack(|| self.match_stmt_candidates(loc_pats));
-                // backtrack, clear status
                 self.unmatch_stmt(loc_pat);
             }
         }
-    }
-
-    fn loc_pats(&self) -> impl Iterator<Item = pat::Location> + use<'_> {
-        self.matching
-            .basic_blocks
-            .iter_enumerated()
-            .flat_map(|(bb, block)| (0..block.statements.len()).map(move |stmt| (bb, stmt).into_location()))
     }
 
     /// Used in [`MatchCtxt::match_candidates`].
@@ -621,17 +611,16 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     /// - `false` if the statement is not matched. Nothing should be changed.
     #[instrument(level = "debug", skip(self), ret)]
     fn match_stmt(&self, loc_pat: pat::Location, stmt_match: StatementMatch) -> bool {
-        self.match_stmt_inner(loc_pat, stmt_match)
-            && if let StatementMatch::Location(loc) = stmt_match {
-                let bb = &self.matching.mir_statements[loc.block];
-                bb.r#match(loc_pat, loc)
-            } else {
-                true
+        if !self.match_stmt_inner(loc_pat, stmt_match) {
+            return false;
+        }
+        if let StatementMatch::Location(loc) = stmt_match {
+            if !self.matching.mir_statements[loc.block].r#match(loc_pat, loc) {
+                return false;
             }
-            && {
-                self.matching[loc_pat].matched.set(Some(stmt_match));
-                true
-            }
+        }
+        self.matching[loc_pat].matched.set(Some(stmt_match));
+        true
     }
     #[instrument(level = "debug", skip(self))]
     fn unmatch_stmt(&self, loc_pat: pat::Location) {
@@ -649,30 +638,19 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         let pat_block = &self.cx.fn_pat.expect_body()[loc_pat.block];
         debug_assert!(loc_pat.statement_index <= pat_block.statements.len());
         match stmt_match {
-            StatementMatch::Arg(arg) => {
-                if loc_pat.statement_index == pat_block.statements.len() {
-                    // An argument does not match the end of a basic block in the pattern.
-                    false
-                } else {
-                    let pat_stmt = &pat_block.statements[loc_pat.statement_index];
-                    match pat_stmt {
-                        pat::StatementKind::Assign(place, value) => {
-                            place
-                                .as_local()
-                                .is_some_and(|local_pat| self.matching.locals.force_get(local_pat) == arg)
-                                && matches!(value, pat::Rvalue::Any)
-                        },
-                        pat::StatementKind::Intrinsic(_) => false,
-                    }
-                }
-            },
             StatementMatch::Location(loc) => self.match_statement_or_terminator(loc_pat, loc),
+            StatementMatch::Arg(arg) => {
+                // An argument does not match a terminator position.
+                let Some(pat_stmt) = pat_block.statements.get(loc_pat.statement_index) else {
+                    return false;
+                };
+                matches!(
+                    pat_stmt,
+                    pat::StatementKind::Assign(place, pat::Rvalue::Any)
+                        if place.as_local().is_some_and(|local_pat| self.matching.locals.force_get(local_pat) == arg)
+                )
+            },
         }
-    }
-
-    #[instrument(level = "debug", skip(self), ret)]
-    fn match_local_ty(&self, ty_pat: pat::Ty<'pcx>, ty: Ty<'tcx>) -> bool {
-        self.match_ty(ty_pat, ty)
     }
 
     fn unmatch_stmt_adt_matches(&self, loc_pat: pat::Location) {
@@ -712,10 +690,16 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             self.cx.unmatch_place(place_pat, place);
         }
     }
-
 }
 
 impl<'tcx> Matching<'tcx> {
+    /// Iterate over all pattern locations across all blocks.
+    fn loc_pats(&self) -> impl Iterator<Item = pat::Location> + use<'_> {
+        self.basic_blocks
+            .iter_enumerated()
+            .flat_map(|(bb, block)| (0..block.statements.len()).map(move |stmt| (bb, stmt).into_location()))
+    }
+
     /// Test if there are any empty candidates in the matches.
     fn has_empty_candidates(&self, cx: &MatchContext<'_, '_, 'tcx>) -> bool {
         self.basic_blocks
@@ -859,12 +843,13 @@ struct StatementMatches {
 }
 
 impl StatementMatches {
-    /// Test if there are any empty candidates in the matches.
+    /// Returns `true` if there are no candidates.
+    /// As a side effect, if there is exactly one candidate, it is pre-assigned
+    /// as the match (since it is the only possibility).
     fn has_empty_candidates(&self) -> bool {
         if let &[m] = &self.candidates[..] {
             self.matched.set(Some(m));
         }
-
         self.candidates.is_empty()
     }
 
@@ -901,14 +886,6 @@ impl IntoLocation for (pat::BasicBlock, usize) {
             block: self.0,
             statement_index: self.1,
         }
-    }
-}
-
-impl IntoLocation for mir::Location {
-    type Location = mir::Location;
-
-    fn into_location(self) -> Self::Location {
-        self
     }
 }
 

@@ -52,9 +52,7 @@ impl<T: Copy + PartialEq> VarSlot<T> {
 
 /// A domain of matchable variables of the same kind.
 ///
-/// This is the core generic type that replaces the duplicated
-/// TyVarMatches, ConstVarMatches, PlaceVarMatches, and LocalMatches types.
-/// Each domain encapsulates a set of indexed variables along with their
+/// Encapsulates a set of indexed variables along with their
 /// candidate values from the target MIR.
 pub struct VarDomain<I: Idx, T: Copy + PartialEq> {
     pub(crate) vars: IndexVec<I, VarSlot<T>>,

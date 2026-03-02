@@ -65,7 +65,6 @@ impl<'pcx, 'tcx> MatchStatement<'pcx, 'tcx> for MatchCtxt<'_, 'pcx, 'tcx> {
 
     fn get_place_ty_from_place_var(&self, var: pat::PlaceVarIdx) -> pat::PlaceTy<'pcx> {
         self.cx.get_place_ty_from_place_var(var)
-        // pat::PlaceTy::from_ty(var.ty)
     }
 }
 
