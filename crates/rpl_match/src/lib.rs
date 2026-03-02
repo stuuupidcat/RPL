@@ -40,6 +40,7 @@ pub mod mir; // FIXME: visibility
 mod place;
 pub mod predicate_evaluator;
 pub mod resolve;
+pub mod solver;
 mod statement;
 mod ty;
 
