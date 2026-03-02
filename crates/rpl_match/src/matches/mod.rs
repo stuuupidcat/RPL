@@ -9,7 +9,7 @@ use rpl_mir_graph::TerminatorEdges;
 use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_hir::FnDecl;
 use rustc_index::bit_set::MixedBitSet;
-use rustc_index::{Idx, IndexVec};
+use rustc_index::IndexVec;
 use rustc_middle::mir::visit::PlaceContext;
 use rustc_middle::mir::{self, PlaceRef};
 use rustc_middle::ty::Ty;
@@ -162,7 +162,7 @@ pub fn matches<'tcx>(cx: &CheckMirCtxt<'_, '_, 'tcx>) -> Vec<Matched<'tcx>> {
 #[derive(Debug)]
 struct Matching<'tcx> {
     basic_blocks: IndexVec<pat::BasicBlock, MatchingBlock>,
-    locals: IndexVec<pat::Local, LocalMatches>,
+    locals: VarDomain<pat::Local, mir::Local>,
     ty_vars: VarDomain<pat::TyVarIdx, Ty<'tcx>>,
     const_vars: VarDomain<pat::ConstVarIdx, Const<'tcx>>,
     place_vars: VarDomain<pat::PlaceVarIdx, PlaceRef<'tcx>>,
@@ -187,10 +187,10 @@ impl Index<pat::Location> for Matching<'_> {
 }
 
 impl Index<pat::Local> for Matching<'_> {
-    type Output = LocalMatches;
+    type Output = VarSlot<mir::Local>;
 
     fn index(&self, local: pat::Local) -> &Self::Output {
-        &self.locals[local]
+        &self.locals.vars[local]
     }
 }
 
@@ -387,7 +387,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                 },
                 num_blocks,
             ),
-            locals: IndexVec::from_fn_n(|_| LocalMatches::new(cx.body.local_decls.len()), num_locals),
+            locals: VarDomain::new(num_locals),
             ty_vars: VarDomain::new(cx.fn_pat.meta.ty_vars.len()),
             const_vars: VarDomain::new(cx.fn_pat.meta.const_vars.len()),
             place_vars: VarDomain::new(cx.fn_pat.meta.place_vars.len()),
@@ -464,14 +464,15 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                 }
             }
         }
-        for ((local_pat, candidates), matches) in
-            core::iter::zip(self.cx.locals.iter_enumerated(), &mut self.matching.locals)
+        for ((local_pat, candidates), slot) in
+            core::iter::zip(self.cx.locals.iter_enumerated(), &mut self.matching.locals.vars)
         {
-            matches.candidates = std::mem::replace(
+            let bitset = std::mem::replace(
                 &mut *candidates.borrow_mut(),
                 MixedBitSet::new_empty(self.cx.body.local_decls.len()),
             );
-            if matches.candidates.is_empty() {
+            slot.candidates = bitset.iter().collect();
+            if slot.candidates.is_empty() {
                 continue;
             }
             // If the local variable is the `self` parameter or the `RET` place, we only need to match the
@@ -483,11 +484,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             } else {
                 continue;
             };
-            let has_only_candidate = matches.candidates.remove(only_candidate);
-            matches.candidates.clear();
-            if has_only_candidate {
-                matches.candidates.insert(only_candidate);
-            }
+            slot.candidates.retain(|&l| l == only_candidate);
         }
         for (candidates, slot) in core::iter::zip(&self.cx.ty.ty_vars, &mut self.matching.ty_vars.vars) {
             slot.candidates = std::mem::take(&mut *candidates.borrow_mut()).into_iter().collect();
@@ -531,7 +528,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     }
     fn assert_local_free(&self) {
         #[cfg(feature = "strict")]
-        debug_assert!(self.matching.locals.iter().all(|c| c.get().is_none()));
+        debug_assert!(self.matching.locals.vars.iter().all(|c| c.get().is_none()));
     }
     fn assert_stmt_free(&self) {
         #[cfg(feature = "strict")]
@@ -570,7 +567,19 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                             &|_place_var| {},
                             &mut || {
                                 self.assert_local_free();
-                                self.match_local_candidates(pat::Local::ZERO, &loc_pats);
+                                self.matching.locals.backtrack(
+                                    pat::Local::ZERO,
+                                    &|local, cand| self.match_local_ty(
+                                        self.cx.mir_pat.locals[local],
+                                        self.cx.body.local_decls[cand].ty,
+                                    ),
+                                    &|_local| {},
+                                    &mut || {
+                                        self.assert_stmt_free();
+                                        self.match_stmt_candidates(&loc_pats);
+                                        self.assert_stmt_free();
+                                    },
+                                );
                                 self.assert_local_free();
                             },
                         );
@@ -581,23 +590,6 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             },
         );
         self.assert_ty_var_free();
-    }
-    fn match_local_candidates(&self, local: pat::Local, loc_pats: &[pat::Location]) {
-        if local == self.cx.mir_pat.locals.next_index() {
-            self.assert_stmt_free();
-            self.match_stmt_candidates(loc_pats);
-            self.assert_stmt_free();
-            return;
-        }
-        for cand in self.matching[local].candidates.iter() {
-            let _span = debug_span!("match_local_candidates", ?local, ?cand).entered();
-            if self.match_local(local, cand) {
-                // recursion
-                ensure_sufficient_stack(|| self.match_local_candidates(local.plus(1), loc_pats));
-                // backtrack, clear status
-                self.unmatch_local(local);
-            }
-        }
     }
     fn match_stmt_candidates(&self, loc_pats: &[pat::Location]) {
         let Some((&loc_pat, loc_pats)) = loc_pats.split_first() else {
@@ -810,7 +802,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     ) -> bool {
         pat_deps.all(|(dep_loc_pat, local_pat)| {
             let dep_loc_pat = dep_loc_pat.into_location();
-            let local = self.matching[local_pat].force_get_matched();
+            let local = self.matching.locals.force_get(local_pat);
             let dep_stmt = self.matching[dep_loc_pat].force_get_matched();
             let matched = match dep_stmt {
                 StatementMatch::Arg(l) => l == local,
@@ -928,7 +920,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                         pat::StatementKind::Assign(place, value) => {
                             place
                                 .as_local()
-                                .is_some_and(|local_pat| self.matching.locals[local_pat].force_get_matched() == arg)
+                                .is_some_and(|local_pat| self.matching.locals.force_get(local_pat) == arg)
                                 && matches!(value, pat::Rvalue::Any)
                         },
                         pat::StatementKind::Intrinsic(_) => false,
@@ -978,30 +970,6 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         // })
     }
 
-    /// Match a local variable in the pattern graph with a local variable in the MIR graph.
-    ///
-    /// # Returns
-    ///
-    /// - `true` if the local variable in the pattern graph matches the local variable in the MIR
-    ///   graph.
-    /// - `false` if the local variable in the pattern graph has already been matched with another
-    /// local variable in the MIR graph.
-    // Note this is different from `self.cx.match_local`, because we would store the matched result in
-    // this method.
-    #[instrument(level = "debug", skip(self), ret)]
-    fn match_local(&self, local_pat: pat::Local, local: mir::Local) -> bool {
-        if !self.match_local_ty(self.cx.mir_pat.locals[local_pat], self.cx.body.local_decls[local].ty) {
-            return false;
-        }
-        if self.matching[local_pat].matched.r#match(local) {
-            self.log_local_matched(local_pat, local);
-            true
-        } else {
-            self.log_local_conflicted(local_pat, local);
-            return false;
-        }
-        //FIXME: use a more elegant way to ensure that we reset the matching state when failing
-    }
     #[instrument(level = "debug", skip(self), ret)]
     fn match_local_ty(&self, ty_pat: pat::Ty<'pcx>, ty: Ty<'tcx>) -> bool {
         self.match_ty(ty_pat, ty)
@@ -1067,12 +1035,6 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         }
     }
 
-    #[instrument(level = "debug", skip(self))]
-    fn unmatch_local(&self, local_pat: pat::Local) {
-        self.matching[local_pat].matched.unmatch();
-    }
-
-
     fn log_stmt_matched(&self, loc_pat: impl IntoLocation<Location = pat::Location>, stmt_match: StatementMatch) {
         let loc_pat = loc_pat.into_location();
         debug!(
@@ -1107,8 +1069,8 @@ impl<'tcx> Matching<'tcx> {
         self.basic_blocks
             .iter_enumerated()
             .any(|(bb, matching)| matching.has_empty_candidates(cx, bb))
-            || self.locals.iter_enumerated().any(|(local, matching)| {
-                matching.has_empty_candidates() && {
+            || self.locals.vars.iter_enumerated().any(|(local, slot)| {
+                slot.has_empty_candidates() && {
                     info!("Local {local:?} has no candidates");
                     true
                 }
@@ -1127,8 +1089,8 @@ impl<'tcx> Matching<'tcx> {
             }
         }
         info!("pat local <-> mir candidate locals");
-        for (local, matches) in self.locals.iter_enumerated() {
-            info!("{local:?}: {:?}", matches.candidates);
+        for (local, slot) in self.locals.vars.iter_enumerated() {
+            info!("{local:?}: {:?}", slot.candidates);
         }
         info!("pat ty metavar <-> mir candidate types");
         for (ty_var, slot) in self.ty_vars.vars.iter_enumerated() {
@@ -1155,8 +1117,8 @@ impl<'tcx> Matching<'tcx> {
                 );
             }
         }
-        for (local, matches) in self.locals.iter_enumerated() {
-            info!("{local:?} <-> {:?}", matches.matched.get());
+        for (local, slot) in self.locals.vars.iter_enumerated() {
+            info!("{local:?} <-> {:?}", slot.get());
         }
         for (ty_var, slot) in self.ty_vars.vars.iter_enumerated() {
             info!("{ty_var:?}: {:?}", slot.get());
@@ -1175,15 +1137,7 @@ impl<'tcx> Matching<'tcx> {
             .iter_enumerated()
             .map(|(bb, matching)| matching.to_matched(bb))
             .collect();
-        let locals = self
-            .locals
-            .iter_enumerated()
-            .map(|(local_pat, matching)| {
-                matching
-                    .get()
-                    .unwrap_or_else(|| panic!("bug: local variable {local_pat:?} not matched"))
-            })
-            .collect();
+        let locals = self.locals.to_matched();
         let ty_vars = self.ty_vars.to_matched();
         let const_vars = self.const_vars.to_matched();
         let place_vars = self.place_vars.to_matched();
@@ -1273,37 +1227,6 @@ impl StatementMatches {
     #[track_caller]
     fn force_get_matched(&self) -> StatementMatch {
         self.matched.get().expect("bug: statement not matched")
-    }
-}
-
-#[derive(Debug)]
-struct LocalMatches {
-    matched: CountedMatch<mir::Local>,
-    candidates: MixedBitSet<mir::Local>,
-}
-
-impl LocalMatches {
-    fn new(num_locals: usize) -> Self {
-        Self {
-            matched: CountedMatch::default(),
-            candidates: MixedBitSet::new_empty(num_locals),
-        }
-    }
-
-    /// Test if there are any empty candidates in the matches.
-    fn has_empty_candidates(&self) -> bool {
-        self.candidates.is_empty()
-    }
-
-    fn get(&self) -> Option<mir::Local> {
-        self.matched.get()
-    }
-
-    // After `match_local_candidates`, all locals are supposed to be matched,
-    // so we can assume that `self.matched` is `Some`.
-    #[track_caller]
-    fn force_get_matched(&self) -> mir::Local {
-        self.matched.get().expect("bug: local not matched")
     }
 }
 

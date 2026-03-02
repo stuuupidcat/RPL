@@ -56,7 +56,7 @@ impl<'pcx, 'tcx> MatchStatement<'pcx, 'tcx> for MatchCtxt<'_, 'pcx, 'tcx> {
     }
 
     fn match_local(&self, pat: pat::Local, local: mir::Local) -> bool {
-        self.matching.locals[pat].force_get_matched() == local
+        self.matching.locals.force_get(pat) == local
     }
 
     fn match_place_var(&self, pat: pat::PlaceVarIdx, place: mir::PlaceRef<'tcx>) -> bool {
