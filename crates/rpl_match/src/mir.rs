@@ -17,9 +17,6 @@ use crate::statement::MatchStatement;
 use crate::ty::MatchTy as _;
 use crate::{MatchPlaceCtxt, MatchTyCtxt};
 
-/// The public entry point alias for downstream crates.
-pub type CheckMirCtxt<'a, 'pcx, 'tcx> = MatchContext<'a, 'pcx, 'tcx>;
-
 /// Read-only context for pattern matching against MIR.
 ///
 /// Holds all the immutable data needed for matching: the MIR body,
