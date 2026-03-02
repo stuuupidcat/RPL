@@ -16,7 +16,7 @@ use rustc_middle::ty::Ty;
 use rustc_span::{Span, Symbol};
 
 use crate::CountedMatch;
-use crate::mir::{CheckMirCtxt, pat};
+use crate::mir::{MatchContext, pat};
 use crate::solver::variable::{VarDomain, VarSlot};
 use crate::statement::MatchStatement as _;
 use crate::ty::MatchTy as _;
@@ -153,7 +153,7 @@ impl<'tcx> Index<pat::PlaceVarIdx> for Matched<'tcx> {
     }
 }
 
-pub fn matches<'tcx>(cx: &CheckMirCtxt<'_, '_, 'tcx>) -> Vec<Matched<'tcx>> {
+pub fn matches<'tcx>(cx: &MatchContext<'_, '_, 'tcx>) -> Vec<Matched<'tcx>> {
     let mut matching = MatchCtxt::new(cx);
     matching.do_match();
     matching.matched.take()
@@ -354,20 +354,20 @@ pub fn local_is_arg(local: mir::Local, body: &mir::Body<'_>) -> bool {
 }
 
 struct MatchCtxt<'a, 'pcx, 'tcx> {
-    cx: &'a CheckMirCtxt<'a, 'pcx, 'tcx>,
+    cx: &'a MatchContext<'a, 'pcx, 'tcx>,
     matching: Matching<'tcx>,
     matched: Cell<Vec<Matched<'tcx>>>,
 }
 
 impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
-    fn new(cx: &'a CheckMirCtxt<'a, 'pcx, 'tcx>) -> Self {
+    fn new(cx: &'a MatchContext<'a, 'pcx, 'tcx>) -> Self {
         Self {
             cx,
             matching: Self::new_checking(cx),
             matched: Cell::new(Vec::new()),
         }
     }
-    fn new_checking(cx: &'a CheckMirCtxt<'a, 'pcx, 'tcx>) -> Matching<'tcx> {
+    fn new_checking(cx: &'a MatchContext<'a, 'pcx, 'tcx>) -> Matching<'tcx> {
         let num_blocks = cx.mir_pat.basic_blocks.len();
         let num_locals = cx.mir_pat.locals.len();
         let mir_statements = IndexVec::from_fn_n(
@@ -1065,7 +1065,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
 
 impl<'tcx> Matching<'tcx> {
     /// Test if there are any empty candidates in the matches.
-    fn has_empty_candidates(&self, cx: &CheckMirCtxt<'_, '_, 'tcx>) -> bool {
+    fn has_empty_candidates(&self, cx: &MatchContext<'_, '_, 'tcx>) -> bool {
         self.basic_blocks
             .iter_enumerated()
             .any(|(bb, matching)| matching.has_empty_candidates(cx, bb))
@@ -1107,7 +1107,7 @@ impl<'tcx> Matching<'tcx> {
     }
 
     #[instrument(level = "info", skip_all)]
-    fn log_matched(&self, cx: &CheckMirCtxt<'_, '_, 'tcx>) {
+    fn log_matched(&self, cx: &MatchContext<'_, '_, 'tcx>) {
         for (bb, block) in self.basic_blocks.iter_enumerated() {
             for (index, stmt) in block.statements.iter().enumerate() {
                 info!(
@@ -1168,7 +1168,7 @@ impl MatchingBlock {
         }
     }
     /// Test if there are any empty candidates in the matches.
-    fn has_empty_candidates(&self, cx: &CheckMirCtxt<'_, '_, '_>, bb: pat::BasicBlock) -> bool {
+    fn has_empty_candidates(&self, cx: &MatchContext<'_, '_, '_>, bb: pat::BasicBlock) -> bool {
         self.statements
             .iter()
             .position(StatementMatches::has_empty_candidates)
