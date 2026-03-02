@@ -1,3 +1,5 @@
+use std::fmt;
+
 use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_index::{Idx, IndexVec};
 
@@ -8,6 +10,15 @@ use crate::CountedMatch;
 pub struct VarSlot<T: Copy + PartialEq> {
     pub(crate) matched: CountedMatch<T>,
     pub(crate) candidates: Vec<T>,
+}
+
+impl<T: Copy + PartialEq + fmt::Debug> fmt::Debug for VarSlot<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VarSlot")
+            .field("matched", &self.matched)
+            .field("candidates", &self.candidates)
+            .finish()
+    }
 }
 
 impl<T: Copy + PartialEq> VarSlot<T> {
@@ -47,6 +58,14 @@ impl<T: Copy + PartialEq> VarSlot<T> {
 /// candidate values from the target MIR.
 pub struct VarDomain<I: Idx, T: Copy + PartialEq> {
     pub(crate) vars: IndexVec<I, VarSlot<T>>,
+}
+
+impl<I: Idx, T: Copy + PartialEq + fmt::Debug> fmt::Debug for VarDomain<I, T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VarDomain")
+            .field("vars", &self.vars)
+            .finish()
+    }
 }
 
 impl<I: Idx, T: Copy + PartialEq> VarDomain<I, T> {

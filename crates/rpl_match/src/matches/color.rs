@@ -60,7 +60,7 @@ impl<'pcx, 'tcx> MatchStatement<'pcx, 'tcx> for MatchCtxt<'_, 'pcx, 'tcx> {
     }
 
     fn match_place_var(&self, pat: pat::PlaceVarIdx, place: mir::PlaceRef<'tcx>) -> bool {
-        self.matching.place_vars[pat].force_get_matched() == place
+        self.matching.place_vars.force_get(pat) == place
     }
 
     fn get_place_ty_from_place_var(&self, var: pat::PlaceVarIdx) -> pat::PlaceTy<'pcx> {
@@ -91,7 +91,7 @@ impl<'pcx, 'tcx> MatchTy<'pcx, 'tcx> for MatchCtxt<'_, 'pcx, 'tcx> {
     }
 
     fn match_ty_var(&self, ty_var: pat::TyVar, ty: ty::Ty<'tcx>) -> bool {
-        self.matching.ty_vars[ty_var.idx].force_get_matched() == ty
+        self.matching.ty_vars.force_get(ty_var.idx) == ty
     }
 
     #[instrument(level = "trace", skip(self), ret)]
@@ -101,13 +101,13 @@ impl<'pcx, 'tcx> MatchTy<'pcx, 'tcx> for MatchCtxt<'_, 'pcx, 'tcx> {
                 let ty = param.find_ty_from_env(self.cx.typing_env().param_env);
                 self.match_ty(const_var.ty, ty) && {
                     // We can't convert a const generic param into a `mir::Const`
-                    self.matching.const_vars[const_var.idx].force_get_matched() == Const::Param(param)
+                    self.matching.const_vars.force_get(const_var.idx) == Const::Param(param)
                 }
             },
             ty::ConstKind::Value(value) => {
                 self.match_ty(const_var.ty, value.ty) && {
                     let const_value = self.cx.tcx().valtree_to_const_val(value);
-                    self.matching.const_vars[const_var.idx].force_get_matched()
+                    self.matching.const_vars.force_get(const_var.idx)
                         == Const::MIR(mir::Const::from_value(const_value, value.ty))
                 }
             },
@@ -116,7 +116,7 @@ impl<'pcx, 'tcx> MatchTy<'pcx, 'tcx> for MatchCtxt<'_, 'pcx, 'tcx> {
     }
 
     fn match_mir_const_var(&self, const_var: pat::ConstVar<'pcx>, konst: mir::Const<'tcx>) -> bool {
-        self.matching.const_vars[const_var.idx].force_get_matched() == Const::MIR(konst)
+        self.matching.const_vars.force_get(const_var.idx) == Const::MIR(konst)
     }
 
     fn match_adt_matches(&self, pat: rustc_span::Symbol, adt_match: crate::AdtMatch<'tcx>) -> bool {

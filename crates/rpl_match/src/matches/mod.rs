@@ -6,7 +6,6 @@ use rpl_constraints::Const;
 use rpl_constraints::attributes::ExtraSpan;
 use rpl_context::pat::{LabelMap, Spanned};
 use rpl_mir_graph::TerminatorEdges;
-use rustc_data_structures::fx::FxIndexSet;
 use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_hir::FnDecl;
 use rustc_index::bit_set::MixedBitSet;
@@ -18,6 +17,7 @@ use rustc_span::{Span, Symbol};
 
 use crate::CountedMatch;
 use crate::mir::{CheckMirCtxt, pat};
+use crate::solver::variable::{VarDomain, VarSlot};
 use crate::statement::MatchStatement as _;
 use crate::ty::MatchTy as _;
 
@@ -163,9 +163,9 @@ pub fn matches<'tcx>(cx: &CheckMirCtxt<'_, '_, 'tcx>) -> Vec<Matched<'tcx>> {
 struct Matching<'tcx> {
     basic_blocks: IndexVec<pat::BasicBlock, MatchingBlock>,
     locals: IndexVec<pat::Local, LocalMatches>,
-    ty_vars: IndexVec<pat::TyVarIdx, TyVarMatches<'tcx>>,
-    const_vars: IndexVec<pat::ConstVarIdx, ConstVarMatches<'tcx>>,
-    place_vars: IndexVec<pat::PlaceVarIdx, PlaceVarMatches<'tcx>>,
+    ty_vars: VarDomain<pat::TyVarIdx, Ty<'tcx>>,
+    const_vars: VarDomain<pat::ConstVarIdx, Const<'tcx>>,
+    place_vars: VarDomain<pat::PlaceVarIdx, PlaceRef<'tcx>>,
     /// Track which pattern statement the statement is matched to.
     mir_statements: IndexVec<mir::BasicBlock, MirStatementBackMatch>,
 }
@@ -195,39 +195,28 @@ impl Index<pat::Local> for Matching<'_> {
 }
 
 impl<'tcx> Index<pat::TyVarIdx> for Matching<'tcx> {
-    type Output = TyVarMatches<'tcx>;
+    type Output = VarSlot<Ty<'tcx>>;
 
     fn index(&self, ty_var: pat::TyVarIdx) -> &Self::Output {
-        &self.ty_vars[ty_var]
+        &self.ty_vars.vars[ty_var]
     }
 }
 
 impl<'tcx> Index<pat::ConstVarIdx> for Matching<'tcx> {
-    type Output = ConstVarMatches<'tcx>;
+    type Output = VarSlot<Const<'tcx>>;
 
     fn index(&self, const_var: pat::ConstVarIdx) -> &Self::Output {
-        &self.const_vars[const_var]
+        &self.const_vars.vars[const_var]
     }
 }
 
 impl<'tcx> Index<pat::PlaceVarIdx> for Matching<'tcx> {
-    type Output = PlaceVarMatches<'tcx>;
+    type Output = VarSlot<PlaceRef<'tcx>>;
 
     fn index(&self, place_var: pat::PlaceVarIdx) -> &Self::Output {
-        &self.place_vars[place_var]
+        &self.place_vars.vars[place_var]
     }
 }
-
-// impl<'tcx> Index<pat::PlaceBase> for Matching<'tcx> {
-//     type Output = PlaceVarMatches<'tcx>;
-
-//     fn index(&self, place_base: pat::PlaceBase) -> &Self::Output {
-//         match place_base {
-//             pat::PlaceBase::Local(local) => &self.locals[local],
-//             pat::PlaceBase::Var(place_var) => &self.place_vars[place_var],
-//         }
-//     }
-// }
 
 #[derive(Debug)]
 struct MirStatementBackMatch {
@@ -399,9 +388,9 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                 num_blocks,
             ),
             locals: IndexVec::from_fn_n(|_| LocalMatches::new(cx.body.local_decls.len()), num_locals),
-            ty_vars: IndexVec::from_fn_n(|_| TyVarMatches::new(), cx.fn_pat.meta.ty_vars.len()),
-            const_vars: IndexVec::from_fn_n(|_| ConstVarMatches::new(), cx.fn_pat.meta.const_vars.len()),
-            place_vars: IndexVec::from_fn_n(|_| PlaceVarMatches::new(), cx.fn_pat.meta.place_vars.len()),
+            ty_vars: VarDomain::new(cx.fn_pat.meta.ty_vars.len()),
+            const_vars: VarDomain::new(cx.fn_pat.meta.const_vars.len()),
+            place_vars: VarDomain::new(cx.fn_pat.meta.place_vars.len()),
             mir_statements,
         }
     }
@@ -500,14 +489,14 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                 matches.candidates.insert(only_candidate);
             }
         }
-        for (candidates, matches) in core::iter::zip(&self.cx.ty.ty_vars, &mut self.matching.ty_vars) {
-            matches.candidates = std::mem::take(&mut *candidates.borrow_mut());
+        for (candidates, slot) in core::iter::zip(&self.cx.ty.ty_vars, &mut self.matching.ty_vars.vars) {
+            slot.candidates = std::mem::take(&mut *candidates.borrow_mut()).into_iter().collect();
         }
-        for (candidates, matches) in core::iter::zip(&self.cx.ty.const_vars, &mut self.matching.const_vars) {
-            matches.candidates = std::mem::take(&mut *candidates.borrow_mut());
+        for (candidates, slot) in core::iter::zip(&self.cx.ty.const_vars, &mut self.matching.const_vars.vars) {
+            slot.candidates = std::mem::take(&mut *candidates.borrow_mut()).into_iter().collect();
         }
-        for (candidates, matches) in core::iter::zip(&self.cx.places, &mut self.matching.place_vars) {
-            matches.candidates = std::mem::take(&mut *candidates.borrow_mut());
+        for (candidates, slot) in core::iter::zip(&self.cx.places, &mut self.matching.place_vars.vars) {
+            slot.candidates = std::mem::take(&mut *candidates.borrow_mut()).into_iter().collect();
         }
     }
     #[instrument(level = "info", skip(self), fields(?pat_name = self.cx.pat_name, ?fn_name = self.cx.fn_pat.name))]
@@ -530,15 +519,15 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     }
     fn assert_ty_var_free(&self) {
         #[cfg(feature = "strict")]
-        debug_assert!(self.matching.ty_vars.iter().all(|c| c.get().is_none()));
+        debug_assert!(self.matching.ty_vars.vars.iter().all(|c| c.get().is_none()));
     }
     fn assert_const_var_free(&self) {
         #[cfg(feature = "strict")]
-        debug_assert!(self.matching.const_vars.iter().all(|c| c.get().is_none()));
+        debug_assert!(self.matching.const_vars.vars.iter().all(|c| c.get().is_none()));
     }
     fn assert_place_var_free(&self) {
         #[cfg(feature = "strict")]
-        debug_assert!(self.matching.place_vars.iter().all(|c| c.get().is_none()));
+        debug_assert!(self.matching.place_vars.vars.iter().all(|c| c.get().is_none()));
     }
     fn assert_local_free(&self) {
         #[cfg(feature = "strict")]
@@ -559,62 +548,39 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     fn match_candidates(&self) {
         let loc_pats = self.loc_pats().collect::<Vec<_>>();
         self.assert_ty_var_free();
-        self.match_ty_var_candidates(pat::TyVarIdx::ZERO, &loc_pats);
+        self.matching.ty_vars.backtrack(
+            pat::TyVarIdx::ZERO,
+            // CountedMatch is managed internally by VarDomain::backtrack
+            &|_ty_var, _cand| true,
+            &|_ty_var| {},
+            &mut || {
+                if !self.match_ret_ty() {
+                    return;
+                }
+                self.assert_const_var_free();
+                self.matching.const_vars.backtrack(
+                    pat::ConstVarIdx::ZERO,
+                    &|_const_var, _cand| true,
+                    &|_const_var| {},
+                    &mut || {
+                        self.assert_place_var_free();
+                        self.matching.place_vars.backtrack(
+                            pat::PlaceVarIdx::ZERO,
+                            &|_place_var, _cand| true,
+                            &|_place_var| {},
+                            &mut || {
+                                self.assert_local_free();
+                                self.match_local_candidates(pat::Local::ZERO, &loc_pats);
+                                self.assert_local_free();
+                            },
+                        );
+                        self.assert_place_var_free();
+                    },
+                );
+                self.assert_const_var_free();
+            },
+        );
         self.assert_ty_var_free();
-    }
-    fn match_ty_var_candidates(&self, ty_var: pat::TyVarIdx, loc_pats: &[pat::Location]) {
-        if ty_var == self.cx.fn_pat.meta.ty_vars.next_index() {
-            if !self.match_ret_ty() {
-                return;
-            }
-            self.assert_const_var_free();
-            self.match_const_var_candidates(pat::ConstVarIdx::ZERO, loc_pats);
-            self.assert_const_var_free();
-            return;
-        }
-        for &cand in &self.matching[ty_var].candidates {
-            let _span = debug_span!("match_ty_var_candidates", ?ty_var, ?cand).entered();
-            if self.match_ty_var(ty_var, cand) {
-                // recursion
-                ensure_sufficient_stack(|| self.match_ty_var_candidates(ty_var.plus(1), loc_pats));
-                // backtrack, clear status
-                self.unmatch_ty_var(ty_var);
-            }
-        }
-    }
-    fn match_const_var_candidates(&self, const_var: pat::ConstVarIdx, loc_pats: &[pat::Location]) {
-        if const_var == self.cx.fn_pat.meta.const_vars.next_index() {
-            self.assert_place_var_free();
-            self.match_place_var_candidates(pat::PlaceVarIdx::ZERO, loc_pats);
-            self.assert_place_var_free();
-            return;
-        }
-        for &cand in &self.matching[const_var].candidates {
-            let _span = debug_span!("match_const_var_candidates", ?const_var, ?cand).entered();
-            if self.match_const_var(const_var, cand) {
-                // recursion
-                ensure_sufficient_stack(|| self.match_const_var_candidates(const_var.plus(1), loc_pats));
-                // backtrack, clear status
-                self.unmatch_const_var(const_var);
-            }
-        }
-    }
-    fn match_place_var_candidates(&self, place_var: pat::PlaceVarIdx, loc_pats: &[pat::Location]) {
-        if place_var == self.cx.fn_pat.meta.place_vars.next_index() {
-            self.assert_local_free();
-            self.match_local_candidates(pat::Local::ZERO, loc_pats);
-            self.assert_local_free();
-            return;
-        }
-        for &cand in &self.matching[place_var].candidates {
-            let _span = debug_span!("match_place_var_candidates", ?place_var, ?cand).entered();
-            if self.match_place_var(place_var, cand) {
-                // recursion
-                ensure_sufficient_stack(|| self.match_place_var_candidates(place_var.plus(1), loc_pats));
-                // backtrack, clear status
-                self.unmatch_place_var(place_var);
-            }
-        }
     }
     fn match_local_candidates(&self, local: pat::Local, loc_pats: &[pat::Location]) {
         if local == self.cx.mir_pat.locals.next_index() {
@@ -1057,18 +1023,6 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         //         ty_var_matched == ty
         //     })
     }
-    #[instrument(level = "debug", skip(self), ret)]
-    fn match_ty_var(&self, ty_var: pat::TyVarIdx, ty: Ty<'tcx>) -> bool {
-        self.matching[ty_var].matched.r#match(ty)
-    }
-    #[instrument(level = "debug", skip(self), ret)]
-    fn match_const_var(&self, const_var: pat::ConstVarIdx, konst: Const<'tcx>) -> bool {
-        self.matching[const_var].matched.r#match(konst)
-    }
-    #[instrument(level = "debug", skip(self), ret)]
-    fn match_place_var(&self, place_var: pat::PlaceVarIdx, place: PlaceRef<'tcx>) -> bool {
-        self.matching[place_var].matched.r#match(place)
-    }
     // #[instrument(level = "debug", skip(self))]
     // fn unmatch_stmt_locals(&self, loc_pat: pat::Location) {
     //     for &(local_pat, _) in self.cx.pat_ddg[loc_pat.block].accesses(loc_pat.statement_index) {
@@ -1118,20 +1072,6 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         self.matching[local_pat].matched.unmatch();
     }
 
-    #[instrument(level = "debug", skip(self))]
-    fn unmatch_ty_var(&self, ty_var: pat::TyVarIdx) {
-        self.matching[ty_var].matched.unmatch();
-    }
-
-    #[instrument(level = "debug", skip(self))]
-    fn unmatch_const_var(&self, const_var: pat::ConstVarIdx) {
-        self.matching[const_var].matched.unmatch();
-    }
-
-    #[instrument(level = "debug", skip(self))]
-    fn unmatch_place_var(&self, place_var: pat::PlaceVarIdx) {
-        self.matching[place_var].matched.unmatch();
-    }
 
     fn log_stmt_matched(&self, loc_pat: impl IntoLocation<Location = pat::Location>, stmt_match: StatementMatch) {
         let loc_pat = loc_pat.into_location();
@@ -1174,7 +1114,7 @@ impl<'tcx> Matching<'tcx> {
                 }
             })
         // may declare a type variable without using it.
-        // || self.ty_vars.iter().any(TyVarMatches::has_empty_candidates)
+        // || self.ty_vars.has_empty_candidates()
     }
 
     #[instrument(level = "info", skip(self))]
@@ -1191,16 +1131,16 @@ impl<'tcx> Matching<'tcx> {
             info!("{local:?}: {:?}", matches.candidates);
         }
         info!("pat ty metavar <-> mir candidate types");
-        for (ty_var, matches) in self.ty_vars.iter_enumerated() {
-            info!("{ty_var:?}: {:?}", matches.candidates);
+        for (ty_var, slot) in self.ty_vars.vars.iter_enumerated() {
+            info!("{ty_var:?}: {:?}", slot.candidates);
         }
         info!("pat const metavar <-> mir candidate constants");
-        for (const_var, matches) in self.const_vars.iter_enumerated() {
-            info!("{const_var:?}: {:?}", matches.candidates);
+        for (const_var, slot) in self.const_vars.vars.iter_enumerated() {
+            info!("{const_var:?}: {:?}", slot.candidates);
         }
         info!("pat place metavar <-> mir candidate places");
-        for (place_var, matches) in self.place_vars.iter_enumerated() {
-            info!("{place_var:?}: {:?}", matches.candidates);
+        for (place_var, slot) in self.place_vars.vars.iter_enumerated() {
+            info!("{place_var:?}: {:?}", slot.candidates);
         }
     }
 
@@ -1218,14 +1158,14 @@ impl<'tcx> Matching<'tcx> {
         for (local, matches) in self.locals.iter_enumerated() {
             info!("{local:?} <-> {:?}", matches.matched.get());
         }
-        for (ty_var, matches) in self.ty_vars.iter_enumerated() {
-            info!("{ty_var:?}: {:?}", matches.matched.get());
+        for (ty_var, slot) in self.ty_vars.vars.iter_enumerated() {
+            info!("{ty_var:?}: {:?}", slot.get());
         }
-        for (const_var, matches) in self.const_vars.iter_enumerated() {
-            info!("{const_var:?}: {:?}", matches.matched.get());
+        for (const_var, slot) in self.const_vars.vars.iter_enumerated() {
+            info!("{const_var:?}: {:?}", slot.get());
         }
-        for (place_var, matches) in self.place_vars.iter_enumerated() {
-            info!("{place_var:?}: {:?}", matches.matched.get());
+        for (place_var, slot) in self.place_vars.vars.iter_enumerated() {
+            info!("{place_var:?}: {:?}", slot.get());
         }
     }
 
@@ -1244,33 +1184,9 @@ impl<'tcx> Matching<'tcx> {
                     .unwrap_or_else(|| panic!("bug: local variable {local_pat:?} not matched"))
             })
             .collect();
-        let ty_vars = self
-            .ty_vars
-            .iter_enumerated()
-            .map(|(ty_var, matching)| {
-                matching
-                    .get()
-                    .unwrap_or_else(|| panic!("bug: type variable {ty_var:?} not matched"))
-            })
-            .collect();
-        let const_vars = self
-            .const_vars
-            .iter_enumerated()
-            .map(|(const_var, matching)| {
-                matching
-                    .get()
-                    .unwrap_or_else(|| panic!("bug: type variable {const_var:?} not matched"))
-            })
-            .collect();
-        let place_vars = self
-            .place_vars
-            .iter_enumerated()
-            .map(|(place_var, matching)| {
-                matching
-                    .get()
-                    .unwrap_or_else(|| panic!("bug: place variable {place_var:?} not matched"))
-            })
-            .collect();
+        let ty_vars = self.ty_vars.to_matched();
+        let const_vars = self.const_vars.to_matched();
+        let place_vars = self.place_vars.to_matched();
 
         Matched {
             basic_blocks,
@@ -1388,93 +1304,6 @@ impl LocalMatches {
     #[track_caller]
     fn force_get_matched(&self) -> mir::Local {
         self.matched.get().expect("bug: local not matched")
-    }
-}
-
-#[derive(Default, Debug)]
-struct TyVarMatches<'tcx> {
-    matched: CountedMatch<Ty<'tcx>>,
-    candidates: FxIndexSet<Ty<'tcx>>,
-}
-
-impl<'tcx> TyVarMatches<'tcx> {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn get(&self) -> Option<Ty<'tcx>> {
-        self.matched.get()
-    }
-
-    /// Test if there are any empty candidates in the matches.
-    #[allow(unused)]
-    fn has_empty_candidates(&self) -> bool {
-        self.candidates.is_empty()
-    }
-
-    // After `match_ty_var_candidates`, all type variables are supposed to be matched,
-    // so we can assume that `self.matched` is `Some`.
-    #[track_caller]
-    fn force_get_matched(&self) -> Ty<'tcx> {
-        self.matched.get().expect("bug: type variable not matched")
-    }
-}
-
-#[derive(Default, Debug)]
-struct ConstVarMatches<'tcx> {
-    matched: CountedMatch<Const<'tcx>>,
-    candidates: FxIndexSet<Const<'tcx>>,
-}
-
-impl<'tcx> ConstVarMatches<'tcx> {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn get(&self) -> Option<Const<'tcx>> {
-        self.matched.get()
-    }
-
-    /// Test if there are any empty candidates in the matches.
-    #[allow(unused)]
-    fn has_empty_candidates(&self) -> bool {
-        self.candidates.is_empty()
-    }
-
-    // After `match_const_var_candidates`, all const variables are supposed to be matched,
-    // so we can assume that `self.matched` is `Some`.
-    #[track_caller]
-    fn force_get_matched(&self) -> Const<'tcx> {
-        self.matched.get().expect("bug: const variable not matched")
-    }
-}
-
-#[derive(Default, Debug)]
-struct PlaceVarMatches<'tcx> {
-    matched: CountedMatch<PlaceRef<'tcx>>,
-    candidates: FxIndexSet<PlaceRef<'tcx>>,
-}
-
-impl<'tcx> PlaceVarMatches<'tcx> {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn get(&self) -> Option<PlaceRef<'tcx>> {
-        self.matched.get()
-    }
-
-    /// Test if there are any empty candidates in the matches.
-    #[allow(unused)]
-    fn has_empty_candidates(&self) -> bool {
-        self.candidates.is_empty()
-    }
-
-    // After `match_place_var_candidates`, all place variables are supposed to be matched,
-    // so we can assume that `self.matched` is `Some`.
-    #[track_caller]
-    fn force_get_matched(&self) -> PlaceRef<'tcx> {
-        self.matched.get().expect("bug: place variable not matched")
     }
 }
 
