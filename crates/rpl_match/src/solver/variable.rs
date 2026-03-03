@@ -21,6 +21,12 @@ impl<T: Copy + PartialEq + fmt::Debug> fmt::Debug for VarSlot<T> {
     }
 }
 
+impl<T: Copy + PartialEq> Default for VarSlot<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T: Copy + PartialEq> VarSlot<T> {
     pub fn new() -> Self {
         Self {
@@ -60,9 +66,7 @@ pub struct VarDomain<I: Idx, T: Copy + PartialEq> {
 
 impl<I: Idx, T: Copy + PartialEq + fmt::Debug> fmt::Debug for VarDomain<I, T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("VarDomain")
-            .field("vars", &self.vars)
-            .finish()
+        f.debug_struct("VarDomain").field("vars", &self.vars).finish()
     }
 }
 
@@ -75,15 +79,16 @@ impl<I: Idx, T: Copy + PartialEq> VarDomain<I, T> {
 
     pub fn from_candidates(candidates: impl IntoIterator<Item = Vec<T>>) -> Self {
         Self {
-            vars: candidates
-                .into_iter()
-                .map(VarSlot::with_candidates)
-                .collect(),
+            vars: candidates.into_iter().map(VarSlot::with_candidates).collect(),
         }
     }
 
     pub fn len(&self) -> usize {
         self.vars.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.vars.is_empty()
     }
 
     pub fn has_empty_candidates(&self) -> bool {
@@ -148,8 +153,9 @@ impl<I: Idx, T: Copy + PartialEq> VarDomain<I, T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use rustc_index::newtype_index;
+
+    use super::*;
 
     newtype_index! {
         struct TestIdx {}
@@ -190,14 +196,9 @@ mod tests {
     fn backtrack_single_var_single_candidate() {
         let domain = VarDomain::<TestIdx, u32>::from_candidates(vec![vec![42]]);
         let mut results = Vec::new();
-        domain.backtrack(
-            TestIdx::ZERO,
-            &|_var, _val| true,
-            &|_var| {},
-            &mut || {
-                results.push(domain.force_get(TestIdx::ZERO));
-            },
-        );
+        domain.backtrack(TestIdx::ZERO, &|_var, _val| true, &|_var| {}, &mut || {
+            results.push(domain.force_get(TestIdx::ZERO));
+        });
         assert_eq!(results, vec![42]);
     }
 
@@ -205,43 +206,27 @@ mod tests {
     fn backtrack_single_var_multiple_candidates() {
         let domain = VarDomain::<TestIdx, u32>::from_candidates(vec![vec![1, 2, 3]]);
         let mut results = Vec::new();
-        domain.backtrack(
-            TestIdx::ZERO,
-            &|_var, _val| true,
-            &|_var| {},
-            &mut || {
-                results.push(domain.force_get(TestIdx::ZERO));
-            },
-        );
+        domain.backtrack(TestIdx::ZERO, &|_var, _val| true, &|_var| {}, &mut || {
+            results.push(domain.force_get(TestIdx::ZERO));
+        });
         assert_eq!(results, vec![1, 2, 3]);
     }
 
     #[test]
     fn backtrack_two_vars_cartesian_product() {
-        let domain = VarDomain::<TestIdx, u32>::from_candidates(vec![
-            vec![1, 2],
-            vec![10, 20],
-        ]);
+        let domain = VarDomain::<TestIdx, u32>::from_candidates(vec![vec![1, 2], vec![10, 20]]);
         let mut results = Vec::new();
-        domain.backtrack(
-            TestIdx::ZERO,
-            &|_var, _val| true,
-            &|_var| {},
-            &mut || {
-                let a = domain.force_get(TestIdx::from_u32(0));
-                let b = domain.force_get(TestIdx::from_u32(1));
-                results.push((a, b));
-            },
-        );
+        domain.backtrack(TestIdx::ZERO, &|_var, _val| true, &|_var| {}, &mut || {
+            let a = domain.force_get(TestIdx::from_u32(0));
+            let b = domain.force_get(TestIdx::from_u32(1));
+            results.push((a, b));
+        });
         assert_eq!(results, vec![(1, 10), (1, 20), (2, 10), (2, 20)]);
     }
 
     #[test]
     fn backtrack_with_filtering() {
-        let domain = VarDomain::<TestIdx, u32>::from_candidates(vec![
-            vec![1, 2, 3],
-            vec![1, 2, 3],
-        ]);
+        let domain = VarDomain::<TestIdx, u32>::from_candidates(vec![vec![1, 2, 3], vec![1, 2, 3]]);
         let mut results = Vec::new();
         domain.backtrack(
             TestIdx::ZERO,
@@ -267,35 +252,21 @@ mod tests {
     #[test]
     fn backtrack_counted_match_allows_reuse() {
         // Two variables can match the same value (CountedMatch increments)
-        let domain = VarDomain::<TestIdx, u32>::from_candidates(vec![
-            vec![1],
-            vec![1],
-        ]);
+        let domain = VarDomain::<TestIdx, u32>::from_candidates(vec![vec![1], vec![1]]);
         let mut count = 0;
-        domain.backtrack(
-            TestIdx::ZERO,
-            &|_var, _val| true,
-            &|_var| {},
-            &mut || { count += 1; },
-        );
+        domain.backtrack(TestIdx::ZERO, &|_var, _val| true, &|_var| {}, &mut || {
+            count += 1;
+        });
         assert_eq!(count, 1);
     }
 
     #[test]
     fn to_matched_collects_all() {
-        let domain = VarDomain::<TestIdx, u32>::from_candidates(vec![
-            vec![10],
-            vec![20],
-        ]);
-        domain.backtrack(
-            TestIdx::ZERO,
-            &|_var, _val| true,
-            &|_var| {},
-            &mut || {
-                let matched = domain.to_matched();
-                assert_eq!(matched[TestIdx::from_u32(0)], 10);
-                assert_eq!(matched[TestIdx::from_u32(1)], 20);
-            },
-        );
+        let domain = VarDomain::<TestIdx, u32>::from_candidates(vec![vec![10], vec![20]]);
+        domain.backtrack(TestIdx::ZERO, &|_var, _val| true, &|_var| {}, &mut || {
+            let matched = domain.to_matched();
+            assert_eq!(matched[TestIdx::from_u32(0)], 10);
+            assert_eq!(matched[TestIdx::from_u32(1)], 20);
+        });
     }
 }

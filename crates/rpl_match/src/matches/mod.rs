@@ -7,8 +7,8 @@ use rpl_constraints::attributes::ExtraSpan;
 use rpl_context::pat::{LabelMap, Spanned};
 use rustc_data_structures::stack::ensure_sufficient_stack;
 use rustc_hir::FnDecl;
-use rustc_index::bit_set::MixedBitSet;
 use rustc_index::IndexVec;
+use rustc_index::bit_set::MixedBitSet;
 use rustc_middle::mir::visit::PlaceContext;
 use rustc_middle::mir::{self, PlaceRef};
 use rustc_middle::ty::Ty;
@@ -538,11 +538,9 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     fn match_candidates(&self) {
         let loc_pats = self.matching.loc_pats().collect::<Vec<_>>();
         self.assert_ty_var_free();
-        self.matching.ty_vars.backtrack(
-            pat::TyVarIdx::ZERO,
-            &|_ty_var, _cand| true,
-            &|_ty_var| {},
-            &mut || {
+        self.matching
+            .ty_vars
+            .backtrack(pat::TyVarIdx::ZERO, &|_ty_var, _cand| true, &|_ty_var| {}, &mut || {
                 if !self.match_ret_ty() {
                     return;
                 }
@@ -561,10 +559,9 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                                 self.assert_local_free();
                                 self.matching.locals.backtrack(
                                     pat::Local::ZERO,
-                                    &|local, cand| self.match_ty(
-                                        self.cx.mir_pat.locals[local],
-                                        self.cx.body.local_decls[cand].ty,
-                                    ),
+                                    &|local, cand| {
+                                        self.match_ty(self.cx.mir_pat.locals[local], self.cx.body.local_decls[cand].ty)
+                                    },
                                     &|_local| {},
                                     &mut || {
                                         self.assert_stmt_free();
@@ -579,8 +576,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
                     },
                 );
                 self.assert_const_var_free();
-            },
-        );
+            });
         self.assert_ty_var_free();
     }
     fn match_stmt_candidates(&self, loc_pats: &[pat::Location]) {
