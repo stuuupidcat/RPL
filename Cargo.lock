@@ -1590,6 +1590,7 @@ dependencies = [
 name = "rpl_interface"
 version = "0.1.0"
 dependencies = [
+ "rpl_config",
  "rpl_context",
  "rpl_driver",
  "rpl_match",
@@ -1624,6 +1625,7 @@ dependencies = [
  "pest_typed_derive",
  "pest_typed_generator",
  "pretty_assertions",
+ "regex",
  "rpl_constraints",
  "rpl_parser",
  "rpl_patterns",

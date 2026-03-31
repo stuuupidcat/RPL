@@ -27,6 +27,7 @@ extern crate itertools;
 pub mod arena;
 pub mod check;
 pub mod cli;
+pub mod expand;
 pub mod context;
 pub mod error;
 pub mod idx;

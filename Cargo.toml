@@ -65,6 +65,7 @@ pest_typed_generator = { version = "0.17.2", features = ["grammar-extras"] }
 pest_typed_derive = { version = "0.17.2", features = ["grammar-extras"] }
 colored = "3.0.0"
 error-enum = "0.4.1"
+regex = "1.5"
 schemars = "0.8.21"
 memmap = "0.5.0"
 pin-project = "1.0"
@@ -96,13 +97,14 @@ rpl_interface.workspace = true
 rpl_meta.workspace = true
 rpl_config.workspace = true
 rustc_tools_util.workspace = true
+serde_json.workspace = true
 color-print = "0.3.4"
 anstream = "0.6.0"
 
 [dev-dependencies]
 ui_test = "0.30.4"
 tester = "0.9"
-regex = "1.5"
+regex.workspace = true
 toml.workspace = true
 walkdir.workspace = true
 # This is used by the `collect-metadata` alias.
