@@ -1,10 +1,14 @@
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+mod operations;
 mod patterns;
 mod run;
 mod util;
+
+pub use operations::Operations;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -49,12 +53,14 @@ pub enum ConfigError {
 struct RplConfig {
     run: Option<run::RunConfig>,
     patterns: Option<patterns::PatternsConfig>,
+    operations: Option<HashMap<String, Vec<String>>>,
 }
 
 #[derive(Debug)]
 pub struct Config {
     pub patterns_env: Option<String>,
     pub inline_mir: Option<bool>,
+    pub operations: HashMap<String, Vec<String>>,
 }
 
 pub fn load_config(manifest_path: Option<&Path>, selected_groups: &[String]) -> Result<Config, ConfigError> {
@@ -67,8 +73,10 @@ pub fn load_config(manifest_path: Option<&Path>, selected_groups: &[String]) -> 
     };
     let inline_mir = run::load_inline_mir(config.as_ref());
     let patterns_env = patterns::load_patterns_env(manifest_path, selected_groups, config.as_ref())?;
+    let operations = operations::load_operations(config.as_ref());
     Ok(Config {
         patterns_env,
         inline_mir,
+        operations,
     })
 }
