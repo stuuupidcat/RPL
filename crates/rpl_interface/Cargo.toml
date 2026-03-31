@@ -8,6 +8,7 @@ keywords.workspace = true
 edition.workspace = true
 
 [dependencies]
+rpl_config.workspace = true
 rpl_context.workspace = true
 rpl_driver.workspace = true
 rpl_match.workspace = true

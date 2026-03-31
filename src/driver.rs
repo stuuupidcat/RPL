@@ -229,6 +229,12 @@ pub fn main() {
             },
         };
 
+        #[allow(rustc::default_hash_types)]
+        let operations: std::collections::HashMap<String, Vec<String>> = match env::var("RPL_OPS") {
+            Ok(val) => serde_json::from_str(&val).unwrap_or_default(),
+            Err(_) => Default::default(),
+        };
+
         let mut no_deps = false;
         let rpl_args_var = env::var(rpl_interface::RPL_ARGS_ENV).ok();
         let rpl_args = rpl_args_var
@@ -261,7 +267,7 @@ pub fn main() {
             /* rustc_driver::RunCompiler::new(&args, &mut RplCallbacks::new(rpl_args_var))
             .set_using_internal_features(using_internal_features)
             .run() */
-            rustc_driver::run_compiler(&args, &mut RplCallbacks::new(rpl_args_var, pattern_paths))
+            rustc_driver::run_compiler(&args, &mut RplCallbacks::new(rpl_args_var, pattern_paths, operations))
         } else {
             rustc_driver::run_compiler(&args, &mut RustcCallbacks::new(rpl_args_var))
         }

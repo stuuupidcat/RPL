@@ -190,6 +190,11 @@ where
     if let Some(inline_mir) = config.inline_mir {
         apply_inline_mir(&mut cmd, inline_mir);
     }
+    if !config.operations.is_empty() {
+        let ops_json = serde_json::to_string(&config.operations)
+            .expect("failed to serialize operations");
+        cmd.env("RPL_OPS", ops_json);
+    }
 
     let exit_status = cmd
         .spawn()

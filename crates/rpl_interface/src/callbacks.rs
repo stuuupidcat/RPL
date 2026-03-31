@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::OnceLock;
 
+use rpl_config::Operations;
 use rpl_context::PatternCtxt;
 use rpl_driver::{ERROR_FOUND, ErrorFound};
 #[cfg(feature = "timing")]
@@ -67,13 +68,19 @@ impl rustc_driver::Callbacks for DefaultCallbacks {}
 pub struct RplCallbacks {
     rpl_args_var: Option<String>,
     pattern_paths: Option<Vec<String>>,
+    operations: std::collections::HashMap<String, Vec<String>>,
 }
 
 impl RplCallbacks {
-    pub fn new(rpl_args_var: Option<String>, pattern_paths: Option<Vec<String>>) -> Self {
+    pub fn new(
+        rpl_args_var: Option<String>,
+        pattern_paths: Option<Vec<String>>,
+        operations: std::collections::HashMap<String, Vec<String>>,
+    ) -> Self {
         Self {
             rpl_args_var,
             pattern_paths,
+            operations,
         }
     }
 }
@@ -96,6 +103,38 @@ static MCTX_ARENA: OnceLock<rpl_meta::arena::Arena<'_>> = OnceLock::new();
 /// [`MetaContext`]: rpl_meta::context::MetaContext
 static MCTX: OnceLock<rpl_meta::context::MetaContext<'_>> = OnceLock::new();
 static PATTERNS: OnceLock<Vec<(PathBuf, String)>> = OnceLock::new();
+static OPERATIONS: OnceLock<Operations> = OnceLock::new();
+
+/// Expand `@op` references in all collected pattern sources.
+/// Patterns with undefined operations are dropped with a warning.
+fn expand_all_patterns(
+    patterns: Vec<(PathBuf, String)>,
+    operations: &Operations,
+) -> Vec<(PathBuf, String)> {
+    let mut expanded = Vec::new();
+    for (path, source) in patterns {
+        match rpl_meta::expand::expand_operations(&source, operations) {
+            Ok(variants) => {
+                for (suffix, variant_source) in variants {
+                    if suffix.is_empty() {
+                        expanded.push((path.clone(), variant_source));
+                    } else {
+                        let variant_path = path.with_extension(format!("{}.rpl", suffix));
+                        expanded.push((variant_path, variant_source));
+                    }
+                }
+            },
+            Err(undefined) => {
+                eprintln!(
+                    "warning: skipping pattern `{}`: undefined operations: {}",
+                    path.display(),
+                    undefined.join(", ")
+                );
+            },
+        }
+    }
+    expanded
+}
 
 impl rustc_driver::Callbacks for RplCallbacks {
     // JUSTIFICATION: necessary in RPL driver to set `mir_opt_level`
@@ -109,14 +148,17 @@ impl rustc_driver::Callbacks for RplCallbacks {
         config.locale_resources = crate::default_locale_resources();
 
         let mctx_arena = MCTX_ARENA.get_or_init(rpl_meta::arena::Arena::default);
+        let operations = OPERATIONS.get_or_init(|| std::mem::take(&mut self.operations));
         let patterns_and_paths = PATTERNS.get_or_init(|| {
-            self.pattern_paths
+            let raw = self
+                .pattern_paths
                 .as_ref()
                 .map_or_else(collect_default_patterns, |pattern_paths| {
                     collect_file_from_string_args(pattern_paths, || {
                         EarlyDiagCtxt::new(config.opts.error_format).early_fatal(ErrorFound)
                     })
-                })
+                });
+            expand_all_patterns(raw, operations)
         });
         // let dcx = compiler.sess.dcx();
         let mut error_counter = 0;
@@ -188,12 +230,15 @@ impl rustc_driver::Callbacks for RplCallbacks {
         let start = std::time::Instant::now();
 
         let mctx_arena = MCTX_ARENA.get_or_init(rpl_meta::arena::Arena::default);
+        let operations = OPERATIONS.get_or_init(Operations::default);
         let patterns_and_paths = PATTERNS.get_or_init(|| {
-            self.pattern_paths
+            let raw = self
+                .pattern_paths
                 .as_ref()
                 .map_or_else(collect_default_patterns, |pattern_paths| {
                     collect_file_from_string_args(pattern_paths, || tcx.dcx().emit_fatal(ErrorFound))
-                })
+                });
+            expand_all_patterns(raw, operations)
         });
 
         // let dcx = compiler.sess.dcx();
