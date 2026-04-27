@@ -575,7 +575,7 @@ impl<'pcx> Pattern<'pcx> {
         for item in ops_block.opsItem() {
             // -- 1. Group name (bare Identifier, no `$`).
             let group_name = Symbol::intern(item.Identifier().span.as_str());
-            let _span = item.span; // pest_typed span; DUMMY_SP used for now
+            let _span = item.span; // TODO(task-6): replace DUMMY_SP with a real rustc Span
 
             // -- 2. Pre-scan MetaVariableDeclList to build OpsMetaLookup.
             //    We need the lookup both for `NonLocalMetaVars::from_meta_decls`
@@ -622,12 +622,12 @@ impl<'pcx> Pattern<'pcx> {
                     }
                 });
 
-                let op_sig = OpSignature { name: op_name, params, ret, span: rustc_span::DUMMY_SP };
+                let op_sig = OpSignature { name: op_name, params, ret, span: rustc_span::DUMMY_SP }; // TODO(task-6): replace DUMMY_SP with a real rustc Span
                 ops.insert(op_name, op_sig);
             }
 
             // -- 5. Build OpGroup and insert.
-            let group = OpGroup { name: group_name, meta_vars: meta, ops, span: rustc_span::DUMMY_SP };
+            let group = OpGroup { name: group_name, meta_vars: meta, ops, span: rustc_span::DUMMY_SP }; // TODO(task-6): replace DUMMY_SP with a real rustc Span
             self.ops_block.groups.insert(group_name, group);
         }
     }
@@ -687,6 +687,18 @@ impl<'i> OpsMetaLookup<'i> {
     /// `opsItem`. Only `$T: type` style (type-kind) declarations are collected;
     /// const and place vars are skipped (they would panic if their types
     /// contained path identifiers, but that scenario is not supported yet).
+    ///
+    /// # Index-counter alignment with `NonLocalMetaVars`
+    ///
+    /// `NonLocalMetaVars::from_meta_decls` partitions declarations into three
+    /// separate buckets (type / const / place) and then pushes each bucket into
+    /// its own `IndexVec` in three independent passes — so type-var indices in
+    /// `NonLocalMetaVars` always start at 0 and count only type-kind decls.
+    /// This function counts `idx` the same way (incrementing only for
+    /// type-kind decls), so the `MetaVariable::Type(idx, …)` values we emit
+    /// for downstream consumers are aligned.  This is **Path A** from the
+    /// code-review checklist: the counter is correct as-is and must *not* be
+    /// changed to be unconditional.
     fn from_meta_decl_list(meta_decl_list: Option<&'i pairs::MetaVariableDeclList<'i>>) -> Self {
         let mut type_vars = Vec::new();
         if let Some(mdl) = meta_decl_list
@@ -698,6 +710,7 @@ impl<'i> OpsMetaLookup<'i> {
                 let (ident, _, ty, _) = decl.get_matched();
                 if matches!(ty.deref(), Choice3::_0(_)) {
                     // Type meta-variable: retain name with $ prefix for matching.
+                    // idx counts only type-kind decls — see alignment note above.
                     type_vars.push((ident.span.as_str(), idx));
                     idx += 1;
                 }
@@ -712,10 +725,14 @@ impl<'i> GetType<'i> for OpsMetaLookup<'i> {
         &self,
         ident: &WithPath<'i, &pairs::Identifier<'i>>,
     ) -> Result<TypeOrPath<'i>, rpl_meta::RPLMetaError<'i>> {
-        // Ops items do not support Rust path types — all their type parameters
-        // are meta-variables declared in the MetaVariableDeclList.
-        panic!(
-            "ops items do not support path types; got `{}` at {:?}",
+        // Ops signatures must only reference meta-variables declared in their
+        // MetaVariableDeclList — bare Rust path types are not permitted.
+        // Reaching this branch means resolver check R1 (Task 6) was not run
+        // or failed to reject the invalid signature before lowering.
+        unreachable!(
+            "internal: ops signatures must use only op-level meta-vars; \
+             bare path type `{}` at {:?} should have been rejected by \
+             resolver check R1 before lowering",
             ident.span.as_str(),
             ident.path
         )
@@ -730,8 +747,13 @@ impl<'i> GetType<'i> for OpsMetaLookup<'i> {
         if let Some((_, idx)) = self.type_vars.iter().find(|(n, _)| *n == name) {
             MetaVariable::Type(*idx, PredicateConjunction::default())
         } else {
-            panic!(
-                "Meta variable `{}` not declared in ops item at {:?}",
+            // Reaching this branch means the meta-variable was used in a
+            // signature but not declared in the ops item's MetaVariableDeclList.
+            // Resolver check R1 (Task 6) must reject this before lowering.
+            unreachable!(
+                "internal: meta-variable `{}` at {:?} is not declared in this \
+                 ops item; this should have been rejected by resolver check R1 \
+                 before lowering",
                 name,
                 ident.path
             )

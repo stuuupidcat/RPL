@@ -93,6 +93,83 @@ patt {
     });
 }
 
+/// Verify that two op groups within a single `ops { ... }` block are both
+/// lowered into `Pattern.ops_block.groups`.
+#[test]
+fn lowering_multiple_op_groups_in_one_block() {
+    let src = r#"
+pattern test
+ops {
+    sync[$T: type, $U: type] = {
+        fn $lock(&mut $T) -> $U;
+    }
+    alloc[$T: type] = {
+        fn $allocate(&mut $T) -> _;
+    }
+}
+patt {
+    p[] = fn _ (..) -> _ { let $x: usize = _; }
+}
+"#;
+
+    let arena: &'static rpl_meta::arena::Arena<'static> =
+        Box::leak(Box::new(rpl_meta::arena::Arena::default()));
+    let path_and_content: &'static Vec<(PathBuf, String)> =
+        Box::leak(Box::new(vec![(PathBuf::from("test_multi_groups.rpl"), src.to_string())]));
+
+    let mctx: &'static rpl_meta::context::MetaContext<'static> = Box::leak(Box::new(
+        rpl_meta::parse_and_collect(arena, path_and_content, |err| {
+            panic!("RPL parse/collect error: {err}");
+        }),
+    ));
+
+    PatternCtxt::entered_no_tcx(|pcx| {
+        pcx.add_parsed_patterns(mctx);
+
+        let mut found = false;
+        pcx.for_each_rpl_pattern(|_, pattern| {
+            let groups = &pattern.ops_block.groups;
+            if groups.is_empty() {
+                return;
+            }
+
+            assert_eq!(groups.len(), 2, "expected exactly 2 op groups");
+
+            let sync_group = groups
+                .get(&Symbol::intern("sync"))
+                .expect("sync op group should be present");
+            assert_eq!(sync_group.ops.len(), 1, "sync group should have 1 op");
+            assert!(
+                sync_group.ops.contains_key(&Symbol::intern("lock")),
+                "sync group should contain `lock` op"
+            );
+            assert_eq!(
+                sync_group.meta_vars.ty_vars.len(),
+                2,
+                "sync group should have 2 type meta-variables ($T, $U)"
+            );
+
+            let alloc_group = groups
+                .get(&Symbol::intern("alloc"))
+                .expect("alloc op group should be present");
+            assert_eq!(alloc_group.ops.len(), 1, "alloc group should have 1 op");
+            assert!(
+                alloc_group.ops.contains_key(&Symbol::intern("allocate")),
+                "alloc group should contain `allocate` op"
+            );
+            assert_eq!(
+                alloc_group.meta_vars.ty_vars.len(),
+                1,
+                "alloc group should have 1 type meta-variable ($T)"
+            );
+
+            found = true;
+        });
+
+        assert!(found, "No pattern with multiple ops groups was found");
+    });
+}
+
 /// Verify that a pattern file with no `ops` block yields an empty
 /// `ops_block.groups` map (not a crash or poison entry).
 #[test]
