@@ -1,0 +1,20 @@
+pattern folded
+
+ops {
+    sync_folded[$T: type, $U: type] = {
+        fn $lock(&mut $T) -> $U;
+    }
+}
+
+patt {
+    p[$U: type] = fn _ (..) -> _ {
+        let $guard: $U = $sync_folded::$lock(move _);
+    }
+}
+
+diag {
+    p = {
+        primary(p) = "folded pattern (this should never fire)",
+        name = "ops_folded",
+    }
+}

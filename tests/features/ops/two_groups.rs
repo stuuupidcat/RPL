@@ -1,0 +1,14 @@
+// two_groups test: exercises cartesian-product matching across TWO op groups.
+// sync_2g has 2 instances (Mutex, RwLock).
+// logger_2g has 1 instance (std::intrinsics::black_box).
+// Total combinations: 2 × 1 = 2.
+// Only the (Mutex, black_box) combination fires; (RwLock, black_box) has no RwLock call.
+use std::sync::Mutex;
+
+fn main() {
+    let m: Mutex<i32> = Mutex::new(0);
+    let _g = m.lock();
+    //~^ ops_two_groups
+    let msg: &str = "hi";
+    let _r = std::hint::black_box(msg);
+}

@@ -14,3 +14,69 @@ type = ["$1"]
 T    = "std::sync::Mutex<$1>"
 U    = "std::sync::MutexGuard<$1>"
 lock = "std::sync::Mutex<$1>::lock"
+
+# ---------------------------------------------------------------------------
+# Task 14: folded test
+# NOTE: There are intentionally NO [[ops.sync_folded]] entries here.
+# The cartesian product over an empty instance list yields zero combinations,
+# so the ops_folded pattern produces no diagnostics (fold-on-no-instances).
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Task 14: partial_bad test — three instances, one malformed (missing unlock)
+# ---------------------------------------------------------------------------
+
+[[ops.sync_pb]]
+type   = ["$1"]
+T      = "std::sync::Mutex<$1>"
+U      = "std::sync::MutexGuard<$1>"
+lock   = "std::sync::Mutex<$1>::lock"
+unlock = "std::sync::MutexGuard<$1>::drop"
+
+[[ops.sync_pb]]
+type   = ["$1"]
+T      = "parking_lot::Mutex<$1>"
+U      = "parking_lot::MutexGuard<$1>"
+lock   = "parking_lot::Mutex<$1>::lock"
+unlock = "parking_lot::MutexGuard<$1>::drop"
+
+[[ops.sync_pb]]
+# missing `unlock` — C3 check should warn and skip this instance
+type = ["$1"]
+T    = "std::sync::RwLock<$1>"
+U    = "std::sync::RwLockReadGuard<$1>"
+lock = "std::sync::RwLock<$1>::read"
+
+# ---------------------------------------------------------------------------
+# Task 14: set_op_with_ops test
+# ---------------------------------------------------------------------------
+
+[[ops.sync_so]]
+type   = ["$1"]
+T      = "std::sync::Mutex<$1>"
+U      = "std::sync::MutexGuard<$1>"
+lock   = "std::sync::Mutex<$1>::lock"
+unlock = "std::intrinsics::black_box"
+
+# ---------------------------------------------------------------------------
+# Task 14: two_groups test — cartesian product over two op groups
+# sync_2g: 2 instances (Mutex, RwLock)
+# logger_2g: 2 instances (str::len, str::is_empty)
+# ---------------------------------------------------------------------------
+
+[[ops.sync_2g]]
+type = ["$1"]
+T    = "std::sync::Mutex<$1>"
+U    = "std::sync::MutexGuard<$1>"
+lock = "std::sync::Mutex<$1>::lock"
+
+[[ops.sync_2g]]
+type = ["$1"]
+T    = "std::sync::RwLock<$1>"
+U    = "std::sync::RwLockReadGuard<$1>"
+lock = "std::sync::RwLock<$1>::read"
+
+[[ops.logger_2g]]
+type = ["$1"]
+L    = "$1"
+log  = "std::intrinsics::black_box"

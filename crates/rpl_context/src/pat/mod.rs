@@ -706,14 +706,29 @@ impl<'pcx> Pattern<'pcx> {
         wf_errors
     }
 
-    /// Run R4/R5 use-site checks on all `RustItems` in `patt_block`, populate
-    /// `referenced_op_groups` on each `RustItems`, and store discovered errors
-    /// in `self.op_ref_errors`.
+    /// Run R4/R5 use-site checks on all `RustItems` in `patt_block` and
+    /// `util_block`, populate `referenced_op_groups` on each `RustItems`, and
+    /// store discovered errors in `self.op_ref_errors`.
     ///
     /// Call this **after** both `add_ops_block` and all `add_pattern_item`
     /// calls have completed.
+    ///
+    /// **`util_block` mutation**: `util_block` stores shared (`&'pcx`)
+    /// references to arena-allocated items so they can be shared across
+    /// multiple `PatternOperation`s.  We need to mutate `referenced_op_groups`
+    /// on those items after construction is complete (at which point no other
+    /// references to the items are being actively read).  The items are
+    /// allocated in a bump arena that outlives this function; they are never
+    /// moved or freed during `'pcx`.  The `unsafe` cast from `&PatternItem` to
+    /// `&mut PatternItem` is sound here because:
+    ///   1. No other code observes `referenced_op_groups` until after this
+    ///      function returns (construction is single-threaded and sequential).
+    ///   2. The field being mutated (`referenced_op_groups`) is entirely
+    ///      separate from the structural fields used to build the item.
     pub fn check_and_populate_op_refs(&mut self) {
         let mut all_errors = Vec::new();
+
+        // Process patt_block items (owned — no unsafe needed).
         for (_name, item) in &mut self.patt_block {
             if let PatternItem::RustItems(rust_items) = item {
                 let mut referenced = FxHashSet::default();
@@ -722,6 +737,24 @@ impl<'pcx> Pattern<'pcx> {
                 all_errors.extend(errs);
             }
         }
+
+        // Process util_block items (arena-allocated; see safety comment above).
+        for (_name, item_ref) in &self.util_block {
+            // SAFETY: the item is allocated in a bump arena that outlives this
+            // function, is not aliased mutably elsewhere at this point, and the
+            // only field we write (`referenced_op_groups`) is not being
+            // concurrently observed.
+            #[allow(invalid_reference_casting)]
+            let item: &mut PatternItem<'pcx> =
+                unsafe { &mut *((*item_ref) as *const PatternItem<'pcx> as *mut PatternItem<'pcx>) };
+            if let PatternItem::RustItems(rust_items) = item {
+                let mut referenced = FxHashSet::default();
+                let errs = ops_uses::check_op_refs(rust_items, &self.ops_block, &mut referenced);
+                rust_items.referenced_op_groups = referenced;
+                all_errors.extend(errs);
+            }
+        }
+
         self.op_ref_errors = all_errors;
     }
 
