@@ -382,6 +382,9 @@ TypePath = {
     QSelf? ~ Path
 }
 
+// Reference to a named operation in a declared op group, used as a call target.
+OpRef = { MetaVariable ~ Colon2 ~ MetaVariable }
+
 Konst = {
     Literal
   | TypePath
@@ -715,6 +718,7 @@ MirFnOperand = {
   | LeftParen ~ MirOperandMove ~ RightParen
   | TypePath
   | LangItemWithArgs
+  | OpRef
   | MetaVariable
 }
 

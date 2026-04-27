@@ -551,3 +551,31 @@ fn ops_block_missing_semicolon_fails() {
     let res = Grammar::try_parse::<pairs::opsBlock>("ops { sync = { fn $lock() } }");
     assert!(res.is_err(), "expected parse error for missing semicolon");
 }
+
+#[test]
+fn op_ref_as_callee() {
+    // $sync::$lock parses as an OpRef.
+    full_test!(OpRef, "$sync::$lock");
+}
+
+#[test]
+fn op_ref_with_single_colon_fails() {
+    use pest_typed::TypedParser as _;
+    let res = Grammar::try_parse::<pairs::OpRef>("$sync:$lock");
+    assert!(res.is_err(), "expected parse error: single colon is not allowed");
+}
+
+#[test]
+fn op_ref_inside_let_rhs() {
+    full_test!(
+        main,
+        "\
+pattern foo
+patt {
+    p[$T: type, $U: type] = fn _ (..) -> _ {
+        let $obj: $T = _;
+        let $g: $U = $sync::$lock(move $obj);
+    }
+}"
+    );
+}
