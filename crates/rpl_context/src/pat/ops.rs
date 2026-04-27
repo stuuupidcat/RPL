@@ -1,3 +1,4 @@
+use derive_more::derive::Debug;
 use rustc_data_structures::fx::FxIndexMap;
 use rustc_span::{Span, Symbol};
 
