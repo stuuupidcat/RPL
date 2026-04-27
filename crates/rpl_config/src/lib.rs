@@ -2,9 +2,12 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+mod ops;
 mod patterns;
 mod run;
 mod util;
+
+pub use ops::RawOpInstance;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -46,9 +49,11 @@ pub enum ConfigError {
 }
 
 #[derive(Debug, Deserialize)]
-struct RplConfig {
-    run: Option<run::RunConfig>,
-    patterns: Option<patterns::PatternsConfig>,
+pub struct RplConfig {
+    pub(crate) run: Option<run::RunConfig>,
+    pub(crate) patterns: Option<patterns::PatternsConfig>,
+    #[serde(default)]
+    pub ops: std::collections::HashMap<String, Vec<RawOpInstance>>,
 }
 
 #[derive(Debug)]
