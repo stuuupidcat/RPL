@@ -77,3 +77,22 @@ pub fn load_config(manifest_path: Option<&Path>, selected_groups: &[String]) -> 
         inline_mir,
     })
 }
+
+/// Load the raw op-group instances from `rpl.toml` in the current directory
+/// (or adjacent to `manifest_path` if given).
+///
+/// Returns an empty map when no `rpl.toml` exists or when the file contains
+/// no `[ops]` table.  Errors during config file reading are surfaced as
+/// `Err(ConfigError)`.
+pub fn load_raw_ops(
+    manifest_path: Option<&Path>,
+) -> Result<std::collections::HashMap<String, Vec<RawOpInstance>>, ConfigError> {
+    let base_dir = util::resolve_base_dir(manifest_path)?;
+    let config_path = base_dir.join("rpl.toml");
+    if config_path.exists() {
+        let config = util::read_config(&config_path)?;
+        Ok(config.ops)
+    } else {
+        Ok(std::collections::HashMap::new())
+    }
+}

@@ -21,9 +21,11 @@ use std::cell::RefCell;
 use std::convert::identity;
 
 use either::Either;
+use rpl_config::RawOpInstance;
 use rpl_constraints::predicates::BodyInfoCache;
 use rpl_context::PatCtxt;
 use rpl_context::pat::DynamicError;
+use rpl_context::pat::ops_resolved::{OpsConfig, resolve_ops_config};
 use rpl_match::graph::{MirControlFlowGraph, MirDataDepGraph};
 use rpl_match::matches::Matched;
 use rpl_match::matches::artifact::NormalizedMatched;
@@ -119,6 +121,19 @@ pub fn check_crate<'tcx, 'pcx, 'mcx: 'pcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>
     #[cfg(feature = "timing")]
     let start = std::time::Instant::now();
 
+    // Resolve raw ops from rpl.toml into typed bindings against the loaded patterns.
+    // `load_raw_ops` returns an empty map when there is no rpl.toml or no [ops] table.
+    let raw_ops: Vec<(String, Vec<RawOpInstance>)> =
+        match rpl_config::load_raw_ops(None) {
+            Ok(map) => map.into_iter().collect(),
+            Err(err) => {
+                // Config loading failure is non-fatal: surface as a warning and continue
+                // without any op instances.
+                tcx.dcx().warn(format!("rpl: failed to load rpl.toml ops: {err}"));
+                Vec::new()
+            },
+        };
+
     // _ = tcx.hir_crate_items(()).par_items(|item_id| {
     //     check_item(tcx, pcx, item_id);
     //     Ok(())
@@ -128,6 +143,7 @@ pub fn check_crate<'tcx, 'pcx, 'mcx: 'pcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>
         tcx,
         pcx,
         body_caches: RefCell::default(),
+        raw_ops,
     };
     tcx.hir().walk_toplevel_module(&mut check_ctxt);
     rpl_utils::visit_crate(tcx);
@@ -166,6 +182,10 @@ struct CheckFnCtxt<'pcx, 'tcx> {
     tcx: TyCtxt<'tcx>,
     pcx: PatCtxt<'pcx>,
     body_caches: RefCell<FxHashMap<DefId, BodyInfoCache>>,
+    /// Raw op-group instances loaded from `rpl.toml` (empty when no file exists).
+    /// Stored as a pre-collected `Vec` so `resolve_ops_config` can be called
+    /// inside each `for_each_rpl_pattern` closure without lifetime trouble.
+    raw_ops: Vec<(String, Vec<RawOpInstance>)>,
 }
 
 impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
@@ -301,11 +321,12 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         rpl_rust_items.post_process(iter)
     }
 
-    #[instrument(level = "trace", skip(self, pat_op, header, body, mir_cfg, mir_ddg), fields(pat_name = ?name))]
+    #[instrument(level = "trace", skip(self, ops, pat_op, header, body, mir_cfg, mir_ddg), fields(pat_name = ?name))]
     #[expect(clippy::too_many_arguments)]
     fn impl_matched_pat_op<'a>(
         &self,
         name: Symbol,
+        ops: &OpsConfig,
         pat_op: &pat::PatternOperation<'pcx>,
         def_id: LocalDefId,
         header: Option<FnHeader>,
@@ -320,7 +341,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .iter()
             .flat_map(|positive| {
                 self.impl_matched_pat_item(
-                    positive.0, positive.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+                    positive.0, ops, positive.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
                 )
                 .map(|matched| matched.map(&positive.2))
             })
@@ -330,7 +351,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .iter()
             .flat_map(|negative| {
                 self.impl_matched_pat_item(
-                    negative.0, negative.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+                    negative.0, ops, negative.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
                 )
                 .map(|matched| matched.map(&negative.2))
             })
@@ -353,6 +374,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
     fn impl_matched_pat_item<'a>(
         &self,
         name: Symbol,
+        ops: &OpsConfig,
         pat_item: &'pcx PatternItem<'pcx>,
         def_id: LocalDefId,
         header: Option<FnHeader>,
@@ -367,7 +389,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                 name, rust_items, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
             )),
             PatternItem::RPLPatternOperation(pat_op) => Either::Right(
-                self.impl_matched_pat_op(name, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg),
+                self.impl_matched_pat_op(name, ops, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg),
             ),
         }
     }
@@ -417,11 +439,12 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         rpl_rust_items.post_process(iter)
     }
 
-    #[instrument(level = "trace", skip(self, pat_op, header, body, mir_cfg, mir_ddg), fields(pat_name = ?name))]
+    #[instrument(level = "trace", skip(self, ops, pat_op, header, body, mir_cfg, mir_ddg), fields(pat_name = ?name))]
     #[expect(clippy::too_many_arguments)]
     fn fn_matched_pat_op<'a>(
         &self,
         name: Symbol,
+        ops: &OpsConfig,
         pat_op: &pat::PatternOperation<'pcx>,
         def_id: LocalDefId,
         header: Option<FnHeader>,
@@ -436,7 +459,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .iter()
             .flat_map(|positive| {
                 self.fn_matched_pat_item(
-                    positive.0, positive.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+                    positive.0, ops, positive.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
                 )
                 .map(|matched| matched.map(&positive.2))
             })
@@ -446,7 +469,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .iter()
             .flat_map(|negative| {
                 self.fn_matched_pat_item(
-                    negative.0, negative.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+                    negative.0, ops, negative.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
                 )
                 .map(|matched| matched.map(&negative.2))
             })
@@ -469,6 +492,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
     fn fn_matched_pat_item<'a>(
         &self,
         name: Symbol,
+        ops: &OpsConfig,
         pat_item: &'pcx PatternItem<'pcx>,
         def_id: LocalDefId,
         header: Option<FnHeader>,
@@ -483,7 +507,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                 name, rust_items, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
             )),
             PatternItem::RPLPatternOperation(pat_op) => Either::Right(
-                self.fn_matched_pat_op(name, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg),
+                self.fn_matched_pat_op(name, ops, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg),
             ),
         }
     }
@@ -564,10 +588,15 @@ impl<'tcx> CheckFnCtxt<'_, 'tcx> {
             let mir_ddg = rpl_match::graph::mir_data_dep_graph(body, &mir_cfg);
             let header = Some(sig.header);
             let source_map = self.tcx.sess.source_map();
+            // Clone so the borrow of `self.raw_ops` does not conflict with
+            // the `&self` receiver used inside the closure body.
+            let raw_ops: Vec<(String, Vec<RawOpInstance>)> = self.raw_ops.clone();
             self.pcx.for_each_rpl_pattern(|_id, pattern| {
+                let (ops, _ops_diags) = resolve_ops_config(pattern, &raw_ops);
+                // _ops_diags: resolution diagnostics will be surfaced in Task 14.
                 for (&name, pat_item) in &pattern.patt_block {
                     for matched in self.impl_matched_pat_item(
-                        name, pat_item, def_id, header, has_self, self_ty, body, &mir_cfg, &mir_ddg,
+                        name, &ops, pat_item, def_id, header, has_self, self_ty, body, &mir_cfg, &mir_ddg,
                     ) {
                         let error = pattern
                             .get_diag(name, source_map, None, body, decl, &matched)
@@ -600,10 +629,15 @@ impl<'tcx> CheckFnCtxt<'_, 'tcx> {
             let mir_ddg = rpl_match::graph::mir_data_dep_graph(body, &mir_cfg);
             let fn_name = fn_name.map(|ident| ident.name);
             let source_map = self.tcx.sess.source_map();
+            // Clone so the borrow of `self.raw_ops` does not conflict with
+            // the `&self` receiver used inside the closure body.
+            let raw_ops: Vec<(String, Vec<RawOpInstance>)> = self.raw_ops.clone();
             self.pcx.for_each_rpl_pattern(|_id, pattern| {
+                let (ops, _ops_diags) = resolve_ops_config(pattern, &raw_ops);
+                // _ops_diags: resolution diagnostics will be surfaced in Task 14.
                 for (&name, pat_item) in &pattern.patt_block {
                     for matched in self.fn_matched_pat_item(
-                        name, pat_item, def_id, header, has_self, self_ty, body, &mir_cfg, &mir_ddg,
+                        name, &ops, pat_item, def_id, header, has_self, self_ty, body, &mir_cfg, &mir_ddg,
                     ) {
                         let error = pattern
                             .get_diag(name, source_map, fn_name, body, decl, &matched)
