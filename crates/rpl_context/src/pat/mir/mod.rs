@@ -929,19 +929,20 @@ impl<'pcx> Operand<'pcx> {
     ) -> Self {
         let p = op.path;
         match op.inner.deref() {
-            Choice5::_0(copy_) => Self::from_copy(WithPath::new(p, copy_.get_matched().1), pcx, fn_sym_tab),
-            Choice5::_1(move_) => Self::from_move(WithPath::new(p, move_.get_matched().1), pcx, fn_sym_tab),
-            Choice5::_2(type_path) => Self::Constant(ConstOperand::from_type_path(
+            Choice6::_0(copy_) => Self::from_copy(WithPath::new(p, copy_.get_matched().1), pcx, fn_sym_tab),
+            Choice6::_1(move_) => Self::from_move(WithPath::new(p, move_.get_matched().1), pcx, fn_sym_tab),
+            Choice6::_2(type_path) => Self::Constant(ConstOperand::from_type_path(
                 WithPath::new(p, type_path),
                 pcx,
                 fn_sym_tab,
             )),
-            Choice5::_3(lang_item) => Self::Constant(ConstOperand::from_lang_item(
+            Choice6::_3(lang_item) => Self::Constant(ConstOperand::from_lang_item(
                 WithPath::new(p, lang_item),
                 pcx,
                 fn_sym_tab,
             )),
-            Choice5::_4(meta_var) => Self::from_meta_var(meta_var),
+            Choice6::_4(_op_ref) => todo!("OpRef lowering: see Task 4 of the abstract-ops plan"),
+            Choice6::_5(meta_var) => Self::from_meta_var(meta_var),
         }
     }
 }
