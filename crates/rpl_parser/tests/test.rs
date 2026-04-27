@@ -505,3 +505,31 @@ fn rvalue_cast() {
 fn mir_local_decl() {
     full_test!(MirLocalDecl, "let $q: DstVec = move $p as DstVec (Transmute);");
 }
+
+#[test]
+fn ops_block_basic() {
+    full_test!(
+        opsBlock,
+        "ops {\n    sync[$T: type, $U: type] = {\n        fn $lock(&mut $T) -> $U;\n        fn $unlock(&mut $U) -> _;\n    }\n}"
+    );
+}
+
+#[test]
+fn ops_block_no_meta_vars() {
+    full_test!(opsBlock, "ops {\n    sync = {\n        fn $lock();\n    }\n}");
+}
+
+#[test]
+fn ops_block_multiple_groups() {
+    full_test!(
+        opsBlock,
+        "ops {\n    sync[$T: type] = { fn $lock(&mut $T) -> _; }\n    logger[$L: type] = { fn $log(&$L); }\n}"
+    );
+}
+
+#[test]
+fn ops_block_missing_semicolon_fails() {
+    use pest_typed::TypedParser as _;
+    let res = Grammar::try_parse::<pairs::opsBlock>("ops { sync = { fn $lock() } }");
+    assert!(res.is_err(), "expected parse error for missing semicolon");
+}
