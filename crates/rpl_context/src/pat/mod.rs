@@ -381,6 +381,31 @@ impl PatternOperation<'_> {
     pub fn post_process<M: Eq + Hash + Debug>(&self, iter: impl Iterator<Item = M>) -> impl Iterator<Item = M> {
         self.attr.post_process(iter)
     }
+
+    /// Returns the union of op-group names referenced by any operand
+    /// (positive or negative) of this set-op, recursing into nested
+    /// `PatternOperation`s.
+    ///
+    /// This is consumed by the matcher (Task 11) to know which op-group
+    /// instances to iterate over for cartesian-product expansion.
+    pub fn referenced_op_groups(&self) -> FxHashSet<Symbol> {
+        let mut all = FxHashSet::default();
+        for (_name, item, _map) in self.positive.iter().chain(self.negative.iter()) {
+            match item {
+                PatternItem::RustItems(rust_items) => {
+                    for &g in rust_items.referenced_op_groups() {
+                        all.insert(g);
+                    }
+                },
+                PatternItem::RPLPatternOperation(inner) => {
+                    for g in inner.referenced_op_groups() {
+                        all.insert(g);
+                    }
+                },
+            }
+        }
+        all
+    }
 }
 
 /// Corresponds to a pattern file in RPL, not a pattern item.

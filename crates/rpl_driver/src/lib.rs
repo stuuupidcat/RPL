@@ -18,6 +18,7 @@ rustc_fluent_macro::fluent_messages! { "../messages.en.ftl" }
 
 use std::borrow::Cow;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::convert::identity;
 
 use either::Either;
@@ -46,6 +47,118 @@ use rustc_middle::util::Providers;
 use rustc_session::declare_tool_lint;
 use rustc_span::symbol::Ident;
 use rustc_span::{Span, Symbol};
+
+// ---------------------------------------------------------------------------
+// Cartesian-product helper
+// ---------------------------------------------------------------------------
+
+/// Generate the cartesian product of a sequence of factors.
+///
+/// - Empty input (no factors): yields a single empty combination.
+/// - Any factor that is empty: yields zero combinations (fold-on-empty semantics).
+/// - Otherwise: yields every combination of one element from each factor,
+///   with the rightmost index varying fastest (odometer order).
+///
+/// The "fold on empty instances" property falls out of the helper: an empty
+/// factor folds the product to zero combinations, which contributes the empty
+/// match-set to set-op composition (Task 11 spec).
+pub fn cartesian<T: Clone, I, II>(factors: II) -> CartesianIter<T>
+where
+    I: Iterator<Item = T>,
+    II: IntoIterator<Item = I>,
+{
+    let factors: Vec<Vec<T>> = factors.into_iter().map(|i| i.collect()).collect();
+
+    if factors.is_empty() {
+        // No factors → yield one empty combination.
+        return CartesianIter { factors: Vec::new(), indices: Vec::new(), done: false, empty_fold: false };
+    }
+    if factors.iter().any(|f| f.is_empty()) {
+        // Any empty factor → fold to zero combos.
+        return CartesianIter { factors: Vec::new(), indices: Vec::new(), done: true, empty_fold: true };
+    }
+
+    let n = factors.len();
+    CartesianIter { factors, indices: vec![0usize; n], done: false, empty_fold: false }
+}
+
+/// Iterator returned by [`cartesian`].
+pub struct CartesianIter<T> {
+    factors: Vec<Vec<T>>,
+    indices: Vec<usize>,
+    done: bool,
+    /// `true` when an empty factor forced the product to zero — done before any yield.
+    empty_fold: bool,
+}
+
+impl<T: Clone> Iterator for CartesianIter<T> {
+    type Item = Vec<T>;
+
+    fn next(&mut self) -> Option<Vec<T>> {
+        if self.done || self.empty_fold {
+            return None;
+        }
+        if self.factors.is_empty() {
+            // No-factors case: one empty combo, then done.
+            self.done = true;
+            return Some(Vec::new());
+        }
+
+        let combo: Vec<T> = self.factors.iter().zip(&self.indices).map(|(f, &i)| f[i].clone()).collect();
+
+        // Increment odometer (rightmost index varies fastest).
+        let mut k = self.factors.len();
+        loop {
+            if k == 0 {
+                self.done = true;
+                break;
+            }
+            k -= 1;
+            self.indices[k] += 1;
+            if self.indices[k] < self.factors[k].len() {
+                break;
+            }
+            self.indices[k] = 0;
+        }
+        Some(combo)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ResolvedOpBindings — one (group → instance) assignment for a cartesian combo
+// ---------------------------------------------------------------------------
+
+use rpl_context::pat::ops_resolved::ResolvedOpInstance;
+
+/// A single (group-name → resolved instance) assignment, built from one
+/// element of the cartesian product over op-group instance vectors.
+///
+/// Passed to `impl_matched_pat_op_with_bindings` / `fn_matched_pat_op_with_bindings`
+/// so that future matcher logic (Task 12) can substitute concrete types/paths
+/// for op-group references.
+pub struct ResolvedOpBindings<'a> {
+    pub by_group: HashMap<Symbol, &'a ResolvedOpInstance>,
+}
+
+impl<'a> ResolvedOpBindings<'a> {
+    /// Build bindings from parallel slices of group names and instance refs.
+    pub fn from_combo(groups: &[Symbol], combo: Vec<&'a ResolvedOpInstance>) -> Self {
+        let by_group = groups.iter().copied().zip(combo).collect();
+        ResolvedOpBindings { by_group }
+    }
+
+    /// The empty binding set — used when a pattern references no op groups.
+    pub fn empty() -> Self {
+        ResolvedOpBindings { by_group: HashMap::new() }
+    }
+
+    /// Look up the instance bound to `group`, if any.
+    pub fn get(&self, group: &Symbol) -> Option<&&'a ResolvedOpInstance> {
+        self.by_group.get(group)
+    }
+}
+
+// ---------------------------------------------------------------------------
 
 #[cfg(feature = "timing")]
 mod errors;
@@ -336,6 +449,50 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         mir_cfg: &'a MirControlFlowGraph,
         mir_ddg: &'a MirDataDepGraph,
     ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
+        // Determine which op groups any operand of this PatternOperation references.
+        let groups_used: Vec<Symbol> = pat_op.referenced_op_groups().into_iter().collect();
+
+        // Build the cartesian product of (group → instance choices).
+        // If groups_used is empty, cartesian yields one empty combo and the
+        // behavior is identical to the original (no-op-groups) path.
+        // If any group has zero instances, cartesian yields zero combos and the
+        // match-set is empty (fold-on-no-instances).
+        let factors: Vec<Vec<&ResolvedOpInstance>> = groups_used
+            .iter()
+            .map(|g| ops.instances_of(g.as_str()).iter().collect())
+            .collect();
+
+        let mut all: Vec<NormalizedMatched<'tcx>> = Vec::new();
+        for combo in cartesian(factors.into_iter().map(|v| v.into_iter())) {
+            let bindings = ResolvedOpBindings::from_combo(&groups_used, combo);
+            all.extend(self.impl_matched_pat_op_with_bindings(
+                name, ops, pat_op, &bindings, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+            ));
+        }
+        all.into_iter()
+    }
+
+    /// Inner body of `impl_matched_pat_op`, lifted out so the cartesian loop
+    /// can call it once per (group → instance) combination.
+    ///
+    /// `bindings` carries the current combo assignment; for patterns that
+    /// reference no op groups `bindings` is empty and behavior is identical
+    /// to the original implementation.
+    #[expect(clippy::too_many_arguments)]
+    fn impl_matched_pat_op_with_bindings<'a>(
+        &self,
+        _name: Symbol,
+        ops: &OpsConfig,
+        pat_op: &pat::PatternOperation<'pcx>,
+        _bindings: &ResolvedOpBindings<'_>,
+        def_id: LocalDefId,
+        header: Option<FnHeader>,
+        has_self: bool,
+        self_ty: Option<ty::Ty<'tcx>>,
+        body: &'a mir::Body<'tcx>,
+        mir_cfg: &'a MirControlFlowGraph,
+        mir_ddg: &'a MirDataDepGraph,
+    ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
         let positive: Vec<_> = pat_op
             .positive
             .iter()
@@ -356,7 +513,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                 .map(|matched| matched.map(&negative.2))
             })
             .collect();
-        debug!(?positive, ?negative, "impl_matched_pat_op");
+        debug!(?positive, ?negative, "impl_matched_pat_op_with_bindings");
 
         let iter = positive
             .into_iter()
@@ -454,6 +611,42 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         mir_cfg: &'a MirControlFlowGraph,
         mir_ddg: &'a MirDataDepGraph,
     ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
+        // Determine which op groups any operand of this PatternOperation references.
+        let groups_used: Vec<Symbol> = pat_op.referenced_op_groups().into_iter().collect();
+
+        // Cartesian product over op-group instance vectors (see impl_matched_pat_op).
+        let factors: Vec<Vec<&ResolvedOpInstance>> = groups_used
+            .iter()
+            .map(|g| ops.instances_of(g.as_str()).iter().collect())
+            .collect();
+
+        let mut all: Vec<NormalizedMatched<'tcx>> = Vec::new();
+        for combo in cartesian(factors.into_iter().map(|v| v.into_iter())) {
+            let bindings = ResolvedOpBindings::from_combo(&groups_used, combo);
+            all.extend(self.fn_matched_pat_op_with_bindings(
+                name, ops, pat_op, &bindings, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+            ));
+        }
+        all.into_iter()
+    }
+
+    /// Inner body of `fn_matched_pat_op`, lifted out so the cartesian loop
+    /// can call it once per (group → instance) combination.
+    #[expect(clippy::too_many_arguments)]
+    fn fn_matched_pat_op_with_bindings<'a>(
+        &self,
+        _name: Symbol,
+        ops: &OpsConfig,
+        pat_op: &pat::PatternOperation<'pcx>,
+        _bindings: &ResolvedOpBindings<'_>,
+        def_id: LocalDefId,
+        header: Option<FnHeader>,
+        has_self: bool,
+        self_ty: Option<ty::Ty<'tcx>>,
+        body: &'a mir::Body<'tcx>,
+        mir_cfg: &'a MirControlFlowGraph,
+        mir_ddg: &'a MirDataDepGraph,
+    ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
         let positive: Vec<_> = pat_op
             .positive
             .iter()
@@ -474,7 +667,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                 .map(|matched| matched.map(&negative.2))
             })
             .collect();
-        debug!(?positive, ?negative, "impl_matched_pat_op");
+        debug!(?positive, ?negative, "fn_matched_pat_op_with_bindings");
 
         let iter = positive
             .into_iter()
