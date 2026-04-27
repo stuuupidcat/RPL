@@ -80,3 +80,31 @@ lock = "std::sync::RwLock<$1>::read"
 type = ["$1"]
 L    = "$1"
 log  = "std::intrinsics::black_box"
+
+# ---------------------------------------------------------------------------
+# Task 15: CVE-2025-68260 POC — two op groups
+#
+# sync_cve: models the lock/unlock primitive.
+#   lock   = Mutex::lock (stable, non-inlined MIR call site)
+#   unlock = std::intrinsics::black_box (opaque sink representing explicit
+#            guard consumption; used because MutexGuard::drop is inlined)
+#
+# intrusive_list_cve: models the intermediate-list transfer/drain operations.
+#   transfer_to_temp / drain_temp are free functions defined in the test
+#   binary itself.  "crate::" resolves to LOCAL_CRATE in def_path_res, so
+#   any binary that defines these two functions at the crate root will match.
+# ---------------------------------------------------------------------------
+
+[[ops.sync_cve]]
+type   = ["$1"]
+L      = "std::sync::Mutex<$1>"
+G      = "std::sync::MutexGuard<$1>"
+lock   = "std::sync::Mutex<$1>::lock"
+unlock = "std::intrinsics::black_box"
+
+[[ops.intrusive_list_cve]]
+type             = ["$1", "$2"]
+List             = "$1"
+TempList         = "$2"
+transfer_to_temp = "crate::transfer_to_temp"
+drain_temp       = "crate::drain_temp"

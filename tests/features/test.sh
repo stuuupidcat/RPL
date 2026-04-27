@@ -52,3 +52,20 @@ RPL_PATS="tests/features/ops/set_op_with_ops.rpl" \
 # Expected: one lint → exit 1 (|| true is intentional).
 RPL_PATS="tests/features/ops/two_groups.rpl" \
   cargo run --bin rpl-driver -- "tests/features/ops/two_groups.rs" 2>&1 | tee .ansi || true
+
+# ---------------------------------------------------------------------------
+# Task 15: CVE-2025-68260 POC — abstract intrusive-list-under-lock pattern
+# ---------------------------------------------------------------------------
+
+# buggy.rs: mirrors the pre-fix Node::release shape (lock → transfer → unlock → drain).
+# sync_cve bound to Mutex::lock + std::intrinsics::black_box (opaque unlock sink).
+# intrusive_list_cve bound to crate::transfer_to_temp + crate::drain_temp.
+# Expected: ops_cve_2025_68260 lint fires → exit 1 (|| true is intentional).
+RPL_PATS="tests/features/ops_cve_2025_68260/pattern.rpl" \
+  cargo run --bin rpl-driver -- "tests/features/ops_cve_2025_68260/buggy.rs" 2>&1 | tee .ansi || true
+
+# fixed.rs: guard drops naturally (no black_box call) — no $sync_cve::$unlock match.
+# Pattern cannot fire without an explicit unlock call site.
+# Expected: NO ops_cve_2025_68260 lint → exit 0.
+RPL_PATS="tests/features/ops_cve_2025_68260/pattern.rpl" \
+  cargo run --bin rpl-driver -- "tests/features/ops_cve_2025_68260/fixed.rs" 2>&1 | tee .ansi
