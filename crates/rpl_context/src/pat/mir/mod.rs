@@ -875,6 +875,8 @@ pub enum Operand<'pcx> {
     Move(Place<'pcx>),
     Constant(ConstOperand<'pcx>),
     FnPat(Symbol),
+    /// Reference to an operation `$group::$op` declared in the `ops` block.
+    OpRef { group: Symbol, op: Symbol },
 }
 
 impl<'pcx> Operand<'pcx> {
@@ -941,7 +943,12 @@ impl<'pcx> Operand<'pcx> {
                 pcx,
                 fn_sym_tab,
             )),
-            Choice6::_4(_op_ref) => todo!("OpRef lowering: see Task 4 of the abstract-ops plan"),
+            Choice6::_4(op_ref) => {
+                let (group_meta, op_meta) = op_ref.MetaVariable();
+                let group = Symbol::intern(group_meta.span.as_str());
+                let op = Symbol::intern(op_meta.span.as_str());
+                Self::OpRef { group, op }
+            },
             Choice6::_5(meta_var) => Self::from_meta_var(meta_var),
         }
     }
@@ -1569,4 +1576,27 @@ impl BasicBlockData<'_> {
 
 pub(crate) fn with_path<T>(path: &'_ std::path::Path, inner: T) -> WithPath<'_, T> {
     WithPath { path, inner }
+}
+
+#[cfg(test)]
+mod tests {
+    use rustc_span::Symbol;
+
+    use super::Operand;
+
+    #[test]
+    fn op_ref_constructs_and_matches() {
+        rustc_span::create_session_if_not_set_then(rustc_span::edition::LATEST_STABLE_EDITION, |_| {
+            let group = Symbol::intern("sync");
+            let op = Symbol::intern("lock");
+            let operand: Operand<'_> = Operand::OpRef { group, op };
+            match operand {
+                Operand::OpRef { group: g, op: o } => {
+                    assert_eq!(g.as_str(), "sync");
+                    assert_eq!(o.as_str(), "lock");
+                },
+                _ => panic!("expected OpRef variant"),
+            }
+        });
+    }
 }

@@ -439,8 +439,14 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
                 }),
             ) if let &ty::FnDef(fn_did, _args) = ty.kind() => self.match_fn_pat(fn_pat, fn_did),
             (pat::Operand::Any, mir::Operand::Copy(_) | mir::Operand::Move(_) | mir::Operand::Constant(_)) => true,
+            (pat::Operand::OpRef { .. }, _) => {
+                todo!("OpRef handling: Task 12 of abstract-ops plan")
+            },
             (
-                pat::Operand::Copy(_) | pat::Operand::Move(_) | pat::Operand::Constant(_) | pat::Operand::FnPat(_),
+                pat::Operand::Copy(_)
+                | pat::Operand::Move(_)
+                | pat::Operand::Constant(_)
+                | pat::Operand::FnPat(_),
                 mir::Operand::Copy(_) | mir::Operand::Move(_) | mir::Operand::Constant(_),
             ) => return false,
         };

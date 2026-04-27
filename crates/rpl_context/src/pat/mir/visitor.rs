@@ -198,6 +198,7 @@ pub trait PatternVisitor<'pcx>: Sized {
             ),
             Operand::Constant(const_operand) => self.visit_const_operand(const_operand),
             &Operand::FnPat(fn_pat) => self.visit_fn_pat(fn_pat),
+            Operand::OpRef { .. } => todo!("OpRef handling: Task 7 of abstract-ops plan"),
         }
     }
     fn super_statement(&mut self, statement: &StatementKind<'pcx>, location: Location) {
