@@ -245,6 +245,12 @@ impl<'pcx> PatCtxt<'pcx> {
             }
         }
 
+        // R4/R5 post-lowering use-site checks + referenced_op_groups population.
+        pattern.check_and_populate_op_refs();
+        for err in pattern.op_ref_errors() {
+            warn!("op-ref use-site: {}", err);
+        }
+
         let mut patterns = self.rpl_patterns.lock();
         debug_assert_eq!(patterns.next_index(), id);
         patterns.push(pattern);

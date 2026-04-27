@@ -13,7 +13,7 @@ use rpl_meta::symbol_table::{GetType, MetaVariable, TypeOrPath, WithPath};
 use rpl_meta::utils::self_param_ty;
 use rpl_parser::generics::{Choice2, Choice3, Choice4};
 use rpl_parser::pairs;
-use rustc_data_structures::fx::{FxHashMap, FxIndexMap};
+use rustc_data_structures::fx::{FxHashMap, FxHashSet, FxIndexMap};
 use rustc_middle::mir::Mutability as MirMutability;
 use rustc_hir::FnDecl;
 use rustc_middle::mir::Body;
@@ -31,6 +31,7 @@ mod matched;
 mod mir;
 mod non_local_meta_vars;
 mod ops;
+pub mod ops_uses;
 pub mod ops_wf;
 mod pretty;
 mod table;
@@ -43,7 +44,8 @@ pub use matched::{Matched, MatchedMap};
 pub use mir::*;
 pub use non_local_meta_vars::*;
 pub use ops::*;
-pub use ops_wf::{OpsWfError, check_ops_block};
+pub use ops_uses::{OpsUseError, check_op_refs};
+pub use ops_wf::{OpsWfError, check_ops_block, check_r6_patt_vs_ops};
 pub(crate) use table::TableHead;
 pub use ty::*;
 
@@ -110,6 +112,10 @@ pub struct RustItems<'pcx> {
     pub fns: FnPatterns<'pcx>,
     pub impls: FxHashMap<Symbol, Impl<'pcx>>,
     pub attr: PatAttr<'pcx>,
+    /// The set of op-group names referenced by `Operand::OpRef` anywhere in
+    /// this pattern's function bodies.  Populated by
+    /// [`Pattern::populate_referenced_op_groups`] after lowering completes.
+    pub(crate) referenced_op_groups: FxHashSet<Symbol>,
 }
 
 impl<'pcx> RustItems<'pcx> {
@@ -121,7 +127,18 @@ impl<'pcx> RustItems<'pcx> {
             fns: Default::default(),
             impls: Default::default(),
             attr,
+            referenced_op_groups: Default::default(),
         }
+    }
+
+    /// Returns the set of op-group names referenced by `$group::$op` operands
+    /// anywhere in this pattern's function bodies.
+    ///
+    /// This is populated by [`Pattern::populate_referenced_op_groups`] after
+    /// all pattern items and the ops block have been lowered.  The matcher
+    /// (Task 11) consumes this to know which op-group instances to iterate.
+    pub fn referenced_op_groups(&self) -> &FxHashSet<Symbol> {
+        &self.referenced_op_groups
     }
 
     fn add_item(
@@ -372,6 +389,9 @@ pub struct Pattern<'pcx> {
     pub util_block: FxIndexMap<Symbol, &'pcx PatternItem<'pcx>>, // indexed by pat_name
     pub ops_block: OpsBlock<'pcx>,
     diag_block: FxHashMap<Symbol, DynamicErrorBuilder<'pcx>>,
+    /// R4/R5 errors discovered during `check_and_populate_op_refs`.
+    /// Stored here so callers (tests, driver) can inspect them after lowering.
+    pub(crate) op_ref_errors: Vec<ops_uses::OpsUseError>,
 }
 
 impl<'pcx> Pattern<'pcx> {
@@ -382,7 +402,13 @@ impl<'pcx> Pattern<'pcx> {
             util_block: Default::default(),
             ops_block: OpsBlock::default(),
             diag_block: Default::default(),
+            op_ref_errors: Default::default(),
         }
+    }
+
+    /// Returns the R4/R5 use-site errors found during `check_and_populate_op_refs`.
+    pub fn op_ref_errors(&self) -> &[ops_uses::OpsUseError] {
+        &self.op_ref_errors
     }
 
     pub fn get_diag<'tcx>(
@@ -651,6 +677,25 @@ impl<'pcx> Pattern<'pcx> {
             self.ops_block.groups.insert(group_name, group);
         }
         wf_errors
+    }
+
+    /// Run R4/R5 use-site checks on all `RustItems` in `patt_block`, populate
+    /// `referenced_op_groups` on each `RustItems`, and store discovered errors
+    /// in `self.op_ref_errors`.
+    ///
+    /// Call this **after** both `add_ops_block` and all `add_pattern_item`
+    /// calls have completed.
+    pub fn check_and_populate_op_refs(&mut self) {
+        let mut all_errors = Vec::new();
+        for (_name, item) in &mut self.patt_block {
+            if let PatternItem::RustItems(rust_items) = item {
+                let mut referenced = FxHashSet::default();
+                let errs = ops_uses::check_op_refs(rust_items, &self.ops_block, &mut referenced);
+                rust_items.referenced_op_groups = referenced;
+                all_errors.extend(errs);
+            }
+        }
+        self.op_ref_errors = all_errors;
     }
 
     pub fn add_diag<'mcx: 'pcx>(

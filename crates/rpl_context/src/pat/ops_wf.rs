@@ -12,6 +12,7 @@
 /// | R1 | Every meta-var in an op group's `MetaVariableDeclList` must be of kind `type`. |
 /// | R2 | Op signatures may only reference meta-vars that are declared in the same op group. |
 /// | R3 | Op signatures must not contain concrete Rust types (concrete paths or primitive types). |
+use std::collections::HashSet;
 use std::ops::Deref;
 
 use rpl_meta::collect_elems_separated_by_comma;
@@ -289,6 +290,291 @@ fn check_type(group_name: &str, ty: &pairs::Type<'_>, declared_type_vars: &[&str
                 ),
             ));
         },
+    }
+}
+
+// ---------------------------------------------------------------------------
+// R6: Op-level meta-vars must not appear in pattern bodies
+// ---------------------------------------------------------------------------
+
+/// Check every `pattBlock` item in `patts` against the op-level meta-var
+/// names collected from `ops_blocks`.
+///
+/// For each pattern item `p[...] = ...`:
+/// 1. Collect the pattern-level declared meta-var names (those in `p[...]`).
+/// 2. Collect all op-level meta-var names across all op groups.
+/// 3. Walk every `TypeMetaVariable` in the item's RHS.
+/// 4. If a type meta-var's name is in the op-level set but NOT in the
+///    pattern-level set, emit an R6 error:
+///    `"op-level meta-var '$T' cannot appear in a pattern body"`.
+///
+/// Returns a flat list of all R6 errors found.
+pub fn check_r6_patt_vs_ops(
+    ops_blocks: &[&pairs::opsBlock<'_>],
+    patts: &[&pairs::pattBlock<'_>],
+) -> Vec<OpsWfError> {
+    // Collect all op-level meta-var names (with `$` prefix) across all groups.
+    let op_level_names: HashSet<&str> = collect_all_op_meta_var_names(ops_blocks);
+
+    let mut errors = Vec::new();
+    for patt_block in patts {
+        for item in patt_block.RPLPatternItem() {
+            let item_name = item.Identifier().span.as_str();
+            // Collect pattern-level declared meta-var names.
+            let pattern_level_names: HashSet<&str> =
+                collect_pattern_meta_var_names(item.MetaVariableDeclList());
+
+            // Walk the item body for TypeMetaVariable references.
+            let rhs = item.RustItemsOrPatternOperation();
+            let mut collector = TypeMetaVarCollector::default();
+            collect_type_meta_vars_in_rhs(rhs, &mut collector);
+
+            for name in collector.names {
+                if op_level_names.contains(name) && !pattern_level_names.contains(name) {
+                    errors.push(OpsWfError::new(
+                        item_name,
+                        format!("op-level meta-var '{}' cannot appear in a pattern body", name),
+                    ));
+                }
+            }
+        }
+    }
+    errors
+}
+
+/// Collect all type meta-var names (with `$`) declared in ANY op group across
+/// all `opsBlock`s.
+fn collect_all_op_meta_var_names<'i>(ops_blocks: &[&pairs::opsBlock<'i>]) -> HashSet<&'i str> {
+    let mut names = HashSet::new();
+    for ops_block in ops_blocks {
+        for item in ops_block.opsItem() {
+            if let Some(mdl) = item.MetaVariableDeclList()
+                && let Some(inner) = mdl.get_matched().1
+            {
+                for decl in collect_elems_separated_by_comma!(inner) {
+                    let (ident, _, ty, _) = decl.get_matched();
+                    // Only type-kind vars are relevant for R6 (R1 already
+                    // rejects non-type vars; we include them anyway for a
+                    // conservative check).
+                    if matches!(ty.deref(), Choice3::_0(_)) {
+                        names.insert(ident.span.as_str());
+                    }
+                }
+            }
+        }
+    }
+    names
+}
+
+/// Collect all meta-var names (with `$`) declared in a
+/// `MetaVariableDeclList` (the `[...]` bracket of a pattern item).
+fn collect_pattern_meta_var_names<'i>(
+    meta_decl_list: Option<&'i pairs::MetaVariableDeclList<'i>>,
+) -> HashSet<&'i str> {
+    let mut names = HashSet::new();
+    if let Some(mdl) = meta_decl_list
+        && let Some(inner) = mdl.get_matched().1
+    {
+        for decl in collect_elems_separated_by_comma!(inner) {
+            let (ident, _, _, _) = decl.get_matched();
+            names.insert(ident.span.as_str());
+        }
+    }
+    names
+}
+
+// ---------------------------------------------------------------------------
+// TypeMetaVariable collector for R6
+// ---------------------------------------------------------------------------
+
+/// Accumulates every `TypeMetaVariable` span text found in a parse sub-tree.
+#[derive(Default)]
+struct TypeMetaVarCollector<'i> {
+    names: Vec<&'i str>,
+}
+
+/// Entry point: walk `RustItemsOrPatternOperation` collecting all
+/// `TypeMetaVariable` references.
+///
+/// We do a best-effort recursive walk over the parts of the grammar that can
+/// contain `Type` nodes (function signatures and MIR bodies).  We deliberately
+/// do NOT walk pattern-operation sub-expressions (they reference util items by
+/// name, not types directly).
+fn collect_type_meta_vars_in_rhs<'i>(
+    rhs: &'i pairs::RustItemsOrPatternOperation<'i>,
+    collector: &mut TypeMetaVarCollector<'i>,
+) {
+    use rpl_parser::generics::Choice3;
+    match rhs.deref() {
+        Choice3::_0(single_item) => collect_in_rust_item_with_constraint(single_item, collector),
+        Choice3::_1(items_block) => {
+            let (_, items, _) = items_block.get_matched();
+            for item in items.iter_matched() {
+                collect_in_rust_item_with_constraint(item, collector);
+            }
+        },
+        Choice3::_2(_patt_op) => {
+            // PatternOperation references util items by name; no Type nodes to
+            // walk here.
+        },
+    }
+}
+
+fn collect_in_rust_item_with_constraint<'i>(
+    item: &'i pairs::RustItemWithConstraint<'i>,
+    collector: &mut TypeMetaVarCollector<'i>,
+) {
+    use rpl_parser::generics::Choice4;
+    let (_, inner, _where_block) = item.get_matched();
+    match inner.deref() {
+        Choice4::_0(rust_fn) => collect_in_fn(rust_fn, collector),
+        Choice4::_1(_struct) => { /* struct fields not yet scanned for R6 */ },
+        Choice4::_2(_enum) => { /* enum variants not yet scanned for R6 */ },
+        Choice4::_3(_impl) => { /* impl fns not yet scanned for R6 */ },
+    }
+}
+
+fn collect_in_fn<'i>(rust_fn: &'i pairs::Fn<'i>, collector: &mut TypeMetaVarCollector<'i>) {
+    let (sig, body) = rust_fn.get_matched();
+    collect_in_fn_sig(sig, collector);
+    if let Some(mir_body) = body.MirBody() {
+        collect_in_mir_body(mir_body, collector);
+    }
+}
+
+fn collect_in_fn_sig<'i>(sig: &'i pairs::FnSig<'i>, collector: &mut TypeMetaVarCollector<'i>) {
+    // Walk parameters.
+    if let Some(params) = sig.FnParamsSeparatedByComma() {
+        let (first, rest) = params.FnParam();
+        for param in std::iter::once(first).chain(rest) {
+            collect_in_fn_param(param, collector);
+        }
+    }
+    // Walk return type.
+    if let Some(fn_ret) = sig.FnRet() {
+        let (_, placeholder_or_ty) = fn_ret.get_matched();
+        if let Choice2::_1(ty) = placeholder_or_ty {
+            collect_in_type(ty, collector);
+        }
+    }
+}
+
+fn collect_in_fn_param<'i>(param: &'i pairs::FnParam<'i>, collector: &mut TypeMetaVarCollector<'i>) {
+    use rpl_parser::generics::Choice4;
+    match param.deref() {
+        Choice4::_0(_self_param) => { /* self — no explicit type to check */ },
+        Choice4::_1(normal) => {
+            let (_, _, _, ty) = normal.get_matched();
+            collect_in_type(ty, collector);
+        },
+        Choice4::_2(ph_with_ty) => {
+            let (_, _, _, ty) = ph_with_ty.get_matched();
+            collect_in_type(ty, collector);
+        },
+        Choice4::_3(_ellipsis) => {},
+    }
+}
+
+fn collect_in_mir_body<'i>(
+    body: &'i pairs::MirBody<'i>,
+    collector: &mut TypeMetaVarCollector<'i>,
+) {
+    let (decls, stmts) = body.get_matched();
+    for decl in decls.iter_matched() {
+        collect_in_mir_decl(decl, collector);
+    }
+    for stmt in stmts.iter_matched() {
+        collect_in_mir_stmt(stmt, collector);
+    }
+}
+
+fn collect_in_mir_decl<'i>(decl: &'i pairs::MirDecl<'i>, collector: &mut TypeMetaVarCollector<'i>) {
+    // MirDecl has two accessor methods: MirTypeDecl() and MirLocalDecl()
+    if let Some(local_decl) = decl.MirLocalDecl() {
+        // `let $x: Type = ...` — the declared type may reference a meta-var
+        let ty = local_decl.Type();
+        collect_in_type(ty, collector);
+    }
+    // MirTypeDecl (type aliases) don't carry op-level meta-var leaks we care about.
+}
+
+fn collect_in_mir_stmt<'i>(stmt: &'i pairs::MirStmt<'i>, collector: &mut TypeMetaVarCollector<'i>) {
+    // Use the accessor methods on MirStmt rather than deref/match.
+    // Cast rvalues are the only place type meta-vars can appear in statements.
+    if let Some(assign) = stmt.MirAssign() {
+        let rvalue_or_call = assign.MirRvalueOrCall();
+        use rpl_parser::generics::Choice2;
+        match rvalue_or_call.deref() {
+            Choice2::_0(_call) => {},
+            Choice2::_1(rvalue) => collect_in_mir_rvalue(rvalue, collector),
+        }
+    }
+}
+
+fn collect_in_mir_rvalue<'i>(
+    rvalue: &'i pairs::MirRvalue<'i>,
+    collector: &mut TypeMetaVarCollector<'i>,
+) {
+    use rpl_parser::generics::Choice12;
+    match rvalue.deref() {
+        Choice12::_1(cast) => {
+            // `operand as Type (cast_kind)` — the target type may reference meta-vars
+            let (_operand, _, ty, _, _cast_kind, _) = cast.get_matched();
+            collect_in_type(ty, collector);
+        },
+        // All other rvalue forms don't carry explicit Type annotations in a
+        // way that would allow op-level meta-var leaks.
+        _ => {},
+    }
+}
+
+/// Recursively walk a `Type` parse node, pushing any `TypeMetaVariable`
+/// span text into `collector.names`.
+fn collect_in_type<'i>(ty: &'i pairs::Type<'i>, collector: &mut TypeMetaVarCollector<'i>) {
+    match ty.deref() {
+        Choice14::_0(ty_array) => {
+            let (_, inner, _, _, _) = ty_array.get_matched();
+            collect_in_type(inner, collector);
+        },
+        Choice14::_1(ty_group) => {
+            let (_, inner) = ty_group.get_matched();
+            collect_in_type(inner, collector);
+        },
+        Choice14::_2(_ty_never) => {},
+        Choice14::_3(ty_paren) => {
+            let (_, inner, _) = ty_paren.get_matched();
+            collect_in_type(inner, collector);
+        },
+        Choice14::_4(ty_ptr) => {
+            let (_, _, inner) = ty_ptr.get_matched();
+            collect_in_type(inner, collector);
+        },
+        Choice14::_5(ty_ref) => {
+            let (_, _, _, inner) = ty_ref.get_matched();
+            collect_in_type(inner, collector);
+        },
+        Choice14::_6(ty_slice) => {
+            let (_, inner, _) = ty_slice.get_matched();
+            collect_in_type(inner, collector);
+        },
+        Choice14::_7(ty_tuple) => {
+            let (_, tys_opt, _) = ty_tuple.get_matched();
+            if let Some(tys) = tys_opt {
+                let tys_vec = collect_elems_separated_by_comma!(tys).collect::<Vec<_>>();
+                for inner in tys_vec {
+                    collect_in_type(inner, collector);
+                }
+            }
+        },
+        Choice14::_8(ty_meta_var) => {
+            // This is the key: collect the name with the `$` prefix.
+            collector.names.push(ty_meta_var.span.as_str());
+        },
+        Choice14::_9(_kw_self) => {},
+        Choice14::_10(_prim) => {},
+        Choice14::_11(_placeholder) => {},
+        Choice14::_12(_ty_path) => {},
+        Choice14::_13(_lang_item) => {},
     }
 }
 
