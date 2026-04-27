@@ -45,6 +45,7 @@ pub use matched::{Matched, MatchedMap};
 pub use mir::*;
 pub use non_local_meta_vars::*;
 pub use ops::*;
+pub use ops_resolved::ResolvedOpBindings;
 pub use ops_uses::{OpsUseError, check_op_refs};
 pub use ops_wf::{OpsWfError, check_ops_block, check_r6_patt_vs_ops};
 pub(crate) use table::TableHead;

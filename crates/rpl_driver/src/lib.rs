@@ -18,7 +18,6 @@ rustc_fluent_macro::fluent_messages! { "../messages.en.ftl" }
 
 use std::borrow::Cow;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::convert::identity;
 
 use either::Either;
@@ -128,35 +127,7 @@ impl<T: Clone> Iterator for CartesianIter<T> {
 // ResolvedOpBindings — one (group → instance) assignment for a cartesian combo
 // ---------------------------------------------------------------------------
 
-use rpl_context::pat::ops_resolved::ResolvedOpInstance;
-
-/// A single (group-name → resolved instance) assignment, built from one
-/// element of the cartesian product over op-group instance vectors.
-///
-/// Passed to `impl_matched_pat_op_with_bindings` / `fn_matched_pat_op_with_bindings`
-/// so that future matcher logic (Task 12) can substitute concrete types/paths
-/// for op-group references.
-pub struct ResolvedOpBindings<'a> {
-    pub by_group: HashMap<Symbol, &'a ResolvedOpInstance>,
-}
-
-impl<'a> ResolvedOpBindings<'a> {
-    /// Build bindings from parallel slices of group names and instance refs.
-    pub fn from_combo(groups: &[Symbol], combo: Vec<&'a ResolvedOpInstance>) -> Self {
-        let by_group = groups.iter().copied().zip(combo).collect();
-        ResolvedOpBindings { by_group }
-    }
-
-    /// The empty binding set — used when a pattern references no op groups.
-    pub fn empty() -> Self {
-        ResolvedOpBindings { by_group: HashMap::new() }
-    }
-
-    /// Look up the instance bound to `group`, if any.
-    pub fn get(&self, group: &Symbol) -> Option<&&'a ResolvedOpInstance> {
-        self.by_group.get(group)
-    }
-}
+use rpl_context::pat::ops_resolved::{ResolvedOpBindings, ResolvedOpInstance};
 
 // ---------------------------------------------------------------------------
 
@@ -395,9 +366,11 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         body: &'a mir::Body<'tcx>,
         mir_cfg: &'a MirControlFlowGraph,
         mir_ddg: &'a MirDataDepGraph,
+        op_bindings: ResolvedOpBindings,
     ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
         let iter = rpl_rust_items.impls.values().flat_map(move |impl_pat| {
             // FIXME: check impl_pat.ty and impl_pat.trait_id
+            let op_bindings = op_bindings.clone();
             impl_pat
                 .fns
                 .values()
@@ -409,7 +382,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                     //     continue;
                     // }
 
-                    CheckMirCtxt::new(
+                    CheckMirCtxt::new_with_bindings(
                         self.tcx,
                         self.pcx,
                         body,
@@ -420,6 +393,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                         fn_pat,
                         mir_cfg,
                         mir_ddg,
+                        op_bindings.clone(),
                     )
                     .check()
                     .into_iter()
@@ -484,7 +458,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         _name: Symbol,
         ops: &OpsConfig,
         pat_op: &pat::PatternOperation<'pcx>,
-        _bindings: &ResolvedOpBindings<'_>,
+        bindings: &ResolvedOpBindings,
         def_id: LocalDefId,
         header: Option<FnHeader>,
         has_self: bool,
@@ -498,7 +472,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .iter()
             .flat_map(|positive| {
                 self.impl_matched_pat_item(
-                    positive.0, ops, positive.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+                    positive.0, ops, positive.1, bindings, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
                 )
                 .map(|matched| matched.map(&positive.2))
             })
@@ -508,7 +482,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .iter()
             .flat_map(|negative| {
                 self.impl_matched_pat_item(
-                    negative.0, ops, negative.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+                    negative.0, ops, negative.1, bindings, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
                 )
                 .map(|matched| matched.map(&negative.2))
             })
@@ -533,6 +507,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         name: Symbol,
         ops: &OpsConfig,
         pat_item: &'pcx PatternItem<'pcx>,
+        bindings: &ResolvedOpBindings,
         def_id: LocalDefId,
         header: Option<FnHeader>,
         has_self: bool,
@@ -543,7 +518,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
     ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
         match pat_item {
             PatternItem::RustItems(rust_items) => Either::Left(self.impl_matched(
-                name, rust_items, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+                name, rust_items, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg, bindings.clone(),
             )),
             PatternItem::RPLPatternOperation(pat_op) => Either::Right(
                 self.impl_matched_pat_op(name, ops, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg),
@@ -564,6 +539,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         body: &'a mir::Body<'tcx>,
         mir_cfg: &'a MirControlFlowGraph,
         mir_ddg: &'a MirDataDepGraph,
+        op_bindings: ResolvedOpBindings,
     ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
         let iter = rpl_rust_items
             .fns
@@ -571,7 +547,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .filter(move |fn_pat| fn_pat.filter(self.tcx, def_id, header, body))
             .filter_map(move |fn_pat| Some((fn_pat, fn_pat.extra_span(self.tcx, def_id)?)))
             .flat_map(move |(fn_pat, attr_map)| {
-                CheckMirCtxt::new(
+                CheckMirCtxt::new_with_bindings(
                     self.tcx,
                     self.pcx,
                     body,
@@ -582,6 +558,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                     fn_pat,
                     mir_cfg,
                     mir_ddg,
+                    op_bindings.clone(),
                 )
                 .check()
                 .into_iter()
@@ -638,7 +615,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         _name: Symbol,
         ops: &OpsConfig,
         pat_op: &pat::PatternOperation<'pcx>,
-        _bindings: &ResolvedOpBindings<'_>,
+        bindings: &ResolvedOpBindings,
         def_id: LocalDefId,
         header: Option<FnHeader>,
         has_self: bool,
@@ -652,7 +629,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .iter()
             .flat_map(|positive| {
                 self.fn_matched_pat_item(
-                    positive.0, ops, positive.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+                    positive.0, ops, positive.1, bindings, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
                 )
                 .map(|matched| matched.map(&positive.2))
             })
@@ -662,7 +639,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .iter()
             .flat_map(|negative| {
                 self.fn_matched_pat_item(
-                    negative.0, ops, negative.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+                    negative.0, ops, negative.1, bindings, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
                 )
                 .map(|matched| matched.map(&negative.2))
             })
@@ -687,6 +664,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         name: Symbol,
         ops: &OpsConfig,
         pat_item: &'pcx PatternItem<'pcx>,
+        bindings: &ResolvedOpBindings,
         def_id: LocalDefId,
         header: Option<FnHeader>,
         has_self: bool,
@@ -697,7 +675,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
     ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
         match pat_item {
             PatternItem::RustItems(rust_items) => Either::Left(self.fn_matched(
-                name, rust_items, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+                name, rust_items, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg, bindings.clone(),
             )),
             PatternItem::RPLPatternOperation(pat_op) => Either::Right(
                 self.fn_matched_pat_op(name, ops, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg),
@@ -789,7 +767,8 @@ impl<'tcx> CheckFnCtxt<'_, 'tcx> {
                 // _ops_diags: resolution diagnostics will be surfaced in Task 14.
                 for (&name, pat_item) in &pattern.patt_block {
                     for matched in self.impl_matched_pat_item(
-                        name, &ops, pat_item, def_id, header, has_self, self_ty, body, &mir_cfg, &mir_ddg,
+                        name, &ops, pat_item, &ResolvedOpBindings::empty(), def_id, header, has_self, self_ty, body,
+                        &mir_cfg, &mir_ddg,
                     ) {
                         let error = pattern
                             .get_diag(name, source_map, None, body, decl, &matched)
@@ -830,7 +809,8 @@ impl<'tcx> CheckFnCtxt<'_, 'tcx> {
                 // _ops_diags: resolution diagnostics will be surfaced in Task 14.
                 for (&name, pat_item) in &pattern.patt_block {
                     for matched in self.fn_matched_pat_item(
-                        name, &ops, pat_item, def_id, header, has_self, self_ty, body, &mir_cfg, &mir_ddg,
+                        name, &ops, pat_item, &ResolvedOpBindings::empty(), def_id, header, has_self, self_ty,
+                        body, &mir_cfg, &mir_ddg,
                     ) {
                         let error = pattern
                             .get_diag(name, source_map, fn_name, body, decl, &matched)

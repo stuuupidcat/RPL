@@ -28,6 +28,34 @@ pub struct OpsConfig {
     pub instances: HashMap<Symbol, Vec<ResolvedOpInstance>>,
 }
 
+/// A single (group-name → resolved instance) assignment built from one element
+/// of the cartesian product over op-group instance vectors.
+///
+/// Passed from the driver's cartesian loop into `CheckMirCtxt` so that the
+/// matcher (Task 12) can substitute concrete types/paths for `OpRef` operands.
+#[derive(Debug, Clone, Default)]
+pub struct ResolvedOpBindings {
+    pub by_group: HashMap<Symbol, ResolvedOpInstance>,
+}
+
+impl ResolvedOpBindings {
+    /// Build bindings from parallel slices of group names and cloned instances.
+    pub fn from_combo(groups: &[Symbol], combo: Vec<&ResolvedOpInstance>) -> Self {
+        let by_group = groups.iter().copied().zip(combo.into_iter().cloned()).collect();
+        ResolvedOpBindings { by_group }
+    }
+
+    /// The empty binding set — used when a pattern references no op groups.
+    pub fn empty() -> Self {
+        ResolvedOpBindings { by_group: HashMap::new() }
+    }
+
+    /// Look up the instance bound to `group`, if any.
+    pub fn get(&self, group: &Symbol) -> Option<&ResolvedOpInstance> {
+        self.by_group.get(group)
+    }
+}
+
 impl OpsConfig {
     /// Returns the slice of resolved instances for the named group, or `&[]` if none exist.
     pub fn instances_of(&self, group: &str) -> &[ResolvedOpInstance] {
