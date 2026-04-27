@@ -219,7 +219,10 @@ impl<'pcx> PatCtxt<'pcx> {
         }
         {
             for ops_block in ops {
-                pattern.add_ops_block(with_path(mctx.get_active_path(), ops_block));
+                let wf_errors = pattern.add_ops_block(with_path(mctx.get_active_path(), ops_block));
+                for err in &wf_errors {
+                    warn!("ops well-formedness: {}", err);
+                }
             }
         }
         {

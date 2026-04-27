@@ -31,6 +31,7 @@ mod matched;
 mod mir;
 mod non_local_meta_vars;
 mod ops;
+pub mod ops_wf;
 mod pretty;
 mod table;
 mod ty;
@@ -42,6 +43,7 @@ pub use matched::{Matched, MatchedMap};
 pub use mir::*;
 pub use non_local_meta_vars::*;
 pub use ops::*;
+pub use ops_wf::{OpsWfError, check_ops_block};
 pub(crate) use table::TableHead;
 pub use ty::*;
 
@@ -560,22 +562,40 @@ impl<'pcx> Pattern<'pcx> {
 
     /// Lower an `opsBlock` pest pair into `self.ops_block`.
     ///
-    /// For each `opsItem` in the block we:
+    /// Runs well-formedness checks R1–R3 on the raw parse tree before any
+    /// lowering so that the `unreachable!()` contracts in `OpsMetaLookup`
+    /// cannot be triggered by malformed input.  Groups that fail a check are
+    /// skipped; callers should surface the returned errors to the user.
+    ///
+    /// For each (valid) `opsItem` in the block we:
     /// 1. Extract the group name (bare, no leading `$`).
     /// 2. Lower the `MetaVariableDeclList` into `NonLocalMetaVars` using a
     ///    minimal `GetType` implementation backed by the item's own type-var
     ///    declarations.
     /// 3. Lower each `OpFnDecl` into an `OpSignature` (name, params, ret).
     /// 4. Build an `OpGroup` and insert it into `self.ops_block.groups`.
+    ///
+    /// Returns the list of well-formedness errors found (if any).
     pub fn add_ops_block<'mcx: 'pcx>(
         &mut self,
         ops_block: WithPath<'mcx, &'mcx pairs::opsBlock<'mcx>>,
-    ) {
+    ) -> Vec<ops_wf::OpsWfError> {
+        // R1–R3: pre-validate before touching any lowering code.
+        let wf_errors = ops_wf::check_ops_block(ops_block.inner);
+        // Collect group names that have errors so we can skip them below.
+        let bad_groups: std::collections::HashSet<&str> =
+            wf_errors.iter().map(|e| e.group.as_str()).collect();
+
         let p = ops_block.path;
         for item in ops_block.opsItem() {
             // -- 1. Group name (bare Identifier, no `$`).
             let group_name = Symbol::intern(item.Identifier().span.as_str());
             let _span = item.span; // TODO(task-6): replace DUMMY_SP with a real rustc Span
+
+            // Skip groups that failed R1/R2/R3.
+            if bad_groups.contains(group_name.as_str()) {
+                continue;
+            }
 
             // -- 2. Pre-scan MetaVariableDeclList to build OpsMetaLookup.
             //    We need the lookup both for `NonLocalMetaVars::from_meta_decls`
@@ -630,6 +650,7 @@ impl<'pcx> Pattern<'pcx> {
             let group = OpGroup { name: group_name, meta_vars: meta, ops, span: rustc_span::DUMMY_SP }; // TODO(task-6): replace DUMMY_SP with a real rustc Span
             self.ops_block.groups.insert(group_name, group);
         }
+        wf_errors
     }
 
     pub fn add_diag<'mcx: 'pcx>(
