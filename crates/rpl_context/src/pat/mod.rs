@@ -6,12 +6,15 @@ use std::sync::Arc;
 pub use error::DynamicError;
 use error::DynamicErrorBuilder;
 use rpl_constraints::Constraints;
+use rpl_constraints::predicates::PredicateConjunction;
 use rpl_meta::collect_elems_separated_by_comma;
 use rpl_meta::meta::PattSymbolTables;
-use rpl_meta::symbol_table::WithPath;
+use rpl_meta::symbol_table::{GetType, MetaVariable, TypeOrPath, WithPath};
+use rpl_meta::utils::self_param_ty;
 use rpl_parser::generics::{Choice2, Choice3, Choice4};
 use rpl_parser::pairs;
 use rustc_data_structures::fx::{FxHashMap, FxIndexMap};
+use rustc_middle::mir::Mutability as MirMutability;
 use rustc_hir::FnDecl;
 use rustc_middle::mir::Body;
 use rustc_span::Symbol;
@@ -365,6 +368,7 @@ pub struct Pattern<'pcx> {
     pub pcx: PatCtxt<'pcx>,
     pub patt_block: FxIndexMap<Symbol, PatternItem<'pcx>>, // indexed by pat_name
     pub util_block: FxIndexMap<Symbol, &'pcx PatternItem<'pcx>>, // indexed by pat_name
+    pub ops_block: OpsBlock<'pcx>,
     diag_block: FxHashMap<Symbol, DynamicErrorBuilder<'pcx>>,
 }
 
@@ -374,6 +378,7 @@ impl<'pcx> Pattern<'pcx> {
             pcx,
             patt_block: Default::default(),
             util_block: Default::default(),
+            ops_block: OpsBlock::default(),
             diag_block: Default::default(),
         }
     }
@@ -553,6 +558,80 @@ impl<'pcx> Pattern<'pcx> {
         };
     }
 
+    /// Lower an `opsBlock` pest pair into `self.ops_block`.
+    ///
+    /// For each `opsItem` in the block we:
+    /// 1. Extract the group name (bare, no leading `$`).
+    /// 2. Lower the `MetaVariableDeclList` into `NonLocalMetaVars` using a
+    ///    minimal `GetType` implementation backed by the item's own type-var
+    ///    declarations.
+    /// 3. Lower each `OpFnDecl` into an `OpSignature` (name, params, ret).
+    /// 4. Build an `OpGroup` and insert it into `self.ops_block.groups`.
+    pub fn add_ops_block<'mcx: 'pcx>(
+        &mut self,
+        ops_block: WithPath<'mcx, &'mcx pairs::opsBlock<'mcx>>,
+    ) {
+        let p = ops_block.path;
+        for item in ops_block.opsItem() {
+            // -- 1. Group name (bare Identifier, no `$`).
+            let group_name = Symbol::intern(item.Identifier().span.as_str());
+            let _span = item.span; // pest_typed span; DUMMY_SP used for now
+
+            // -- 2. Pre-scan MetaVariableDeclList to build OpsMetaLookup.
+            //    We need the lookup both for `NonLocalMetaVars::from_meta_decls`
+            //    (const/place var types) and for `Ty::from` on param types
+            //    that reference type meta-variables like `$T`.
+            let meta_decl_list = item.MetaVariableDeclList();
+            let lookup = OpsMetaLookup::from_meta_decl_list(meta_decl_list);
+
+            // -- 3. Lower the MetaVariableDeclList into NonLocalMetaVars.
+            let meta = NonLocalMetaVars::from_meta_decls(
+                meta_decl_list.map(|mdl| WithPath::new(p, mdl)),
+                self.pcx,
+                &lookup,
+            );
+
+            // -- 4. Lower each OpFnDecl into OpSignature.
+            let mut ops: FxIndexMap<Symbol, OpSignature<'pcx>> = FxIndexMap::default();
+            for decl in item.OpFnDecl() {
+                let sig = decl.OpFnSig();
+                // Op name: FnName is PlaceHolder | MetaVariable | Identifier.
+                // In practice op fn names are MetaVariables like `$lock`.
+                let op_name_raw = sig.FnName().span.as_str();
+                let op_name = Symbol::intern(op_name_raw.trim_start_matches('$'));
+
+                // Lower parameters.
+                let params: Vec<Param<'pcx>> = if let Some(params_pair) = sig.OpFnParamsSeparatedByComma() {
+                    let (first, rest) = params_pair.OpFnParam();
+                    std::iter::once(first)
+                        .chain(rest)
+                        .filter_map(|param| lower_op_fn_param(p, param, self.pcx, &lookup))
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+
+                // Lower return type.
+                // We inline the logic of Ty::from_fn_ret because that function
+                // takes &FnSymbolTable specifically; here we use our OpsMetaLookup.
+                let ret = sig.FnRet().map(|fn_ret| {
+                    let (_, placeholder_or_ty) = fn_ret.get_matched();
+                    match placeholder_or_ty {
+                        Choice2::_0(_) => self.pcx.mk_any_ty(),
+                        Choice2::_1(ty) => Ty::from(WithPath::new(p, ty), self.pcx, &lookup),
+                    }
+                });
+
+                let op_sig = OpSignature { name: op_name, params, ret, span: rustc_span::DUMMY_SP };
+                ops.insert(op_name, op_sig);
+            }
+
+            // -- 5. Build OpGroup and insert.
+            let group = OpGroup { name: group_name, meta_vars: meta, ops, span: rustc_span::DUMMY_SP };
+            self.ops_block.groups.insert(group_name, group);
+        }
+    }
+
     pub fn add_diag<'mcx: 'pcx>(
         &mut self,
         diag: WithPath<'mcx, &'mcx pairs::diagBlock<'mcx>>,
@@ -590,4 +669,133 @@ impl<'pcx> Pattern<'pcx> {
             }
         }
     }
+}
+
+/// Minimal `GetType` implementation for lowering ops-item signatures.
+///
+/// Ops items do not import Rust types or paths — they only use type meta-variables
+/// (e.g. `$T`, `$U`) declared in the item's own `MetaVariableDeclList`.
+/// This struct is populated by pre-scanning that list and maps each declared
+/// type-variable name to its 0-based index.
+struct OpsMetaLookup<'i> {
+    /// (bare_name_with_dollar, index)
+    type_vars: Vec<(&'i str, usize)>,
+}
+
+impl<'i> OpsMetaLookup<'i> {
+    /// Build an `OpsMetaLookup` by scanning the `MetaVariableDeclList` of one
+    /// `opsItem`. Only `$T: type` style (type-kind) declarations are collected;
+    /// const and place vars are skipped (they would panic if their types
+    /// contained path identifiers, but that scenario is not supported yet).
+    fn from_meta_decl_list(meta_decl_list: Option<&'i pairs::MetaVariableDeclList<'i>>) -> Self {
+        let mut type_vars = Vec::new();
+        if let Some(mdl) = meta_decl_list
+            && let Some(inner) = mdl.get_matched().1
+        {
+            let decls = collect_elems_separated_by_comma!(inner).collect::<Vec<_>>();
+            let mut idx = 0usize;
+            for decl in &decls {
+                let (ident, _, ty, _) = decl.get_matched();
+                if matches!(ty.deref(), Choice3::_0(_)) {
+                    // Type meta-variable: retain name with $ prefix for matching.
+                    type_vars.push((ident.span.as_str(), idx));
+                    idx += 1;
+                }
+            }
+        }
+        Self { type_vars }
+    }
+}
+
+impl<'i> GetType<'i> for OpsMetaLookup<'i> {
+    fn get_type_or_path(
+        &self,
+        ident: &WithPath<'i, &pairs::Identifier<'i>>,
+    ) -> Result<TypeOrPath<'i>, rpl_meta::RPLMetaError<'i>> {
+        // Ops items do not support Rust path types — all their type parameters
+        // are meta-variables declared in the MetaVariableDeclList.
+        panic!(
+            "ops items do not support path types; got `{}` at {:?}",
+            ident.span.as_str(),
+            ident.path
+        )
+    }
+
+    fn force_get_meta_var(
+        &self,
+        ident: WithPath<'i, &pairs::MetaVariable<'i>>,
+    ) -> MetaVariable<'i> {
+        let name = ident.inner.span.as_str();
+        // The meta variable includes the `$` prefix in its span text.
+        if let Some((_, idx)) = self.type_vars.iter().find(|(n, _)| *n == name) {
+            MetaVariable::Type(*idx, PredicateConjunction::default())
+        } else {
+            panic!(
+                "Meta variable `{}` not declared in ops item at {:?}",
+                name,
+                ident.path
+            )
+        }
+    }
+}
+
+/// Lower a single `OpFnParam` into a `Param`, or return `None` for the
+/// variadic `..` case (which sets `non_exhaustive` rather than adding a param).
+///
+/// Handles the five alternatives of `OpFnParam`:
+/// - `SelfParam` → self parameter with auto-inferred type
+/// - `NormalParam` → `$name: Type`
+/// - `PlaceHolderWithType` → `_: Type`
+/// - `Type` → anonymous parameter with inferred type (e.g. `&mut $T`)
+/// - `Dot2` → variadic `..`; returns `None`
+fn lower_op_fn_param<'mcx, 'pcx: 'mcx>(
+    p: &'mcx std::path::Path,
+    param: &'mcx pairs::OpFnParam<'mcx>,
+    pcx: PatCtxt<'pcx>,
+    lookup: &OpsMetaLookup<'mcx>,
+) -> Option<Param<'pcx>> {
+    use utils::mutability_from_pair_mutability;
+
+    if let Some(self_param) = param.SelfParam() {
+        let (ty, mutability) = self_param_ty(self_param);
+        let ty = Ty::from(WithPath::new(p, ty), pcx, lookup);
+        return Some(Param {
+            mutability,
+            ident: Symbol::intern("self"),
+            ty,
+        });
+    }
+
+    if let Some(normal) = param.NormalParam() {
+        let (mutability, ident, _, ty) = normal.get_matched();
+        let mutability = mutability_from_pair_mutability(mutability);
+        let ident = Symbol::intern(ident.span.as_str());
+        let ty = Ty::from(WithPath::new(p, ty), pcx, lookup);
+        return Some(Param { mutability, ident, ty });
+    }
+
+    if let Some(place_holder_with_type) = param.PlaceHolderWithType() {
+        let (mutability, _placeholder, _, ty) = place_holder_with_type.get_matched();
+        let mutability = mutability_from_pair_mutability(mutability);
+        let ty = Ty::from(WithPath::new(p, ty), pcx, lookup);
+        return Some(Param {
+            mutability,
+            ident: Symbol::intern("_"),
+            ty,
+        });
+    }
+
+    if let Some(ty_only) = param.Type() {
+        // Bare `Type` parameter: no explicit name, synthesize `_`.
+        let ty = Ty::from(WithPath::new(p, ty_only), pcx, lookup);
+        return Some(Param {
+            mutability: MirMutability::Not,
+            ident: Symbol::intern("_"),
+            ty,
+        });
+    }
+
+    // Dot2 / `..` — variadic; callers can set non_exhaustive if needed.
+    // For ops signatures we simply drop it (no body to match against).
+    None
 }

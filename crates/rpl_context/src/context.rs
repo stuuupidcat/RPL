@@ -203,7 +203,7 @@ impl<'pcx> PatCtxt<'pcx> {
     ) {
         let pattern = self.new_pattern();
         // FIXME: process utils
-        let (utils, patts, diags) = collect_blocks(main);
+        let (utils, patts, ops, diags) = collect_blocks(main);
 
         let symbol_tables = &mctx.symbol_tables.get(id).unwrap();
         {
@@ -216,6 +216,11 @@ impl<'pcx> PatCtxt<'pcx> {
                     pat::PattOrUtil::Util,
                 );
             });
+        }
+        {
+            for ops_block in ops {
+                pattern.add_ops_block(with_path(mctx.get_active_path(), ops_block));
+            }
         }
         {
             let patt_items = patts.iter().flat_map(|patt| patt.get_matched().3.iter_matched());
