@@ -1,0 +1,16 @@
+# RPL workspace configuration.
+#
+# [[ops.<group>]] entries provide concrete instances of abstract op groups
+# declared in .rpl pattern files.  Any pattern file that declares
+# `ops { <group>[...] = { ... } }` will receive these instances at match time.
+#
+# The `type = [...]` array names the existential "free" placeholder(s) that
+# appear in the binding values.  After eager expansion, `T` and `U` resolve to
+# concrete generic paths; `strip_generics_and_split` in the matcher strips the
+# `<$1>` brackets and splits on `::` before DefId comparison.
+
+[[ops.sync]]
+type = ["$1"]
+T    = "std::sync::Mutex<$1>"
+U    = "std::sync::MutexGuard<$1>"
+lock = "std::sync::Mutex<$1>::lock"

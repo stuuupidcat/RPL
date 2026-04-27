@@ -517,9 +517,29 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         mir_ddg: &'a MirDataDepGraph,
     ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
         match pat_item {
-            PatternItem::RustItems(rust_items) => Either::Left(self.impl_matched(
-                name, rust_items, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg, bindings.clone(),
-            )),
+            PatternItem::RustItems(rust_items) => {
+                // Same cartesian-product treatment as `fn_matched_pat_item`.
+                let groups_used: Vec<Symbol> =
+                    rust_items.referenced_op_groups().iter().copied().collect();
+                let factors: Vec<Vec<&ResolvedOpInstance>> = groups_used
+                    .iter()
+                    .map(|g| ops.instances_of(g.as_str()).iter().collect())
+                    .collect();
+
+                let mut all: Vec<NormalizedMatched<'tcx>> = Vec::new();
+                for combo in cartesian(factors.into_iter().map(|v| v.into_iter())) {
+                    let combo_bindings = if groups_used.is_empty() {
+                        bindings.clone()
+                    } else {
+                        ResolvedOpBindings::from_combo(&groups_used, combo)
+                    };
+                    all.extend(self.impl_matched(
+                        name, rust_items, def_id, header, has_self, self_ty, body, mir_cfg,
+                        mir_ddg, combo_bindings,
+                    ));
+                }
+                Either::Left(all.into_iter())
+            },
             PatternItem::RPLPatternOperation(pat_op) => Either::Right(
                 self.impl_matched_pat_op(name, ops, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg),
             ),
@@ -674,9 +694,36 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         mir_ddg: &'a MirDataDepGraph,
     ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
         match pat_item {
-            PatternItem::RustItems(rust_items) => Either::Left(self.fn_matched(
-                name, rust_items, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg, bindings.clone(),
-            )),
+            PatternItem::RustItems(rust_items) => {
+                // If this RustItems pattern references any op groups, we need to iterate
+                // over the cartesian product of (group → instance) assignments, passing
+                // concrete bindings to each CheckMirCtxt invocation.  If the pattern
+                // references no op groups (the common case), `groups_used` is empty and
+                // `cartesian` yields one empty combo, which is equivalent to the
+                // original `bindings.clone()` path.
+                let groups_used: Vec<Symbol> =
+                    rust_items.referenced_op_groups().iter().copied().collect();
+                let factors: Vec<Vec<&ResolvedOpInstance>> = groups_used
+                    .iter()
+                    .map(|g| ops.instances_of(g.as_str()).iter().collect())
+                    .collect();
+
+                let mut all: Vec<NormalizedMatched<'tcx>> = Vec::new();
+                for combo in cartesian(factors.into_iter().map(|v| v.into_iter())) {
+                    let combo_bindings = if groups_used.is_empty() {
+                        // No op groups referenced — use the caller-supplied bindings
+                        // (preserves the existing behaviour for patterns without ops).
+                        bindings.clone()
+                    } else {
+                        ResolvedOpBindings::from_combo(&groups_used, combo)
+                    };
+                    all.extend(self.fn_matched(
+                        name, rust_items, def_id, header, has_self, self_ty, body, mir_cfg,
+                        mir_ddg, combo_bindings,
+                    ));
+                }
+                Either::Left(all.into_iter())
+            },
             PatternItem::RPLPatternOperation(pat_op) => Either::Right(
                 self.fn_matched_pat_op(name, ops, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg),
             ),
