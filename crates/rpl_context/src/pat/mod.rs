@@ -31,6 +31,7 @@ mod matched;
 mod mir;
 mod non_local_meta_vars;
 mod ops;
+pub mod ops_resolved;
 pub mod ops_uses;
 pub mod ops_wf;
 mod pretty;
