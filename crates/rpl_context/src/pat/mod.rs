@@ -27,6 +27,7 @@ mod item;
 mod matched;
 mod mir;
 mod non_local_meta_vars;
+mod ops;
 mod pretty;
 mod table;
 mod ty;
@@ -37,6 +38,7 @@ pub use item::*;
 pub use matched::{Matched, MatchedMap};
 pub use mir::*;
 pub use non_local_meta_vars::*;
+pub use ops::*;
 pub(crate) use table::TableHead;
 pub use ty::*;
 
