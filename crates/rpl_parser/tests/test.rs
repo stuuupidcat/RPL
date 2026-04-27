@@ -510,20 +510,38 @@ fn mir_local_decl() {
 fn ops_block_basic() {
     full_test!(
         opsBlock,
-        "ops {\n    sync[$T: type, $U: type] = {\n        fn $lock(&mut $T) -> $U;\n        fn $unlock(&mut $U) -> _;\n    }\n}"
+        "\
+ops {
+    sync[$T: type, $U: type] = {
+        fn $lock(&mut $T) -> $U;
+        fn $unlock(&mut $U) -> _;
+    }
+}"
     );
 }
 
 #[test]
 fn ops_block_no_meta_vars() {
-    full_test!(opsBlock, "ops {\n    sync = {\n        fn $lock();\n    }\n}");
+    full_test!(
+        opsBlock,
+        "\
+ops {
+    sync = {
+        fn $lock();
+    }
+}"
+    );
 }
 
 #[test]
 fn ops_block_multiple_groups() {
     full_test!(
         opsBlock,
-        "ops {\n    sync[$T: type] = { fn $lock(&mut $T) -> _; }\n    logger[$L: type] = { fn $log(&$L); }\n}"
+        "\
+ops {
+    sync[$T: type] = { fn $lock(&mut $T) -> _; }
+    logger[$L: type] = { fn $log(&$L); }
+}"
     );
 }
 

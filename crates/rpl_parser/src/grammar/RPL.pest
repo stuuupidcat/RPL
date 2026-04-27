@@ -972,6 +972,7 @@ diagBlockItem = {
     Identifier ~ Assign ~ LeftBrace ~ diagItems ~ MetaVariableWithDiagMessageSeparatedByComma? ~ RightBrace
 }
 
+// ops block helpers
 // A function parameter in an op group signature: supports type-only params
 // (e.g. `&mut $T`) in addition to the named/self forms from FnParam.
 OpFnParam = {
@@ -992,13 +993,11 @@ OpFnSig = {
 }
 
 // One signature-only Rust function declaration inside an op group.
-FnDecl    = { Attr* ~ OpFnSig ~ SemiColon }
+OpFnDecl  = { OpFnSig ~ SemiColon }
 
 // One named op group, e.g. `sync[$T:type, $U:type] = { fn $lock(...); ... }`.
 opsItem   = { Attr* ~ Identifier ~ MetaVariableDeclList? ~ Assign
-              ~ LeftBrace ~ (FnDecl)+ ~ RightBrace }
-
-opsBlock  = { kw_ops ~ LeftBrace ~ (opsItem)* ~ RightBrace }
+              ~ LeftBrace ~ (OpFnDecl)+ ~ RightBrace }
 
 // RPL Blocks
 pattBlock =  {
@@ -1006,6 +1005,9 @@ pattBlock =  {
 }
 utilBlock =  {
     kw_util ~ LeftBrace ~ (UsePath)* ~ (RPLPatternItem)* ~ RightBrace
+}
+opsBlock  =  {
+    kw_ops ~ LeftBrace ~ (opsItem)* ~ RightBrace
 }
 diagBlock =  {
     kw_diag ~ LeftBrace ~ (diagBlockItem)* ~ RightBrace
