@@ -1,3 +1,4 @@
+//@compile-flags: -Zinline-mir=false
 use std::sync::Mutex;
 
 fn main() {

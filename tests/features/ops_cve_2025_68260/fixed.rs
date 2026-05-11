@@ -1,3 +1,4 @@
+//@compile-flags: -Zinline-mir=false
 //! CVE-2025-68260 POC — fixed variant.
 //!
 //! Mirrors the post-fix shape:
@@ -11,6 +12,7 @@
 //! fixed variant lets the guard drop naturally (no black_box call), the pattern
 //! cannot match — demonstrating the structural asymmetry.
 #![feature(core_intrinsics)]
+#![allow(internal_features, dead_code, unused_must_use)]
 use std::sync::Mutex;
 
 #[inline(never)]

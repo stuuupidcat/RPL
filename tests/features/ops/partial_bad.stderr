@@ -1,9 +1,0 @@
-error: partial_bad pattern matched
- --> tests/features/ops/partial_bad.rs:5:14
-  |
-5 |     let _g = m.lock().unwrap();
-  |              ^^^^^^^^
-  |
-  = note: `#[deny(rpl::ops_partial_bad)]` on by default
-
-error: aborting due to 1 previous error

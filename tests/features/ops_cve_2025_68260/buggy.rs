@@ -1,3 +1,4 @@
+//@compile-flags: -Zinline-mir=false
 //! CVE-2025-68260 POC — buggy variant.
 //!
 //! Mirrors the pre-fix shape of Linux kernel Node::release:
@@ -8,6 +9,7 @@
 //!
 //! The `ops_cve_2025_68260` pattern should fire here.
 #![feature(core_intrinsics)]
+#![allow(internal_features, dead_code, unused_must_use)]
 use std::sync::Mutex;
 
 // Stand-ins for the kernel's intrusive-list operations.

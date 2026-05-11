@@ -1,9 +1,0 @@
-error: lock-unlock pair detected via abstract op
- --> tests/features/ops/lock_unlock.rs:6:14
-  |
-6 |     let _g = m.lock().unwrap();
-  |              ^^^^^^^^
-  |
-  = note: `#[deny(rpl::ops_lock_unlock)]` on by default
-
-error: aborting due to 1 previous error

@@ -48,7 +48,8 @@ RPL_PATS="tests/features/ops/set_op_with_ops.rpl" \
   cargo run --bin rpl-driver -- "tests/features/ops/set_op_with_ops.rs" 2>&1 | tee .ansi || true
 
 # two_groups: two op groups (sync_2g × logger_2g); cartesian-product expansion.
-# Mutex + str::len combination in main() is the only one that matches.
+# Mutex × black_box combination in main() is the only one that fires (RwLock
+# also has an instance, but no matching call site is present).
 # Expected: one lint → exit 1 (|| true is intentional).
 RPL_PATS="tests/features/ops/two_groups.rpl" \
   cargo run --bin rpl-driver -- "tests/features/ops/two_groups.rs" 2>&1 | tee .ansi || true

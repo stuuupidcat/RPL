@@ -59,9 +59,11 @@ lock   = "std::sync::Mutex<$1>::lock"
 unlock = "std::intrinsics::black_box"
 
 # ---------------------------------------------------------------------------
-# Task 14: two_groups test — cartesian product over two op groups
-# sync_2g: 2 instances (Mutex, RwLock)
-# logger_2g: 2 instances (str::len, str::is_empty)
+# two_groups test — cartesian product over two op groups.
+#   sync_2g:   2 instances (Mutex, RwLock)
+#   logger_2g: 1 instance  (std::intrinsics::black_box)
+# Total combinations: 2 × 1 = 2.  Only (Mutex, black_box) fires in the test
+# body; (RwLock, black_box) has no matching RwLock call site.
 # ---------------------------------------------------------------------------
 
 [[ops.sync_2g]]
