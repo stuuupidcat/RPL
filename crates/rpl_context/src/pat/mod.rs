@@ -1,3 +1,4 @@
+use std::cell::OnceCell;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::ops::Deref;
@@ -115,8 +116,13 @@ pub struct RustItems<'pcx> {
     pub attr: PatAttr<'pcx>,
     /// The set of op-group names referenced by `Operand::OpRef` anywhere in
     /// this pattern's function bodies.  Populated by
-    /// [`Pattern::populate_referenced_op_groups`] after lowering completes.
-    pub(crate) referenced_op_groups: FxHashSet<Symbol>,
+    /// [`Pattern::check_and_populate_op_refs`] after lowering completes.
+    ///
+    /// Stored in a `OnceCell` so it can be initialised via a shared `&Self`
+    /// reference (as held by `util_block`, where items are arena-allocated and
+    /// shared across multiple `PatternOperation`s).  Reads before population
+    /// return an empty set via `get_or_init`.
+    pub(crate) referenced_op_groups: OnceCell<FxHashSet<Symbol>>,
 }
 
 impl<'pcx> RustItems<'pcx> {
@@ -128,18 +134,23 @@ impl<'pcx> RustItems<'pcx> {
             fns: Default::default(),
             impls: Default::default(),
             attr,
-            referenced_op_groups: Default::default(),
+            referenced_op_groups: OnceCell::new(),
         }
     }
 
     /// Returns the set of op-group names referenced by `$group::$op` operands
     /// anywhere in this pattern's function bodies.
     ///
-    /// This is populated by [`Pattern::populate_referenced_op_groups`] after
-    /// all pattern items and the ops block have been lowered.  The matcher
-    /// (Task 11) consumes this to know which op-group instances to iterate.
+    /// This is populated by [`Pattern::check_and_populate_op_refs`] after all
+    /// pattern items and the ops block have been lowered.  The matcher (Task
+    /// 11) consumes this to know which op-group instances to iterate.
+    ///
+    /// If called before population, returns a (durable) empty set via
+    /// `OnceCell::get_or_init`; subsequent population attempts on an
+    /// already-initialised cell are silently ignored, which preserves the
+    /// invariant that the first observed value is the final one.
     pub fn referenced_op_groups(&self) -> &FxHashSet<Symbol> {
-        &self.referenced_op_groups
+        self.referenced_op_groups.get_or_init(FxHashSet::default)
     }
 
     fn add_item(
@@ -717,45 +728,34 @@ impl<'pcx> Pattern<'pcx> {
     /// Call this **after** both `add_ops_block` and all `add_pattern_item`
     /// calls have completed.
     ///
-    /// **`util_block` mutation**: `util_block` stores shared (`&'pcx`)
-    /// references to arena-allocated items so they can be shared across
-    /// multiple `PatternOperation`s.  We need to mutate `referenced_op_groups`
-    /// on those items after construction is complete (at which point no other
-    /// references to the items are being actively read).  The items are
-    /// allocated in a bump arena that outlives this function; they are never
-    /// moved or freed during `'pcx`.  The `unsafe` cast from `&PatternItem` to
-    /// `&mut PatternItem` is sound here because:
-    ///   1. No other code observes `referenced_op_groups` until after this function returns
-    ///      (construction is single-threaded and sequential).
-    ///   2. The field being mutated (`referenced_op_groups`) is entirely separate from the
-    ///      structural fields used to build the item.
+    /// `referenced_op_groups` is now a `OnceCell`, so population goes through
+    /// `OnceCell::set` via a shared reference.  This works uniformly for
+    /// `patt_block` (owned `PatternItem`s) and `util_block` (arena-allocated
+    /// items shared across multiple `PatternOperation`s) — no `unsafe` is
+    /// needed.  A second `set` on an already-initialised cell returns `Err`
+    /// and is ignored: by construction, each `RustItems` is visited once here
+    /// and not observed by any reader until after this function returns.
     pub fn check_and_populate_op_refs(&mut self) {
         let mut all_errors = Vec::new();
 
-        // Process patt_block items (owned — no unsafe needed).
-        for (_name, item) in &mut self.patt_block {
+        let process = |rust_items: &RustItems<'pcx>, errors: &mut Vec<ops_uses::OpsUseError>| {
+            let mut referenced = FxHashSet::default();
+            let errs = ops_uses::check_op_refs(rust_items, &self.ops_block, &mut referenced);
+            // `set` returns Err iff the cell was already initialised; that
+            // would indicate this function ran twice, which is a logic bug
+            // but not a soundness one — silently keep the prior value.
+            let _ = rust_items.referenced_op_groups.set(referenced);
+            errors.extend(errs);
+        };
+
+        for (_name, item) in &self.patt_block {
             if let PatternItem::RustItems(rust_items) = item {
-                let mut referenced = FxHashSet::default();
-                let errs = ops_uses::check_op_refs(rust_items, &self.ops_block, &mut referenced);
-                rust_items.referenced_op_groups = referenced;
-                all_errors.extend(errs);
+                process(rust_items, &mut all_errors);
             }
         }
-
-        // Process util_block items (arena-allocated; see safety comment above).
         for (_name, item_ref) in &self.util_block {
-            // SAFETY: the item is allocated in a bump arena that outlives this
-            // function, is not aliased mutably elsewhere at this point, and the
-            // only field we write (`referenced_op_groups`) is not being
-            // concurrently observed.
-            #[allow(invalid_reference_casting)]
-            let item: &mut PatternItem<'pcx> =
-                unsafe { &mut *((*item_ref) as *const PatternItem<'pcx> as *mut PatternItem<'pcx>) };
-            if let PatternItem::RustItems(rust_items) = item {
-                let mut referenced = FxHashSet::default();
-                let errs = ops_uses::check_op_refs(rust_items, &self.ops_block, &mut referenced);
-                rust_items.referenced_op_groups = referenced;
-                all_errors.extend(errs);
+            if let PatternItem::RustItems(rust_items) = *item_ref {
+                process(rust_items, &mut all_errors);
             }
         }
 
