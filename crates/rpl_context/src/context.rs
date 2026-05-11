@@ -218,11 +218,19 @@ impl<'pcx> PatCtxt<'pcx> {
             });
         }
         {
-            for ops_block in ops {
+            for ops_block in &ops {
                 let wf_errors = pattern.add_ops_block(with_path(mctx.get_active_path(), ops_block));
                 for err in &wf_errors {
                     warn!("ops well-formedness: {}", err);
                 }
+            }
+            // R6: op-level meta-vars (declared in `ops { ... }`) must not leak
+            // into pattern-block bodies.  Implemented but previously never
+            // invoked — the rule was unenforced.  Surface violations as
+            // warnings here, alongside R1–R3.
+            let r6_errors = pat::check_r6_patt_vs_ops(&ops, &patts);
+            for err in &r6_errors {
+                warn!("ops well-formedness (R6): {}", err);
             }
         }
         {
