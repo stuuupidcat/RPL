@@ -111,8 +111,8 @@ pub enum ResolveDiagnostic {
 /// strings rather than typed `Ty<'pcx>` / `Path<'pcx>`.  C6 (parse-clean check)
 /// is therefore deferred to match time; if a string fails to parse there, the
 /// matcher will surface a runtime error.
-pub fn resolve_ops_config<'pcx>(
-    pattern: &Pattern<'pcx>,
+pub fn resolve_ops_config(
+    pattern: &Pattern<'_>,
     raw: &[(String, Vec<rpl_config::RawOpInstance>)],
 ) -> (OpsConfig, Vec<ResolveDiagnostic>) {
     let mut diagnostics = Vec::new();
@@ -147,9 +147,9 @@ pub fn resolve_ops_config<'pcx>(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-fn resolve_one<'pcx>(
+fn resolve_one(
     group_name: &str,
-    group: &crate::pat::OpGroup<'pcx>,
+    group: &crate::pat::OpGroup<'_>,
     raw: &rpl_config::RawOpInstance,
 ) -> Result<ResolvedOpInstance, ResolveDiagnostic> {
     // C2: every type meta-var declared in the group must have a binding.

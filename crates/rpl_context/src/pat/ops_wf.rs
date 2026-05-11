@@ -75,7 +75,7 @@ fn check_ops_item(item: &pairs::opsItem<'_>, errors: &mut Vec<OpsWfError>) {
     // -- R2 + R3: walk each OpFnDecl signature.
     for decl in item.OpFnDecl() {
         let sig = decl.OpFnSig();
-        check_op_sig(group_name, &sig, &declared_type_vars, errors);
+        check_op_sig(group_name, sig, &declared_type_vars, errors);
     }
 }
 

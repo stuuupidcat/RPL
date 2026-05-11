@@ -19,7 +19,7 @@ fn empty_input_yields_one_empty_combo() {
 fn single_factor_yields_one_combo_per_element() {
     let factors = vec![vec![1usize, 2, 3]];
     let iters: Vec<_> = factors.into_iter().map(|v| v.into_iter()).collect();
-    let combos: Vec<Vec<usize>> = cartesian(iters.into_iter()).collect();
+    let combos: Vec<Vec<usize>> = cartesian(iters).collect();
     assert_eq!(combos.len(), 3);
 }
 
@@ -27,7 +27,7 @@ fn single_factor_yields_one_combo_per_element() {
 fn two_factors_two_three_yields_six() {
     let factors = vec![vec![1usize, 2], vec![10, 20, 30]];
     let iters: Vec<_> = factors.into_iter().map(|v| v.into_iter()).collect();
-    let combos: Vec<Vec<usize>> = cartesian(iters.into_iter()).collect();
+    let combos: Vec<Vec<usize>> = cartesian(iters).collect();
     assert_eq!(combos.len(), 6);
 }
 
@@ -35,6 +35,6 @@ fn two_factors_two_three_yields_six() {
 fn one_empty_factor_yields_zero_combos() {
     let factors: Vec<Vec<usize>> = vec![vec![1, 2], vec![]];
     let iters: Vec<_> = factors.into_iter().map(|v| v.into_iter()).collect();
-    let combos: Vec<Vec<usize>> = cartesian(iters.into_iter()).collect();
+    let combos: Vec<Vec<usize>> = cartesian(iters).collect();
     assert!(combos.is_empty(), "an empty factor folds the product to empty");
 }

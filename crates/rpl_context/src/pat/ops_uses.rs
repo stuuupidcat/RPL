@@ -103,46 +103,39 @@ fn check_basic_block(
 ) {
     // We only need to look at terminators; OpRef appears as the `func` operand
     // of a Call terminator (never in a statement rvalue).
-    if let Some(terminator) = &bb_data.terminator {
-        if let TerminatorKind::Call { func, args, .. } = terminator {
-            if let Operand::OpRef { group, op } = func {
-                // Record the group name (even if invalid — callers may want the
-                // full list for diagnostics).
-                referenced_groups.insert(*group);
+    if let Some(TerminatorKind::Call { func: Operand::OpRef { group, op }, args, .. }) = &bb_data.terminator {
+        // Record the group name (even if invalid — callers may want the
+        // full list for diagnostics).
+        referenced_groups.insert(*group);
 
-                // R4a: group must be declared.
-                let Some(op_group) = ops_block.groups.get(group) else {
-                    errors.push(OpsUseError::new(format!(
-                        "op group '{}' is not declared",
-                        group.as_str()
-                    )));
-                    return;
-                };
+        // R4a: group must be declared.
+        let Some(op_group) = ops_block.groups.get(group) else {
+            errors.push(OpsUseError::new(format!("op group '{}' is not declared", group.as_str())));
+            return;
+        };
 
-                // R4b: op must be declared within the group.
-                let Some(op_sig) = op_group.ops.get(op) else {
-                    errors.push(OpsUseError::new(format!(
-                        "op '{}' is not declared in op group '{}'",
-                        op.as_str(),
-                        group.as_str()
-                    )));
-                    return;
-                };
+        // R4b: op must be declared within the group.
+        let Some(op_sig) = op_group.ops.get(op) else {
+            errors.push(OpsUseError::new(format!(
+                "op '{}' is not declared in op group '{}'",
+                op.as_str(),
+                group.as_str()
+            )));
+            return;
+        };
 
-                // R5: arity check.
-                let expected = op_sig.params.len();
-                let got = args.len();
-                if expected != got {
-                    errors.push(OpsUseError::new(format!(
-                        "arity mismatch for op '{}::{}': expected {} arg{}, got {}",
-                        group.as_str(),
-                        op.as_str(),
-                        expected,
-                        if expected == 1 { "" } else { "s" },
-                        got
-                    )));
-                }
-            }
+        // R5: arity check.
+        let expected = op_sig.params.len();
+        let got = args.len();
+        if expected != got {
+            errors.push(OpsUseError::new(format!(
+                "arity mismatch for op '{}::{}': expected {} arg{}, got {}",
+                group.as_str(),
+                op.as_str(),
+                expected,
+                if expected == 1 { "" } else { "s" },
+                got
+            )));
         }
     }
 }
