@@ -14,9 +14,8 @@ use rpl_meta::utils::self_param_ty;
 use rpl_parser::generics::{Choice2, Choice3, Choice4};
 use rpl_parser::pairs;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet, FxIndexMap};
-use rustc_middle::mir::Mutability as MirMutability;
 use rustc_hir::FnDecl;
-use rustc_middle::mir::Body;
+use rustc_middle::mir::{Body, Mutability as MirMutability};
 use rustc_span::Symbol;
 use rustc_span::source_map::SourceMap;
 
@@ -622,9 +621,8 @@ impl<'pcx> Pattern<'pcx> {
     ///
     /// For each (valid) `opsItem` in the block we:
     /// 1. Extract the group name (bare, no leading `$`).
-    /// 2. Lower the `MetaVariableDeclList` into `NonLocalMetaVars` using a
-    ///    minimal `GetType` implementation backed by the item's own type-var
-    ///    declarations.
+    /// 2. Lower the `MetaVariableDeclList` into `NonLocalMetaVars` using a minimal `GetType`
+    ///    implementation backed by the item's own type-var declarations.
     /// 3. Lower each `OpFnDecl` into an `OpSignature` (name, params, ret).
     /// 4. Build an `OpGroup` and insert it into `self.ops_block.groups`.
     ///
@@ -636,8 +634,7 @@ impl<'pcx> Pattern<'pcx> {
         // R1–R3: pre-validate before touching any lowering code.
         let wf_errors = ops_wf::check_ops_block(ops_block.inner);
         // Collect group names that have errors so we can skip them below.
-        let bad_groups: std::collections::HashSet<&str> =
-            wf_errors.iter().map(|e| e.group.as_str()).collect();
+        let bad_groups: std::collections::HashSet<&str> = wf_errors.iter().map(|e| e.group.as_str()).collect();
 
         let p = ops_block.path;
         for item in ops_block.opsItem() {
@@ -658,11 +655,8 @@ impl<'pcx> Pattern<'pcx> {
             let lookup = OpsMetaLookup::from_meta_decl_list(meta_decl_list);
 
             // -- 3. Lower the MetaVariableDeclList into NonLocalMetaVars.
-            let meta = NonLocalMetaVars::from_meta_decls(
-                meta_decl_list.map(|mdl| WithPath::new(p, mdl)),
-                self.pcx,
-                &lookup,
-            );
+            let meta =
+                NonLocalMetaVars::from_meta_decls(meta_decl_list.map(|mdl| WithPath::new(p, mdl)), self.pcx, &lookup);
 
             // -- 4. Lower each OpFnDecl into OpSignature.
             let mut ops: FxIndexMap<Symbol, OpSignature<'pcx>> = FxIndexMap::default();
@@ -695,12 +689,22 @@ impl<'pcx> Pattern<'pcx> {
                     }
                 });
 
-                let op_sig = OpSignature { name: op_name, params, ret, span: rustc_span::DUMMY_SP }; // TODO(task-6): replace DUMMY_SP with a real rustc Span
+                let op_sig = OpSignature {
+                    name: op_name,
+                    params,
+                    ret,
+                    span: rustc_span::DUMMY_SP,
+                }; // TODO(task-6): replace DUMMY_SP with a real rustc Span
                 ops.insert(op_name, op_sig);
             }
 
             // -- 5. Build OpGroup and insert.
-            let group = OpGroup { name: group_name, meta_vars: meta, ops, span: rustc_span::DUMMY_SP }; // TODO(task-6): replace DUMMY_SP with a real rustc Span
+            let group = OpGroup {
+                name: group_name,
+                meta_vars: meta,
+                ops,
+                span: rustc_span::DUMMY_SP,
+            }; // TODO(task-6): replace DUMMY_SP with a real rustc Span
             self.ops_block.groups.insert(group_name, group);
         }
         wf_errors
@@ -721,10 +725,10 @@ impl<'pcx> Pattern<'pcx> {
     /// allocated in a bump arena that outlives this function; they are never
     /// moved or freed during `'pcx`.  The `unsafe` cast from `&PatternItem` to
     /// `&mut PatternItem` is sound here because:
-    ///   1. No other code observes `referenced_op_groups` until after this
-    ///      function returns (construction is single-threaded and sequential).
-    ///   2. The field being mutated (`referenced_op_groups`) is entirely
-    ///      separate from the structural fields used to build the item.
+    ///   1. No other code observes `referenced_op_groups` until after this function returns
+    ///      (construction is single-threaded and sequential).
+    ///   2. The field being mutated (`referenced_op_groups`) is entirely separate from the
+    ///      structural fields used to build the item.
     pub fn check_and_populate_op_refs(&mut self) {
         let mut all_errors = Vec::new();
 
@@ -864,10 +868,7 @@ impl<'i> GetType<'i> for OpsMetaLookup<'i> {
         )
     }
 
-    fn force_get_meta_var(
-        &self,
-        ident: WithPath<'i, &pairs::MetaVariable<'i>>,
-    ) -> MetaVariable<'i> {
+    fn force_get_meta_var(&self, ident: WithPath<'i, &pairs::MetaVariable<'i>>) -> MetaVariable<'i> {
         let name = ident.inner.span.as_str();
         // The meta variable includes the `$` prefix in its span text.
         if let Some((_, idx)) = self.type_vars.iter().find(|(n, _)| *n == name) {
@@ -880,8 +881,7 @@ impl<'i> GetType<'i> for OpsMetaLookup<'i> {
                 "internal: meta-variable `{}` at {:?} is not declared in this \
                  ops item; this should have been rejected by resolver check R1 \
                  before lowering",
-                name,
-                ident.path
+                name, ident.path
             )
         }
     }

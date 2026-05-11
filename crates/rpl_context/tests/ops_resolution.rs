@@ -60,16 +60,14 @@ patt { p[] = fn _ () -> _ {} }
 /// Uses `Box::leak` to extend arena and path lifetime to `'static`, mirroring
 /// the approach used in `ops_lowering.rs`.
 fn with_pattern<F: for<'pcx> FnMut(&rpl_context::pat::Pattern<'pcx>)>(src: &str, mut f: F) {
-    let arena: &'static rpl_meta::arena::Arena<'static> =
-        Box::leak(Box::new(rpl_meta::arena::Arena::default()));
+    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
     let path_and_content: &'static Vec<(PathBuf, String)> =
         Box::leak(Box::new(vec![(PathBuf::from("test.rpl"), src.to_string())]));
 
-    let mctx: &'static rpl_meta::context::MetaContext<'static> = Box::leak(Box::new(
-        rpl_meta::parse_and_collect(arena, path_and_content, |err| {
+    let mctx: &'static rpl_meta::context::MetaContext<'static> =
+        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
             panic!("RPL parse/collect error: {err}");
-        }),
-    ));
+        })));
 
     PatternCtxt::entered_no_tcx(|pcx| {
         pcx.add_parsed_patterns(mctx);
@@ -102,7 +100,10 @@ fn happy_path_eager_expansion() {
             )],
         )];
         let (cfg, diags) = resolve_ops_config(pattern, &raw);
-        assert!(diags.is_empty(), "no diagnostics expected for happy path, got: {diags:?}");
+        assert!(
+            diags.is_empty(),
+            "no diagnostics expected for happy path, got: {diags:?}"
+        );
 
         let sync = cfg.instances_of("sync");
         assert_eq!(sync.len(), 1, "expected exactly one resolved instance");
@@ -126,8 +127,14 @@ fn happy_path_eager_expansion() {
 
         // T should expand to the Mutex string.
         let t_val = inst.types.get(&Symbol::intern("T")).unwrap();
-        assert!(t_val.contains("Mutex"), "T type should expand to Mutex<$1>, got: {t_val}");
-        assert!(t_val.contains("$1"), "T type should retain $1 placeholder, got: {t_val}");
+        assert!(
+            t_val.contains("Mutex"),
+            "T type should expand to Mutex<$1>, got: {t_val}"
+        );
+        assert!(
+            t_val.contains("$1"),
+            "T type should retain $1 placeholder, got: {t_val}"
+        );
     });
 }
 
@@ -154,7 +161,10 @@ fn c2_missing_meta_var_binding_warns_and_skips() {
             matches!(&diags[..], [ResolveDiagnostic::MissingBinding { .. }]),
             "expected exactly one MissingBinding diagnostic, got: {diags:?}"
         );
-        assert!(cfg.instances_of("sync").is_empty(), "instance with missing T must be skipped");
+        assert!(
+            cfg.instances_of("sync").is_empty(),
+            "instance with missing T must be skipped"
+        );
     });
 }
 
@@ -179,10 +189,15 @@ fn c4_unknown_extra_key_warns_and_skips() {
         let (cfg, diags) = resolve_ops_config(pattern, &raw);
 
         assert!(
-            diags.iter().any(|d| matches!(d, ResolveDiagnostic::UnknownKey { name, .. } if name == "foo")),
+            diags
+                .iter()
+                .any(|d| matches!(d, ResolveDiagnostic::UnknownKey { name, .. } if name == "foo")),
             "expected an UnknownKey diagnostic for 'foo', got: {diags:?}"
         );
-        assert!(cfg.instances_of("sync").is_empty(), "instance with unknown key must be skipped");
+        assert!(
+            cfg.instances_of("sync").is_empty(),
+            "instance with unknown key must be skipped"
+        );
     });
 }
 
@@ -245,7 +260,11 @@ fn good_and_bad_instance_separated() {
         )];
         let (cfg, diags) = resolve_ops_config(pattern, &raw);
 
-        assert_eq!(diags.len(), 1, "expected exactly 1 diagnostic (for the bad instance), got: {diags:?}");
+        assert_eq!(
+            diags.len(),
+            1,
+            "expected exactly 1 diagnostic (for the bad instance), got: {diags:?}"
+        );
         assert_eq!(
             cfg.instances_of("sync").len(),
             1,

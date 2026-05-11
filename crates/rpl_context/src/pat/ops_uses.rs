@@ -15,7 +15,7 @@
 use rustc_data_structures::fx::FxHashSet;
 use rustc_span::Symbol;
 
-use crate::pat::{BasicBlockData, FnPatternBody, FnPatterns, OpsBlock, Operand, RustItems, TerminatorKind};
+use crate::pat::{BasicBlockData, FnPatternBody, FnPatterns, Operand, OpsBlock, RustItems, TerminatorKind};
 
 // ---------------------------------------------------------------------------
 // Public error type
@@ -29,7 +29,9 @@ pub struct OpsUseError {
 
 impl OpsUseError {
     fn new(message: impl Into<String>) -> Self {
-        Self { message: message.into() }
+        Self {
+            message: message.into(),
+        }
     }
 }
 
@@ -48,8 +50,7 @@ impl std::fmt::Display for OpsUseError {
 ///
 /// 1. **(R4a)** Check that `group` is declared in `ops_block.groups`.
 /// 2. **(R4b)** Check that `op` is declared within that group.
-/// 3. **(R5)** Check that the call-site argument count matches the op
-///    signature's parameter count.
+/// 3. **(R5)** Check that the call-site argument count matches the op signature's parameter count.
 ///
 /// Also collects every group name referenced by a (potentially invalid) OpRef
 /// into `referenced_groups`, which is used to populate

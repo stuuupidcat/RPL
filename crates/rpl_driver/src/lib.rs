@@ -55,8 +55,8 @@ use rustc_span::{Span, Symbol};
 ///
 /// - Empty input (no factors): yields a single empty combination.
 /// - Any factor that is empty: yields zero combinations (fold-on-empty semantics).
-/// - Otherwise: yields every combination of one element from each factor,
-///   with the rightmost index varying fastest (odometer order).
+/// - Otherwise: yields every combination of one element from each factor, with the rightmost index
+///   varying fastest (odometer order).
 ///
 /// The "fold on empty instances" property falls out of the helper: an empty
 /// factor folds the product to zero combinations, which contributes the empty
@@ -70,15 +70,30 @@ where
 
     if factors.is_empty() {
         // No factors → yield one empty combination.
-        return CartesianIter { factors: Vec::new(), indices: Vec::new(), done: false, empty_fold: false };
+        return CartesianIter {
+            factors: Vec::new(),
+            indices: Vec::new(),
+            done: false,
+            empty_fold: false,
+        };
     }
     if factors.iter().any(|f| f.is_empty()) {
         // Any empty factor → fold to zero combos.
-        return CartesianIter { factors: Vec::new(), indices: Vec::new(), done: true, empty_fold: true };
+        return CartesianIter {
+            factors: Vec::new(),
+            indices: Vec::new(),
+            done: true,
+            empty_fold: true,
+        };
     }
 
     let n = factors.len();
-    CartesianIter { factors, indices: vec![0usize; n], done: false, empty_fold: false }
+    CartesianIter {
+        factors,
+        indices: vec![0usize; n],
+        done: false,
+        empty_fold: false,
+    }
 }
 
 /// Iterator returned by [`cartesian`].
@@ -103,7 +118,12 @@ impl<T: Clone> Iterator for CartesianIter<T> {
             return Some(Vec::new());
         }
 
-        let combo: Vec<T> = self.factors.iter().zip(&self.indices).map(|(f, &i)| f[i].clone()).collect();
+        let combo: Vec<T> = self
+            .factors
+            .iter()
+            .zip(&self.indices)
+            .map(|(f, &i)| f[i].clone())
+            .collect();
 
         // Increment odometer (rightmost index varies fastest).
         let mut k = self.factors.len();
@@ -207,16 +227,15 @@ pub fn check_crate<'tcx, 'pcx, 'mcx: 'pcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>
 
     // Resolve raw ops from rpl.toml into typed bindings against the loaded patterns.
     // `load_raw_ops` returns an empty map when there is no rpl.toml or no [ops] table.
-    let raw_ops: Vec<(String, Vec<RawOpInstance>)> =
-        match rpl_config::load_raw_ops(None) {
-            Ok(map) => map.into_iter().collect(),
-            Err(err) => {
-                // Config loading failure is non-fatal: surface as a warning and continue
-                // without any op instances.
-                tcx.dcx().warn(format!("rpl: failed to load rpl.toml ops: {err}"));
-                Vec::new()
-            },
-        };
+    let raw_ops: Vec<(String, Vec<RawOpInstance>)> = match rpl_config::load_raw_ops(None) {
+        Ok(map) => map.into_iter().collect(),
+        Err(err) => {
+            // Config loading failure is non-fatal: surface as a warning and continue
+            // without any op instances.
+            tcx.dcx().warn(format!("rpl: failed to load rpl.toml ops: {err}"));
+            Vec::new()
+        },
+    };
 
     // _ = tcx.hir_crate_items(()).par_items(|item_id| {
     //     check_item(tcx, pcx, item_id);
@@ -519,8 +538,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         match pat_item {
             PatternItem::RustItems(rust_items) => {
                 // Same cartesian-product treatment as `fn_matched_pat_item`.
-                let groups_used: Vec<Symbol> =
-                    rust_items.referenced_op_groups().iter().copied().collect();
+                let groups_used: Vec<Symbol> = rust_items.referenced_op_groups().iter().copied().collect();
                 let factors: Vec<Vec<&ResolvedOpInstance>> = groups_used
                     .iter()
                     .map(|g| ops.instances_of(g.as_str()).iter().collect())
@@ -534,15 +552,23 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                         ResolvedOpBindings::from_combo(&groups_used, combo)
                     };
                     all.extend(self.impl_matched(
-                        name, rust_items, def_id, header, has_self, self_ty, body, mir_cfg,
-                        mir_ddg, combo_bindings,
+                        name,
+                        rust_items,
+                        def_id,
+                        header,
+                        has_self,
+                        self_ty,
+                        body,
+                        mir_cfg,
+                        mir_ddg,
+                        combo_bindings,
                     ));
                 }
                 Either::Left(all.into_iter())
             },
-            PatternItem::RPLPatternOperation(pat_op) => Either::Right(
-                self.impl_matched_pat_op(name, ops, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg),
-            ),
+            PatternItem::RPLPatternOperation(pat_op) => Either::Right(self.impl_matched_pat_op(
+                name, ops, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+            )),
         }
     }
 
@@ -701,8 +727,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                 // references no op groups (the common case), `groups_used` is empty and
                 // `cartesian` yields one empty combo, which is equivalent to the
                 // original `bindings.clone()` path.
-                let groups_used: Vec<Symbol> =
-                    rust_items.referenced_op_groups().iter().copied().collect();
+                let groups_used: Vec<Symbol> = rust_items.referenced_op_groups().iter().copied().collect();
                 let factors: Vec<Vec<&ResolvedOpInstance>> = groups_used
                     .iter()
                     .map(|g| ops.instances_of(g.as_str()).iter().collect())
@@ -718,15 +743,23 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                         ResolvedOpBindings::from_combo(&groups_used, combo)
                     };
                     all.extend(self.fn_matched(
-                        name, rust_items, def_id, header, has_self, self_ty, body, mir_cfg,
-                        mir_ddg, combo_bindings,
+                        name,
+                        rust_items,
+                        def_id,
+                        header,
+                        has_self,
+                        self_ty,
+                        body,
+                        mir_cfg,
+                        mir_ddg,
+                        combo_bindings,
                     ));
                 }
                 Either::Left(all.into_iter())
             },
-            PatternItem::RPLPatternOperation(pat_op) => Either::Right(
-                self.fn_matched_pat_op(name, ops, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg),
-            ),
+            PatternItem::RPLPatternOperation(pat_op) => Either::Right(self.fn_matched_pat_op(
+                name, ops, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+            )),
         }
     }
 
@@ -814,8 +847,17 @@ impl<'tcx> CheckFnCtxt<'_, 'tcx> {
                 // _ops_diags: resolution diagnostics will be surfaced in Task 14.
                 for (&name, pat_item) in &pattern.patt_block {
                     for matched in self.impl_matched_pat_item(
-                        name, &ops, pat_item, &ResolvedOpBindings::empty(), def_id, header, has_self, self_ty, body,
-                        &mir_cfg, &mir_ddg,
+                        name,
+                        &ops,
+                        pat_item,
+                        &ResolvedOpBindings::empty(),
+                        def_id,
+                        header,
+                        has_self,
+                        self_ty,
+                        body,
+                        &mir_cfg,
+                        &mir_ddg,
                     ) {
                         let error = pattern
                             .get_diag(name, source_map, None, body, decl, &matched)
@@ -856,8 +898,17 @@ impl<'tcx> CheckFnCtxt<'_, 'tcx> {
                 // _ops_diags: resolution diagnostics will be surfaced in Task 14.
                 for (&name, pat_item) in &pattern.patt_block {
                     for matched in self.fn_matched_pat_item(
-                        name, &ops, pat_item, &ResolvedOpBindings::empty(), def_id, header, has_self, self_ty,
-                        body, &mir_cfg, &mir_ddg,
+                        name,
+                        &ops,
+                        pat_item,
+                        &ResolvedOpBindings::empty(),
+                        def_id,
+                        header,
+                        has_self,
+                        self_ty,
+                        body,
+                        &mir_cfg,
+                        &mir_ddg,
                     ) {
                         let error = pattern
                             .get_diag(name, source_map, fn_name, body, decl, &matched)

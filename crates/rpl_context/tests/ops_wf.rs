@@ -29,16 +29,14 @@ use rpl_context::pat::check_ops_block;
 /// Panics if the source fails to parse (that would be a test-fixture bug, not
 /// an R1/R2/R3 violation).
 fn collect_wf_errors(src: &str) -> Vec<String> {
-    let arena: &'static rpl_meta::arena::Arena<'static> =
-        Box::leak(Box::new(rpl_meta::arena::Arena::default()));
+    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
     let path_and_content: &'static Vec<(PathBuf, String)> =
         Box::leak(Box::new(vec![(PathBuf::from("test.rpl"), src.to_string())]));
 
-    let mctx: &'static rpl_meta::context::MetaContext<'static> = Box::leak(Box::new(
-        rpl_meta::parse_and_collect(arena, path_and_content, |err| {
+    let mctx: &'static rpl_meta::context::MetaContext<'static> =
+        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
             panic!("RPL parse/collect error: {err}");
-        }),
-    ));
+        })));
 
     let mut errors = Vec::new();
     for syntax_tree in mctx.syntax_trees.iter() {
@@ -108,7 +106,10 @@ patt { p[] = fn _ () -> _ {} }
 "#;
     let errors = collect_wf_errors(src);
     let r1_errors: Vec<_> = errors.iter().filter(|e| e.contains("must be of kind")).collect();
-    assert!(r1_errors.is_empty(), "R1: no error expected for type-kind meta-var, got: {r1_errors:?}");
+    assert!(
+        r1_errors.is_empty(),
+        "R1: no error expected for type-kind meta-var, got: {r1_errors:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -144,7 +145,10 @@ ops {
 patt { p[] = fn _ () -> _ {} }
 "#;
     let errors = collect_wf_errors(src);
-    let r2_errors: Vec<_> = errors.iter().filter(|e| e.contains("is not declared in op group")).collect();
+    let r2_errors: Vec<_> = errors
+        .iter()
+        .filter(|e| e.contains("is not declared in op group"))
+        .collect();
     assert!(r2_errors.is_empty(), "R2: no error expected, got: {r2_errors:?}");
 }
 
@@ -209,7 +213,10 @@ patt { p[] = fn _ () -> _ {} }
 "#;
     let errors = collect_wf_errors(src);
     let r3_errors: Vec<_> = errors.iter().filter(|e| e.contains("concrete types belong")).collect();
-    assert!(r3_errors.is_empty(), "R3: no error expected for &mut $T, got: {r3_errors:?}");
+    assert!(
+        r3_errors.is_empty(),
+        "R3: no error expected for &mut $T, got: {r3_errors:?}"
+    );
 }
 
 /// R3: concrete type in the return position is also rejected.
@@ -223,7 +230,10 @@ ops {
 patt { p[] = fn _ () -> _ {} }
 "#;
     let errors = collect_wf_errors(src);
-    assert!(!errors.is_empty(), "R3: expected at least one error for concrete return type, got none");
+    assert!(
+        !errors.is_empty(),
+        "R3: expected at least one error for concrete return type, got none"
+    );
     assert_any_contains(&errors, "concrete types belong in rpl.toml");
 }
 
@@ -286,16 +296,16 @@ ops {
 }
 patt { p[] = fn _ () -> _ {} }
 "#;
-    let arena: &'static rpl_meta::arena::Arena<'static> =
-        Box::leak(Box::new(rpl_meta::arena::Arena::default()));
-    let path_and_content: &'static Vec<(std::path::PathBuf, String)> =
-        Box::leak(Box::new(vec![(std::path::PathBuf::from("test_r1.rpl"), src.to_string())]));
+    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
+    let path_and_content: &'static Vec<(std::path::PathBuf, String)> = Box::leak(Box::new(vec![(
+        std::path::PathBuf::from("test_r1.rpl"),
+        src.to_string(),
+    )]));
 
-    let mctx: &'static rpl_meta::context::MetaContext<'static> = Box::leak(Box::new(
-        rpl_meta::parse_and_collect(arena, path_and_content, |err| {
+    let mctx: &'static rpl_meta::context::MetaContext<'static> =
+        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
             panic!("RPL parse/collect error: {err}");
-        }),
-    ));
+        })));
 
     // This must NOT panic — the R1 guard skips the bad group.
     PatternCtxt::entered_no_tcx(|pcx| {

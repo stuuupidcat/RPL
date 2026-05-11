@@ -47,7 +47,9 @@ impl ResolvedOpBindings {
 
     /// The empty binding set — used when a pattern references no op groups.
     pub fn empty() -> Self {
-        ResolvedOpBindings { by_group: HashMap::new() }
+        ResolvedOpBindings {
+            by_group: HashMap::new(),
+        }
     }
 
     /// Look up the instance bound to `group`, if any.
@@ -79,11 +81,19 @@ pub enum ResolveDiagnostic {
     /// C4: the instance contains a key that is not a declared meta-var or op name.
     UnknownKey { group: String, name: String },
     /// C5: after expansion, a `$<id>` remains that is neither in `free` nor a meta-var.
-    UndeclaredPlaceholder { group: String, name: String, in_value: String },
+    UndeclaredPlaceholder {
+        group: String,
+        name: String,
+        in_value: String,
+    },
     /// C7: the meta-var bindings form a cycle (did not converge in 16 passes).
     Cycle { group: String, names: Vec<String> },
     /// C6: the post-expansion string could not be parsed (placeholder for matcher-time check).
-    ParseFailure { group: String, key: String, message: String },
+    ParseFailure {
+        group: String,
+        key: String,
+        message: String,
+    },
 }
 
 /// Resolve raw op instances from `rpl.toml` into a typed [`OpsConfig`].
@@ -109,7 +119,9 @@ pub fn resolve_ops_config<'pcx>(
         let group = match pattern.ops_block.groups.get(&group_sym) {
             Some(g) => g,
             None => {
-                diagnostics.push(ResolveDiagnostic::UnknownGroup { group: group_name.clone() });
+                diagnostics.push(ResolveDiagnostic::UnknownGroup {
+                    group: group_name.clone(),
+                });
                 continue;
             },
         };
@@ -184,11 +196,7 @@ fn resolve_one<'pcx>(
         .collect();
 
     // Free placeholder names from `type = [...]`, stripped of leading `$`.
-    let free_names: BTreeSet<String> = raw
-        .free
-        .iter()
-        .map(|s| s.trim_start_matches('$').to_string())
-        .collect();
+    let free_names: BTreeSet<String> = raw.free.iter().map(|s| s.trim_start_matches('$').to_string()).collect();
 
     // C5/C7: fixed-point textual expansion of meta-var `$<name>` references.
     //

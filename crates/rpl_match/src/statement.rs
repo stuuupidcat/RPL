@@ -478,16 +478,11 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
                     const_: mir::Const::Val(mir::ConstValue::ZeroSized, ty),
                     ..
                 }),
-            ) if let &ty::FnDef(fn_did, _args) = ty.kind() => {
-                self.match_op_ref(group, op, fn_did)
-            },
+            ) if let &ty::FnDef(fn_did, _args) = ty.kind() => self.match_op_ref(group, op, fn_did),
             // OpRef against a non-FnDef operand: no match.
             (pat::Operand::OpRef { .. }, _) => false,
             (
-                pat::Operand::Copy(_)
-                | pat::Operand::Move(_)
-                | pat::Operand::Constant(_)
-                | pat::Operand::FnPat(_),
+                pat::Operand::Copy(_) | pat::Operand::Move(_) | pat::Operand::Constant(_) | pat::Operand::FnPat(_),
                 mir::Operand::Copy(_) | mir::Operand::Move(_) | mir::Operand::Constant(_),
             ) => return false,
         };

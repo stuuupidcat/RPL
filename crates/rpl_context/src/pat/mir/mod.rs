@@ -876,7 +876,10 @@ pub enum Operand<'pcx> {
     Constant(ConstOperand<'pcx>),
     FnPat(Symbol),
     /// Reference to an operation `$group::$op` declared in the `ops` block.
-    OpRef { group: Symbol, op: Symbol },
+    OpRef {
+        group: Symbol,
+        op: Symbol,
+    },
 }
 
 impl<'pcx> Operand<'pcx> {
@@ -1615,8 +1618,8 @@ mod tests {
         use pest_typed::TypedParser as _;
         use rpl_parser::parser::{Grammar, pairs};
 
-        let parsed = Grammar::try_parse::<pairs::MirFnOperand>("$sync::$lock")
-            .expect("$sync::$lock must parse as MirFnOperand");
+        let parsed =
+            Grammar::try_parse::<pairs::MirFnOperand>("$sync::$lock").expect("$sync::$lock must parse as MirFnOperand");
 
         // `MirFnOperand` is `Choice6`; variant `_4` is `OpRef`.
         let op_ref = parsed

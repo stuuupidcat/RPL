@@ -25,16 +25,13 @@ use rustc_span::Symbol;
 // ---------------------------------------------------------------------------
 
 fn lower_src(src: &str) -> &'static rpl_meta::context::MetaContext<'static> {
-    let arena: &'static rpl_meta::arena::Arena<'static> =
-        Box::leak(Box::new(rpl_meta::arena::Arena::default()));
+    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
     let path_and_content: &'static Vec<(PathBuf, String)> =
         Box::leak(Box::new(vec![(PathBuf::from("test_refgroups.rpl"), src.to_string())]));
 
-    Box::leak(Box::new(
-        rpl_meta::parse_and_collect(arena, path_and_content, |err| {
-            panic!("RPL parse/collect error: {err}");
-        }),
-    ))
+    Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
+        panic!("RPL parse/collect error: {err}");
+    })))
 }
 
 // ---------------------------------------------------------------------------

@@ -32,7 +32,10 @@ pub struct OpsWfError {
 
 impl OpsWfError {
     fn new(group: impl Into<String>, message: impl Into<String>) -> Self {
-        Self { group: group.into(), message: message.into() }
+        Self {
+            group: group.into(),
+            message: message.into(),
+        }
     }
 }
 
@@ -134,12 +137,7 @@ fn collect_declared_type_vars<'i>(
 
 /// Check a single `OpFnSig` for R2 (undeclared meta-var references) and
 /// R3 (concrete type references).
-fn check_op_sig(
-    group_name: &str,
-    sig: &pairs::OpFnSig<'_>,
-    declared_type_vars: &[&str],
-    errors: &mut Vec<OpsWfError>,
-) {
+fn check_op_sig(group_name: &str, sig: &pairs::OpFnSig<'_>, declared_type_vars: &[&str], errors: &mut Vec<OpsWfError>) {
     // Walk parameters.
     if let Some(params_pair) = sig.OpFnParamsSeparatedByComma() {
         let (first, rest) = params_pair.OpFnParam();
@@ -193,8 +191,7 @@ fn param_type<'a>(param: &'a pairs::OpFnParam<'a>) -> Option<&'a pairs::Type<'a>
 
 /// Recursively walk a `Type` node to check R2 and R3.
 ///
-/// - R2: if a `TypeMetaVariable` is found whose name is not in
-///   `declared_type_vars`, emit an error.
+/// - R2: if a `TypeMetaVariable` is found whose name is not in `declared_type_vars`, emit an error.
 /// - R3: if a `TypePath` or `PrimitiveType` leaf is found, emit an error.
 ///
 /// Wrapper types (`TypeReference`, `TypePtr`, `TypeSlice`, `TypeTuple`,
@@ -304,15 +301,11 @@ fn check_type(group_name: &str, ty: &pairs::Type<'_>, declared_type_vars: &[&str
 /// 1. Collect the pattern-level declared meta-var names (those in `p[...]`).
 /// 2. Collect all op-level meta-var names across all op groups.
 /// 3. Walk every `TypeMetaVariable` in the item's RHS.
-/// 4. If a type meta-var's name is in the op-level set but NOT in the
-///    pattern-level set, emit an R6 error:
-///    `"op-level meta-var '$T' cannot appear in a pattern body"`.
+/// 4. If a type meta-var's name is in the op-level set but NOT in the pattern-level set, emit an R6
+///    error: `"op-level meta-var '$T' cannot appear in a pattern body"`.
 ///
 /// Returns a flat list of all R6 errors found.
-pub fn check_r6_patt_vs_ops(
-    ops_blocks: &[&pairs::opsBlock<'_>],
-    patts: &[&pairs::pattBlock<'_>],
-) -> Vec<OpsWfError> {
+pub fn check_r6_patt_vs_ops(ops_blocks: &[&pairs::opsBlock<'_>], patts: &[&pairs::pattBlock<'_>]) -> Vec<OpsWfError> {
     // Collect all op-level meta-var names (with `$` prefix) across all groups.
     let op_level_names: HashSet<&str> = collect_all_op_meta_var_names(ops_blocks);
 
@@ -321,8 +314,7 @@ pub fn check_r6_patt_vs_ops(
         for item in patt_block.RPLPatternItem() {
             let item_name = item.Identifier().span.as_str();
             // Collect pattern-level declared meta-var names.
-            let pattern_level_names: HashSet<&str> =
-                collect_pattern_meta_var_names(item.MetaVariableDeclList());
+            let pattern_level_names: HashSet<&str> = collect_pattern_meta_var_names(item.MetaVariableDeclList());
 
             // Walk the item body for TypeMetaVariable references.
             let rhs = item.RustItemsOrPatternOperation();
@@ -368,9 +360,7 @@ fn collect_all_op_meta_var_names<'i>(ops_blocks: &[&pairs::opsBlock<'i>]) -> Has
 
 /// Collect all meta-var names (with `$`) declared in a
 /// `MetaVariableDeclList` (the `[...]` bracket of a pattern item).
-fn collect_pattern_meta_var_names<'i>(
-    meta_decl_list: Option<&'i pairs::MetaVariableDeclList<'i>>,
-) -> HashSet<&'i str> {
+fn collect_pattern_meta_var_names<'i>(meta_decl_list: Option<&'i pairs::MetaVariableDeclList<'i>>) -> HashSet<&'i str> {
     let mut names = HashSet::new();
     if let Some(mdl) = meta_decl_list
         && let Some(inner) = mdl.get_matched().1
@@ -475,10 +465,7 @@ fn collect_in_fn_param<'i>(param: &'i pairs::FnParam<'i>, collector: &mut TypeMe
     }
 }
 
-fn collect_in_mir_body<'i>(
-    body: &'i pairs::MirBody<'i>,
-    collector: &mut TypeMetaVarCollector<'i>,
-) {
+fn collect_in_mir_body<'i>(body: &'i pairs::MirBody<'i>, collector: &mut TypeMetaVarCollector<'i>) {
     let (decls, stmts) = body.get_matched();
     for decl in decls.iter_matched() {
         collect_in_mir_decl(decl, collector);
@@ -511,10 +498,7 @@ fn collect_in_mir_stmt<'i>(stmt: &'i pairs::MirStmt<'i>, collector: &mut TypeMet
     }
 }
 
-fn collect_in_mir_rvalue<'i>(
-    rvalue: &'i pairs::MirRvalue<'i>,
-    collector: &mut TypeMetaVarCollector<'i>,
-) {
+fn collect_in_mir_rvalue<'i>(rvalue: &'i pairs::MirRvalue<'i>, collector: &mut TypeMetaVarCollector<'i>) {
     use rpl_parser::generics::Choice12;
     match rvalue.deref() {
         Choice12::_1(cast) => {

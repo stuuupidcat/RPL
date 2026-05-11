@@ -35,7 +35,7 @@ impl<'de> Deserialize<'de> for RawOpInstance {
                 return Err(serde::de::Error::custom(format!(
                     "ops 'type' must be an array of strings, got {other:?}"
                 )));
-            }
+            },
         };
 
         let mut bindings = BTreeMap::new();
@@ -43,12 +43,12 @@ impl<'de> Deserialize<'de> for RawOpInstance {
             match v {
                 toml::Value::String(s) => {
                     bindings.insert(k, s);
-                }
+                },
                 other => {
                     return Err(serde::de::Error::custom(format!(
                         "ops binding '{k}' must be a string, got {other:?}"
                     )));
-                }
+                },
             }
         }
 

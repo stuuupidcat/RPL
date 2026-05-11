@@ -32,16 +32,14 @@ use rpl_context::pat::{check_ops_block, check_r6_patt_vs_ops};
 /// Parse `src`, run `check_ops_block` on every `opsBlock` found, and return
 /// all error messages as display strings.
 fn run_resolver_on_src(src: &str) -> Vec<String> {
-    let arena: &'static rpl_meta::arena::Arena<'static> =
-        Box::leak(Box::new(rpl_meta::arena::Arena::default()));
+    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
     let path_and_content: &'static Vec<(PathBuf, String)> =
         Box::leak(Box::new(vec![(PathBuf::from("test.rpl"), src.to_string())]));
 
-    let mctx: &'static rpl_meta::context::MetaContext<'static> = Box::leak(Box::new(
-        rpl_meta::parse_and_collect(arena, path_and_content, |err| {
+    let mctx: &'static rpl_meta::context::MetaContext<'static> =
+        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
             panic!("RPL parse/collect error: {err}");
-        }),
-    ));
+        })));
 
     let mut errors = Vec::new();
     for syntax_tree in mctx.syntax_trees.iter() {
@@ -66,16 +64,14 @@ fn run_resolver_on_src(src: &str) -> Vec<String> {
 ///
 /// Panics if the source fails to parse (that's a test-fixture bug).
 fn run_r4_r5_checks(src: &str) -> Vec<String> {
-    let arena: &'static rpl_meta::arena::Arena<'static> =
-        Box::leak(Box::new(rpl_meta::arena::Arena::default()));
+    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
     let path_and_content: &'static Vec<(PathBuf, String)> =
         Box::leak(Box::new(vec![(PathBuf::from("test_r4r5.rpl"), src.to_string())]));
 
-    let mctx: &'static rpl_meta::context::MetaContext<'static> = Box::leak(Box::new(
-        rpl_meta::parse_and_collect(arena, path_and_content, |err| {
+    let mctx: &'static rpl_meta::context::MetaContext<'static> =
+        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
             panic!("RPL parse/collect error: {err}");
-        }),
-    ));
+        })));
 
     let mut all_errors: Vec<String> = Vec::new();
 
@@ -99,19 +95,17 @@ fn run_r4_r5_checks(src: &str) -> Vec<String> {
 /// errors from `parse_and_collect` do not abort the check.  The R6 function
 /// runs at parse-tree level — before any lowering that would panic.
 fn run_r6_check(src: &str) -> Vec<String> {
-    let arena: &'static rpl_meta::arena::Arena<'static> =
-        Box::leak(Box::new(rpl_meta::arena::Arena::default()));
+    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
     let path_and_content: &'static Vec<(PathBuf, String)> =
         Box::leak(Box::new(vec![(PathBuf::from("test_r6.rpl"), src.to_string())]));
 
     // Use a collecting (non-panicking) handler so the meta-collection phase
     // does not abort even when undeclared meta-vars are encountered.
-    let mctx: &'static rpl_meta::context::MetaContext<'static> = Box::leak(Box::new(
-        rpl_meta::parse_and_collect(arena, path_and_content, |_err| {
+    let mctx: &'static rpl_meta::context::MetaContext<'static> =
+        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |_err| {
             // Intentionally swallow meta-collection errors: undeclared meta-vars
             // in pattern bodies will be caught by our R6 check below.
-        }),
-    ));
+        })));
 
     let mut errors = Vec::new();
     for syntax_tree in mctx.syntax_trees.iter() {
@@ -157,7 +151,8 @@ patt { p[] = fn _ () -> _ {} }
 "#;
     let errs = run_resolver_on_src(src);
     assert!(
-        errs.iter().any(|e| e.contains("'$Z' is not declared in op group 'sync'")),
+        errs.iter()
+            .any(|e| e.contains("'$Z' is not declared in op group 'sync'")),
         "R2: expected undeclared-meta-var error, got: {errs:?}"
     );
 }
@@ -218,7 +213,8 @@ patt {
 "#;
     let errs = run_r4_r5_checks(src);
     assert!(
-        errs.iter().any(|e| e.contains("op 'try_lock' is not declared in op group 'sync'")),
+        errs.iter()
+            .any(|e| e.contains("op 'try_lock' is not declared in op group 'sync'")),
         "R4: expected undeclared-op-in-group error, got: {errs:?}"
     );
 }
@@ -237,7 +233,10 @@ patt {
 "#;
     let errs = run_r4_r5_checks(src);
     let r4_errs: Vec<_> = errs.iter().filter(|e| e.contains("is not declared")).collect();
-    assert!(r4_errs.is_empty(), "R4: no error expected for valid op ref, got: {r4_errs:?}");
+    assert!(
+        r4_errs.is_empty(),
+        "R4: no error expected for valid op ref, got: {r4_errs:?}"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -299,7 +298,8 @@ patt {
 "#;
     let errs = run_r6_check(src);
     assert!(
-        errs.iter().any(|e| e.contains("op-level meta-var '$T' cannot appear in a pattern body")),
+        errs.iter()
+            .any(|e| e.contains("op-level meta-var '$T' cannot appear in a pattern body")),
         "R6: expected op-level-leak error, got: {errs:?}"
     );
 }
