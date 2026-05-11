@@ -537,20 +537,24 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
     ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
         match pat_item {
             PatternItem::RustItems(rust_items) => {
-                // Same cartesian-product treatment as `fn_matched_pat_item`.
-                let groups_used: Vec<Symbol> = rust_items.referenced_op_groups().iter().copied().collect();
-                let factors: Vec<Vec<&ResolvedOpInstance>> = groups_used
-                    .iter()
-                    .map(|g| ops.instances_of(g.as_str()).iter().collect())
-                    .collect();
-
+                // Two cases:
+                //
+                // (a) `bindings` is non-empty.  The outer `impl_matched_pat_op` has
+                //     already chosen one element of the cartesian product over its
+                //     `referenced_op_groups()` (the union over all sub-items) and is
+                //     threading those bindings down through every sub-item in turn.
+                //     We must use the outer combo unchanged — re-running a local
+                //     cartesian here would silently overwrite the outer choices for
+                //     any group this sub-item happens to reference, breaking
+                //     `set_op_with_ops`-style composition where two sub-items each
+                //     reference a different (or overlapping) subset of groups.
+                //
+                // (b) `bindings` is empty.  This is the top-level direct entry into
+                //     a `RustItems` pattern from `for_each_rpl_pattern`.  Iterate
+                //     the cartesian product over this `RustItems`' own
+                //     `referenced_op_groups()`.
                 let mut all: Vec<NormalizedMatched<'tcx>> = Vec::new();
-                for combo in cartesian(factors.into_iter().map(|v| v.into_iter())) {
-                    let combo_bindings = if groups_used.is_empty() {
-                        bindings.clone()
-                    } else {
-                        ResolvedOpBindings::from_combo(&groups_used, combo)
-                    };
+                if !bindings.by_group.is_empty() {
                     all.extend(self.impl_matched(
                         name,
                         rust_items,
@@ -561,8 +565,33 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                         body,
                         mir_cfg,
                         mir_ddg,
-                        combo_bindings,
+                        bindings.clone(),
                     ));
+                } else {
+                    let groups_used: Vec<Symbol> = rust_items.referenced_op_groups().iter().copied().collect();
+                    let factors: Vec<Vec<&ResolvedOpInstance>> = groups_used
+                        .iter()
+                        .map(|g| ops.instances_of(g.as_str()).iter().collect())
+                        .collect();
+                    for combo in cartesian(factors.into_iter().map(|v| v.into_iter())) {
+                        let combo_bindings = if groups_used.is_empty() {
+                            bindings.clone()
+                        } else {
+                            ResolvedOpBindings::from_combo(&groups_used, combo)
+                        };
+                        all.extend(self.impl_matched(
+                            name,
+                            rust_items,
+                            def_id,
+                            header,
+                            has_self,
+                            self_ty,
+                            body,
+                            mir_cfg,
+                            mir_ddg,
+                            combo_bindings,
+                        ));
+                    }
                 }
                 Either::Left(all.into_iter())
             },
@@ -721,27 +750,14 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
     ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
         match pat_item {
             PatternItem::RustItems(rust_items) => {
-                // If this RustItems pattern references any op groups, we need to iterate
-                // over the cartesian product of (group → instance) assignments, passing
-                // concrete bindings to each CheckMirCtxt invocation.  If the pattern
-                // references no op groups (the common case), `groups_used` is empty and
-                // `cartesian` yields one empty combo, which is equivalent to the
-                // original `bindings.clone()` path.
-                let groups_used: Vec<Symbol> = rust_items.referenced_op_groups().iter().copied().collect();
-                let factors: Vec<Vec<&ResolvedOpInstance>> = groups_used
-                    .iter()
-                    .map(|g| ops.instances_of(g.as_str()).iter().collect())
-                    .collect();
-
+                // See the rationale on `impl_matched_pat_item` above — same shape
+                // applies here on the free-fn side.  When `bindings` is non-empty
+                // the outer `fn_matched_pat_op` has already chosen a combo for
+                // the union of groups referenced by the operation; we must
+                // descend with the same combo rather than rebuild a local one
+                // over this `RustItems`' own subset of groups.
                 let mut all: Vec<NormalizedMatched<'tcx>> = Vec::new();
-                for combo in cartesian(factors.into_iter().map(|v| v.into_iter())) {
-                    let combo_bindings = if groups_used.is_empty() {
-                        // No op groups referenced — use the caller-supplied bindings
-                        // (preserves the existing behaviour for patterns without ops).
-                        bindings.clone()
-                    } else {
-                        ResolvedOpBindings::from_combo(&groups_used, combo)
-                    };
+                if !bindings.by_group.is_empty() {
                     all.extend(self.fn_matched(
                         name,
                         rust_items,
@@ -752,8 +768,35 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                         body,
                         mir_cfg,
                         mir_ddg,
-                        combo_bindings,
+                        bindings.clone(),
                     ));
+                } else {
+                    let groups_used: Vec<Symbol> = rust_items.referenced_op_groups().iter().copied().collect();
+                    let factors: Vec<Vec<&ResolvedOpInstance>> = groups_used
+                        .iter()
+                        .map(|g| ops.instances_of(g.as_str()).iter().collect())
+                        .collect();
+                    for combo in cartesian(factors.into_iter().map(|v| v.into_iter())) {
+                        let combo_bindings = if groups_used.is_empty() {
+                            // No op groups referenced — use the caller-supplied bindings
+                            // (preserves the existing behaviour for patterns without ops).
+                            bindings.clone()
+                        } else {
+                            ResolvedOpBindings::from_combo(&groups_used, combo)
+                        };
+                        all.extend(self.fn_matched(
+                            name,
+                            rust_items,
+                            def_id,
+                            header,
+                            has_self,
+                            self_ty,
+                            body,
+                            mir_cfg,
+                            mir_ddg,
+                            combo_bindings,
+                        ));
+                    }
                 }
                 Either::Left(all.into_iter())
             },
