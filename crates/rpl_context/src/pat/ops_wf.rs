@@ -562,19 +562,6 @@ fn collect_in_type<'i>(ty: &'i pairs::Type<'i>, collector: &mut TypeMetaVarColle
     }
 }
 
-// ---------------------------------------------------------------------------
-// Unit tests for the helper functions
-// ---------------------------------------------------------------------------
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn wf_no_errors_for_valid_ops_block() {
-        // The module-level tests in ops_lowering.rs already test valid input
-        // end-to-end; this is just a quick sanity check that the checker is
-        // quiet on well-formed input.
-        assert!(true, "placeholder: valid input tested in ops_lowering.rs");
-    }
-}
+// Well-formed-input coverage is provided by the integration tests in
+// `tests/ops_lowering.rs` and `tests/ops_wf.rs`; no in-file unit tests are
+// needed here.

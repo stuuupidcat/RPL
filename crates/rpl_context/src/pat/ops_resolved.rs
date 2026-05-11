@@ -1,5 +1,6 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 
+use rustc_data_structures::fx::FxHashMap;
 use rustc_span::Symbol;
 
 use crate::pat::Pattern;
@@ -23,9 +24,12 @@ pub struct ResolvedOpInstance {
 }
 
 /// A collection of resolved op-group instances, keyed by group name.
+///
+/// Uses `FxHashMap` (rustc's deterministic hasher) so diagnostic ordering and
+/// iteration order are stable across runs.
 #[derive(Debug, Default)]
 pub struct OpsConfig {
-    pub instances: HashMap<Symbol, Vec<ResolvedOpInstance>>,
+    pub instances: FxHashMap<Symbol, Vec<ResolvedOpInstance>>,
 }
 
 /// A single (group-name → resolved instance) assignment built from one element
@@ -35,7 +39,7 @@ pub struct OpsConfig {
 /// matcher (Task 12) can substitute concrete types/paths for `OpRef` operands.
 #[derive(Debug, Clone, Default)]
 pub struct ResolvedOpBindings {
-    pub by_group: HashMap<Symbol, ResolvedOpInstance>,
+    pub by_group: FxHashMap<Symbol, ResolvedOpInstance>,
 }
 
 impl ResolvedOpBindings {
@@ -48,7 +52,7 @@ impl ResolvedOpBindings {
     /// The empty binding set — used when a pattern references no op groups.
     pub fn empty() -> Self {
         ResolvedOpBindings {
-            by_group: HashMap::new(),
+            by_group: FxHashMap::default(),
         }
     }
 
@@ -112,7 +116,7 @@ pub fn resolve_ops_config<'pcx>(
     raw: &[(String, Vec<rpl_config::RawOpInstance>)],
 ) -> (OpsConfig, Vec<ResolveDiagnostic>) {
     let mut diagnostics = Vec::new();
-    let mut instances: HashMap<Symbol, Vec<ResolvedOpInstance>> = HashMap::new();
+    let mut instances: FxHashMap<Symbol, Vec<ResolvedOpInstance>> = FxHashMap::default();
 
     for (group_name, raw_instances) in raw {
         let group_sym = Symbol::intern(group_name);
