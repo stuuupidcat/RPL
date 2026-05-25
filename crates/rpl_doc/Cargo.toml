@@ -8,6 +8,8 @@ license.workspace = true
 keywords.workspace = true
 
 [dependencies]
+pest.workspace = true
+rpl_parser.workspace = true
 thiserror.workspace = true
 walkdir.workspace = true
 
@@ -16,3 +18,7 @@ pretty_assertions.workspace = true
 
 [lib]
 doctest = false
+
+[package.metadata.rust-analyzer]
+# This crate transitively uses #[feature(rustc_private)] via rpl_parser
+rustc_private = true

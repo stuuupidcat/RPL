@@ -2,11 +2,51 @@
 //!
 //! See `docs/superpowers/specs/2026-05-26-rpldoc-design.md` for the design.
 
+#![feature(rustc_private)]
+
 pub mod error;
 pub use error::RpldocError;
 
+use std::path::Path;
+
+/// Parse an `.rpl` source string through the rpl_parser pipeline.
+///
+/// Returns `Ok(())` if parsing succeeds. The typed AST is dropped — callers
+/// that want it should use `rpl_parser::parse_main` directly. This is the
+/// minimal entry point for the corpus-sweep backward-compatibility gate.
+pub fn parse_only(path: &Path, source: &str) -> Result<(), RpldocError> {
+    rpl_parser::parse_main(source, path).map(|_| ()).map_err(|e| {
+        RpldocError::Parse {
+            path: path.to_path_buf(),
+            message: format!("{e}"),
+        }
+    })
+}
+
 /// Crate version, exposed for sanity tests.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[cfg(test)]
+mod parse_only_tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn parse_only_accepts_simple_pattern_file() {
+        let src = "pattern Foo\n";
+        // parse_only does not need the path to exist on disk; only used in errors.
+        let result = parse_only(Path::new("/synthetic/foo.rpl"), src);
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+    }
+
+    #[test]
+    fn parse_only_reports_parse_error() {
+        // `paten` is a misspelling of `pattern` — parse failure expected.
+        let src = "paten Foo\n";
+        let result = parse_only(Path::new("/synthetic/foo.rpl"), src);
+        assert!(result.is_err());
+    }
+}
 
 #[cfg(test)]
 mod tests {
