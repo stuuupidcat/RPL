@@ -10,6 +10,8 @@ pub use error::RpldocError;
 pub mod model;
 pub use model::{DocDiag, DocExample, DocFile, DocItem};
 
+mod extract;
+
 use std::path::Path;
 
 /// Parse an `.rpl` source string through the rpl_parser pipeline.
