@@ -402,7 +402,7 @@ impl<'pcx> Pattern<'pcx> {
         block_type: PattOrUtil,
     ) {
         let p = pat_item.path;
-        let (attr, name, meta_decls, _, item_or_patt_op) = pat_item.get_matched();
+        let (_, attr, name, meta_decls, _, item_or_patt_op) = pat_item.get_matched();
         let name = name.span.as_str();
         let symbol_table = symbol_tables.get(&name).unwrap();
         let meta = Arc::new(NonLocalMetaVars::from_meta_decls(
@@ -559,7 +559,7 @@ impl<'pcx> Pattern<'pcx> {
     ) {
         let mut items = FxHashMap::default();
         for item in diag.get_matched().2.iter_matched() {
-            let (ident, _, _, _, _, _) = item.get_matched();
+            let (_, ident, _, _, _, _, _) = item.get_matched();
             let name = Symbol::intern(ident.span.as_str());
             let prev = items.insert(name, item);
             debug_assert!(prev.is_none(), "Duplicate diagnostic for {:?}", name); //FIXME: raise an error

@@ -39,7 +39,7 @@ impl<'i> DiagSymbolTable<'i> {
     ) -> FlatMap<&'i str, Self> {
         let mut diag_symbols = FlatMap::default();
         for diag in diags {
-            let name = diag.get_matched().0;
+            let name = diag.get_matched().1;
             let symbol_table = Self::collect_diag_symbol_table(mctx, diag, errors);
             _ = diag_symbols
                 .try_insert(name.span.as_str(), symbol_table)
@@ -61,7 +61,7 @@ impl<'i> DiagSymbolTable<'i> {
         errors: &mut Vec<RPLMetaError<'i>>,
     ) -> Self {
         let mut diag_symbol_table = DiagSymbolTable::default();
-        let (_, _, _, items, messages, _) = diag.get_matched();
+        let (_, _, _, _, items, messages, _) = diag.get_matched();
 
         diag_symbol_table.get_lint(items, mctx, errors);
 

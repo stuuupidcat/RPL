@@ -171,8 +171,24 @@ Keywords = @{
 }
 
 // Space and Comment
-COMMENT    = _{ "//" ~ (!(NEWLINE) ~ ANY)* | "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
-WHITESPACE = _{ " " | "\t" | "\r" | "\n" }
+//
+// Doc comments are non-silent: they propagate into the AST at the three
+// designated attachment points (RPLPattern, RPLPatternItem, diagBlockItem)
+// and are otherwise rejected by the grammar.
+DocComment      = ${ OuterDocComment | InnerDocComment }
+OuterDocComment = ${ "///" ~ !"/" ~ DocCommentText }
+InnerDocComment = ${ "//!"        ~ DocCommentText }
+DocCommentText  = @{ (!NEWLINE ~ ANY)* }
+
+// Line and block comments are silently skipped. The negative lookaheads on
+// the line variant prevent us from re-consuming `///` / `//!` / `////` —
+// the `///` and `//!` cases are doc comments; `////` (four-or-more slashes)
+// is a decorative section divider, per Rust convention.
+LineCommentNonDoc = _{ "//" ~ !("/" | "!") ~ (!NEWLINE ~ ANY)*
+                     | "////" ~ (!NEWLINE ~ ANY)* }
+BlockComment      = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" }
+COMMENT           = _{ LineCommentNonDoc | BlockComment }
+WHITESPACE        = _{ " " | "\t" | "\r" | "\n" }
 
 // Symbols
 LeftBrace    = @{ "{" }
@@ -923,7 +939,7 @@ Attr = {
 
 // patt block Item
 RPLPatternItem = {
-    Attr* ~ Identifier ~ MetaVariableDeclList? ~ Assign ~ RustItemsOrPatternOperation
+    OuterDocComment* ~ Attr* ~ Identifier ~ MetaVariableDeclList? ~ Assign ~ RustItemsOrPatternOperation
 }
 
 MetaVariableWithDiagMessage = {
@@ -968,7 +984,7 @@ diagItems = {
 
 // diag block Item
 diagBlockItem = {
-    Identifier ~ Assign ~ LeftBrace ~ diagItems ~ MetaVariableWithDiagMessageSeparatedByComma? ~ RightBrace
+    OuterDocComment* ~ Identifier ~ Assign ~ LeftBrace ~ diagItems ~ MetaVariableWithDiagMessageSeparatedByComma? ~ RightBrace
 }
 
 // RPL Blocks
@@ -987,7 +1003,7 @@ Block     = _{ pattBlock | utilBlock | diagBlock }
 RPLHeader = { kw_pattern ~ Identifier }
 
 // RPL Pattern
-RPLPattern = { RPLHeader ~ Block* }
+RPLPattern = { InnerDocComment* ~ RPLHeader ~ Block* }
 
 // RPL File entry
 main = { SOI ~ RPLPattern ~ EOI }

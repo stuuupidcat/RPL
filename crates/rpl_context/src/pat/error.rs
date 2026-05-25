@@ -434,7 +434,7 @@ impl<'i> DynamicErrorBuilder<'i> {
         table: &DiagSymbolTable,
     ) -> Result<Self, ParseError<'i>> {
         let path = item.path;
-        let (_, _, _, diags, _, _) = item.get_matched();
+        let (_, _, _, _, diags, _, _) = item.get_matched();
         let mut primary = None;
         let mut labels = Vec::new();
         let mut notes = Vec::new();

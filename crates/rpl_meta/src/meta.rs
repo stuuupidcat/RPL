@@ -65,7 +65,7 @@ impl<'mcx> SymbolTables<'mcx> {
 
     fn collect_rpl_pattern_name(main: &pairs::main<'mcx>) -> &'mcx str {
         let rpl_pattern = main.get_matched().1;
-        let rpl_header = rpl_pattern.get_matched().0;
+        let rpl_header = rpl_pattern.get_matched().1;
         let name = rpl_header.get_matched().1.span.as_str();
         name
     }
@@ -110,7 +110,7 @@ pub fn collect_blocks<'mcx, 'i>(
     let mut patts = Vec::new();
     let mut diags = Vec::new();
 
-    let blocks = main.get_matched().1.get_matched().1;
+    let blocks = main.get_matched().1.get_matched().2;
     let blocks = blocks.iter_matched();
 
     for block in blocks {

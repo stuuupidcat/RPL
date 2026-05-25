@@ -52,7 +52,7 @@ impl<'i> CheckCtxt<'i> {
     }
 
     pub fn check_pat_item(&mut self, mctx: &MetaContext<'i>, pat_item: &'i pairs::RPLPatternItem<'i>) {
-        let (_, _, meta_decl_list, _, rust_item_or_patt_operation) = pat_item.get_matched();
+        let (_, _, _, meta_decl_list, _, rust_item_or_patt_operation) = pat_item.get_matched();
         if let Some(meta_decl_list) = meta_decl_list {
             self.check_meta_decl_list(mctx, meta_decl_list);
         }
