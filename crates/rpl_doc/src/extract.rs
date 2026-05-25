@@ -1,6 +1,6 @@
 //! Build `DocFile` from the typed pest AST.
 
-use crate::model::DocFile;
+use crate::model::{DocFile, DocItem};
 use rpl_parser::pairs;
 use std::path::Path;
 
@@ -132,15 +132,194 @@ pub(crate) fn build_doc_file<'i>(
     let header_name = collect_header_name(main).to_string();
     let file_doc = collect_file_doc(main);
 
+    let mut patterns = Vec::new();
+    let mut utilities = Vec::new();
+
+    // `RPLPattern.Block()` returns a `Vec<&Block>` of zero-or-more blocks.
+    // Each `Block` is a `Choice3` of `pattBlock | utilBlock | diagBlock`; the
+    // generated typed-pair API exposes one `Option<&_>` accessor per variant.
+    let rpl_pattern = main.RPLPattern();
+    for block in rpl_pattern.Block() {
+        if let Some(patt) = block.pattBlock() {
+            for item in patt.RPLPatternItem() {
+                patterns.push(build_doc_item(item));
+            }
+        } else if let Some(util) = block.utilBlock() {
+            for item in util.RPLPatternItem() {
+                utilities.push(build_doc_item(item));
+            }
+        }
+        // `diagBlock` is handled in a later task (C6).
+    }
+
     DocFile {
         path,
         header_name,
         file_doc,
-        patterns: Vec::new(),     // filled by later tasks
-        utilities: Vec::new(),    // filled by later tasks
-        diagnostics: Vec::new(),  // filled by later tasks
-        examples: Vec::new(),     // filled by examples::load_examples
+        patterns,
+        utilities,
+        diagnostics: Vec::new(), // filled by later tasks
+        examples: Vec::new(),    // filled by examples::load_examples
     }
+}
+
+/// Convert one `RPLPatternItem` into a `DocItem`.
+///
+/// Grammar:
+///   RPLPatternItem = OuterDocComment* ~ Attr* ~ Identifier
+///                  ~ MetaVariableDeclList? ~ Assign ~ RustItemsOrPatternOperation
+fn build_doc_item<'i>(item: &pairs::RPLPatternItem<'i>) -> DocItem {
+    let outer_docs = item.OuterDocComment();
+    let doc = collect_runs(outer_docs.iter().map(|p| p.span.as_str()));
+
+    let diag_attr = item
+        .Attr()
+        .into_iter()
+        .find_map(extract_diag_attr_value);
+
+    let name = item.Identifier().span.as_str().to_string();
+    let meta_vars = item
+        .MetaVariableDeclList()
+        .map(|m| m.span.as_str().to_string());
+
+    let (signature, body_raw) = split_signature_and_body(item.RustItemsOrPatternOperation());
+    let body_source = dedent(&body_raw);
+
+    DocItem {
+        name,
+        meta_vars,
+        doc,
+        diag_attr,
+        signature,
+        body_source,
+    }
+}
+
+/// If the given `Attr` is `#[diag = "value"]`, return `Some(value)` (the inner
+/// string without surrounding quotes). Otherwise return `None`.
+///
+/// Grammar:
+///   Attr      = Hash ~ LeftBracket ~ diagAttrs ~ RightBracket
+///   diagAttrs = diagAttr ~ (Comma ~ diagAttr)* ~ Comma?
+///   diagAttr  = Word ~ ((LeftParen ~ diagAttrs? ~ RightParen) | (Assign ~ diagMessage))?
+///   diagMessage = "\"" ~ diagMessageInner ~ "\""
+///
+/// The `Word` of the first `diagAttr` whose key is `diag` and which has an
+/// `Assign ~ diagMessage` form yields the value. `diagMessageInner` has its
+/// own span (Both-mode atomic), so its `span.as_str()` already excludes the
+/// surrounding quotes.
+fn extract_diag_attr_value<'i>(attr: &pairs::Attr<'i>) -> Option<String> {
+    let diag_attrs = attr.diagAttrs();
+    let (first, rest) = diag_attrs.diagAttr();
+    std::iter::once(first)
+        .chain(rest.into_iter())
+        .find_map(|da| {
+            if da.Word().span.as_str() == "diag" {
+                da.diagMessage()
+                    .map(|m| m.diagMessageInner().span.as_str().to_string())
+            } else {
+                None
+            }
+        })
+}
+
+/// Split a `RustItemsOrPatternOperation` into (signature, body), driven by
+/// the typed AST rather than byte-level brace counting.
+///
+/// Layout per variant:
+/// - `PatternOperation`: pure expression (e.g. `divergent[$T = $T]`). The
+///   entire text is the signature; there is no body.
+/// - `RustItemsWithConstraint` (`{ item+ }`): a wrapping brace block whose
+///   contents are several items. The signature is empty; the body is the
+///   text strictly between the outer `LeftBrace` and `RightBrace`.
+/// - `RustItemWithConstraint` (`Attr* ~ RustItem ~ WhereBlock?`): unwraps to
+///   one `RustItem` (`Fn`/`Struct`/`Enum`/`Impl`). The signature runs from
+///   the start of the node up to the item's opening brace, and the body is
+///   the text between that brace and its matching closer:
+///   - `Fn` with `LeftBrace ~ MirBody ~ RightBrace` body — use the `Fn`'s
+///     `FnBody` braces; for a `SemiColon`-only `FnBody`, the body is empty.
+///   - `Struct` / `Enum` / `Impl` — use their own `LeftBrace`/`RightBrace`
+///     accessors.
+///
+/// All brace positions come from named pest accessors, so a `}` (or `{`)
+/// inside a string literal (`const "..."`) never confuses the split — the
+/// previous byte-scan would have truncated the body at the first `}` inside
+/// a string. Body trimming uses `trim_start_matches('\n').trim_end_matches('\n')`
+/// to drop a leading and trailing newline without collapsing blank lines on
+/// either side.
+fn split_signature_and_body<'i>(
+    node: &pairs::RustItemsOrPatternOperation<'i>,
+) -> (String, String) {
+    // `PatternOperation` is an expression with no brace body.
+    if node.PatternOperation().is_some() {
+        return (node.span.as_str().trim().to_string(), String::new());
+    }
+
+    // `RustItemsWithConstraint` is `LeftBrace ~ RustItemWithConstraint+ ~
+    // RightBrace`. There is no signature; the body is the inside-of-braces.
+    if let Some(items) = node.RustItemsWithConstraint() {
+        let lb = items.LeftBrace().span;
+        let rb = items.RightBrace().span;
+        let input = lb.get_input();
+        let body = &input[lb.end()..rb.start()];
+        return (
+            String::new(),
+            trim_one_newline(body).to_string(),
+        );
+    }
+
+    // Otherwise: `RustItemWithConstraint` = `Attr* ~ RustItem ~ WhereBlock?`.
+    // Grammar guarantees one Choice3 arm matches; this `expect` only fires on
+    // a parser/grammar mismatch.
+    let item = node
+        .RustItemWithConstraint()
+        .expect("RustItemsOrPatternOperation must match one Choice3 variant");
+    let node_span = node.span;
+    let input = node_span.get_input();
+    let rust_item = item.RustItem();
+
+    // For each Rust item variant, locate the brace pair delimiting its body.
+    // `Fn` has the only variant whose body is optional (`SemiColon` form).
+    let braces = if let Some(f) = rust_item.Fn() {
+        let fn_body = f.FnBody();
+        match (fn_body.LeftBrace(), fn_body.RightBrace()) {
+            (Some(lb), Some(rb)) => Some((lb.span, rb.span)),
+            _ => None, // `SemiColon` form
+        }
+    } else if let Some(s) = rust_item.Struct() {
+        Some((s.LeftBrace().span, s.RightBrace().span))
+    } else if let Some(e) = rust_item.Enum() {
+        Some((e.LeftBrace().span, e.RightBrace().span))
+    } else if let Some(i) = rust_item.Impl() {
+        Some((i.LeftBrace().span, i.RightBrace().span))
+    } else {
+        // Grammar guarantees one RustItem variant matches; fall back safely.
+        None
+    };
+
+    match braces {
+        Some((lb, rb)) => {
+            let sig = &input[node_span.start()..lb.start()];
+            let body = &input[lb.end()..rb.start()];
+            (
+                sig.trim().to_string(),
+                trim_one_newline(body).to_string(),
+            )
+        }
+        None => (node_span.as_str().trim().to_string(), String::new()),
+    }
+}
+
+/// Strip a single leading and a single trailing `\n` from `s` (preserving any
+/// further consecutive newlines on either side).
+///
+/// `body_source` is later dedented; `dedent` preserves blank lines verbatim,
+/// so collapsing all leading/trailing newlines with `trim_matches('\n')`
+/// would silently lose intentional blank lines that the author wrote before
+/// or after the body content.
+fn trim_one_newline(s: &str) -> &str {
+    let s = s.strip_prefix('\n').unwrap_or(s);
+    s.strip_suffix('\n').unwrap_or(s)
 }
 
 fn collect_header_name<'i>(main: &pairs::main<'i>) -> &'i str {
@@ -214,5 +393,114 @@ pattern Foo
         let main = parse(src);
         let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
         assert_eq!(doc.file_doc, vec!["first line\nsecond line".to_string()]);
+    }
+
+    #[test]
+    fn pattern_item_extracted() {
+        let src = "\
+pattern Foo
+patt {
+    /// docs for p_foo
+    /// continuation
+    p_foo = fn _ (..) -> _ { _ = const 0_usize; }
+}
+";
+        let main = parse(src);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        assert_eq!(doc.patterns.len(), 1);
+        let item = &doc.patterns[0];
+        assert_eq!(item.name, "p_foo");
+        assert_eq!(item.doc, vec!["docs for p_foo\ncontinuation"]);
+        assert!(item.body_source.contains("_ = const 0_usize;"));
+        assert!(item.signature.contains("fn _"));
+        assert!(item.meta_vars.is_none());
+    }
+
+    #[test]
+    fn pattern_item_with_meta_vars() {
+        let src = "\
+pattern Foo
+patt {
+    p_foo[$T: type] = fn _ (..) -> _ { _ = const 0_usize; }
+}
+";
+        let main = parse(src);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        assert_eq!(doc.patterns[0].meta_vars.as_deref(), Some("[$T: type]"));
+    }
+
+    #[test]
+    fn pattern_item_with_diag_attr() {
+        let src = r#"
+pattern Foo
+patt {
+    #[diag = "p_misordered"]
+    p_foo = fn _ (..) -> _ { _ = const 0_usize; }
+}
+"#;
+        let main = parse(src);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        assert_eq!(doc.patterns[0].diag_attr.as_deref(), Some("p_misordered"));
+    }
+
+    #[test]
+    fn util_block_items_extracted() {
+        let src = "\
+pattern Foo
+util {
+    u_foo = fn _ (..) -> _ { _ = const 0_usize; }
+}
+";
+        let main = parse(src);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        assert_eq!(doc.utilities.len(), 1);
+        assert_eq!(doc.utilities[0].name, "u_foo");
+        assert!(doc.patterns.is_empty());
+    }
+
+    #[test]
+    fn pattern_body_with_brace_in_string_literal_extracts_correctly() {
+        // Regression guard: `}` (or `{`) inside a `const "..."` string literal
+        // must not fool the signature/body split. A byte-level brace counter
+        // truncates the body at the inner `}`; the AST-driven split uses the
+        // typed span of the function's body braces and so sees through it.
+        let src = r#"
+pattern Foo
+patt {
+    p_foo = fn _ (..) -> _ { _ = const "look: }"; }
+}
+"#;
+        let main = parse(src);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        assert_eq!(doc.patterns.len(), 1);
+        let body = &doc.patterns[0].body_source;
+        assert!(
+            body.contains("look: }"),
+            "body lost the string content; got: {body:?}"
+        );
+        // The trailing `;` must also survive — i.e. we did not stop at the
+        // `}` inside the literal.
+        assert!(
+            body.contains(';'),
+            "body truncated before the terminating `;`; got: {body:?}"
+        );
+    }
+
+    #[test]
+    fn non_diag_attr_is_silently_skipped() {
+        // The grammar accepts any `Word` as the attr key; we only consume
+        // `diag`. A non-`diag` key (e.g. `lint_level`) must not error or be
+        // misread as a diagnostic message.
+        let src = r#"
+pattern Foo
+patt {
+    #[lint_level = "deny"]
+    p_foo = fn _ (..) -> _ { _ = const 0_usize; }
+}
+"#;
+        let main = parse(src);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        assert_eq!(doc.patterns.len(), 1);
+        assert!(doc.patterns[0].diag_attr.is_none());
     }
 }
