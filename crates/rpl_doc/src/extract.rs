@@ -1,5 +1,9 @@
 //! Build `DocFile` from the typed pest AST.
 
+use crate::model::DocFile;
+use rpl_parser::pairs;
+use std::path::Path;
+
 /// Strip the `///` or `//!` prefix and an optional single trailing space.
 ///
 /// `/// foo`  → `foo`
@@ -114,5 +118,101 @@ mod dedent_tests {
     fn no_trailing_newline_in_no_trailing_newline_out() {
         let input = "    a\n    b";
         assert_eq!(dedent(input), "a\nb");
+    }
+}
+
+/// Build a `DocFile` from already-parsed `pairs::main`.
+///
+/// Doesn't load examples (that's `examples::load_examples`'s job).
+pub(crate) fn build_doc_file<'i>(
+    path: &Path,
+    main: &pairs::main<'i>,
+) -> DocFile {
+    let path = path.to_path_buf();
+    let header_name = collect_header_name(main).to_string();
+    let file_doc = collect_file_doc(main);
+
+    DocFile {
+        path,
+        header_name,
+        file_doc,
+        patterns: Vec::new(),     // filled by later tasks
+        utilities: Vec::new(),    // filled by later tasks
+        diagnostics: Vec::new(),  // filled by later tasks
+        examples: Vec::new(),     // filled by examples::load_examples
+    }
+}
+
+fn collect_header_name<'i>(main: &pairs::main<'i>) -> &'i str {
+    // Named accessors are immune to grammar shifts (e.g., a future
+    // file-level attribute prepended to `RPLPattern`). The generator emits
+    // one accessor per named child in the production:
+    //   main         → r#RPLPattern()
+    //   RPLPattern   → r#RPLHeader()
+    //   RPLHeader    → r#Identifier()
+    let rpl_pattern = main.RPLPattern();
+    let rpl_header = rpl_pattern.RPLHeader();
+    rpl_header.Identifier().span.as_str()
+}
+
+fn collect_file_doc<'i>(main: &pairs::main<'i>) -> Vec<String> {
+    // `RPLPattern.InnerDocComment()` returns a `Vec<&InnerDocComment>` of
+    // the zero-or-more inner doc lines that precede `RPLHeader`.
+    let rpl_pattern = main.RPLPattern();
+    let inner_docs = rpl_pattern.InnerDocComment();
+    collect_runs(inner_docs.iter().map(|p| p.span.as_str()))
+}
+
+/// Join doc-comment lines (with their `///` / `//!` prefix already stripped)
+/// into a single run separated by `\n`. Returns `Vec<String>` containing
+/// either zero or one run.
+///
+/// Why one run only: the strict-mode grammar forbids two doc-comment runs at
+/// the same attachment site (a blank line between them is a parse error), so
+/// the pest pairs we iterate are always one contiguous block.
+fn collect_runs<'a>(lines: impl Iterator<Item = &'a str>) -> Vec<String> {
+    let stripped: Vec<&str> = lines.map(strip_doc_prefix).collect();
+    if stripped.is_empty() {
+        Vec::new()
+    } else {
+        vec![stripped.join("\n")]
+    }
+}
+
+#[cfg(test)]
+mod build_tests {
+    use super::*;
+    use rpl_parser::parse_main;
+
+    fn parse(src: &str) -> pairs::main<'_> {
+        parse_main(src, Path::new("/synthetic/test.rpl")).expect("parse")
+    }
+
+    #[test]
+    fn header_name_extracted() {
+        let src = "pattern Foo\n";
+        let main = parse(src);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        assert_eq!(doc.header_name, "Foo");
+    }
+
+    #[test]
+    fn file_doc_empty_when_no_inner_doc() {
+        let src = "pattern Foo\n";
+        let main = parse(src);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        assert!(doc.file_doc.is_empty());
+    }
+
+    #[test]
+    fn file_doc_captured_when_inner_doc_present() {
+        let src = "\
+//! first line
+//! second line
+pattern Foo
+";
+        let main = parse(src);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        assert_eq!(doc.file_doc, vec!["first line\nsecond line".to_string()]);
     }
 }
