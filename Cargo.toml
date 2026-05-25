@@ -25,6 +25,7 @@ rpl_meta = { path = "./crates/rpl_meta" }
 rpl_patterns = { path = "./crates/rpl_patterns" }
 rpl_config = { path = "./crates/rpl_config" }
 rpl_constraints = { path = "./crates/rpl_constraints" }
+rpl_doc = { path = "./crates/rpl_doc" }
 rpl_resolve = { path = "./crates/rpl_resolve" }
 rustc_tools_util = "0.3.0"
 serde = { version = "1.0", features = ["derive"] }
