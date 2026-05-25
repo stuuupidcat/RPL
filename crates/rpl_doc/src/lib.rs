@@ -7,6 +7,9 @@
 pub mod error;
 pub use error::RpldocError;
 
+pub mod model;
+pub use model::{DocDiag, DocExample, DocFile, DocItem};
+
 use std::path::Path;
 
 /// Parse an `.rpl` source string through the rpl_parser pipeline.
@@ -21,6 +24,26 @@ pub fn parse_only(path: &Path, source: &str) -> Result<(), RpldocError> {
             message: format!("{e}"),
         }
     })
+}
+
+#[cfg(test)]
+mod model_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn doc_file_constructs() {
+        let f = DocFile {
+            path: PathBuf::from("/x.rpl"),
+            header_name: "X".into(),
+            file_doc: vec!["hello".into()],
+            patterns: vec![],
+            utilities: vec![],
+            diagnostics: vec![],
+            examples: vec![],
+        };
+        assert_eq!(f.header_name, "X");
+    }
 }
 
 /// Crate version, exposed for sanity tests.
