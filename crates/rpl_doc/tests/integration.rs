@@ -23,3 +23,5 @@ fn assert_fixture(name: &str) {
 #[test] fn patt_with_doc() { assert_fixture("patt_with_doc"); }
 #[test] fn diag_with_doc() { assert_fixture("diag_with_doc"); }
 #[test] fn with_examples() { assert_fixture("with_examples"); }
+#[test] fn body_with_backticks() { assert_fixture("body_with_backticks"); }
+#[test] fn multi_block() { assert_fixture("multi_block"); }

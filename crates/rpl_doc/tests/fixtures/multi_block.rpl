@@ -1,0 +1,21 @@
+pattern MultiBlock
+
+patt {
+    p_a = fn _ (..) -> _ {
+        _ = const 0_usize;
+    }
+}
+
+util {
+    u_b = fn _ (..) -> _ {
+        _ = const 0_usize;
+    }
+}
+
+diag {
+    p_a = {
+        primary(span) = "msg",
+        level = "deny",
+        name = "lint",
+    }
+}

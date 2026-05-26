@@ -1,0 +1,8 @@
+pattern BodyWithBackticks
+
+patt {
+    p_foo = fn _ (..) -> _ {
+        // contains literal ``` triple backtick in a comment
+        _ = const 0_usize;
+    }
+}
