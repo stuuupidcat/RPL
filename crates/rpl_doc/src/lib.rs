@@ -10,6 +10,7 @@ pub use error::RpldocError;
 pub mod model;
 pub use model::{DocDiag, DocExample, DocFile, DocItem};
 
+mod examples;
 mod extract;
 
 use std::path::Path;

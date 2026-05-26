@@ -15,6 +15,7 @@ walkdir.workspace = true
 
 [dev-dependencies]
 pretty_assertions.workspace = true
+tempfile = "3"
 
 [lib]
 doctest = false
