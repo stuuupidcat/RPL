@@ -184,7 +184,7 @@ fn build_doc_item<'i>(item: &pairs::RPLPatternItem<'i>) -> DocItem {
     let name = item.Identifier().span.as_str().to_string();
     let meta_vars = item
         .MetaVariableDeclList()
-        .map(|m| m.span.as_str().to_string());
+        .map(|m| collapse_whitespace(m.span.as_str()));
 
     let (signature, body_raw) = split_signature_and_body(item.RustItemsOrPatternOperation());
     let body_source = dedent(&body_raw);
@@ -359,6 +359,13 @@ fn split_signature_and_body<'i>(
         }
         None => (node_span.as_str().trim().to_string(), String::new()),
     }
+}
+
+/// Collapse all internal whitespace runs to single spaces.
+/// `"[$T: type,\n    $U: type,\n]"` → `"[$T: type, $U: type, ]"`.
+/// Used to normalize multi-line meta-var declarations into a one-line heading.
+fn collapse_whitespace(s: &str) -> String {
+    s.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
 /// Strip a single leading `\n` from `s` and strip all trailing whitespace
@@ -569,6 +576,26 @@ diag {
         assert_eq!(d.level.as_deref(), Some("deny"));
         assert_eq!(d.lint_name.as_deref(), Some("foo_lint"));
         assert!(d.note.is_none());
+    }
+
+    #[test]
+    fn multiline_meta_vars_collapsed_to_one_line() {
+        let src = "\
+pattern Foo
+patt {
+    p_foo[
+        $T: type,
+        $U: type,
+    ] = fn _ (..) -> _ { _ = const 0_usize; }
+}
+";
+        let main = parse(src);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        let mv = doc.patterns[0].meta_vars.as_deref().unwrap();
+        // Newlines and indentation are collapsed; the heading becomes one line.
+        assert!(!mv.contains('\n'));
+        assert!(mv.contains("$T: type"));
+        assert!(mv.contains("$U: type"));
     }
 
     #[test]

@@ -21,6 +21,37 @@ pub(crate) fn fence_len_for(body: &str) -> usize {
     std::cmp::max(3, max_run + 1)
 }
 
+/// Wrap `value` in a backtick code span, escalating the fence length if
+/// `value` contains backticks. Returns a string like `` `value` `` or
+/// `` `` `value with `inner` backticks` `` `` with proper escalation.
+pub(crate) fn inline_code(value: &str) -> String {
+    // Count the longest run of backticks inside the value.
+    let mut max_run = 0usize;
+    let mut cur = 0usize;
+    for c in value.chars() {
+        if c == '`' {
+            cur += 1;
+            if cur > max_run {
+                max_run = cur;
+            }
+        } else {
+            cur = 0;
+        }
+    }
+    // Inline spans need at least 1 backtick (not the 3-tick floor for fences).
+    let n = max_run + 1;
+    let ticks: String = "`".repeat(n);
+    // Add a space whenever the fence is longer than 1 tick (CommonMark rule:
+    // avoids the content being mis-parsed as part of the delimiter), and also
+    // when the value starts or ends with a backtick.
+    let needs_pad = n > 1 || value.starts_with('`') || value.ends_with('`');
+    if needs_pad {
+        format!("{ticks} {value} {ticks}")
+    } else {
+        format!("{ticks}{value}{ticks}")
+    }
+}
+
 /// Helper: write a fenced code block to `out`, escalating the fence length
 /// as needed to safely embed `body`.
 pub(crate) fn write_fence(out: &mut String, lang: &str, body: &str) {
@@ -114,22 +145,22 @@ fn render_diag(out: &mut String, d: &DocDiag) {
         out.push_str("\n\n");
     }
     if let Some(s) = &d.primary {
-        out.push_str(&format!("- **Primary:** `{s}`\n"));
+        out.push_str(&format!("- **Primary:** {}\n", inline_code(s)));
     }
     if let Some(s) = &d.label {
-        out.push_str(&format!("- **Label:** `{s}`\n"));
+        out.push_str(&format!("- **Label:** {}\n", inline_code(s)));
     }
     if let Some(s) = &d.help {
-        out.push_str(&format!("- **Help:** `{s}`\n"));
+        out.push_str(&format!("- **Help:** {}\n", inline_code(s)));
     }
     if let Some(s) = &d.note {
-        out.push_str(&format!("- **Note:** `{s}`\n"));
+        out.push_str(&format!("- **Note:** {}\n", inline_code(s)));
     }
     if let Some(s) = &d.level {
-        out.push_str(&format!("- **Level:** `{s}`\n"));
+        out.push_str(&format!("- **Level:** {}\n", inline_code(s)));
     }
     if let Some(s) = &d.lint_name {
-        out.push_str(&format!("- **Lint name:** `{s}`\n"));
+        out.push_str(&format!("- **Lint name:** {}\n", inline_code(s)));
     }
     out.push_str("\n");
 }
@@ -157,6 +188,18 @@ mod tests {
     fn fence_escalates_past_inner_run() {
         assert_eq!(fence_len_for("contains ``` triple"), 4);
         assert_eq!(fence_len_for("contains ```` quad"), 5);
+    }
+
+    #[test]
+    fn inline_code_escalates_for_inner_backticks() {
+        assert_eq!(inline_code("plain"), "`plain`");
+        assert_eq!(inline_code("has `inner` backticks"), "`` has `inner` backticks ``");
+    }
+
+    #[test]
+    fn inline_code_pads_when_value_starts_or_ends_with_backtick() {
+        assert_eq!(inline_code("`x"), "`` `x ``");
+        assert_eq!(inline_code("x`"), "`` x` ``");
     }
 
     #[test]
