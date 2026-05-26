@@ -17,6 +17,11 @@ fn assert_fixture(name: &str) {
         .unwrap_or_else(|_| panic!("missing fixture {}", expected_path.display()));
     let actual =
         rpl_doc::render_markdown(&rpl).unwrap_or_else(|e| panic!("render_markdown({}) failed: {e}", rpl.display()));
+    // Normalize CRLF→LF so the test isn't sensitive to how the fixture file
+    // was checked out (Windows git defaults to autocrlf on some configs).
+    // The renderer itself always emits LF; we only normalize the expected
+    // side here.
+    let expected = expected.replace("\r\n", "\n");
     assert_eq!(actual, expected, "fixture: {name}");
 }
 
