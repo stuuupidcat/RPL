@@ -125,3 +125,15 @@ For example:
 ```
 RPL_PATS=~/home/code/projects/RPL/docs/patterns/CVE-2019-16138-MIR.rpl RUSTFLAGS=-Zinline-mir=false cargo rpl
 ```
+
+## Documenting Patterns
+
+When writing or substantially revising an `.rpl` file under
+`docs/patterns-pest/`, consider adding a `//!` block at the top
+describing what the pattern detects, and `///` blocks on each
+pattern/util/diag item explaining its role. See
+[`docs/development/rpldoc-authoring.md`](docs/development/rpldoc-authoring.md)
+for conventions and a worked example.
+
+Documentation is encouraged but not enforced; existing pattern files
+without docs continue to work unchanged.

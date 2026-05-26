@@ -52,6 +52,16 @@ The toolchain of RPL, which is a custom configuration of Rust compiler, enables 
 
    TIP: You can view all available lints with `cargo rpl -- -W help`.
 
+## Documenting Patterns
+
+You can generate Markdown documentation for any `.rpl` file with:
+
+```sh
+cargo rpl doc path/to/pattern.rpl
+```
+
+See [`docs/development/rpldoc-authoring.md`](./docs/development/rpldoc-authoring.md) for the authoring conventions (`//!` for file-level docs, `///` for items, and the sibling examples folder).
+
 ## RPL Book
 
 See [this website](https://rpl-toolchain.github.io/rpl-book/) for the RPL book (Work in progress).
