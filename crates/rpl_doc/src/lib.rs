@@ -50,6 +50,46 @@ mod model_tests {
     }
 }
 
+/// Options controlling output behavior.
+#[derive(Debug, Clone, Default)]
+pub struct GenerateOpts {
+    /// Optional output base directory. If `None`, write the .md next to each .rpl.
+    /// If `Some`, write outputs under this directory, mirroring the input tree
+    /// rooted at the input PATH.
+    pub output_root: Option<std::path::PathBuf>,
+    /// Suppress per-file "Generated foo.md" status lines.
+    pub quiet: bool,
+}
+
+/// Build the documentation Markdown for a single `.rpl` file and return it.
+///
+/// This is the in-memory entry point — the CLI calls this and writes the
+/// returned string to disk.
+pub fn render_markdown(rpl_path: &std::path::Path) -> Result<String, RpldocError> {
+    let source = std::fs::read_to_string(rpl_path).map_err(|e| RpldocError::Io {
+        path: rpl_path.to_path_buf(),
+        source: e,
+    })?;
+    let main = rpl_parser::parse_main(&source, rpl_path).map_err(|e| {
+        RpldocError::Parse {
+            path: rpl_path.to_path_buf(),
+            message: format!("{e}"),
+        }
+    })?;
+    let mut doc = extract::build_doc_file(rpl_path, &main);
+    if doc.header_name.is_empty() {
+        return Err(RpldocError::MissingPatternHeader {
+            path: rpl_path.to_path_buf(),
+        });
+    }
+    let mut warnings: Vec<RpldocError> = Vec::new();
+    doc.examples = examples::load_examples(rpl_path, |w| warnings.push(w));
+    for w in warnings {
+        eprintln!("warning: {w}");
+    }
+    Ok(render::render(&doc))
+}
+
 /// Crate version, exposed for sanity tests.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -104,5 +144,32 @@ mod tests {
         let msg = format!("{err}");
         assert!(msg.contains("foo.rpl"));
         assert!(msg.contains("not found"));
+    }
+}
+
+#[cfg(test)]
+mod render_markdown_tests {
+    use super::*;
+
+    fn write(td: &tempfile::TempDir, name: &str, content: &str) -> std::path::PathBuf {
+        let p = td.path().join(name);
+        std::fs::write(&p, content).unwrap();
+        p
+    }
+
+    #[test]
+    fn renders_minimal_pattern() {
+        let td = tempfile::TempDir::new().unwrap();
+        let p = write(&td, "Foo.rpl", "pattern Foo\n");
+        let md = render_markdown(&p).unwrap();
+        assert_eq!(md, "# Foo\n\n");
+    }
+
+    #[test]
+    fn parse_error_propagates_as_rpldoc_error() {
+        let td = tempfile::TempDir::new().unwrap();
+        let p = write(&td, "Bad.rpl", "not a pattern at all\n");
+        let err = render_markdown(&p).unwrap_err();
+        assert!(matches!(err, RpldocError::Parse { .. }));
     }
 }
