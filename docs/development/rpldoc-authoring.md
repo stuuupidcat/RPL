@@ -36,10 +36,16 @@ document.
 See [`examples/Sample-Documented.rpl`](examples/Sample-Documented.rpl)
 for a complete file. The companion folder
 [`examples/Sample-Documented/`](examples/Sample-Documented/) holds the
-`.rs` examples it points to.
+`.rs` examples it points to, and
+[`examples/Sample-Documented.md`](examples/Sample-Documented.md) is the
+output rpldoc produces from this source — read it side-by-side with the
+`.rpl` to see what each `//!` and `///` block becomes.
 
-Run `cargo rpl doc docs/development/examples/Sample-Documented.rpl`
-to see the generated Markdown.
+To regenerate it locally, run:
+
+```sh
+cargo rpl doc docs/development/examples/Sample-Documented.rpl
+```
 
 ## Generated layout
 
