@@ -96,6 +96,7 @@ path = "src/driver.rs"
 rpl_interface.workspace = true
 rpl_meta.workspace = true
 rpl_config.workspace = true
+rpl_doc.workspace = true
 rustc_tools_util.workspace = true
 color-print = "0.3.4"
 anstream = "0.6.0"

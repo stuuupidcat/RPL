@@ -90,6 +90,74 @@ pub fn render_markdown(rpl_path: &std::path::Path) -> Result<String, RpldocError
     Ok(render::render(&doc))
 }
 
+/// Drive the CLI: takes a `PATH` (file or directory) and writes Markdown
+/// outputs. Returns `Ok(())` if everything succeeded, or a `Vec` of all
+/// per-file errors (and exits 1 in the caller).
+pub fn run_cli(path: &std::path::Path, opts: GenerateOpts) -> Result<(), Vec<RpldocError>> {
+    let mut errors = Vec::new();
+    let files: Vec<std::path::PathBuf> = if path.is_dir() {
+        walkdir::WalkDir::new(path)
+            .into_iter()
+            .filter_map(Result::ok)
+            .filter(|e| e.file_type().is_file())
+            .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("rpl"))
+            .map(|e| e.into_path())
+            .collect()
+    } else {
+        vec![path.to_path_buf()]
+    };
+
+    for rpl in &files {
+        let md = match render_markdown(rpl) {
+            Ok(md) => md,
+            Err(e) => {
+                errors.push(e);
+                continue;
+            }
+        };
+        let out_path = compute_output_path(path, rpl, &opts);
+        if let Some(parent) = out_path.parent() {
+            if let Err(e) = std::fs::create_dir_all(parent) {
+                errors.push(RpldocError::OutputWrite {
+                    path: parent.to_path_buf(),
+                    source: e,
+                });
+                continue;
+            }
+        }
+        if let Err(e) = std::fs::write(&out_path, &md) {
+            errors.push(RpldocError::OutputWrite { path: out_path.clone(), source: e });
+            continue;
+        }
+        if !opts.quiet {
+            eprintln!("generated {}", out_path.display());
+        }
+    }
+
+    if errors.is_empty() { Ok(()) } else { Err(errors) }
+}
+
+fn compute_output_path(
+    input_root: &std::path::Path,
+    rpl: &std::path::Path,
+    opts: &GenerateOpts,
+) -> std::path::PathBuf {
+    match &opts.output_root {
+        None => rpl.with_extension("md"),
+        Some(out_root) => {
+            // Mirror the rpl's path relative to input_root under out_root.
+            let rel = if input_root.is_file() {
+                std::path::PathBuf::from(rpl.file_name().unwrap_or_default())
+            } else {
+                rpl.strip_prefix(input_root)
+                    .map(|p| p.to_path_buf())
+                    .unwrap_or_else(|_| std::path::PathBuf::from(rpl.file_name().unwrap_or_default()))
+            };
+            out_root.join(rel).with_extension("md")
+        }
+    }
+}
+
 /// Crate version, exposed for sanity tests.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

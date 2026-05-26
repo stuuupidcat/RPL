@@ -1,5 +1,6 @@
 // warn on lints, that are included in `rust-lang/rust`s bootstrap
 #![warn(rust_2018_idioms, unused_lifetimes)]
+#![feature(rustc_private)]
 
 use std::env;
 use std::path::PathBuf;
@@ -37,6 +38,15 @@ pub fn main() {
             show_help();
         }
         return;
+    }
+
+    // rpldoc subcommand: `cargo rpl doc <PATH> [--output <DIR>] [--quiet]`
+    if env::args().nth(2).as_deref() == Some("doc") {
+        let doc_args: Vec<String> = env::args().skip(3).collect();
+        match run_doc(doc_args) {
+            Ok(()) => return,
+            Err(code) => process::exit(code),
+        }
     }
 
     if let Err(code) = process(env::args().skip(2)) {
@@ -218,6 +228,49 @@ fn apply_inline_mir(cmd: &mut Command, inline_mir: bool) {
             cmd.env("RUSTFLAGS", flag);
         },
     }
+}
+
+fn run_doc(args: Vec<String>) -> Result<(), i32> {
+    let mut path: Option<std::path::PathBuf> = None;
+    let mut output_root: Option<std::path::PathBuf> = None;
+    let mut quiet = false;
+
+    let mut it = args.into_iter();
+    while let Some(arg) = it.next() {
+        match arg.as_str() {
+            "--quiet" => quiet = true,
+            "--output" => {
+                let v = it.next().ok_or_else(|| {
+                    eprintln!("error: --output requires a value");
+                    2
+                })?;
+                output_root = Some(std::path::PathBuf::from(v));
+            }
+            s if s.starts_with("--output=") => {
+                output_root = Some(std::path::PathBuf::from(&s["--output=".len()..]));
+            }
+            _ => {
+                if path.is_some() {
+                    eprintln!("error: only one PATH argument supported");
+                    return Err(2);
+                }
+                path = Some(std::path::PathBuf::from(arg));
+            }
+        }
+    }
+
+    let path = path.ok_or_else(|| {
+        eprintln!("usage: cargo rpl doc <PATH> [--output <DIR>] [--quiet]");
+        2
+    })?;
+
+    let opts = rpl_doc::GenerateOpts { output_root, quiet };
+    rpl_doc::run_cli(&path, opts).map_err(|errors| {
+        for e in errors {
+            eprintln!("error: {e}");
+        }
+        1
+    })
 }
 
 #[must_use]
