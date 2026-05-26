@@ -1,8 +1,10 @@
 //! Build `DocFile` from the typed pest AST.
 
-use crate::model::{DocDiag, DocFile, DocItem};
-use rpl_parser::pairs;
 use std::path::Path;
+
+use rpl_parser::pairs;
+
+use crate::model::{DocDiag, DocFile, DocItem};
 
 /// Strip the `///` or `//!` prefix and an optional single trailing space.
 ///
@@ -124,10 +126,7 @@ mod dedent_tests {
 /// Build a `DocFile` from already-parsed `pairs::main`.
 ///
 /// Doesn't load examples (that's `examples::load_examples`'s job).
-pub(crate) fn build_doc_file<'i>(
-    path: &Path,
-    main: &pairs::main<'i>,
-) -> DocFile {
+pub(crate) fn build_doc_file(path: &Path, main: &pairs::main<'_>) -> DocFile {
     let path = path.to_path_buf();
     let header_name = collect_header_name(main).to_string();
     let file_doc = collect_file_doc(main);
@@ -172,14 +171,11 @@ pub(crate) fn build_doc_file<'i>(
 /// Grammar:
 ///   RPLPatternItem = OuterDocComment* ~ Attr* ~ Identifier
 ///                  ~ MetaVariableDeclList? ~ Assign ~ RustItemsOrPatternOperation
-fn build_doc_item<'i>(item: &pairs::RPLPatternItem<'i>) -> DocItem {
+fn build_doc_item(item: &pairs::RPLPatternItem<'_>) -> DocItem {
     let outer_docs = item.OuterDocComment();
     let doc = collect_runs(outer_docs.iter().map(|p| p.span.as_str()));
 
-    let diag_attr = item
-        .Attr()
-        .into_iter()
-        .find_map(extract_diag_attr_value);
+    let diag_attr = item.Attr().into_iter().find_map(extract_diag_attr_value);
 
     let name = item.Identifier().span.as_str().to_string();
     let meta_vars = item
@@ -206,7 +202,7 @@ fn build_doc_item<'i>(item: &pairs::RPLPatternItem<'i>) -> DocItem {
 ///                 ~ diagItems ~ MetaVariableWithDiagMessageSeparatedByComma? ~ RightBrace
 ///   diagItems     = diagItem ~ (Comma ~ diagItem)* ~ Comma?
 ///   diagItem      = Identifier ~ (LeftParen ~ diagAttrs ~ RightParen)? ~ Assign ~ diagMessage
-fn build_doc_diag<'i>(item: &pairs::diagBlockItem<'i>) -> DocDiag {
+fn build_doc_diag(item: &pairs::diagBlockItem<'_>) -> DocDiag {
     let name = item.Identifier().span.as_str().to_string();
     let doc = collect_runs(item.OuterDocComment().iter().map(|p| p.span.as_str()));
 
@@ -230,7 +226,7 @@ fn build_doc_diag<'i>(item: &pairs::diagBlockItem<'i>) -> DocDiag {
             "note" => note = Some(msg_text),
             "level" => level = Some(msg_text),
             "name" => lint_name = Some(msg_text),
-            _ => { /* unknown key — ignore */ }
+            _ => { /* unknown key — ignore */ },
         }
     }
 
@@ -259,38 +255,33 @@ fn build_doc_diag<'i>(item: &pairs::diagBlockItem<'i>) -> DocDiag {
 /// `Assign ~ diagMessage` form yields the value. `diagMessageInner` has its
 /// own span (Both-mode atomic), so its `span.as_str()` already excludes the
 /// surrounding quotes.
-fn extract_diag_attr_value<'i>(attr: &pairs::Attr<'i>) -> Option<String> {
+fn extract_diag_attr_value(attr: &pairs::Attr<'_>) -> Option<String> {
     let diag_attrs = attr.diagAttrs();
     let (first, rest) = diag_attrs.diagAttr();
-    std::iter::once(first)
-        .chain(rest.into_iter())
-        .find_map(|da| {
-            if da.Word().span.as_str() == "diag" {
-                da.diagMessage()
-                    .map(|m| m.diagMessageInner().span.as_str().to_string())
-            } else {
-                None
-            }
-        })
+    std::iter::once(first).chain(rest).find_map(|da| {
+        if da.Word().span.as_str() == "diag" {
+            da.diagMessage().map(|m| m.diagMessageInner().span.as_str().to_string())
+        } else {
+            None
+        }
+    })
 }
 
 /// Split a `RustItemsOrPatternOperation` into (signature, body), driven by
 /// the typed AST rather than byte-level brace counting.
 ///
 /// Layout per variant:
-/// - `PatternOperation`: pure expression (e.g. `divergent[$T = $T]`). The
-///   entire text is the signature; there is no body.
-/// - `RustItemsWithConstraint` (`{ item+ }`): a wrapping brace block whose
-///   contents are several items. The signature is empty; the body is the
-///   text strictly between the outer `LeftBrace` and `RightBrace`.
-/// - `RustItemWithConstraint` (`Attr* ~ RustItem ~ WhereBlock?`): unwraps to
-///   one `RustItem` (`Fn`/`Struct`/`Enum`/`Impl`). The signature runs from
-///   the start of the node up to the item's opening brace, and the body is
-///   the text between that brace and its matching closer:
-///   - `Fn` with `LeftBrace ~ MirBody ~ RightBrace` body — use the `Fn`'s
-///     `FnBody` braces; for a `SemiColon`-only `FnBody`, the body is empty.
-///   - `Struct` / `Enum` / `Impl` — use their own `LeftBrace`/`RightBrace`
-///     accessors.
+/// - `PatternOperation`: pure expression (e.g. `divergent[$T = $T]`). The entire text is the
+///   signature; there is no body.
+/// - `RustItemsWithConstraint` (`{ item+ }`): a wrapping brace block whose contents are several
+///   items. The signature is empty; the body is the text strictly between the outer `LeftBrace` and
+///   `RightBrace`.
+/// - `RustItemWithConstraint` (`Attr* ~ RustItem ~ WhereBlock?`): unwraps to one `RustItem`
+///   (`Fn`/`Struct`/`Enum`/`Impl`). The signature runs from the start of the node up to the item's
+///   opening brace, and the body is the text between that brace and its matching closer:
+///   - `Fn` with `LeftBrace ~ MirBody ~ RightBrace` body — use the `Fn`'s `FnBody` braces; for a
+///     `SemiColon`-only `FnBody`, the body is empty.
+///   - `Struct` / `Enum` / `Impl` — use their own `LeftBrace`/`RightBrace` accessors.
 ///
 /// All brace positions come from named pest accessors, so a `}` (or `{`)
 /// inside a string literal (`const "..."`) never confuses the split — the
@@ -298,9 +289,7 @@ fn extract_diag_attr_value<'i>(attr: &pairs::Attr<'i>) -> Option<String> {
 /// a string. Body trimming uses `trim_start_matches('\n').trim_end_matches('\n')`
 /// to drop a leading and trailing newline without collapsing blank lines on
 /// either side.
-fn split_signature_and_body<'i>(
-    node: &pairs::RustItemsOrPatternOperation<'i>,
-) -> (String, String) {
+fn split_signature_and_body(node: &pairs::RustItemsOrPatternOperation<'_>) -> (String, String) {
     // `PatternOperation` is an expression with no brace body.
     if node.PatternOperation().is_some() {
         return (node.span.as_str().trim().to_string(), String::new());
@@ -313,10 +302,7 @@ fn split_signature_and_body<'i>(
         let rb = items.RightBrace().span;
         let input = lb.get_input();
         let body = &input[lb.end()..rb.start()];
-        return (
-            String::new(),
-            trim_one_newline(body).to_string(),
-        );
+        return (String::new(), trim_one_newline(body).to_string());
     }
 
     // Otherwise: `RustItemWithConstraint` = `Attr* ~ RustItem ~ WhereBlock?`.
@@ -341,22 +327,16 @@ fn split_signature_and_body<'i>(
         Some((s.LeftBrace().span, s.RightBrace().span))
     } else if let Some(e) = rust_item.Enum() {
         Some((e.LeftBrace().span, e.RightBrace().span))
-    } else if let Some(i) = rust_item.Impl() {
-        Some((i.LeftBrace().span, i.RightBrace().span))
     } else {
-        // Grammar guarantees one RustItem variant matches; fall back safely.
-        None
+        rust_item.Impl().map(|i| (i.LeftBrace().span, i.RightBrace().span))
     };
 
     match braces {
         Some((lb, rb)) => {
             let sig = &input[node_span.start()..lb.start()];
             let body = &input[lb.end()..rb.start()];
-            (
-                sig.trim().to_string(),
-                trim_one_newline(body).to_string(),
-            )
-        }
+            (sig.trim().to_string(), trim_one_newline(body).to_string())
+        },
         None => (node_span.as_str().trim().to_string(), String::new()),
     }
 }
@@ -397,7 +377,7 @@ fn collect_header_name<'i>(main: &pairs::main<'i>) -> &'i str {
     rpl_header.Identifier().span.as_str()
 }
 
-fn collect_file_doc<'i>(main: &pairs::main<'i>) -> Vec<String> {
+fn collect_file_doc(main: &pairs::main<'_>) -> Vec<String> {
     // `RPLPattern.InnerDocComment()` returns a `Vec<&InnerDocComment>` of
     // the zero-or-more inner doc lines that precede `RPLHeader`.
     let rpl_pattern = main.RPLPattern();
@@ -423,8 +403,9 @@ fn collect_runs<'a>(lines: impl Iterator<Item = &'a str>) -> Vec<String> {
 
 #[cfg(test)]
 mod build_tests {
-    use super::*;
     use rpl_parser::parse_main;
+
+    use super::*;
 
     fn parse(src: &str) -> pairs::main<'_> {
         parse_main(src, Path::new("/synthetic/test.rpl")).expect("parse")
@@ -537,10 +518,7 @@ patt {
         let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
         assert_eq!(doc.patterns.len(), 1);
         let body = &doc.patterns[0].body_source;
-        assert!(
-            body.contains("look: }"),
-            "body lost the string content; got: {body:?}"
-        );
+        assert!(body.contains("look: }"), "body lost the string content; got: {body:?}");
         // The trailing `;` must also survive — i.e. we did not stop at the
         // `}` inside the literal.
         assert!(

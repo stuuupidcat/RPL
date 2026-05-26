@@ -12,10 +12,10 @@ fn cargo_rpl_bin() -> std::path::PathBuf {
     // the binary from the workspace `target/` tree at runtime.
     //
     // Strategy (in priority order):
-    // 1. `CARGO_BIN_EXE_cargo-rpl` — set when Cargo does supply it (e.g. if
-    //    the project is restructured in the future).
-    // 2. Walk up from `CARGO_MANIFEST_DIR` to find the workspace root, then
-    //    locate `target/{profile}/cargo-rpl`.
+    // 1. `CARGO_BIN_EXE_cargo-rpl` — set when Cargo does supply it (e.g. if the project is restructured
+    //    in the future).
+    // 2. Walk up from `CARGO_MANIFEST_DIR` to find the workspace root, then locate
+    //    `target/{profile}/cargo-rpl`.
     if let Ok(p) = std::env::var("CARGO_BIN_EXE_cargo-rpl") {
         return std::path::PathBuf::from(p);
     }

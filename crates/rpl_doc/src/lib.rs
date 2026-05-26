@@ -22,18 +22,19 @@ use std::path::Path;
 /// that want it should use `rpl_parser::parse_main` directly. This is the
 /// minimal entry point for the corpus-sweep backward-compatibility gate.
 pub fn parse_only(path: &Path, source: &str) -> Result<(), RpldocError> {
-    rpl_parser::parse_main(source, path).map(|_| ()).map_err(|e| {
-        RpldocError::Parse {
+    rpl_parser::parse_main(source, path)
+        .map(|_| ())
+        .map_err(|e| RpldocError::Parse {
             path: path.to_path_buf(),
             message: format!("{e}"),
-        }
-    })
+        })
 }
 
 #[cfg(test)]
 mod model_tests {
-    use super::*;
     use std::path::PathBuf;
+
+    use super::*;
 
     #[test]
     fn doc_file_constructs() {
@@ -70,11 +71,9 @@ pub fn render_markdown(rpl_path: &std::path::Path) -> Result<String, RpldocError
         path: rpl_path.to_path_buf(),
         source: e,
     })?;
-    let main = rpl_parser::parse_main(&source, rpl_path).map_err(|e| {
-        RpldocError::Parse {
-            path: rpl_path.to_path_buf(),
-            message: format!("{e}"),
-        }
+    let main = rpl_parser::parse_main(&source, rpl_path).map_err(|e| RpldocError::Parse {
+        path: rpl_path.to_path_buf(),
+        message: format!("{e}"),
     })?;
     let mut doc = extract::build_doc_file(rpl_path, &main);
     if doc.header_name.is_empty() {
@@ -113,7 +112,7 @@ pub fn run_cli(path: &std::path::Path, opts: GenerateOpts) -> Result<(), Vec<Rpl
             Err(e) => {
                 errors.push(e);
                 continue;
-            }
+            },
         };
         let out_path = compute_output_path(path, rpl, &opts);
         if let Some(parent) = out_path.parent() {
@@ -126,7 +125,10 @@ pub fn run_cli(path: &std::path::Path, opts: GenerateOpts) -> Result<(), Vec<Rpl
             }
         }
         if let Err(e) = std::fs::write(&out_path, &md) {
-            errors.push(RpldocError::OutputWrite { path: out_path.clone(), source: e });
+            errors.push(RpldocError::OutputWrite {
+                path: out_path.clone(),
+                source: e,
+            });
             continue;
         }
         if !opts.quiet {
@@ -137,11 +139,7 @@ pub fn run_cli(path: &std::path::Path, opts: GenerateOpts) -> Result<(), Vec<Rpl
     if errors.is_empty() { Ok(()) } else { Err(errors) }
 }
 
-fn compute_output_path(
-    input_root: &std::path::Path,
-    rpl: &std::path::Path,
-    opts: &GenerateOpts,
-) -> std::path::PathBuf {
+fn compute_output_path(input_root: &std::path::Path, rpl: &std::path::Path, opts: &GenerateOpts) -> std::path::PathBuf {
     match &opts.output_root {
         None => rpl.with_extension("md"),
         Some(out_root) => {
@@ -154,7 +152,7 @@ fn compute_output_path(
                     .unwrap_or_else(|_| std::path::PathBuf::from(rpl.file_name().unwrap_or_default()))
             };
             out_root.join(rel).with_extension("md")
-        }
+        },
     }
 }
 
@@ -163,8 +161,9 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 #[cfg(test)]
 mod parse_only_tests {
-    use super::*;
     use std::path::Path;
+
+    use super::*;
 
     #[test]
     fn parse_only_accepts_simple_pattern_file() {
@@ -185,13 +184,9 @@ mod parse_only_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::PathBuf;
 
-    #[test]
-    fn crate_loads() {
-        assert!(!VERSION.is_empty());
-    }
+    use super::*;
 
     #[test]
     fn missing_pattern_header_error_renders() {

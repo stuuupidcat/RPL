@@ -5,8 +5,9 @@
 
 #![feature(rustc_private)]
 
-use rpl_parser::parse_main;
 use std::path::Path;
+
+use rpl_parser::parse_main;
 
 fn assert_parses(label: &str, src: &str) {
     let result = parse_main(src, Path::new("/synthetic/test.rpl"));

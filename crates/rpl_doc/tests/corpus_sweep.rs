@@ -33,7 +33,10 @@ fn all_rpl_files() -> Vec<PathBuf> {
 #[test]
 fn existing_patterns_still_parse_after_grammar_change() {
     let files = all_rpl_files();
-    assert!(!files.is_empty(), "expected at least one .rpl under docs/patterns-pest/");
+    assert!(
+        !files.is_empty(),
+        "expected at least one .rpl under docs/patterns-pest/"
+    );
 
     let mut failures = Vec::new();
     for path in &files {
@@ -42,7 +45,7 @@ fn existing_patterns_still_parse_after_grammar_change() {
             Err(e) => {
                 failures.push(format!("read {}: {e}", path.display()));
                 continue;
-            }
+            },
         };
         if let Err(e) = rpl_doc::parse_only(path, &source) {
             failures.push(format!("parse {}: {e}", path.display()));

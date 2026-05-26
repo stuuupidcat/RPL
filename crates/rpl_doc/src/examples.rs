@@ -2,19 +2,17 @@
 //!
 //! For `<dir>/<stem>.rpl`, looks at `<dir>/<stem>/` for `.rs` files.
 
+use std::path::Path;
+
 use crate::error::RpldocError;
 use crate::model::DocExample;
-use std::path::Path;
 
 /// Load `.rs` example files from the sibling folder of `rpl_path`.
 ///
 /// Returns an empty `Vec` if the folder doesn't exist. Per-file read errors
 /// are reported to `warn` (caller's responsibility to surface), and the
 /// offending file is skipped.
-pub(crate) fn load_examples(
-    rpl_path: &Path,
-    mut warn: impl FnMut(RpldocError),
-) -> Vec<DocExample> {
+pub(crate) fn load_examples(rpl_path: &Path, mut warn: impl FnMut(RpldocError)) -> Vec<DocExample> {
     let stem = match rpl_path.file_stem().and_then(|s| s.to_str()) {
         Some(s) => s,
         None => return Vec::new(),
@@ -30,9 +28,12 @@ pub(crate) fn load_examples(
     let mut entries: Vec<_> = match std::fs::read_dir(&dir) {
         Ok(rd) => rd.filter_map(Result::ok).collect(),
         Err(e) => {
-            warn(RpldocError::Io { path: dir.clone(), source: e });
+            warn(RpldocError::Io {
+                path: dir.clone(),
+                source: e,
+            });
             return Vec::new();
-        }
+        },
     };
     entries.sort_by_key(|e| e.file_name());
 
@@ -52,9 +53,12 @@ pub(crate) fn load_examples(
         let source = match std::fs::read_to_string(&path) {
             Ok(s) => s,
             Err(e) => {
-                warn(RpldocError::Io { path: path.clone(), source: e });
+                warn(RpldocError::Io {
+                    path: path.clone(),
+                    source: e,
+                });
                 continue;
-            }
+            },
         };
         out.push(promote_leading_inner_doc(filename, source));
     }
@@ -70,10 +74,7 @@ fn promote_leading_inner_doc(filename: String, source: String) -> DocExample {
         let trimmed = line.trim_end_matches('\n').trim_end_matches('\r');
         if trimmed.trim_start().starts_with("//!") {
             // Capture, stripping prefix and one optional space.
-            let after = trimmed
-                .trim_start()
-                .strip_prefix("//!")
-                .unwrap_or("");
+            let after = trimmed.trim_start().strip_prefix("//!").unwrap_or("");
             let stripped = after.strip_prefix(' ').unwrap_or(after);
             leading_doc.push(stripped.to_string());
             consumed_bytes += line.len();
@@ -107,8 +108,9 @@ fn promote_leading_inner_doc(filename: String, source: String) -> DocExample {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::fs;
+
+    use super::*;
 
     fn make_temp_with_layout(stem: &str, files: &[(&str, &str)]) -> tempfile::TempDir {
         let td = tempfile::TempDir::new().unwrap();
@@ -167,18 +169,12 @@ mod tests {
     fn promotes_leading_inner_doc_block() {
         let td = make_temp_with_layout(
             "Foo",
-            &[(
-                "a.rs",
-                "//! Demonstrates the bug.\n//! Second line.\n\nfn a() {}\n",
-            )],
+            &[("a.rs", "//! Demonstrates the bug.\n//! Second line.\n\nfn a() {}\n")],
         );
         let rpl = td.path().join("Foo.rpl");
         let examples = load_examples(&rpl, |_| {});
         assert_eq!(examples.len(), 1);
-        assert_eq!(
-            examples[0].leading_doc,
-            vec!["Demonstrates the bug.\nSecond line."]
-        );
+        assert_eq!(examples[0].leading_doc, vec!["Demonstrates the bug.\nSecond line."]);
         assert_eq!(examples[0].source, "fn a() {}\n");
     }
 

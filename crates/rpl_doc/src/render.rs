@@ -127,9 +127,7 @@ fn render_item(out: &mut String, item: &DocItem) {
         out.push_str("\n\n");
     }
     if let Some(diag) = &item.diag_attr {
-        out.push_str(&format!(
-            "**Diagnostic:** [`{diag}`](#diagnostic-{diag})\n\n",
-        ));
+        out.push_str(&format!("**Diagnostic:** [`{diag}`](#diagnostic-{diag})\n\n",));
     }
     out.push_str(&format!("**Signature:** `{}`\n\n", item.signature));
     out.push_str("<details><summary>Pattern body</summary>\n\n");
@@ -162,7 +160,7 @@ fn render_diag(out: &mut String, d: &DocDiag) {
     if let Some(s) = &d.lint_name {
         out.push_str(&format!("- **Lint name:** {}\n", inline_code(s)));
     }
-    out.push_str("\n");
+    out.push('\n');
 }
 
 fn render_example(out: &mut String, ex: &DocExample) {
@@ -172,7 +170,7 @@ fn render_example(out: &mut String, ex: &DocExample) {
         out.push_str("\n\n");
     }
     write_fence(out, "rust", &ex.source);
-    out.push_str("\n");
+    out.push('\n');
 }
 
 #[cfg(test)]
@@ -216,8 +214,9 @@ mod tests {
 
 #[cfg(test)]
 mod render_doc_file_tests {
-    use super::*;
     use std::path::PathBuf;
+
+    use super::*;
 
     fn empty_doc() -> DocFile {
         DocFile {
@@ -291,9 +290,9 @@ mod render_doc_file_tests {
         assert!(out.contains("<a id=\"diagnostic-p_diag\"></a>"));
         assert!(out.contains("### Diagnostic: `p_diag`"));
         assert!(out.contains("- **Primary:** `primary msg`"));
-        assert!(!out.contains("- **Label:**"));   // omitted
+        assert!(!out.contains("- **Label:**")); // omitted
         assert!(out.contains("- **Help:** `help msg`"));
-        assert!(!out.contains("- **Note:**"));   // omitted
+        assert!(!out.contains("- **Note:**")); // omitted
         assert!(out.contains("- **Level:** `deny`"));
         assert!(out.contains("- **Lint name:** `foo_lint`"));
     }

@@ -245,17 +245,17 @@ fn run_doc(args: Vec<String>) -> Result<(), i32> {
                     2
                 })?;
                 output_root = Some(std::path::PathBuf::from(v));
-            }
+            },
             s if s.starts_with("--output=") => {
                 output_root = Some(std::path::PathBuf::from(&s["--output=".len()..]));
-            }
+            },
             _ => {
                 if path.is_some() {
                     eprintln!("error: only one PATH argument supported");
                     return Err(2);
                 }
                 path = Some(std::path::PathBuf::from(arg));
-            }
+            },
         }
     }
 
