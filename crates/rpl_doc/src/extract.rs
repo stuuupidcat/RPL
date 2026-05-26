@@ -1,6 +1,6 @@
 //! Build `DocFile` from the typed pest AST.
 
-use crate::model::{DocFile, DocItem};
+use crate::model::{DocDiag, DocFile, DocItem};
 use rpl_parser::pairs;
 use std::path::Path;
 
@@ -134,6 +134,7 @@ pub(crate) fn build_doc_file<'i>(
 
     let mut patterns = Vec::new();
     let mut utilities = Vec::new();
+    let mut diagnostics = Vec::new();
 
     // `RPLPattern.Block()` returns a `Vec<&Block>` of zero-or-more blocks.
     // Each `Block` is a `Choice3` of `pattBlock | utilBlock | diagBlock`; the
@@ -148,8 +149,11 @@ pub(crate) fn build_doc_file<'i>(
             for item in util.RPLPatternItem() {
                 utilities.push(build_doc_item(item));
             }
+        } else if let Some(d) = block.diagBlock() {
+            for item in d.diagBlockItem() {
+                diagnostics.push(build_doc_diag(item));
+            }
         }
-        // `diagBlock` is handled in a later task (C6).
     }
 
     DocFile {
@@ -158,8 +162,8 @@ pub(crate) fn build_doc_file<'i>(
         file_doc,
         patterns,
         utilities,
-        diagnostics: Vec::new(), // filled by later tasks
-        examples: Vec::new(),    // filled by examples::load_examples
+        diagnostics,
+        examples: Vec::new(), // filled by examples::load_examples
     }
 }
 
@@ -192,6 +196,53 @@ fn build_doc_item<'i>(item: &pairs::RPLPatternItem<'i>) -> DocItem {
         diag_attr,
         signature,
         body_source,
+    }
+}
+
+/// Convert one `diagBlockItem` into a `DocDiag`.
+///
+/// Grammar:
+///   diagBlockItem = OuterDocComment* ~ Identifier ~ Assign ~ LeftBrace
+///                 ~ diagItems ~ MetaVariableWithDiagMessageSeparatedByComma? ~ RightBrace
+///   diagItems     = diagItem ~ (Comma ~ diagItem)* ~ Comma?
+///   diagItem      = Identifier ~ (LeftParen ~ diagAttrs ~ RightParen)? ~ Assign ~ diagMessage
+fn build_doc_diag<'i>(item: &pairs::diagBlockItem<'i>) -> DocDiag {
+    let name = item.Identifier().span.as_str().to_string();
+    let doc = collect_runs(item.OuterDocComment().iter().map(|p| p.span.as_str()));
+
+    let mut primary = None;
+    let mut label = None;
+    let mut help = None;
+    let mut note = None;
+    let mut level = None;
+    let mut lint_name = None;
+
+    // `diagItems().diagItem()` returns a head-tail tuple
+    // `(&diagItem, Vec<&diagItem>)` — same shape as `diagAttrs.diagAttr()`.
+    let (first, rest) = item.diagItems().diagItem();
+    for di in std::iter::once(first).chain(rest.into_iter()) {
+        let key = di.Identifier().span.as_str();
+        let msg_text = di.diagMessage().diagMessageInner().span.as_str().to_string();
+        match key {
+            "primary" => primary = Some(msg_text),
+            "label" => label = Some(msg_text),
+            "help" => help = Some(msg_text),
+            "note" => note = Some(msg_text),
+            "level" => level = Some(msg_text),
+            "name" => lint_name = Some(msg_text),
+            _ => { /* unknown key — ignore */ }
+        }
+    }
+
+    DocDiag {
+        name,
+        doc,
+        primary,
+        label,
+        help,
+        note,
+        level,
+        lint_name,
     }
 }
 
@@ -484,6 +535,35 @@ patt {
             body.contains(';'),
             "body truncated before the terminating `;`; got: {body:?}"
         );
+    }
+
+    #[test]
+    fn diag_item_extracted() {
+        let src = r#"
+pattern Foo
+diag {
+    /// detection notes
+    p_foo = {
+        primary(span) = "primary text",
+        label(span) = "label text",
+        help(span) = "help text",
+        level = "deny",
+        name = "foo_lint",
+    }
+}
+"#;
+        let main = parse(src);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        assert_eq!(doc.diagnostics.len(), 1);
+        let d = &doc.diagnostics[0];
+        assert_eq!(d.name, "p_foo");
+        assert_eq!(d.doc, vec!["detection notes"]);
+        assert_eq!(d.primary.as_deref(), Some("primary text"));
+        assert_eq!(d.label.as_deref(), Some("label text"));
+        assert_eq!(d.help.as_deref(), Some("help text"));
+        assert_eq!(d.level.as_deref(), Some("deny"));
+        assert_eq!(d.lint_name.as_deref(), Some("foo_lint"));
+        assert!(d.note.is_none());
     }
 
     #[test]
