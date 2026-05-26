@@ -1,0 +1,10 @@
+//! Top-level prose for this pattern file.
+
+pattern PattWithDoc
+
+patt {
+    /// Item-level documentation for `p_foo`.
+    p_foo = fn _ (..) -> _ {
+        _ = const 0_usize;
+    }
+}

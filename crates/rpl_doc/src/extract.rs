@@ -361,16 +361,21 @@ fn split_signature_and_body<'i>(
     }
 }
 
-/// Strip a single leading and a single trailing `\n` from `s` (preserving any
-/// further consecutive newlines on either side).
+/// Strip a single leading `\n` from `s` and strip all trailing whitespace
+/// (spaces, tabs, and newlines) from `s`.
 ///
-/// `body_source` is later dedented; `dedent` preserves blank lines verbatim,
-/// so collapsing all leading/trailing newlines with `trim_matches('\n')`
-/// would silently lose intentional blank lines that the author wrote before
-/// or after the body content.
+/// The trailing-whitespace strip (rather than a single `\n`) is needed for
+/// multi-line bodies: the text between the opening `{` and closing `}` of
+/// `fn _ (..) -> _ {\n    body;\n}` ends with `\n    ` (the indentation
+/// before `}`), not a bare `\n`.  Stripping only `\n` leaves the trailing
+/// spaces intact, which then survive `dedent` as a whitespace-only line and
+/// end up as trailing spaces inside the rendered code block.
+///
+/// `dedent` preserves blank lines verbatim, so removing all trailing
+/// whitespace here does not affect intentional blank lines inside the body.
 fn trim_one_newline(s: &str) -> &str {
     let s = s.strip_prefix('\n').unwrap_or(s);
-    s.strip_suffix('\n').unwrap_or(s)
+    s.trim_end_matches(|c: char| c.is_ascii_whitespace())
 }
 
 fn collect_header_name<'i>(main: &pairs::main<'i>) -> &'i str {

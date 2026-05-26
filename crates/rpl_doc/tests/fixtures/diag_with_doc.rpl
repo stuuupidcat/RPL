@@ -1,0 +1,10 @@
+pattern DiagWithDoc
+
+diag {
+    /// Description of the diagnostic.
+    p_diag = {
+        primary(span) = "primary message",
+        level = "deny",
+        name = "my_lint",
+    }
+}
