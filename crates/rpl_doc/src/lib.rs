@@ -12,6 +12,7 @@ pub use model::{DocDiag, DocExample, DocFile, DocItem};
 
 mod examples;
 mod extract;
+mod render;
 
 use std::path::Path;
 
