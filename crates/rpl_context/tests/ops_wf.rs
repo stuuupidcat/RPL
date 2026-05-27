@@ -14,9 +14,10 @@
 extern crate rustc_data_structures;
 extern crate rustc_span;
 
-use std::path::PathBuf;
-
 use rpl_context::pat::check_ops_block;
+
+mod common;
+use common::make_static_mctx;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -29,15 +30,7 @@ use rpl_context::pat::check_ops_block;
 /// Panics if the source fails to parse (that would be a test-fixture bug, not
 /// an R1/R2/R3 violation).
 fn collect_wf_errors(src: &str) -> Vec<String> {
-    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
-    let path_and_content: &'static Vec<(PathBuf, String)> =
-        Box::leak(Box::new(vec![(PathBuf::from("test.rpl"), src.to_string())]));
-
-    let mctx: &'static rpl_meta::context::MetaContext<'static> =
-        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
-            panic!("RPL parse/collect error: {err}");
-        })));
-
+    let mctx = make_static_mctx("test.rpl", src);
     let mut errors = Vec::new();
     for syntax_tree in mctx.syntax_trees.iter() {
         let (_, _, ops, _) = rpl_meta::meta::collect_blocks(syntax_tree);
@@ -296,16 +289,7 @@ ops {
 }
 patt { p[] = fn _ () -> _ {} }
 "#;
-    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
-    let path_and_content: &'static Vec<(std::path::PathBuf, String)> = Box::leak(Box::new(vec![(
-        std::path::PathBuf::from("test_r1.rpl"),
-        src.to_string(),
-    )]));
-
-    let mctx: &'static rpl_meta::context::MetaContext<'static> =
-        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
-            panic!("RPL parse/collect error: {err}");
-        })));
+    let mctx = make_static_mctx("test_r1.rpl", src);
 
     // This must NOT panic — the R1 guard skips the bad group.
     PatternCtxt::entered_no_tcx(|pcx| {

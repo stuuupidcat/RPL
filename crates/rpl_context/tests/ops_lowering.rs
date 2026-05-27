@@ -15,10 +15,11 @@
 extern crate rustc_data_structures;
 extern crate rustc_span;
 
-use std::path::PathBuf;
-
 use rpl_context::PatternCtxt;
 use rustc_span::Symbol;
+
+mod common;
+use common::make_static_mctx;
 
 /// Full-pipeline test: parse an RPL source string containing an `ops { ... }`
 /// block and verify that the resulting `Pattern.ops_block` is populated with
@@ -38,18 +39,7 @@ patt {
 }
 "#;
 
-    // Leak the arena and the source so they have `'static` lifetimes, which is
-    // required because `PatternCtxt::entered_no_tcx` is a re-entrant closure
-    // and the borrow checker cannot verify shorter lifetimes across the
-    // closure boundary.
-    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
-    let path_and_content: &'static Vec<(PathBuf, String)> =
-        Box::leak(Box::new(vec![(PathBuf::from("test.rpl"), src.to_string())]));
-
-    let mctx: &'static rpl_meta::context::MetaContext<'static> =
-        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
-            panic!("RPL parse/collect error: {err}");
-        })));
+    let mctx = make_static_mctx("test.rpl", src);
 
     PatternCtxt::entered_no_tcx(|pcx| {
         pcx.add_parsed_patterns(mctx);
@@ -110,16 +100,7 @@ patt {
 }
 "#;
 
-    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
-    let path_and_content: &'static Vec<(PathBuf, String)> = Box::leak(Box::new(vec![(
-        PathBuf::from("test_multi_groups.rpl"),
-        src.to_string(),
-    )]));
-
-    let mctx: &'static rpl_meta::context::MetaContext<'static> =
-        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
-            panic!("RPL parse/collect error: {err}");
-        })));
+    let mctx = make_static_mctx("test_multi_groups.rpl", src);
 
     PatternCtxt::entered_no_tcx(|pcx| {
         pcx.add_parsed_patterns(mctx);
@@ -179,14 +160,7 @@ patt {
 }
 "#;
 
-    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
-    let path_and_content: &'static Vec<(PathBuf, String)> =
-        Box::leak(Box::new(vec![(PathBuf::from("test_no_ops.rpl"), src.to_string())]));
-
-    let mctx: &'static rpl_meta::context::MetaContext<'static> =
-        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
-            panic!("RPL parse/collect error: {err}");
-        })));
+    let mctx = make_static_mctx("test_no_ops.rpl", src);
 
     PatternCtxt::entered_no_tcx(|pcx| {
         pcx.add_parsed_patterns(mctx);

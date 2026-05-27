@@ -20,10 +20,11 @@
 extern crate rustc_data_structures;
 extern crate rustc_span;
 
-use std::path::PathBuf;
-
 use rpl_context::PatternCtxt;
 use rpl_context::pat::{check_ops_block, check_r6_patt_vs_ops};
+
+mod common;
+use common::{make_static_mctx, make_static_mctx_with};
 
 // ---------------------------------------------------------------------------
 // Helper: pre-lowering R1–R3 checks (ops block well-formedness)
@@ -32,15 +33,7 @@ use rpl_context::pat::{check_ops_block, check_r6_patt_vs_ops};
 /// Parse `src`, run `check_ops_block` on every `opsBlock` found, and return
 /// all error messages as display strings.
 fn run_resolver_on_src(src: &str) -> Vec<String> {
-    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
-    let path_and_content: &'static Vec<(PathBuf, String)> =
-        Box::leak(Box::new(vec![(PathBuf::from("test.rpl"), src.to_string())]));
-
-    let mctx: &'static rpl_meta::context::MetaContext<'static> =
-        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
-            panic!("RPL parse/collect error: {err}");
-        })));
-
+    let mctx = make_static_mctx("test.rpl", src);
     let mut errors = Vec::new();
     for syntax_tree in mctx.syntax_trees.iter() {
         let (_, _, ops, _) = rpl_meta::meta::collect_blocks(syntax_tree);
@@ -64,15 +57,7 @@ fn run_resolver_on_src(src: &str) -> Vec<String> {
 ///
 /// Panics if the source fails to parse (that's a test-fixture bug).
 fn run_r4_r5_checks(src: &str) -> Vec<String> {
-    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
-    let path_and_content: &'static Vec<(PathBuf, String)> =
-        Box::leak(Box::new(vec![(PathBuf::from("test_r4r5.rpl"), src.to_string())]));
-
-    let mctx: &'static rpl_meta::context::MetaContext<'static> =
-        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
-            panic!("RPL parse/collect error: {err}");
-        })));
-
+    let mctx = make_static_mctx("test_r4r5.rpl", src);
     let mut all_errors: Vec<String> = Vec::new();
 
     PatternCtxt::entered_no_tcx(|pcx| {
@@ -95,17 +80,11 @@ fn run_r4_r5_checks(src: &str) -> Vec<String> {
 /// errors from `parse_and_collect` do not abort the check.  The R6 function
 /// runs at parse-tree level — before any lowering that would panic.
 fn run_r6_check(src: &str) -> Vec<String> {
-    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
-    let path_and_content: &'static Vec<(PathBuf, String)> =
-        Box::leak(Box::new(vec![(PathBuf::from("test_r6.rpl"), src.to_string())]));
-
     // Use a collecting (non-panicking) handler so the meta-collection phase
     // does not abort even when undeclared meta-vars are encountered.
-    let mctx: &'static rpl_meta::context::MetaContext<'static> =
-        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |_err| {
-            // Intentionally swallow meta-collection errors: undeclared meta-vars
-            // in pattern bodies will be caught by our R6 check below.
-        })));
+    // Undeclared pattern-level meta-vars are exactly what R6 is meant to flag,
+    // so we want the collection phase to keep going.
+    let mctx = make_static_mctx_with("test_r6.rpl", src, |_err| {});
 
     let mut errors = Vec::new();
     for syntax_tree in mctx.syntax_trees.iter() {

@@ -19,12 +19,14 @@ extern crate rustc_data_structures;
 extern crate rustc_span;
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
 use rpl_config::RawOpInstance;
 use rpl_context::PatternCtxt;
 use rpl_context::pat::ops_resolved::{ResolveDiagnostic, resolve_ops_config};
 use rustc_span::Symbol;
+
+mod common;
+use common::make_static_mctx;
 
 // ---------------------------------------------------------------------------
 // Helper utilities
@@ -57,18 +59,10 @@ patt { p[] = fn _ () -> _ {} }
 /// Parse the RPL source, lower it into a `Pattern`, then call the supplied
 /// closure `f` with that pattern (inside `PatternCtxt::entered_no_tcx`).
 ///
-/// Uses `Box::leak` to extend arena and path lifetime to `'static`, mirroring
-/// the approach used in `ops_lowering.rs`.
+/// The arena and `MetaContext` are obtained via the shared helper in
+/// `tests/common/mod.rs`, which leaks them into `'static` once per binary.
 fn with_pattern<F: for<'pcx> FnMut(&rpl_context::pat::Pattern<'pcx>)>(src: &str, mut f: F) {
-    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
-    let path_and_content: &'static Vec<(PathBuf, String)> =
-        Box::leak(Box::new(vec![(PathBuf::from("test.rpl"), src.to_string())]));
-
-    let mctx: &'static rpl_meta::context::MetaContext<'static> =
-        Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
-            panic!("RPL parse/collect error: {err}");
-        })));
-
+    let mctx = make_static_mctx("test.rpl", src);
     PatternCtxt::entered_no_tcx(|pcx| {
         pcx.add_parsed_patterns(mctx);
         pcx.for_each_rpl_pattern(|_, pattern| {

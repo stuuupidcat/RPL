@@ -15,24 +15,11 @@
 extern crate rustc_data_structures;
 extern crate rustc_span;
 
-use std::path::PathBuf;
-
 use rpl_context::PatternCtxt;
 use rustc_span::Symbol;
 
-// ---------------------------------------------------------------------------
-// Helper
-// ---------------------------------------------------------------------------
-
-fn lower_src(src: &str) -> &'static rpl_meta::context::MetaContext<'static> {
-    let arena: &'static rpl_meta::arena::Arena<'static> = Box::leak(Box::new(rpl_meta::arena::Arena::default()));
-    let path_and_content: &'static Vec<(PathBuf, String)> =
-        Box::leak(Box::new(vec![(PathBuf::from("test_refgroups.rpl"), src.to_string())]));
-
-    Box::leak(Box::new(rpl_meta::parse_and_collect(arena, path_and_content, |err| {
-        panic!("RPL parse/collect error: {err}");
-    })))
-}
+mod common;
+use common::make_static_mctx;
 
 // ---------------------------------------------------------------------------
 // Tests
@@ -57,7 +44,7 @@ patt {
 }
 "#;
 
-    let mctx = lower_src(src);
+    let mctx = make_static_mctx("test_refgroups.rpl", src);
 
     PatternCtxt::entered_no_tcx(|pcx| {
         pcx.add_parsed_patterns(mctx);
@@ -108,7 +95,7 @@ patt {
 }
 "#;
 
-    let mctx = lower_src(src);
+    let mctx = make_static_mctx("test_refgroups.rpl", src);
 
     PatternCtxt::entered_no_tcx(|pcx| {
         pcx.add_parsed_patterns(mctx);
@@ -153,7 +140,7 @@ patt {
 }
 "#;
 
-    let mctx = lower_src(src);
+    let mctx = make_static_mctx("test_refgroups.rpl", src);
 
     PatternCtxt::entered_no_tcx(|pcx| {
         pcx.add_parsed_patterns(mctx);
