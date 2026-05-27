@@ -75,7 +75,7 @@ pub fn render_markdown(rpl_path: &std::path::Path) -> Result<String, RpldocError
         path: rpl_path.to_path_buf(),
         message: format!("{e}"),
     })?;
-    let mut doc = extract::build_doc_file(rpl_path, &main);
+    let mut doc = extract::build_doc_file(rpl_path, &source, &main);
     if doc.header_name.is_empty() {
         return Err(RpldocError::MissingPatternHeader {
             path: rpl_path.to_path_buf(),
@@ -97,6 +97,19 @@ pub fn run_cli(path: &std::path::Path, opts: GenerateOpts) -> Result<(), Vec<Rpl
     let files: Vec<std::path::PathBuf> = if path.is_dir() {
         walkdir::WalkDir::new(path)
             .into_iter()
+            .filter_entry(|e| {
+                let name = e.file_name().to_string_lossy();
+                // Skip hidden entries except the root (which can be "." or
+                // have a "." prefix legitimately).
+                if e.depth() > 0 && name.starts_with('.') {
+                    return false;
+                }
+                // Skip cargo build output.
+                if e.file_type().is_dir() && name == "target" {
+                    return false;
+                }
+                true
+            })
             .filter_map(Result::ok)
             .filter(|e| e.file_type().is_file())
             .filter(|e| e.path().extension().and_then(|s| s.to_str()) == Some("rpl"))

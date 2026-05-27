@@ -247,7 +247,17 @@ fn run_doc(args: Vec<String>) -> Result<(), i32> {
                 output_root = Some(std::path::PathBuf::from(v));
             },
             s if s.starts_with("--output=") => {
-                output_root = Some(std::path::PathBuf::from(&s["--output=".len()..]));
+                let value = &s["--output=".len()..];
+                if value.is_empty() {
+                    eprintln!("error: --output= requires a value");
+                    return Err(2);
+                }
+                output_root = Some(std::path::PathBuf::from(value));
+            },
+            s if s.starts_with("--") => {
+                eprintln!("error: unrecognized flag: {s}");
+                eprintln!("usage: cargo rpl doc <PATH> [--output <DIR>] [--quiet]");
+                return Err(2);
             },
             _ => {
                 if path.is_some() {

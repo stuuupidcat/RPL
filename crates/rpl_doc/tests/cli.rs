@@ -6,50 +6,23 @@ use std::path::Path;
 use std::process::Command;
 
 fn cargo_rpl_bin() -> std::path::PathBuf {
-    // The `CARGO_BIN_EXE_cargo-rpl` env var is only set when the binary lives
-    // in the same package as the test. Since `cargo-rpl` is defined in the
-    // workspace root package while this test crate is `rpl_doc`, we locate
-    // the binary from the workspace `target/` tree at runtime.
-    //
-    // Strategy (in priority order):
-    // 1. `CARGO_BIN_EXE_cargo-rpl` — set when Cargo does supply it (e.g. if the project is restructured
-    //    in the future).
-    // 2. Walk up from `CARGO_MANIFEST_DIR` to find the workspace root, then locate
-    //    `target/{profile}/cargo-rpl`.
-    if let Ok(p) = std::env::var("CARGO_BIN_EXE_cargo-rpl") {
-        return std::path::PathBuf::from(p);
+    // If Cargo set CARGO_BIN_EXE_cargo-rpl (it does for tests living in the
+    // same package as the binary), use it directly.
+    if let Ok(path) = std::env::var("CARGO_BIN_EXE_cargo-rpl") {
+        return std::path::PathBuf::from(path);
     }
 
-    // CARGO_MANIFEST_DIR points to crates/rpl_doc; go up two levels to
-    // reach the workspace root.
-    let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let workspace_root = manifest_dir
-        .parent() // crates/
-        .and_then(|p| p.parent()) // workspace root
-        .expect("could not locate workspace root from CARGO_MANIFEST_DIR");
-
-    // Prefer the same profile the test was built with.  We approximate
-    // this by checking PROFILE env var (set by some CI setups) or falling
-    // back to "debug".
-    let profile = std::env::var("CARGO_PROFILE").unwrap_or_else(|_| "debug".to_string());
-    let mut bin = workspace_root.join("target").join(&profile).join("cargo-rpl");
-
-    if cfg!(windows) {
-        bin.set_extension("exe");
-    }
-
-    // If the profiled path doesn't exist, fall back to debug.
-    if !bin.exists() && profile != "debug" {
-        let mut fallback = workspace_root.join("target").join("debug").join("cargo-rpl");
-        if cfg!(windows) {
-            fallback.set_extension("exe");
-        }
-        if fallback.exists() {
-            return fallback;
-        }
-    }
-
-    bin
+    // Otherwise: this integration-test binary lives at
+    //   target/<profile>/deps/cli-<hash>(.exe)
+    // The cargo-rpl binary is a sibling of `deps/`:
+    //   target/<profile>/cargo-rpl(.exe)
+    let test_exe = std::env::current_exe().expect("current_exe");
+    let target_profile = test_exe
+        .parent() // .../target/<profile>/deps
+        .and_then(Path::parent) // .../target/<profile>
+        .expect("test binary should live under target/<profile>/deps/");
+    let exe_name = if cfg!(windows) { "cargo-rpl.exe" } else { "cargo-rpl" };
+    target_profile.join(exe_name)
 }
 
 #[test]
@@ -132,4 +105,20 @@ fn output_flag_mirrors_input_tree() {
     assert!(td_out.path().join("nested/B.md").exists());
     // Input tree was not modified.
     assert!(!td_in.path().join("A.md").exists());
+}
+
+#[test]
+fn unknown_flag_exits_nonzero() {
+    let td = tempfile::TempDir::new().unwrap();
+    let rpl = td.path().join("Foo.rpl");
+    std::fs::write(&rpl, "pattern Foo\n").unwrap();
+
+    let status = Command::new(cargo_rpl_bin())
+        .arg("rpl")
+        .arg("doc")
+        .arg(&rpl)
+        .arg("--verbose") // unknown flag
+        .status()
+        .expect("spawn");
+    assert!(!status.success(), "should reject --verbose");
 }

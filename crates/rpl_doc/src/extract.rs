@@ -125,11 +125,13 @@ mod dedent_tests {
 
 /// Build a `DocFile` from already-parsed `pairs::main`.
 ///
-/// Doesn't load examples (that's `examples::load_examples`'s job).
-pub(crate) fn build_doc_file(path: &Path, main: &pairs::main<'_>) -> DocFile {
+/// `source` is the original `.rpl` text — required so paragraph breaks
+/// (blank-line gaps between consecutive doc-comment spans) can be detected
+/// in `collect_runs`. Doesn't load examples (that's `examples::load_examples`'s job).
+pub(crate) fn build_doc_file<'i>(path: &Path, source: &'i str, main: &pairs::main<'i>) -> DocFile {
     let path = path.to_path_buf();
     let header_name = collect_header_name(main).to_string();
-    let file_doc = collect_file_doc(main);
+    let file_doc = collect_file_doc(main, source);
 
     let mut patterns = Vec::new();
     let mut utilities = Vec::new();
@@ -142,15 +144,15 @@ pub(crate) fn build_doc_file(path: &Path, main: &pairs::main<'_>) -> DocFile {
     for block in rpl_pattern.Block() {
         if let Some(patt) = block.pattBlock() {
             for item in patt.RPLPatternItem() {
-                patterns.push(build_doc_item(item));
+                patterns.push(build_doc_item(item, source));
             }
         } else if let Some(util) = block.utilBlock() {
             for item in util.RPLPatternItem() {
-                utilities.push(build_doc_item(item));
+                utilities.push(build_doc_item(item, source));
             }
         } else if let Some(d) = block.diagBlock() {
             for item in d.diagBlockItem() {
-                diagnostics.push(build_doc_diag(item));
+                diagnostics.push(build_doc_diag(item, source));
             }
         }
     }
@@ -171,9 +173,14 @@ pub(crate) fn build_doc_file(path: &Path, main: &pairs::main<'_>) -> DocFile {
 /// Grammar:
 ///   RPLPatternItem = OuterDocComment* ~ Attr* ~ Identifier
 ///                  ~ MetaVariableDeclList? ~ Assign ~ RustItemsOrPatternOperation
-fn build_doc_item(item: &pairs::RPLPatternItem<'_>) -> DocItem {
+fn build_doc_item<'i>(item: &pairs::RPLPatternItem<'i>, source: &'i str) -> DocItem {
     let outer_docs = item.OuterDocComment();
-    let doc = collect_runs(outer_docs.iter().map(|p| p.span.as_str()));
+    let doc = collect_runs(
+        outer_docs
+            .iter()
+            .map(|p| (p.span.start(), p.span.end(), p.span.as_str())),
+        source,
+    );
 
     let diag_attr = item.Attr().into_iter().find_map(extract_diag_attr_value);
 
@@ -202,9 +209,14 @@ fn build_doc_item(item: &pairs::RPLPatternItem<'_>) -> DocItem {
 ///                 ~ diagItems ~ MetaVariableWithDiagMessageSeparatedByComma? ~ RightBrace
 ///   diagItems     = diagItem ~ (Comma ~ diagItem)* ~ Comma?
 ///   diagItem      = Identifier ~ (LeftParen ~ diagAttrs ~ RightParen)? ~ Assign ~ diagMessage
-fn build_doc_diag(item: &pairs::diagBlockItem<'_>) -> DocDiag {
+fn build_doc_diag<'i>(item: &pairs::diagBlockItem<'i>, source: &'i str) -> DocDiag {
     let name = item.Identifier().span.as_str().to_string();
-    let doc = collect_runs(item.OuterDocComment().iter().map(|p| p.span.as_str()));
+    let doc = collect_runs(
+        item.OuterDocComment()
+            .iter()
+            .map(|p| (p.span.start(), p.span.end(), p.span.as_str())),
+        source,
+    );
 
     let mut primary = None;
     let mut label = None;
@@ -377,28 +389,53 @@ fn collect_header_name<'i>(main: &pairs::main<'i>) -> &'i str {
     rpl_header.Identifier().span.as_str()
 }
 
-fn collect_file_doc(main: &pairs::main<'_>) -> Vec<String> {
+fn collect_file_doc<'i>(main: &pairs::main<'i>, source: &'i str) -> Vec<String> {
     // `RPLPattern.InnerDocComment()` returns a `Vec<&InnerDocComment>` of
     // the zero-or-more inner doc lines that precede `RPLHeader`.
     let rpl_pattern = main.RPLPattern();
     let inner_docs = rpl_pattern.InnerDocComment();
-    collect_runs(inner_docs.iter().map(|p| p.span.as_str()))
+    collect_runs(
+        inner_docs
+            .iter()
+            .map(|p| (p.span.start(), p.span.end(), p.span.as_str())),
+        source,
+    )
 }
 
-/// Join doc-comment lines (with their `///` / `//!` prefix already stripped)
-/// into a single run separated by `\n`. Returns `Vec<String>` containing
-/// either zero or one run.
+/// Group prefix-stripped doc-comment lines into runs separated by blank lines
+/// in the original source.
 ///
-/// Why one run only: the strict-mode grammar forbids two doc-comment runs at
-/// the same attachment site (a blank line between them is a parse error), so
-/// the pest pairs we iterate are always one contiguous block.
-fn collect_runs<'a>(lines: impl Iterator<Item = &'a str>) -> Vec<String> {
-    let stripped: Vec<&str> = lines.map(strip_doc_prefix).collect();
-    if stripped.is_empty() {
-        Vec::new()
-    } else {
-        vec![stripped.join("\n")]
+/// `OuterDocComment*` in pest matches across blank lines because the implicit
+/// `WHITESPACE` rule consumes them. To preserve paragraph breaks in the
+/// rendered Markdown, we inspect the source-text gap between consecutive
+/// captured pairs: if the gap contains an empty line, we start a new run.
+///
+/// The renderer joins runs with `\n\n` (Markdown paragraph break), so each
+/// element of the returned Vec corresponds to one paragraph.
+fn collect_runs<'a>(spans: impl Iterator<Item = (usize, usize, &'a str)>, source: &'a str) -> Vec<String> {
+    let mut runs: Vec<Vec<&str>> = Vec::new();
+    let mut last_end: Option<usize> = None;
+    for (start, end, text) in spans {
+        let stripped = strip_doc_prefix(text);
+        let new_run = match last_end {
+            None => true,
+            Some(prev_end) => {
+                // The slice between the previous doc-comment line's end and
+                // this one's start contains whitespace (and possibly other
+                // comments). Count newlines: 2+ newlines means a blank line
+                // between them, which is a paragraph break.
+                let gap = &source[prev_end..start];
+                gap.matches('\n').count() >= 2
+            },
+        };
+        if new_run || runs.is_empty() {
+            runs.push(vec![stripped]);
+        } else {
+            runs.last_mut().unwrap().push(stripped);
+        }
+        last_end = Some(end);
     }
+    runs.into_iter().map(|r| r.join("\n")).collect()
 }
 
 #[cfg(test)]
@@ -415,7 +452,7 @@ mod build_tests {
     fn header_name_extracted() {
         let src = "pattern Foo\n";
         let main = parse(src);
-        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), src, &main);
         assert_eq!(doc.header_name, "Foo");
     }
 
@@ -423,7 +460,7 @@ mod build_tests {
     fn file_doc_empty_when_no_inner_doc() {
         let src = "pattern Foo\n";
         let main = parse(src);
-        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), src, &main);
         assert!(doc.file_doc.is_empty());
     }
 
@@ -435,7 +472,7 @@ mod build_tests {
 pattern Foo
 ";
         let main = parse(src);
-        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), src, &main);
         assert_eq!(doc.file_doc, vec!["first line\nsecond line".to_string()]);
     }
 
@@ -450,7 +487,7 @@ patt {
 }
 ";
         let main = parse(src);
-        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), src, &main);
         assert_eq!(doc.patterns.len(), 1);
         let item = &doc.patterns[0];
         assert_eq!(item.name, "p_foo");
@@ -469,7 +506,7 @@ patt {
 }
 ";
         let main = parse(src);
-        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), src, &main);
         assert_eq!(doc.patterns[0].meta_vars.as_deref(), Some("[$T: type]"));
     }
 
@@ -483,7 +520,7 @@ patt {
 }
 "#;
         let main = parse(src);
-        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), src, &main);
         assert_eq!(doc.patterns[0].diag_attr.as_deref(), Some("p_misordered"));
     }
 
@@ -496,7 +533,7 @@ util {
 }
 ";
         let main = parse(src);
-        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), src, &main);
         assert_eq!(doc.utilities.len(), 1);
         assert_eq!(doc.utilities[0].name, "u_foo");
         assert!(doc.patterns.is_empty());
@@ -515,7 +552,7 @@ patt {
 }
 "#;
         let main = parse(src);
-        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), src, &main);
         assert_eq!(doc.patterns.len(), 1);
         let body = &doc.patterns[0].body_source;
         assert!(body.contains("look: }"), "body lost the string content; got: {body:?}");
@@ -543,7 +580,7 @@ diag {
 }
 "#;
         let main = parse(src);
-        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), src, &main);
         assert_eq!(doc.diagnostics.len(), 1);
         let d = &doc.diagnostics[0];
         assert_eq!(d.name, "p_foo");
@@ -568,7 +605,7 @@ patt {
 }
 ";
         let main = parse(src);
-        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), src, &main);
         let mv = doc.patterns[0].meta_vars.as_deref().unwrap();
         // Newlines and indentation are collapsed; the heading becomes one line.
         assert!(!mv.contains('\n'));
@@ -589,8 +626,29 @@ patt {
 }
 "#;
         let main = parse(src);
-        let doc = build_doc_file(Path::new("/x/Foo.rpl"), &main);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), src, &main);
         assert_eq!(doc.patterns.len(), 1);
         assert!(doc.patterns[0].diag_attr.is_none());
+    }
+
+    #[test]
+    fn blank_line_separates_paragraphs_in_doc() {
+        let src = "\
+pattern Foo
+patt {
+    /// First paragraph.
+
+    /// Second paragraph.
+    p_foo = fn _ (..) -> _ {
+        _ = const 0_usize;
+    }
+}
+";
+        let main = parse(src);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), src, &main);
+        assert_eq!(
+            doc.patterns[0].doc,
+            vec!["First paragraph.".to_string(), "Second paragraph.".to_string()]
+        );
     }
 }

@@ -129,7 +129,7 @@ fn render_item(out: &mut String, item: &DocItem) {
     if let Some(diag) = &item.diag_attr {
         out.push_str(&format!("**Diagnostic:** [`{diag}`](#diagnostic-{diag})\n\n",));
     }
-    out.push_str(&format!("**Signature:** `{}`\n\n", item.signature));
+    out.push_str(&format!("**Signature:** {}\n\n", inline_code(&item.signature)));
     out.push_str("<details><summary>Pattern body</summary>\n\n");
     write_fence(out, "rpl", &item.body_source);
     out.push_str("</details>\n\n");

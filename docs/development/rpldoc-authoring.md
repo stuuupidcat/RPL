@@ -11,10 +11,29 @@ nicely with `cargo rpl doc`. For the full design spec, see
 | `//!` | At the very top of the `.rpl` file, before `pattern <Name>`. | The file as a whole. |
 | `///` | Immediately before a `patt`/`util` item, or before a `diag` item. | That single item. |
 
-A run of consecutive `///` (or `//!`) lines is treated as one block. A
-blank line breaks the run — exactly like rustdoc. Doc-comment content
-is rendered as raw Markdown; use inline code, lists, and `####` or
-deeper headings freely.
+A run of consecutive `///` (or `//!`) lines is treated as one paragraph.
+You can use either an empty `///` line OR a true blank line (no `///`
+prefix) to start a new paragraph. Both forms render as Markdown paragraph
+breaks. Doc-comment content is rendered as raw Markdown; use inline code,
+lists, and `####` or deeper headings freely.
+
+Example — two paragraphs above the same item:
+
+```rpl
+/// First paragraph: what this pattern detects.
+///
+/// Second paragraph: caveats or false positives.
+p_foo = fn _ (..) -> _ { … }
+```
+
+Equivalent (blank line instead of empty `///`):
+
+```rpl
+/// First paragraph: what this pattern detects.
+
+/// Second paragraph: caveats or false positives.
+p_foo = fn _ (..) -> _ { … }
+```
 
 ## Strict placement
 
