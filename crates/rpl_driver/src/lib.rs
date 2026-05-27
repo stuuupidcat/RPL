@@ -21,9 +21,11 @@ use std::cell::RefCell;
 use std::convert::identity;
 
 use either::Either;
+use rpl_config::RawOpInstance;
 use rpl_constraints::predicates::BodyInfoCache;
 use rpl_context::PatCtxt;
 use rpl_context::pat::DynamicError;
+use rpl_context::pat::ops_resolved::{OpsConfig, resolve_ops_config};
 use rpl_match::graph::{MirControlFlowGraph, MirDataDepGraph};
 use rpl_match::matches::Matched;
 use rpl_match::matches::artifact::NormalizedMatched;
@@ -44,6 +46,110 @@ use rustc_middle::util::Providers;
 use rustc_session::declare_tool_lint;
 use rustc_span::symbol::Ident;
 use rustc_span::{Span, Symbol};
+
+// ---------------------------------------------------------------------------
+// Cartesian-product helper
+// ---------------------------------------------------------------------------
+
+/// Generate the cartesian product of a sequence of factors.
+///
+/// - Empty input (no factors): yields a single empty combination.
+/// - Any factor that is empty: yields zero combinations (fold-on-empty semantics).
+/// - Otherwise: yields every combination of one element from each factor, with the rightmost index
+///   varying fastest (odometer order).
+///
+/// The "fold on empty instances" property falls out of the helper: an empty
+/// factor folds the product to zero combinations, which contributes the empty
+/// match-set to set-op composition (Task 11 spec).
+pub fn cartesian<T: Clone, I, II>(factors: II) -> CartesianIter<T>
+where
+    I: Iterator<Item = T>,
+    II: IntoIterator<Item = I>,
+{
+    let factors: Vec<Vec<T>> = factors.into_iter().map(|i| i.collect()).collect();
+
+    if factors.is_empty() {
+        // No factors → yield one empty combination.
+        return CartesianIter {
+            factors: Vec::new(),
+            indices: Vec::new(),
+            done: false,
+            empty_fold: false,
+        };
+    }
+    if factors.iter().any(|f| f.is_empty()) {
+        // Any empty factor → fold to zero combos.
+        return CartesianIter {
+            factors: Vec::new(),
+            indices: Vec::new(),
+            done: true,
+            empty_fold: true,
+        };
+    }
+
+    let n = factors.len();
+    CartesianIter {
+        factors,
+        indices: vec![0usize; n],
+        done: false,
+        empty_fold: false,
+    }
+}
+
+/// Iterator returned by [`cartesian`].
+pub struct CartesianIter<T> {
+    factors: Vec<Vec<T>>,
+    indices: Vec<usize>,
+    done: bool,
+    /// `true` when an empty factor forced the product to zero — done before any yield.
+    empty_fold: bool,
+}
+
+impl<T: Clone> Iterator for CartesianIter<T> {
+    type Item = Vec<T>;
+
+    fn next(&mut self) -> Option<Vec<T>> {
+        if self.done || self.empty_fold {
+            return None;
+        }
+        if self.factors.is_empty() {
+            // No-factors case: one empty combo, then done.
+            self.done = true;
+            return Some(Vec::new());
+        }
+
+        let combo: Vec<T> = self
+            .factors
+            .iter()
+            .zip(&self.indices)
+            .map(|(f, &i)| f[i].clone())
+            .collect();
+
+        // Increment odometer (rightmost index varies fastest).
+        let mut k = self.factors.len();
+        loop {
+            if k == 0 {
+                self.done = true;
+                break;
+            }
+            k -= 1;
+            self.indices[k] += 1;
+            if self.indices[k] < self.factors[k].len() {
+                break;
+            }
+            self.indices[k] = 0;
+        }
+        Some(combo)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ResolvedOpBindings — one (group → instance) assignment for a cartesian combo
+// ---------------------------------------------------------------------------
+
+use rpl_context::pat::ops_resolved::{ResolvedOpBindings, ResolvedOpInstance};
+
+// ---------------------------------------------------------------------------
 
 #[cfg(feature = "timing")]
 mod errors;
@@ -119,6 +225,18 @@ pub fn check_crate<'tcx, 'pcx, 'mcx: 'pcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>
     #[cfg(feature = "timing")]
     let start = std::time::Instant::now();
 
+    // Resolve raw ops from rpl.toml into typed bindings against the loaded patterns.
+    // `load_raw_ops` returns an empty map when there is no rpl.toml or no [ops] table.
+    let raw_ops: Vec<(String, Vec<RawOpInstance>)> = match rpl_config::load_raw_ops(None) {
+        Ok(map) => map.into_iter().collect(),
+        Err(err) => {
+            // Config loading failure is non-fatal: surface as a warning and continue
+            // without any op instances.
+            tcx.dcx().warn(format!("rpl: failed to load rpl.toml ops: {err}"));
+            Vec::new()
+        },
+    };
+
     // _ = tcx.hir_crate_items(()).par_items(|item_id| {
     //     check_item(tcx, pcx, item_id);
     //     Ok(())
@@ -128,6 +246,7 @@ pub fn check_crate<'tcx, 'pcx, 'mcx: 'pcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>
         tcx,
         pcx,
         body_caches: RefCell::default(),
+        raw_ops,
     };
     tcx.hir().walk_toplevel_module(&mut check_ctxt);
     rpl_utils::visit_crate(tcx);
@@ -166,6 +285,10 @@ struct CheckFnCtxt<'pcx, 'tcx> {
     tcx: TyCtxt<'tcx>,
     pcx: PatCtxt<'pcx>,
     body_caches: RefCell<FxHashMap<DefId, BodyInfoCache>>,
+    /// Raw op-group instances loaded from `rpl.toml` (empty when no file exists).
+    /// Stored as a pre-collected `Vec` so `resolve_ops_config` can be called
+    /// inside each `for_each_rpl_pattern` closure without lifetime trouble.
+    raw_ops: Vec<(String, Vec<RawOpInstance>)>,
 }
 
 impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
@@ -262,9 +385,11 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         body: &'a mir::Body<'tcx>,
         mir_cfg: &'a MirControlFlowGraph,
         mir_ddg: &'a MirDataDepGraph,
+        op_bindings: ResolvedOpBindings,
     ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
         let iter = rpl_rust_items.impls.values().flat_map(move |impl_pat| {
             // FIXME: check impl_pat.ty and impl_pat.trait_id
+            let op_bindings = op_bindings.clone();
             impl_pat
                 .fns
                 .values()
@@ -276,7 +401,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                     //     continue;
                     // }
 
-                    CheckMirCtxt::new(
+                    CheckMirCtxt::new_with_bindings(
                         self.tcx,
                         self.pcx,
                         body,
@@ -287,6 +412,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                         fn_pat,
                         mir_cfg,
                         mir_ddg,
+                        op_bindings.clone(),
                     )
                     .check()
                     .into_iter()
@@ -301,12 +427,57 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         rpl_rust_items.post_process(iter)
     }
 
-    #[instrument(level = "trace", skip(self, pat_op, header, body, mir_cfg, mir_ddg), fields(pat_name = ?name))]
+    #[instrument(level = "trace", skip(self, ops, pat_op, header, body, mir_cfg, mir_ddg), fields(pat_name = ?name))]
     #[expect(clippy::too_many_arguments)]
     fn impl_matched_pat_op<'a>(
         &self,
         name: Symbol,
+        ops: &OpsConfig,
         pat_op: &pat::PatternOperation<'pcx>,
+        def_id: LocalDefId,
+        header: Option<FnHeader>,
+        has_self: bool,
+        self_ty: Option<ty::Ty<'tcx>>,
+        body: &'a mir::Body<'tcx>,
+        mir_cfg: &'a MirControlFlowGraph,
+        mir_ddg: &'a MirDataDepGraph,
+    ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
+        // Determine which op groups any operand of this PatternOperation references.
+        let groups_used: Vec<Symbol> = pat_op.referenced_op_groups().into_iter().collect();
+
+        // Build the cartesian product of (group → instance choices).
+        // If groups_used is empty, cartesian yields one empty combo and the
+        // behavior is identical to the original (no-op-groups) path.
+        // If any group has zero instances, cartesian yields zero combos and the
+        // match-set is empty (fold-on-no-instances).
+        let factors: Vec<Vec<&ResolvedOpInstance>> = groups_used
+            .iter()
+            .map(|g| ops.instances_of(g.as_str()).iter().collect())
+            .collect();
+
+        let mut all: Vec<NormalizedMatched<'tcx>> = Vec::new();
+        for combo in cartesian(factors.into_iter().map(|v| v.into_iter())) {
+            let bindings = ResolvedOpBindings::from_combo(&groups_used, combo);
+            all.extend(self.impl_matched_pat_op_with_bindings(
+                name, ops, pat_op, &bindings, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+            ));
+        }
+        all.into_iter()
+    }
+
+    /// Inner body of `impl_matched_pat_op`, lifted out so the cartesian loop
+    /// can call it once per (group → instance) combination.
+    ///
+    /// `bindings` carries the current combo assignment; for patterns that
+    /// reference no op groups `bindings` is empty and behavior is identical
+    /// to the original implementation.
+    #[expect(clippy::too_many_arguments)]
+    fn impl_matched_pat_op_with_bindings<'a>(
+        &self,
+        _name: Symbol,
+        ops: &OpsConfig,
+        pat_op: &pat::PatternOperation<'pcx>,
+        bindings: &ResolvedOpBindings,
         def_id: LocalDefId,
         header: Option<FnHeader>,
         has_self: bool,
@@ -320,7 +491,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .iter()
             .flat_map(|positive| {
                 self.impl_matched_pat_item(
-                    positive.0, positive.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+                    positive.0, ops, positive.1, bindings, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
                 )
                 .map(|matched| matched.map(&positive.2))
             })
@@ -330,12 +501,12 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .iter()
             .flat_map(|negative| {
                 self.impl_matched_pat_item(
-                    negative.0, negative.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+                    negative.0, ops, negative.1, bindings, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
                 )
                 .map(|matched| matched.map(&negative.2))
             })
             .collect();
-        debug!(?positive, ?negative, "impl_matched_pat_op");
+        debug!(?positive, ?negative, "impl_matched_pat_op_with_bindings");
 
         let iter = positive
             .into_iter()
@@ -353,7 +524,9 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
     fn impl_matched_pat_item<'a>(
         &self,
         name: Symbol,
+        ops: &OpsConfig,
         pat_item: &'pcx PatternItem<'pcx>,
+        bindings: &ResolvedOpBindings,
         def_id: LocalDefId,
         header: Option<FnHeader>,
         has_self: bool,
@@ -363,12 +536,68 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         mir_ddg: &'a MirDataDepGraph,
     ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
         match pat_item {
-            PatternItem::RustItems(rust_items) => Either::Left(self.impl_matched(
-                name, rust_items, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+            PatternItem::RustItems(rust_items) => {
+                // Two cases:
+                //
+                // (a) `bindings` is non-empty.  The outer `impl_matched_pat_op` has
+                //     already chosen one element of the cartesian product over its
+                //     `referenced_op_groups()` (the union over all sub-items) and is
+                //     threading those bindings down through every sub-item in turn.
+                //     We must use the outer combo unchanged — re-running a local
+                //     cartesian here would silently overwrite the outer choices for
+                //     any group this sub-item happens to reference, breaking
+                //     `set_op_with_ops`-style composition where two sub-items each
+                //     reference a different (or overlapping) subset of groups.
+                //
+                // (b) `bindings` is empty.  This is the top-level direct entry into
+                //     a `RustItems` pattern from `for_each_rpl_pattern`.  Iterate
+                //     the cartesian product over this `RustItems`' own
+                //     `referenced_op_groups()`.
+                let mut all: Vec<NormalizedMatched<'tcx>> = Vec::new();
+                if !bindings.by_group.is_empty() {
+                    all.extend(self.impl_matched(
+                        name,
+                        rust_items,
+                        def_id,
+                        header,
+                        has_self,
+                        self_ty,
+                        body,
+                        mir_cfg,
+                        mir_ddg,
+                        bindings.clone(),
+                    ));
+                } else {
+                    let groups_used: Vec<Symbol> = rust_items.referenced_op_groups().iter().copied().collect();
+                    let factors: Vec<Vec<&ResolvedOpInstance>> = groups_used
+                        .iter()
+                        .map(|g| ops.instances_of(g.as_str()).iter().collect())
+                        .collect();
+                    for combo in cartesian(factors.into_iter().map(|v| v.into_iter())) {
+                        let combo_bindings = if groups_used.is_empty() {
+                            bindings.clone()
+                        } else {
+                            ResolvedOpBindings::from_combo(&groups_used, combo)
+                        };
+                        all.extend(self.impl_matched(
+                            name,
+                            rust_items,
+                            def_id,
+                            header,
+                            has_self,
+                            self_ty,
+                            body,
+                            mir_cfg,
+                            mir_ddg,
+                            combo_bindings,
+                        ));
+                    }
+                }
+                Either::Left(all.into_iter())
+            },
+            PatternItem::RPLPatternOperation(pat_op) => Either::Right(self.impl_matched_pat_op(
+                name, ops, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
             )),
-            PatternItem::RPLPatternOperation(pat_op) => Either::Right(
-                self.impl_matched_pat_op(name, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg),
-            ),
         }
     }
 
@@ -385,6 +614,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         body: &'a mir::Body<'tcx>,
         mir_cfg: &'a MirControlFlowGraph,
         mir_ddg: &'a MirDataDepGraph,
+        op_bindings: ResolvedOpBindings,
     ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
         let iter = rpl_rust_items
             .fns
@@ -392,7 +622,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .filter(move |fn_pat| fn_pat.filter(self.tcx, def_id, header, body))
             .filter_map(move |fn_pat| Some((fn_pat, fn_pat.extra_span(self.tcx, def_id)?)))
             .flat_map(move |(fn_pat, attr_map)| {
-                CheckMirCtxt::new(
+                CheckMirCtxt::new_with_bindings(
                     self.tcx,
                     self.pcx,
                     body,
@@ -403,6 +633,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                     fn_pat,
                     mir_cfg,
                     mir_ddg,
+                    op_bindings.clone(),
                 )
                 .check()
                 .into_iter()
@@ -417,12 +648,49 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         rpl_rust_items.post_process(iter)
     }
 
-    #[instrument(level = "trace", skip(self, pat_op, header, body, mir_cfg, mir_ddg), fields(pat_name = ?name))]
+    #[instrument(level = "trace", skip(self, ops, pat_op, header, body, mir_cfg, mir_ddg), fields(pat_name = ?name))]
     #[expect(clippy::too_many_arguments)]
     fn fn_matched_pat_op<'a>(
         &self,
         name: Symbol,
+        ops: &OpsConfig,
         pat_op: &pat::PatternOperation<'pcx>,
+        def_id: LocalDefId,
+        header: Option<FnHeader>,
+        has_self: bool,
+        self_ty: Option<ty::Ty<'tcx>>,
+        body: &'a mir::Body<'tcx>,
+        mir_cfg: &'a MirControlFlowGraph,
+        mir_ddg: &'a MirDataDepGraph,
+    ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
+        // Determine which op groups any operand of this PatternOperation references.
+        let groups_used: Vec<Symbol> = pat_op.referenced_op_groups().into_iter().collect();
+
+        // Cartesian product over op-group instance vectors (see impl_matched_pat_op).
+        let factors: Vec<Vec<&ResolvedOpInstance>> = groups_used
+            .iter()
+            .map(|g| ops.instances_of(g.as_str()).iter().collect())
+            .collect();
+
+        let mut all: Vec<NormalizedMatched<'tcx>> = Vec::new();
+        for combo in cartesian(factors.into_iter().map(|v| v.into_iter())) {
+            let bindings = ResolvedOpBindings::from_combo(&groups_used, combo);
+            all.extend(self.fn_matched_pat_op_with_bindings(
+                name, ops, pat_op, &bindings, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+            ));
+        }
+        all.into_iter()
+    }
+
+    /// Inner body of `fn_matched_pat_op`, lifted out so the cartesian loop
+    /// can call it once per (group → instance) combination.
+    #[expect(clippy::too_many_arguments)]
+    fn fn_matched_pat_op_with_bindings<'a>(
+        &self,
+        _name: Symbol,
+        ops: &OpsConfig,
+        pat_op: &pat::PatternOperation<'pcx>,
+        bindings: &ResolvedOpBindings,
         def_id: LocalDefId,
         header: Option<FnHeader>,
         has_self: bool,
@@ -436,7 +704,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .iter()
             .flat_map(|positive| {
                 self.fn_matched_pat_item(
-                    positive.0, positive.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+                    positive.0, ops, positive.1, bindings, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
                 )
                 .map(|matched| matched.map(&positive.2))
             })
@@ -446,12 +714,12 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .iter()
             .flat_map(|negative| {
                 self.fn_matched_pat_item(
-                    negative.0, negative.1, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+                    negative.0, ops, negative.1, bindings, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
                 )
                 .map(|matched| matched.map(&negative.2))
             })
             .collect();
-        debug!(?positive, ?negative, "impl_matched_pat_op");
+        debug!(?positive, ?negative, "fn_matched_pat_op_with_bindings");
 
         let iter = positive
             .into_iter()
@@ -469,7 +737,9 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
     fn fn_matched_pat_item<'a>(
         &self,
         name: Symbol,
+        ops: &OpsConfig,
         pat_item: &'pcx PatternItem<'pcx>,
+        bindings: &ResolvedOpBindings,
         def_id: LocalDefId,
         header: Option<FnHeader>,
         has_self: bool,
@@ -479,12 +749,60 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
         mir_ddg: &'a MirDataDepGraph,
     ) -> impl Iterator<Item = NormalizedMatched<'tcx>> {
         match pat_item {
-            PatternItem::RustItems(rust_items) => Either::Left(self.fn_matched(
-                name, rust_items, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
+            PatternItem::RustItems(rust_items) => {
+                // See the rationale on `impl_matched_pat_item` above — same shape
+                // applies here on the free-fn side.  When `bindings` is non-empty
+                // the outer `fn_matched_pat_op` has already chosen a combo for
+                // the union of groups referenced by the operation; we must
+                // descend with the same combo rather than rebuild a local one
+                // over this `RustItems`' own subset of groups.
+                let mut all: Vec<NormalizedMatched<'tcx>> = Vec::new();
+                if !bindings.by_group.is_empty() {
+                    all.extend(self.fn_matched(
+                        name,
+                        rust_items,
+                        def_id,
+                        header,
+                        has_self,
+                        self_ty,
+                        body,
+                        mir_cfg,
+                        mir_ddg,
+                        bindings.clone(),
+                    ));
+                } else {
+                    let groups_used: Vec<Symbol> = rust_items.referenced_op_groups().iter().copied().collect();
+                    let factors: Vec<Vec<&ResolvedOpInstance>> = groups_used
+                        .iter()
+                        .map(|g| ops.instances_of(g.as_str()).iter().collect())
+                        .collect();
+                    for combo in cartesian(factors.into_iter().map(|v| v.into_iter())) {
+                        let combo_bindings = if groups_used.is_empty() {
+                            // No op groups referenced — use the caller-supplied bindings
+                            // (preserves the existing behaviour for patterns without ops).
+                            bindings.clone()
+                        } else {
+                            ResolvedOpBindings::from_combo(&groups_used, combo)
+                        };
+                        all.extend(self.fn_matched(
+                            name,
+                            rust_items,
+                            def_id,
+                            header,
+                            has_self,
+                            self_ty,
+                            body,
+                            mir_cfg,
+                            mir_ddg,
+                            combo_bindings,
+                        ));
+                    }
+                }
+                Either::Left(all.into_iter())
+            },
+            PatternItem::RPLPatternOperation(pat_op) => Either::Right(self.fn_matched_pat_op(
+                name, ops, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg,
             )),
-            PatternItem::RPLPatternOperation(pat_op) => Either::Right(
-                self.fn_matched_pat_op(name, pat_op, def_id, header, has_self, self_ty, body, mir_cfg, mir_ddg),
-            ),
         }
     }
 
@@ -564,10 +882,25 @@ impl<'tcx> CheckFnCtxt<'_, 'tcx> {
             let mir_ddg = rpl_match::graph::mir_data_dep_graph(body, &mir_cfg);
             let header = Some(sig.header);
             let source_map = self.tcx.sess.source_map();
+            // Clone so the borrow of `self.raw_ops` does not conflict with
+            // the `&self` receiver used inside the closure body.
+            let raw_ops: Vec<(String, Vec<RawOpInstance>)> = self.raw_ops.clone();
             self.pcx.for_each_rpl_pattern(|_id, pattern| {
+                let (ops, _ops_diags) = resolve_ops_config(pattern, &raw_ops);
+                // _ops_diags: resolution diagnostics will be surfaced in Task 14.
                 for (&name, pat_item) in &pattern.patt_block {
                     for matched in self.impl_matched_pat_item(
-                        name, pat_item, def_id, header, has_self, self_ty, body, &mir_cfg, &mir_ddg,
+                        name,
+                        &ops,
+                        pat_item,
+                        &ResolvedOpBindings::empty(),
+                        def_id,
+                        header,
+                        has_self,
+                        self_ty,
+                        body,
+                        &mir_cfg,
+                        &mir_ddg,
                     ) {
                         let error = pattern
                             .get_diag(name, source_map, None, body, decl, &matched)
@@ -600,10 +933,25 @@ impl<'tcx> CheckFnCtxt<'_, 'tcx> {
             let mir_ddg = rpl_match::graph::mir_data_dep_graph(body, &mir_cfg);
             let fn_name = fn_name.map(|ident| ident.name);
             let source_map = self.tcx.sess.source_map();
+            // Clone so the borrow of `self.raw_ops` does not conflict with
+            // the `&self` receiver used inside the closure body.
+            let raw_ops: Vec<(String, Vec<RawOpInstance>)> = self.raw_ops.clone();
             self.pcx.for_each_rpl_pattern(|_id, pattern| {
+                let (ops, _ops_diags) = resolve_ops_config(pattern, &raw_ops);
+                // _ops_diags: resolution diagnostics will be surfaced in Task 14.
                 for (&name, pat_item) in &pattern.patt_block {
                     for matched in self.fn_matched_pat_item(
-                        name, pat_item, def_id, header, has_self, self_ty, body, &mir_cfg, &mir_ddg,
+                        name,
+                        &ops,
+                        pat_item,
+                        &ResolvedOpBindings::empty(),
+                        def_id,
+                        header,
+                        has_self,
+                        self_ty,
+                        body,
+                        &mir_cfg,
+                        &mir_ddg,
                     ) {
                         let error = pattern
                             .get_diag(name, source_map, fn_name, body, decl, &matched)
