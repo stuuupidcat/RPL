@@ -46,7 +46,7 @@ pub struct NormalizedMatched<'tcx> {
 impl<'tcx> NormalizedMatched<'tcx> {
     /// Create a new [`NormalizedMatched`] from a [`Matched`] and a [`pat::LabelMap`].
     #[instrument(level = "trace", ret)]
-    pub fn new(matched: &Matched<'tcx>, label_map: &pat::LabelMap, extra_spans: &ExtraSpan<'tcx>) -> Self {
+    pub fn new(matched: &Matched<'tcx>, label_map: &pat::LabelMap, extra_spans: &ExtraSpan) -> Self {
         let ty_vars = matched.ty_vars.clone();
         let const_vars = matched.const_vars.clone();
         let place_vars = matched.place_vars.clone();
@@ -62,7 +62,7 @@ impl<'tcx> NormalizedMatched<'tcx> {
         labels.extend(
             extra_spans
                 .iter()
-                .map(|(label, span)| (*label, NormalizedSpanned::Span(span.span()))),
+                .map(|(label, span)| (*label, NormalizedSpanned::Span(*span))),
         );
         labels.sort_by_key(|(label, _)| *label);
 

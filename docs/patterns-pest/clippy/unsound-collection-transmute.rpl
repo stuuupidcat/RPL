@@ -69,6 +69,19 @@ patt {
     } where {
         !compatible_layout($T, $U)
     }
+    // Cross-statement form: a `let`-bound collection stays live for its drop, so the transmute reads
+    // it with `copy` rather than `move`. Match that too (`#[diag = "p_vec"]` reuses the p_vec diag).
+    #[diag = "p_vec"]
+    p_vec_copied[$T: type, $U: type] = fn _ (..) {
+        type Src = Vec<$T>;
+        type Dst = Vec<$U>;
+        'src:
+        let $p: Src = _;
+        'cast:
+        let $q: Dst = copy $p as Dst (Transmute);
+    } where {
+        !compatible_layout($T, $U)
+    }
     p_vec_deque[$T: type, $U: type] = fn _ (..) {
         type Src = VecDeque<$T>;
         type Dst = VecDeque<$U>;

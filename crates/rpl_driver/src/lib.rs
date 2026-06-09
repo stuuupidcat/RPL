@@ -2,7 +2,6 @@
 #![warn(unused_qualifications)]
 extern crate rustc_data_structures;
 extern crate rustc_errors;
-extern crate rustc_fluent_macro;
 extern crate rustc_hir;
 extern crate rustc_interface;
 extern crate rustc_lint_defs;
@@ -13,8 +12,6 @@ extern crate rustc_span;
 #[macro_use]
 extern crate tracing;
 extern crate either;
-
-rustc_fluent_macro::fluent_messages! { "../messages.en.ftl" }
 
 use std::borrow::Cow;
 use std::cell::RefCell;
@@ -36,7 +33,7 @@ use rustc_hir::def_id::{DefId, LocalDefId};
 use rustc_hir::intravisit::{self, Visitor};
 use rustc_hir::{self as hir, FnHeader};
 use rustc_lint_defs::RegisteredTools;
-use rustc_macros::{Diagnostic, LintDiagnostic};
+use rustc_macros::Diagnostic;
 use rustc_middle::hir::nested_filter;
 use rustc_middle::mir;
 use rustc_middle::ty::{self, TyCtxt};
@@ -69,8 +66,8 @@ declare_tool_lint! {
     "detects an error"
 }
 
-#[derive(Diagnostic, LintDiagnostic)]
-#[diag(rpl_driver_error_found_with_pattern)]
+#[derive(Diagnostic)]
+#[diag("an error was found with input RPL pattern(s)")]
 pub struct ErrorFound;
 
 impl From<ErrorFound> for rustc_errors::DiagMessage {
@@ -80,11 +77,11 @@ impl From<ErrorFound> for rustc_errors::DiagMessage {
 }
 
 pub fn provide(providers: &mut Providers) {
-    providers.registered_tools = registered_tools;
+    providers.queries.registered_tools = registered_tools;
 }
 
 fn registered_tools(tcx: TyCtxt<'_>, (): ()) -> RegisteredTools {
-    let mut registered_tools = (rustc_interface::DEFAULT_QUERY_PROVIDERS.registered_tools)(tcx, ());
+    let mut registered_tools = (rustc_interface::DEFAULT_QUERY_PROVIDERS.queries.registered_tools)(tcx, ());
     registered_tools.insert(Ident::from_str("rpl"));
     registered_tools
 }
@@ -107,7 +104,7 @@ pub fn check_crate<'tcx, 'pcx, 'mcx: 'pcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>
         tcx.emit_node_span_lint(
             TIMING,
             hir_id,
-            tcx.hir().span(hir_id),
+            tcx.hir_span(hir_id),
             Timing {
                 time,
                 stage: "add_parsed_patterns",
@@ -129,7 +126,7 @@ pub fn check_crate<'tcx, 'pcx, 'mcx: 'pcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>
         pcx,
         body_caches: RefCell::default(),
     };
-    tcx.hir().walk_toplevel_module(&mut check_ctxt);
+    tcx.hir_walk_toplevel_module(&mut check_ctxt);
     rpl_utils::visit_crate(tcx);
 
     #[cfg(feature = "timing")]
@@ -144,7 +141,7 @@ pub fn check_crate<'tcx, 'pcx, 'mcx: 'pcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>
         tcx.emit_node_span_lint(
             TIMING,
             hir_id,
-            tcx.hir().span(hir_id),
+            tcx.hir_span(hir_id),
             Timing {
                 time,
                 stage: "do_match",
@@ -170,22 +167,27 @@ struct CheckFnCtxt<'pcx, 'tcx> {
 
 impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
     type NestedFilter = nested_filter::All;
-    fn nested_visit_map(&mut self) -> Self::Map {
-        self.tcx.hir()
+    fn maybe_tcx(&mut self) -> Self::MaybeTyCtxt {
+        self.tcx
     }
 
     #[instrument(level = "debug", skip_all, fields(item_id = ?item.owner_id.def_id))]
     fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
         match item.kind {
             // hir::ItemKind::Trait(hir::IsAuto::No, hir::Safety::Safe, ..) | hir::ItemKind::Fn { .. } => {},
-            hir::ItemKind::Trait(_, _, _, _, impl_) => {
-                for trait_item in impl_ {
-                    self.check_trait_item_ref(trait_item, None);
+            hir::ItemKind::Trait { items, .. } => {
+                for &trait_item in items {
+                    self.check_trait_item(trait_item, None);
                 }
             },
             hir::ItemKind::Impl(impl_) => self.check_impl(
-                impl_,
-                Some(self.tcx.type_of(item.owner_id.def_id).instantiate_identity()),
+                &impl_,
+                Some(
+                    self.tcx
+                        .type_of(item.owner_id.def_id)
+                        .instantiate_identity()
+                        .skip_normalization(),
+                ),
             ),
             // hir::ItemKind::Fn { sig, .. } => self.check_fn(
             //     Some(item.ident),
@@ -218,14 +220,14 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
 
         let self_ty = self
             .tcx
-            .impl_of_method(def_id.into())
-            .map(|impl_| self.tcx.type_of(impl_).instantiate_identity());
+            .impl_of_assoc(def_id.into())
+            .map(|impl_| self.tcx.type_of(impl_).instantiate_identity().skip_normalization());
 
         self.check_fn(
             name,
             decl,
             header,
-            decl.implicit_self.has_implicit_self(),
+            decl.implicit_self().has_implicit_self(),
             self_ty,
             def_id,
         );
@@ -515,38 +517,28 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
 }
 
 impl<'tcx> CheckFnCtxt<'_, 'tcx> {
-    #[instrument(level = "debug", skip(self, trait_item), fields(trait_item_id = ?trait_item.id))]
-    fn check_trait_item_ref(&mut self, trait_item: &'tcx hir::TraitItemRef, self_ty: Option<ty::Ty<'tcx>>) {
-        if let hir::AssocItemKind::Fn { has_self } = trait_item.kind {
-            let id = trait_item.id;
-            let trait_item = self.tcx.hir().trait_item(id);
-            let def_id = trait_item.owner_id.def_id;
-            match trait_item.kind {
-                hir::TraitItemKind::Fn(sig, _) => {
-                    self.check_assoc_fn(has_self, self_ty, &sig, def_id);
-                },
-                _ => (), // Actually impossible, but we handle it gracefully.
-            }
+    #[instrument(level = "debug", skip(self, self_ty), fields(trait_item_id = ?id))]
+    fn check_trait_item(&mut self, id: hir::TraitItemId, self_ty: Option<ty::Ty<'tcx>>) {
+        let trait_item = self.tcx.hir_trait_item(id);
+        let def_id = trait_item.owner_id.def_id;
+        if let hir::TraitItemKind::Fn(sig, _) = trait_item.kind {
+            let has_self = self.tcx.associated_item(def_id).is_method();
+            self.check_assoc_fn(has_self, self_ty, &sig, def_id);
         }
     }
     #[instrument(level = "debug", skip(self, impl_))]
     fn check_impl(&mut self, impl_: &hir::Impl<'tcx>, self_ty: Option<ty::Ty<'tcx>>) {
-        for impl_item in impl_.items {
-            self.check_impl_item_ref(impl_item, self_ty);
+        for &impl_item in impl_.items {
+            self.check_impl_item(impl_item, self_ty);
         }
     }
-    #[instrument(level = "debug", skip(self, impl_item), fields(impl_item_id = ?impl_item.id))]
-    fn check_impl_item_ref(&mut self, impl_item: &'tcx hir::ImplItemRef, self_ty: Option<ty::Ty<'tcx>>) {
-        if let hir::AssocItemKind::Fn { has_self } = impl_item.kind {
-            let id = impl_item.id;
-            let impl_item = self.tcx.hir().impl_item(id);
-            let def_id = impl_item.owner_id.def_id;
-            match impl_item.kind {
-                hir::ImplItemKind::Fn(sig, _) => {
-                    self.check_assoc_fn(has_self, self_ty, &sig, def_id);
-                },
-                _ => (), // Actually impossible, but we handle it gracefully.
-            }
+    #[instrument(level = "debug", skip(self, self_ty), fields(impl_item_id = ?id))]
+    fn check_impl_item(&mut self, id: hir::ImplItemId, self_ty: Option<ty::Ty<'tcx>>) {
+        let impl_item = self.tcx.hir_impl_item(id);
+        let def_id = impl_item.owner_id.def_id;
+        if let hir::ImplItemKind::Fn(sig, _) = impl_item.kind {
+            let has_self = self.tcx.associated_item(def_id).is_method();
+            self.check_assoc_fn(has_self, self_ty, &sig, def_id);
         }
     }
     #[instrument(level = "debug", skip(self, sig), fields(is_mir_available = ?self.tcx.is_mir_available(def_id)))]

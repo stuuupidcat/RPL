@@ -1,14 +1,7 @@
 #![allow(internal_features)]
 #![feature(rustc_private)]
 #![feature(rustc_attrs)]
-#![feature(let_chains)]
-#![feature(if_let_guard)]
 #![feature(box_patterns)]
-#![feature(try_trait_v2)]
-#![feature(debug_closure_helpers)]
-#![feature(iter_chain)]
-#![feature(iterator_try_collect)]
-#![feature(cell_update)]
 #![warn(unused_qualifications)]
 
 extern crate either;
@@ -18,8 +11,6 @@ extern crate rustc_ast;
 extern crate rustc_data_structures;
 extern crate rustc_driver;
 extern crate rustc_errors;
-extern crate rustc_fluent_macro;
-extern crate rustc_hash;
 extern crate rustc_hir;
 extern crate rustc_index;
 extern crate rustc_macros;

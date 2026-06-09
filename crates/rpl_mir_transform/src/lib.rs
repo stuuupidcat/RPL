@@ -38,8 +38,10 @@ fn mir_drops_elaborated_and_const_checked(tcx: TyCtxt<'_>, def: LocalDefId) -> &
     }
 
     // We only need to borrowck non-synthetic MIR.
+    // `mir_borrowck` is now keyed on the typeck root and returns a `Result`, whose `Err` carries
+    // the `ErrorGuaranteed` (previously surfaced via the `tainted_by_errors` field).
     let tainted_by_errors = if !tcx.is_synthetic_mir(def) {
-        tcx.mir_borrowck(def).tainted_by_errors
+        tcx.mir_borrowck(tcx.typeck_root_def_id_local(def)).err()
     } else {
         None
     };

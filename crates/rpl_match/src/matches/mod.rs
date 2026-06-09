@@ -73,7 +73,7 @@ impl Matched<'_> {
 }
 
 #[derive(Debug)]
-pub struct MatchedWithLabelMap<'a, 'tcx>(pub &'a LabelMap, pub &'a Matched<'tcx>, pub &'a ExtraSpan<'tcx>);
+pub struct MatchedWithLabelMap<'a, 'tcx>(pub &'a LabelMap, pub &'a Matched<'tcx>, pub &'a ExtraSpan);
 
 impl<'tcx> pat::Matched<'tcx> for MatchedWithLabelMap<'_, 'tcx> {
     fn span(&self, body: &mir::Body<'tcx>, decl: &FnDecl<'tcx>, name: &str) -> Span {
@@ -82,7 +82,7 @@ impl<'tcx> pat::Matched<'tcx> for MatchedWithLabelMap<'_, 'tcx> {
         labels
             .get(&name)
             .map(|spanned| matched.span_spanned(*spanned, body, decl))
-            .or_else(|| attr.get(&name).map(|attr| attr.span))
+            .or_else(|| attr.get(&name).copied())
             .unwrap_or_else(|| {
                 panic!("label `{name}` not found in:\n    pattern labels: {labels:?}\n    attributes: {attr:?}");
             })
@@ -739,6 +739,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
     // For intrablock edges, we can directly test if it is an edge of DDG, but for interblock edges, we
     // need to recursively check if there is a path from the start of the block `bb` to location
     // `rdep_loc`, because we don't store the interblock edges from the start of blocks yet.
+    #[allow(dead_code)] // reverse-dependency graph helper; currently unused.
     #[instrument(level = "debug", skip(self), ret)]
     fn is_rdep_start(&self, bb: mir::BasicBlock, rdep_loc: mir::Location, local: mir::Local) -> bool {
         rdep_loc.block == bb && self.cx.mir_ddg[bb].is_rdep_start(rdep_loc.statement_index, local)
@@ -931,6 +932,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         }
         self.matching[loc_pat].matched.set(None);
     }
+    #[allow(dead_code)] // currently unused.
     fn place_context_compatible(place_context_pat: PlaceContext, place_context: PlaceContext, is_copy: bool) -> bool {
         let _ = place_context;
         let _ = place_context_pat;
@@ -1133,6 +1135,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         self.matching[place_var].matched.unmatch();
     }
 
+    #[allow(dead_code)] // debug logging helper; currently unused.
     fn log_stmt_matched(&self, loc_pat: impl IntoLocation<Location = pat::Location>, stmt_match: StatementMatch) {
         let loc_pat = loc_pat.into_location();
         debug!(
@@ -1156,6 +1159,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
             ty = self.cx.body.local_decls[local].ty,
         );
     }
+    #[allow(dead_code)] // debug logging helper; currently unused.
     fn log_ty_var_matched(&self, ty_var: pat::TyVarIdx, ty: Ty<'tcx>) {
         debug!("type variable matched, {ty_var:?} <-> {ty:?}");
     }

@@ -19,7 +19,7 @@ pub fn mir_program_dep_graph(body: &mir::Body<'_>) -> MirProgramDepGraph {
 pub fn mir_data_dep_graph(body: &mir::Body<'_>, cfg: &MirControlFlowGraph) -> MirDataDepGraph {
     let mut graph = DataDepGraph::new(
         body.basic_blocks.len(),
-        |bb| body.basic_blocks[bb].statements.len() + 1,
+        |bb: mir::BasicBlock| body.basic_blocks[bb].statements.len() + 1,
         body.local_decls.len(),
     );
     for (bb, block) in body.basic_blocks.iter_enumerated() {
@@ -62,9 +62,8 @@ fn terminator_edges(terminator: &mir::TerminatorKind<'_>) -> MirTerminatorEdges 
         mir::TerminatorEdges::None => TerminatorEdges::None,
         mir::TerminatorEdges::Single(bb) => TerminatorEdges::Single(bb),
         mir::TerminatorEdges::Double(bb0, bb1) => TerminatorEdges::Double(bb0, bb1),
-        mir::TerminatorEdges::AssignOnReturn { return_, cleanup, .. } => TerminatorEdges::AssignOnReturn {
-            return_: return_.into(),
-            cleanup,
+        mir::TerminatorEdges::AssignOnReturn { return_, cleanup, .. } => {
+            TerminatorEdges::AssignOnReturn { return_, cleanup }
         },
         mir::TerminatorEdges::SwitchInt { targets, .. } => TerminatorEdges::SwitchInt(mir_switch_targets(targets)),
     }

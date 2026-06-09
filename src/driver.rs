@@ -1,8 +1,4 @@
-#![allow(rustc::diagnostic_outside_of_impl)]
-#![allow(rustc::untranslatable_diagnostic)]
 #![feature(rustc_private)]
-#![feature(let_chains)]
-#![feature(os_str_display)]
 // warn on lints, that are included in `rust-lang/rust`s bootstrap
 #![warn(rust_2018_idioms, unused_lifetimes)]
 // warn on rustc internal lints
@@ -14,7 +10,9 @@
 extern crate rustc_driver;
 extern crate rustc_log;
 extern crate rustc_session;
-#[allow(unused_extern_crates)]
+// `tracing` is a regular dependency (not a sysroot crate); the `extern crate` form is
+// intentional here, so opt out of the rustc-internal sysroot-import lint for it.
+#[allow(unused_extern_crates, rustc::implicit_sysroot_crate_import)]
 extern crate tracing;
 
 use std::env;
@@ -24,7 +22,7 @@ use std::path::Path;
 use std::process::exit;
 
 use anstream::println;
-use rpl_interface::{DefaultCallbacks, RPL_PATS_ENV, RplCallbacks, RustcCallbacks};
+use rpl_interface::{DefaultCallbacks, RplCallbacks, RustcCallbacks};
 use rustc_session::EarlyDiagCtxt;
 use rustc_session::config::ErrorOutputType;
 
@@ -134,7 +132,7 @@ fn logger_config() -> rustc_log::LoggerConfig {
 
 #[allow(clippy::too_many_lines)]
 #[allow(clippy::ignored_unit_patterns)]
-pub fn main() {
+pub fn main() -> std::process::ExitCode {
     let early_dcx = EarlyDiagCtxt::new(ErrorOutputType::default());
 
     rustc_driver::init_logger(&early_dcx, logger_config());
@@ -152,7 +150,7 @@ pub fn main() {
         handler.handle().note(format!("RPL-driver version: {version_info}"));
     });
 
-    exit(rustc_driver::catch_with_exit_code(move || {
+    rustc_driver::catch_with_exit_code(move || {
         let mut orig_args: Vec<String> = rustc_driver::args::raw_args(&early_dcx);
 
         let has_sysroot_arg = |args: &mut [String]| -> bool {
@@ -163,12 +161,12 @@ pub fn main() {
             // Beside checking for existence of `--sysroot` on the command line, we need to
             // check for the arg files that are prefixed with @ as well to be consistent with rustc
             for arg in args.iter() {
-                if let Some(arg_file_path) = arg.strip_prefix('@') {
-                    if let Ok(arg_file) = read_to_string(arg_file_path) {
-                        let split_arg_file: Vec<String> = arg_file.lines().map(ToString::to_string).collect();
-                        if arg_value(&split_arg_file, "--sysroot", |_| true).is_some() {
-                            return true;
-                        }
+                if let Some(arg_file_path) = arg.strip_prefix('@')
+                    && let Ok(arg_file) = read_to_string(arg_file_path)
+                {
+                    let split_arg_file: Vec<String> = arg_file.lines().map(ToString::to_string).collect();
+                    if arg_value(&split_arg_file, "--sysroot", |_| true).is_some() {
+                        return true;
                     }
                 }
             }
@@ -177,10 +175,10 @@ pub fn main() {
 
         let sys_root_env = std::env::var("SYSROOT").ok();
         let pass_sysroot_env_if_given = |args: &mut Vec<String>, sys_root_env| {
-            if let Some(sys_root) = sys_root_env {
-                if !has_sysroot_arg(args) {
-                    args.extend(vec!["--sysroot".into(), sys_root]);
-                }
+            if let Some(sys_root) = sys_root_env
+                && !has_sysroot_arg(args)
+            {
+                args.extend(vec!["--sysroot".into(), sys_root]);
             };
         };
 
@@ -221,7 +219,7 @@ pub fn main() {
         let mut args: Vec<String> = orig_args.clone();
         pass_sysroot_env_if_given(&mut args, sys_root_env);
 
-        let rpl_pats_var = env::var(RPL_PATS_ENV);
+        let rpl_pats_var = env::var(rpl_interface::RPL_PATS_ENV);
         let pattern_paths = match &rpl_pats_var {
             Ok(val) => Some(val.split(':').map(ToString::to_string).collect()),
             Err(env::VarError::NotPresent) => None,
@@ -269,7 +267,7 @@ pub fn main() {
         } else {
             rustc_driver::run_compiler(&args, &mut RustcCallbacks::new(rpl_args_var))
         }
-    }))
+    })
 }
 
 #[must_use]

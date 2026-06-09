@@ -98,7 +98,7 @@ impl<'pcx, 'tcx> MatchTy<'pcx, 'tcx> for MatchCtxt<'_, 'pcx, 'tcx> {
     fn match_ty_const_var(&self, const_var: pat::ConstVar<'pcx>, konst: ty::Const<'tcx>) -> bool {
         match konst.kind() {
             ty::ConstKind::Param(param) => {
-                let ty = param.find_ty_from_env(self.cx.typing_env().param_env);
+                let ty = param.find_const_ty_from_env(self.cx.typing_env().param_env);
                 self.match_ty(const_var.ty, ty) && {
                     // We can't convert a const generic param into a `mir::Const`
                     self.matching.const_vars[const_var.idx].force_get_matched() == Const::Param(param)

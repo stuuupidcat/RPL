@@ -1,4 +1,4 @@
-use rustc_macros::{Diagnostic, LintDiagnostic};
+use rustc_macros::Diagnostic;
 use rustc_session::declare_tool_lint;
 use rustc_span::Symbol;
 
@@ -8,8 +8,8 @@ declare_tool_lint!(
     "timing information for RPL interface"
 );
 
-#[derive(Diagnostic, LintDiagnostic)]
-#[diag(rpl_driver_timing)]
+#[derive(Diagnostic)]
+#[diag("{$time} ns has been used during {$stage} after checking {$crate_name}")]
 pub struct Timing {
     /// Used time in nanoseconds
     pub time: u64,

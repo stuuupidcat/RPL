@@ -1,6 +1,4 @@
 #![feature(rustc_private)]
-#![feature(let_chains)]
-#![feature(if_let_guard)]
 #![feature(map_try_insert)]
 #![feature(box_patterns)]
 
@@ -9,7 +7,6 @@ extern crate rustc_const_eval;
 extern crate rustc_data_structures;
 extern crate rustc_driver;
 extern crate rustc_errors;
-extern crate rustc_fluent_macro;
 extern crate rustc_hir;
 extern crate rustc_index;
 extern crate rustc_infer;

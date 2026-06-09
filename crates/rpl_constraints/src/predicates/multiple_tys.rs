@@ -38,8 +38,8 @@ pub fn compatible_layout<'tcx>(tcx: TyCtxt<'tcx>, typing_env: ty::TypingEnv<'tcx
         from: Ty<'tcx>,
         to: Ty<'tcx>,
     ) -> bool {
-        if let Ok(from) = tcx.try_normalize_erasing_regions(typing_env, from)
-            && let Ok(to) = tcx.try_normalize_erasing_regions(typing_env, to)
+        if let Ok(from) = tcx.try_normalize_erasing_regions(typing_env, ty::Unnormalized::new_wip(from))
+            && let Ok(to) = tcx.try_normalize_erasing_regions(typing_env, ty::Unnormalized::new_wip(to))
             && let Ok(from_layout) = tcx.layout_of(typing_env.as_query_input(from))
             && let Ok(to_layout) = tcx.layout_of(typing_env.as_query_input(to))
         {

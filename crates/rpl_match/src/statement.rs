@@ -4,7 +4,7 @@ use rpl_context::PatCtxt;
 pub use rpl_context::pat;
 use rpl_mir_graph::TerminatorEdges;
 use rustc_abi::{FieldIdx, VariantIdx};
-use rustc_hash::FxHashMap;
+use rustc_data_structures::fx::FxHashMap;
 use rustc_hir::def::CtorKind;
 use rustc_hir::def_id::DefId;
 use rustc_index::IndexSlice;
@@ -21,9 +21,9 @@ fn iter_place_proj_and_ty<'pcx, 'tcx>(
     body: &mir::Body<'tcx>,
     tcx: TyCtxt<'tcx>,
     place: mir::PlaceRef<'tcx>,
-) -> impl Iterator<Item = (mir::PlaceElem<'tcx>, mir::tcx::PlaceTy<'tcx>)> + use<'tcx, 'pcx> {
+) -> impl Iterator<Item = (mir::PlaceElem<'tcx>, mir::PlaceTy<'tcx>)> + use<'tcx, 'pcx> {
     place.projection.iter().scan(
-        mir::tcx::PlaceTy::from_ty(body.local_decls[place.local].ty),
+        mir::PlaceTy::from_ty(body.local_decls[place.local].ty),
         move |place_ty, &proj| Some((proj, std::mem::replace(place_ty, place_ty.projection_ty(tcx, proj)))),
     )
 }
@@ -39,7 +39,7 @@ fn iter_place_pat_proj_and_ty<'pcx, 'tcx>(
 
 type PlaceElemPair<'pcx, 'tcx> = (
     (pat::PlaceElem<'pcx>, Option<pat::PlaceTy<'pcx>>),
-    (mir::ProjectionElem<mir::Local, ty::Ty<'tcx>>, mir::tcx::PlaceTy<'tcx>),
+    (mir::ProjectionElem<mir::Local, ty::Ty<'tcx>>, mir::PlaceTy<'tcx>),
 );
 
 pub(crate) trait MatchStatement<'pcx, 'tcx> {
@@ -158,10 +158,8 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
                 mir::StatementKind::Assign(..)
                 | mir::StatementKind::FakeRead(..)
                 | mir::StatementKind::SetDiscriminant { .. }
-                | mir::StatementKind::Deinit(_)
                 | mir::StatementKind::StorageLive(_)
                 | mir::StatementKind::StorageDead(_)
-                | mir::StatementKind::Retag(..)
                 | mir::StatementKind::PlaceMention(..)
                 | mir::StatementKind::AscribeUserType(..)
                 | mir::StatementKind::Coverage(..)
@@ -239,7 +237,7 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
                     place: place_pat,
                     target: _,
                 },
-                &mir::TerminatorKind::Drop { place, target: _, .. },
+                &mir::TerminatorKind::Drop { place, .. },
             ) => self.match_place(place_pat, place),
             // Trivial matches, do not need to print
             (pat::TerminatorKind::Goto(_), mir::TerminatorKind::Goto { .. })
@@ -296,36 +294,13 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
     #[instrument(level = "trace", skip(self), ret)]
     fn match_rvalue(&self, pat: &pat::Rvalue<'pcx>, rvalue: &mir::Rvalue<'tcx>) -> bool {
         let matched = match (pat, rvalue) {
-            // Special case of `Len(*p)` <=> `PtrMetadata(p)`
-            (
-                &pat::Rvalue::Len(place_pat),
-                &mir::Rvalue::UnaryOp(mir::UnOp::PtrMetadata, mir::Operand::Copy(place)),
-            ) => {
-                if let [pat::PlaceElem::Deref, projection @ ..] = place_pat.projection {
-                    let place_pat = pat::Place {
-                        base: place_pat.base,
-                        projection,
-                    };
-                    return self.match_place(place_pat, place);
-                }
-                false
-            },
-            (
-                &pat::Rvalue::UnaryOp(mir::UnOp::PtrMetadata, pat::Operand::Copy(place_pat)),
-                &mir::Rvalue::Len(place),
-            ) => {
-                if let [mir::PlaceElem::Deref, projection @ ..] = place.as_ref().projection {
-                    let place = mir::PlaceRef {
-                        local: place.local,
-                        projection,
-                    };
-                    return self.match_place_ref(place_pat, place);
-                }
-                false
-            },
-
             (pat::Rvalue::Any, _) => true,
-            (pat::Rvalue::Use(operand_pat), mir::Rvalue::Use(operand)) => self.match_operand(operand_pat, operand),
+            (pat::Rvalue::Use(operand_pat), mir::Rvalue::Use(operand, _)) => self.match_operand(operand_pat, operand),
+            // NOTE: there is deliberately no `SizeOf` / `AlignOf` rvalue here. `size_of::<T>()` /
+            // `align_of::<T>()` no longer lower to a `mir::NullOp`, so the RPL grammar dropped the
+            // `SizeOf(..)` / `AlignOf(..)` syntax (and the `pat::Rvalue::NullaryOp` variant) entirely.
+            // Patterns now mirror MIR by binding the `<T as SizedTypeProperties>::SIZE` constant
+            // directly (a `const $c` operand + the `is_size_of` predicate).
             (&pat::Rvalue::Repeat(ref operand_pat, konst_pat), &mir::Rvalue::Repeat(ref operand, konst)) => {
                 self.match_operand(operand_pat, operand) && self.ty().match_ty_const(konst_pat, konst)
             },
@@ -348,8 +323,7 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
             (&pat::Rvalue::RawPtr(mutability_pat, place_pat), &mir::Rvalue::RawPtr(ptr_mutability, place)) => {
                 mutability_pat == ptr_mutability.to_mutbl_lossy() && self.match_place(place_pat, place)
             },
-            (&pat::Rvalue::Len(place_pat), &mir::Rvalue::Len(place))
-            | (&pat::Rvalue::Discriminant(place_pat), &mir::Rvalue::Discriminant(place))
+            (&pat::Rvalue::Discriminant(place_pat), &mir::Rvalue::Discriminant(place))
             | (&pat::Rvalue::CopyForDeref(place_pat), &mir::Rvalue::CopyForDeref(place)) => {
                 self.match_place(place_pat, place)
             },
@@ -362,17 +336,11 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
             (pat::Rvalue::BinaryOp(op_pat, box [lhs_pat, rhs_pat]), mir::Rvalue::BinaryOp(op, box (lhs, rhs))) => {
                 op_pat == op && self.match_operand(lhs_pat, lhs) && self.match_operand(rhs_pat, rhs)
             },
-            (&pat::Rvalue::NullaryOp(op_pat, ty_pat), &mir::Rvalue::NullaryOp(op, ty)) => {
-                op_pat == op && self.ty().match_ty(ty_pat, ty)
-            },
             (pat::Rvalue::UnaryOp(op_pat, operand_pat), mir::Rvalue::UnaryOp(op, operand)) => {
                 op_pat == op && self.match_operand(operand_pat, operand)
             },
             (pat::Rvalue::Aggregate(agg_kind_pat, operands_pat), mir::Rvalue::Aggregate(box agg_kind, operands)) => {
                 self.match_aggregate(agg_kind_pat, operands_pat, agg_kind, operands)
-            },
-            (&pat::Rvalue::ShallowInitBox(ref operand_pat, ty_pat), &mir::Rvalue::ShallowInitBox(ref operand, ty)) => {
-                self.match_operand(operand_pat, operand) && self.ty().match_ty(ty_pat, ty)
             },
             (
                 // pat::Rvalue::Any
@@ -380,30 +348,25 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
                 | pat::Rvalue::Repeat(..)
                 | pat::Rvalue::Ref(..)
                 | pat::Rvalue::RawPtr(..)
-                | pat::Rvalue::Len(_)
                 | pat::Rvalue::Cast(..)
                 | pat::Rvalue::BinaryOp(..)
-                | pat::Rvalue::NullaryOp(..)
                 | pat::Rvalue::UnaryOp(..)
                 | pat::Rvalue::Discriminant(_)
                 | pat::Rvalue::Aggregate(..)
-                | pat::Rvalue::ShallowInitBox(..)
                 | pat::Rvalue::CopyForDeref(_),
-                mir::Rvalue::Use(_)
+                mir::Rvalue::Use(..)
                 | mir::Rvalue::Repeat(..)
                 | mir::Rvalue::Ref(..)
                 | mir::Rvalue::ThreadLocalRef(_)
                 | mir::Rvalue::RawPtr(..)
-                | mir::Rvalue::Len(_)
                 | mir::Rvalue::Cast(..)
                 | mir::Rvalue::BinaryOp(..)
-                | mir::Rvalue::NullaryOp(..)
                 | mir::Rvalue::UnaryOp(..)
                 | mir::Rvalue::Discriminant(_)
                 | mir::Rvalue::Aggregate(..)
-                | mir::Rvalue::ShallowInitBox(..)
                 | mir::Rvalue::CopyForDeref(_)
-                | mir::Rvalue::WrapUnsafeBinder(..),
+                | mir::Rvalue::WrapUnsafeBinder(..)
+                | mir::Rvalue::Reborrow(..),
             ) => return false,
         };
         debug!(?pat, ?rvalue, matched, "match_rvalue");
@@ -439,6 +402,8 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
                 }),
             ) if let &ty::FnDef(fn_did, _args) = ty.kind() => self.match_fn_pat(fn_pat, fn_did),
             (pat::Operand::Any, mir::Operand::Copy(_) | mir::Operand::Move(_) | mir::Operand::Constant(_)) => true,
+            // `RuntimeChecks` is a new, non-value operand kind that no pattern can match.
+            (_, mir::Operand::RuntimeChecks(_)) => return false,
             (
                 pat::Operand::Copy(_) | pat::Operand::Move(_) | pat::Operand::Constant(_) | pat::Operand::FnPat(_),
                 mir::Operand::Copy(_) | mir::Operand::Move(_) | mir::Operand::Constant(_),
@@ -452,7 +417,7 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
     fn match_spanned_operands(
         &self,
         pat: &[pat::Operand<'pcx>],
-        operands: &[rustc_span::source_map::Spanned<mir::Operand<'tcx>>],
+        operands: &[rustc_span::Spanned<mir::Operand<'tcx>>],
     ) -> bool {
         pat.len() == operands.len()
             && zip(pat, operands).all(|(operand_pat, operand)| self.match_operand(operand_pat, &operand.node))
@@ -722,8 +687,7 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
             (_, ty::Adt(adt, _), pat::PlaceElem::Downcast(sym), Downcast(_, idx)) => {
                 adt.is_enum() && adt.variant(idx).name == sym
             },
-            (_, _, pat::PlaceElem::OpaqueCast(ty_pat), OpaqueCast(ty))
-            | (_, _, pat::PlaceElem::Subtype(ty_pat), Subtype(ty)) => self.ty().match_ty(ty_pat, ty),
+            (_, _, pat::PlaceElem::OpaqueCast(ty_pat), OpaqueCast(ty)) => self.ty().match_ty(ty_pat, ty),
             (
                 _,
                 _,
@@ -735,8 +699,7 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
                 | pat::PlaceElem::Subslice { .. }
                 | pat::PlaceElem::Downcast(..)
                 | pat::PlaceElem::DowncastPat(..)
-                | pat::PlaceElem::OpaqueCast(..)
-                | pat::PlaceElem::Subtype(..),
+                | pat::PlaceElem::OpaqueCast(..),
                 Deref
                 | Field(..)
                 | Index(_)
@@ -744,7 +707,6 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
                 | Subslice { .. }
                 | Downcast(..)
                 | OpaqueCast(_)
-                | Subtype(_)
                 | UnwrapUnsafeBinder(_),
             ) => false,
         }
@@ -827,8 +789,7 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
                     | pat::PlaceElem::Subslice { .. }
                     | pat::PlaceElem::Downcast(..)
                     | pat::PlaceElem::DowncastPat(..)
-                    | pat::PlaceElem::OpaqueCast(..)
-                    | pat::PlaceElem::Subtype(..),
+                    | pat::PlaceElem::OpaqueCast(..),
                     Deref
                     | Field(..)
                     | Index(_)
@@ -836,7 +797,6 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
                     | Subslice { .. }
                     | Downcast(..)
                     | OpaqueCast(_)
-                    | Subtype(_)
                     | UnwrapUnsafeBinder(_),
                 ) => {},
             }

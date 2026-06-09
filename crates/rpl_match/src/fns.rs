@@ -27,8 +27,15 @@ impl<'a, 'pcx, 'tcx> MatchFnCtxt<'a, 'pcx, 'tcx> {
     #[instrument(level = "debug", skip_all, fields(fn_pat = %self.fn_pat, fn_did = ?fn_did.into()), ret)]
     pub fn match_fn(&self, fn_did: impl Into<DefId> + Copy) -> bool {
         let fn_did = fn_did.into();
-        let poly_fn_sig = match self.ty.tcx.type_of(fn_did).instantiate_identity().kind() {
-            ty::FnDef(..) => self.ty.tcx.fn_sig(fn_did).instantiate_identity(),
+        let poly_fn_sig = match self
+            .ty
+            .tcx
+            .type_of(fn_did)
+            .instantiate_identity()
+            .skip_normalization()
+            .kind()
+        {
+            ty::FnDef(..) => self.ty.tcx.fn_sig(fn_did).instantiate_identity().skip_normalization(),
             ty::Closure(_, args) => args.as_closure().sig(),
             _ => unimplemented!(),
         };

@@ -12,12 +12,11 @@ extern crate tracing;
 
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::def_id::{CrateNum, LOCAL_CRATE, LocalDefId};
-use rustc_hir::{ImplItemRef, ItemKind, Node, OwnerId, PrimTy, TraitItemRef};
+use rustc_hir::{ItemKind, Mod, Node, OwnerId, PrimTy};
 use rustc_middle::ty::fast_reject::SimplifiedType;
 use rustc_middle::ty::{FloatTy, IntTy, Mutability, TyCtxt, UintTy};
 use rustc_span::Symbol;
 use rustc_span::def_id::DefId;
-use rustc_span::symbol::Ident;
 
 /// Kind of an item path in pattern.
 ///
@@ -89,7 +88,7 @@ impl PatItemKind {
             Self::Variant => matches!(res, Res::Def(DefKind::Variant, _)),
             Self::Trait => matches!(res, Res::Def(DefKind::Trait | DefKind::TraitAlias, _)),
             Self::Fn => matches!(res, Res::Def(DefKind::Fn | DefKind::AssocFn, _)),
-            Self::Const => matches!(res, Res::Def(DefKind::Const | DefKind::AssocConst, _)),
+            Self::Const => matches!(res, Res::Def(DefKind::Const { .. } | DefKind::AssocConst { .. }, _)),
             Self::Static => matches!(res, Res::Def(DefKind::Static { .. }, _)),
             Self::Ctor => matches!(res, Res::Def(DefKind::Ctor(..), _)),
         }
@@ -105,11 +104,11 @@ impl PatItemKind {
             DefKind::TraitAlias => Self::Trait,
             DefKind::AssocTy | DefKind::TyParam => Self::Type,
             DefKind::Fn => Self::Fn,
-            DefKind::Const | DefKind::ConstParam => Self::Const,
+            DefKind::Const { .. } | DefKind::ConstParam => Self::Const,
             DefKind::Static { .. } => Self::Static,
             DefKind::Ctor(..) => Self::Ctor,
             DefKind::AssocFn => Self::Fn,
-            DefKind::AssocConst => Self::Const,
+            DefKind::AssocConst { .. } => Self::Const,
             DefKind::Macro(..)
             | DefKind::ExternCrate
             | DefKind::Use
@@ -247,7 +246,7 @@ fn non_local_item_children_by_name(tcx: TyCtxt<'_>, def_id: DefId, name: Symbol)
             .associated_item_def_ids(def_id)
             .iter()
             .copied()
-            .filter(|assoc_def_id| tcx.item_name(*assoc_def_id) == name)
+            .filter(|assoc_def_id| tcx.opt_item_name(*assoc_def_id) == Some(name))
             .map(|assoc_def_id| Res::Def(tcx.def_kind(assoc_def_id), assoc_def_id))
             .collect(),
         def_kind => {
@@ -259,57 +258,45 @@ fn non_local_item_children_by_name(tcx: TyCtxt<'_>, def_id: DefId, name: Symbol)
 
 // #[instrument(level = "trace", skip(tcx), ret)]
 fn local_item_children_by_name(tcx: TyCtxt<'_>, local_id: LocalDefId, name: Symbol) -> Vec<Res> {
-    let hir = tcx.hir();
-
-    let root_mod;
-    let item_kind = match tcx.hir_node_by_def_id(local_id) {
-        Node::Crate(r#mod) => {
-            root_mod = ItemKind::Mod(r#mod);
-            &root_mod
-        },
-        Node::Item(item) => &item.kind,
-        node => {
-            trace!(?local_id, ?node, "no children available for local item");
-            return Vec::new();
-        },
-    };
-
-    // trace!(?item_kind);
-
-    let res = |ident: Ident, owner_id: OwnerId| {
-        // trace!(?ident, ?name, ?owner_id);
-        if ident.name == name {
-            let def_id = owner_id.to_def_id();
+    let res = |owner_id: OwnerId| {
+        let def_id = owner_id.to_def_id();
+        // `opt_item_name` (not `item_name`) because some children — e.g. `use` imports — have no
+        // name, and `item_name` ICEs on those.
+        if tcx.opt_item_name(def_id) == Some(name) {
             Some(Res::Def(tcx.def_kind(def_id), def_id))
         } else {
             None
         }
     };
 
-    match item_kind {
-        ItemKind::Mod(r#mod) => r#mod
+    // `ItemKind::{ForeignMod, Impl, Trait}` now hold `&[*ItemId]` (each carrying only an
+    // `owner_id`); names are recovered via `tcx.item_name`.
+    let process_mod = |r#mod: &Mod<'_>| -> Vec<Res> {
+        r#mod
             .item_ids
             .iter()
             .filter_map(|&item_id| {
-                let item = hir.item(item_id);
+                let item = tcx.hir_item(item_id);
                 match item.kind {
-                    ItemKind::ForeignMod { abi: _, items } => {
-                        items.iter().find_map(|item| res(item.ident, item.id.owner_id))
-                    },
-                    _ => res(item.ident, item_id.owner_id),
+                    ItemKind::ForeignMod { abi: _, items } => items.iter().find_map(|item| res(item.owner_id)),
+                    _ => res(item_id.owner_id),
                 }
             })
-            .collect(),
-        ItemKind::Impl(r#impl) => r#impl
-            .items
-            .iter()
-            .filter_map(|&ImplItemRef { ident, id, .. }| res(ident, id.owner_id))
-            .collect(),
-        ItemKind::Trait(.., trait_item_refs) => trait_item_refs
-            .iter()
-            .filter_map(|&TraitItemRef { ident, id, .. }| res(ident, id.owner_id))
-            .collect(),
-        _ => Vec::new(),
+            .collect()
+    };
+
+    match tcx.hir_node_by_def_id(local_id) {
+        Node::Crate(r#mod) => process_mod(r#mod),
+        Node::Item(item) => match item.kind {
+            ItemKind::Mod(_, r#mod) => process_mod(r#mod),
+            ItemKind::Impl(r#impl) => r#impl.items.iter().filter_map(|item| res(item.owner_id)).collect(),
+            ItemKind::Trait { items, .. } => items.iter().filter_map(|item| res(item.owner_id)).collect(),
+            _ => Vec::new(),
+        },
+        node => {
+            trace!(?local_id, ?node, "no children available for local item");
+            Vec::new()
+        },
     }
 }
 

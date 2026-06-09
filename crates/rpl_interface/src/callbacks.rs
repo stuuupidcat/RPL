@@ -9,8 +9,7 @@ use rpl_meta::cli::{collect_default_patterns, collect_file_from_string_args};
 // use rpl_middle::ty::RplConfig;
 use rustc_interface::interface;
 use rustc_middle::ty::TyCtxt;
-use rustc_session::EarlyDiagCtxt;
-use rustc_session::parse::ParseSess;
+use rustc_session::{EarlyDiagCtxt, Session};
 use rustc_span::Symbol;
 
 // use crate::passes::create_rpl_ctxt;
@@ -18,8 +17,8 @@ use rustc_span::Symbol;
 pub static RPL_ARGS_ENV: &str = "RPL_ARGS";
 pub static RPL_PATS_ENV: &str = "RPL_PATS";
 
-fn track_rpl_args(psess: &mut ParseSess, args_env_var: &Option<String>) {
-    psess.env_depinfo.get_mut().insert((
+fn track_rpl_args(sess: &Session, args_env_var: &Option<String>) {
+    sess.env_depinfo.lock().insert((
         Symbol::intern(RPL_ARGS_ENV),
         args_env_var.as_deref().map(Symbol::intern),
     ));
@@ -28,8 +27,8 @@ fn track_rpl_args(psess: &mut ParseSess, args_env_var: &Option<String>) {
 #[cfg_attr(not(debug_assertions), allow(unused_variables))]
 /// Track files that may be accessed at runtime in `file_depinfo` so that cargo will re-run RPL
 /// when any of them are modified
-fn track_files(psess: &mut ParseSess) {
-    let file_depinfo = psess.file_depinfo.get_mut();
+fn track_files(sess: &Session) {
+    let mut file_depinfo = sess.file_depinfo.lock();
 
     // During development track the `rpl-driver` executable so that cargo will re-run RPL
     // whenever it is rebuilt
@@ -41,17 +40,16 @@ fn track_files(psess: &mut ParseSess) {
     }
 }
 
-fn track_rpl_pats(psess: &mut ParseSess, pats_env_var: Option<String>, pats: &[String]) {
-    let rpl_pats = pats_env_var;
-    psess
-        .env_depinfo
-        .get_mut()
-        .insert((Symbol::intern(RPL_PATS_ENV), rpl_pats.as_deref().map(Symbol::intern)));
-
-    let pat_depinfo = psess.file_depinfo.get_mut();
-
+/// Track the `RPL_PATS` environment variable and the pattern files it points to, so that cargo
+/// re-runs RPL when the variable or any pattern file changes.
+fn track_rpl_pats(sess: &Session, pats_env_var: &Option<String>, pats: &[String]) {
+    sess.env_depinfo.lock().insert((
+        Symbol::intern(RPL_PATS_ENV),
+        pats_env_var.as_deref().map(Symbol::intern),
+    ));
+    let mut file_depinfo = sess.file_depinfo.lock();
     for path in pats {
-        pat_depinfo.insert(Symbol::intern(path));
+        file_depinfo.insert(Symbol::intern(path));
     }
 }
 
@@ -70,8 +68,8 @@ impl RustcCallbacks {
 impl rustc_driver::Callbacks for RustcCallbacks {
     fn config(&mut self, config: &mut interface::Config) {
         let rpl_args_var = self.rpl_args_var.take();
-        config.psess_created = Some(Box::new(move |psess| {
-            track_rpl_args(psess, &rpl_args_var);
+        config.track_state = Some(Box::new(move |sess| {
+            track_rpl_args(sess, &rpl_args_var);
         }));
     }
 }
@@ -121,12 +119,11 @@ impl rustc_driver::Callbacks for RplCallbacks {
         let rpl_args_var = self.rpl_args_var.take();
         let rpl_pats_var = self.rpl_pats_var.take();
         let rpl_pats = self.pattern_paths.clone();
-        config.psess_created = Some(Box::new(move |psess| {
-            track_rpl_args(psess, &rpl_args_var);
-            track_files(psess);
-            track_rpl_pats(psess, rpl_pats_var, rpl_pats.as_deref().unwrap_or(&[]));
+        config.track_state = Some(Box::new(move |sess| {
+            track_rpl_args(sess, &rpl_args_var);
+            track_files(sess);
+            track_rpl_pats(sess, &rpl_pats_var, rpl_pats.as_deref().unwrap_or(&[]));
         }));
-        config.locale_resources = crate::default_locale_resources();
 
         let mctx_arena = MCTX_ARENA.get_or_init(rpl_meta::arena::Arena::default);
         let patterns_and_paths = PATTERNS.get_or_init(|| {

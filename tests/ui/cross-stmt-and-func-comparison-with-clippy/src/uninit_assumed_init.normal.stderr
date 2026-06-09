@@ -8,7 +8,7 @@ LL |     let x: usize = unsafe { MaybeUninit::uninit().assume_init() };
    = help: to override `-D warnings` add `#[allow(rpl::uninit_assumed_init)]`
 
 error: this call for this type may be undefined behavior
-  --> tests/ui/cross-stmt-and-func-comparison-with-clippy/src/uninit_assumed_init.rs:36:29
+  --> tests/ui/cross-stmt-and-func-comparison-with-clippy/src/uninit_assumed_init.rs:39:29
    |
 LL |     let x: usize = unsafe { maybe_uninit.assume_init() };
    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^

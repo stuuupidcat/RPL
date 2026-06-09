@@ -3,7 +3,6 @@
 #![feature(rustc_attrs)]
 #![feature(debug_closure_helpers)]
 #![feature(box_patterns)]
-#![feature(let_chains)]
 #![feature(map_try_insert)]
 
 extern crate either;

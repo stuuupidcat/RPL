@@ -2,7 +2,7 @@ use std::ops::Deref;
 use std::sync::Arc;
 
 use impls::CheckImplCtxt;
-use parser::generics::{Choice2, Choice3, Choice4, Choice5, Choice6, Choice8, Choice12, Choice14};
+use parser::generics::{Choice2, Choice3, Choice4, Choice5, Choice6, Choice8, Choice10, Choice14};
 use parser::{SpanWrapper, pairs};
 use rpl_constraints::predicates::{PredicateConjunction, PredicateError};
 use rustc_data_structures::fx::FxHashMap;
@@ -326,7 +326,7 @@ impl<'i> CheckFnCtxt<'i, '_> {
     fn check_mir(&mut self, mctx: &MetaContext<'i>, mir: &'i pairs::MirBody<'i>) {
         let (mir_decls, mir_stmts) = mir.get_matched();
         //FIXME: the key in the line below may be reused for cloning, as `Path::from` may be expensive
-        for (_, path) in self.imports.iter() {
+        for path in self.imports.values() {
             self.fn_def.add_import(mctx, path, self.errors);
         }
         mir_decls
@@ -512,32 +512,30 @@ impl<'i> CheckFnCtxt<'i, '_> {
 
     fn check_mir_rvalue(&mut self, mctx: &MetaContext<'i>, rvalue: &'i pairs::MirRvalue<'i>) {
         match rvalue.deref() {
-            Choice12::_0(_place_holder) => {},
-            Choice12::_1(mir_rvalue_cast) => {
+            Choice10::_0(_place_holder) => {},
+            Choice10::_1(mir_rvalue_cast) => {
                 let (operand, _, ty, _, _, _) = mir_rvalue_cast.get_matched();
                 self.check_mir_operand(mctx, operand);
                 self.check_type(mctx, ty);
             },
-            Choice12::_2(mir_rvalue_use) => {
+            Choice10::_2(mir_rvalue_use) => {
                 let operand = match mir_rvalue_use.deref() {
                     Choice2::_0(op) => op.get_matched().1,
                     Choice2::_1(op) => op,
                 };
                 self.check_mir_operand(mctx, operand);
             },
-            Choice12::_3(mir_rvalue_repeat) => self.check_mir_operand(mctx, mir_rvalue_repeat.MirOperand()),
-            Choice12::_4(mir_rvalue_ref) => self.check_mir_place(mctx, mir_rvalue_ref.MirPlace()),
-            Choice12::_5(mir_rvalue_raw_ptr) => self.check_mir_place(mctx, mir_rvalue_raw_ptr.MirPlace()),
-            Choice12::_6(mir_rvalue_len) => self.check_mir_place(mctx, mir_rvalue_len.MirPlace()),
-            Choice12::_7(mir_rvalue_bin_op) => {
+            Choice10::_3(mir_rvalue_repeat) => self.check_mir_operand(mctx, mir_rvalue_repeat.MirOperand()),
+            Choice10::_4(mir_rvalue_ref) => self.check_mir_place(mctx, mir_rvalue_ref.MirPlace()),
+            Choice10::_5(mir_rvalue_raw_ptr) => self.check_mir_place(mctx, mir_rvalue_raw_ptr.MirPlace()),
+            Choice10::_6(mir_rvalue_bin_op) => {
                 let (_, _, lhs, _, rhs, _) = mir_rvalue_bin_op.get_matched();
                 self.check_mir_operand(mctx, lhs);
                 self.check_mir_operand(mctx, rhs);
             },
-            Choice12::_8(mir_rvalue_null_op) => self.check_type(mctx, mir_rvalue_null_op.Type()),
-            Choice12::_9(mir_rvalue_un_op) => self.check_mir_operand(mctx, mir_rvalue_un_op.MirOperand()),
-            Choice12::_10(mir_rvalue_discriminant) => self.check_mir_place(mctx, mir_rvalue_discriminant.MirPlace()),
-            Choice12::_11(mir_rvalue_aggregate) => self.check_mir_rvalue_aggregate(mctx, mir_rvalue_aggregate),
+            Choice10::_7(mir_rvalue_un_op) => self.check_mir_operand(mctx, mir_rvalue_un_op.MirOperand()),
+            Choice10::_8(mir_rvalue_discriminant) => self.check_mir_place(mctx, mir_rvalue_discriminant.MirPlace()),
+            Choice10::_9(mir_rvalue_aggregate) => self.check_mir_rvalue_aggregate(mctx, mir_rvalue_aggregate),
         }
     }
 
@@ -594,13 +592,13 @@ impl<'i> CheckFnCtxt<'i, '_> {
                 let (_, _, index, _, min_length, _) = const_index.get_matched();
                 let a = index.span.as_str().parse::<i32>();
                 let b = min_length.span.as_str().parse::<i32>();
-                if let (Ok(a), Ok(b)) = (a, b) {
-                    if a >= b {
-                        self.errors.push(RPLMetaError::ConstantIndexOutOfBound {
-                            index: SpanWrapper::new(index.span, mctx.get_active_path()),
-                            min_length: SpanWrapper::new(min_length.span, mctx.get_active_path()),
-                        });
-                    }
+                if let (Ok(a), Ok(b)) = (a, b)
+                    && a >= b
+                {
+                    self.errors.push(RPLMetaError::ConstantIndexOutOfBound {
+                        index: SpanWrapper::new(index.span, mctx.get_active_path()),
+                        min_length: SpanWrapper::new(min_length.span, mctx.get_active_path()),
+                    });
                 }
             },
             Choice5::_3(_subslice) => {},

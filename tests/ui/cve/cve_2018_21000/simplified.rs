@@ -1,4 +1,5 @@
 // https://github.com/nabijaczleweli/safe-transmute-rs/commit/c79ebfdb5858982af59a78df471c7cad7a78fd23
+//@compile-flags: -Zinline-mir=false
 use std::mem::{forget, size_of};
 use std::vec::Vec;
 

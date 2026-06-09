@@ -203,11 +203,11 @@ test_case! {
 test_case! {
     fn cve_2018_21000_const() {
         let pattern = quote!{
-            p[$T:type] = fn _ () {
+            p[$T:type, $ty_size_const:const(usize)] = fn _ () {
                 let $from_slice: &[$T] = _;
                 let $from_raw: *const [$T] = &raw const *$from_slice;
                 let $from_len: usize = PtrMetadata(copy $from_slice);
-                let $ty_size: usize = SizeOf($T);
+                let $ty_size: usize = const $ty_size_const;
                 let $to_ptr_t: *const $T = move $from_raw as *const $T (PtrToPtr);
                 let $to_ptr: *const u8 = move $to_ptr_t as *const u8 (PtrToPtr);
                 let $to_len: usize = Mul(move $from_len, move $ty_size);
@@ -221,11 +221,11 @@ test_case! {
 test_case! {
     fn cve_2018_21000() {
         let pattern = quote!{
-            p[$T:type] = fn _ () {
+            p[$T:type, $ty_size_mut_const:const(usize)] = fn _ () {
                 let $from_slice_mut: &mut [$T] = _;
                 let $from_raw_mut: *mut [$T] = &raw mut *$from_slice_mut;
                 let $from_len_mut: usize = PtrMetadata(copy $from_slice_mut);
-                let $ty_size_mut: usize = SizeOf($T);
+                let $ty_size_mut: usize = const $ty_size_mut_const;
                 let $to_ptr_mut: *mut u8 = copy $from_raw_mut as *mut u8 (PtrToPtr);
                 let $to_len_mut: usize = Mul(move $from_len_mut, move $ty_size_mut);
                 let $to_raw_mut: *mut [u8] = *mut [u8] from (copy $to_ptr_mut, copy $to_len_mut);

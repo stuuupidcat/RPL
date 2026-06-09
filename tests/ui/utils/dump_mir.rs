@@ -75,9 +75,6 @@ fn main() {
     //~| NOTE: bb0: {
     //~| NOTE: bb1: {
     //~| NOTE: bb2: {
-    //~| NOTE: bb3: {
-    //~| NOTE: bb4: {
-    //~| NOTE: bb5: {
 
     #[rpl::dump_mir(dump_cfg, dump_ddg)] //~ ERROR: abort due to debugging
     //~^ HELP: remove this attribute
@@ -97,9 +94,9 @@ fn main() {
     //~| NOTE: this error is to remind you removing these attributes
     let _ = <std::result::IntoIter<&str> as std::iter::Iterator>::next;
     //~^ NOTE: MIR of `<std::result::IntoIter<T> as std::iter::Iterator>::next`
-    //~| NOTE: /see `.*[/\\]mir_dump[/\\]core\.result-\{impl#20\}-next\.-------\.dump_mir\.\.mir` for dumped MIR/
-    //~| NOTE: /see `.*[/\\]mir_dump[/\\]core\.result-\{impl#20\}-next\.-------\.dump_mir\.\.mir\.cfg\.dot` for dumped control flow graph/
-    //~| NOTE: /see `.*[/\\]mir_dump[/\\]core\.result-\{impl#20\}-next\.-------\.dump_mir\.\.mir\.ddg\.dot` for dumped data dependency graph/
+    //~| NOTE: /see `.*[/\\]mir_dump[/\\]core\.result-\{impl#21\}-next\.-------\.dump_mir\.\.mir` for dumped MIR/
+    //~| NOTE: /see `.*[/\\]mir_dump[/\\]core\.result-\{impl#21\}-next\.-------\.dump_mir\.\.mir\.cfg\.dot` for dumped control flow graph/
+    //~| NOTE: /see `.*[/\\]mir_dump[/\\]core\.result-\{impl#21\}-next\.-------\.dump_mir\.\.mir\.ddg\.dot` for dumped data dependency graph/
     //~| NOTE: locals and scopes in this MIR
     //~| NOTE: bb0: {
 }

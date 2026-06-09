@@ -2,6 +2,15 @@
 //@[inline] compile-flags: -Z inline-mir=true
 //@[regular] compile-flags: -Z inline-mir=false
 //@[regular] check-pass: no pattern yet
+//@[inline] check-pass: `from_raw_parts` shape gone after inlining (see note below)
+//
+// NOTE (nightly-2026-06 migration): the `inline` revision used to fire
+// `cast_slice_from_raw_parts` because `SmallVec::iter()` -> `[T]::iter()` lowered
+// through `slice::from_raw_parts`, and inlining exposed that call followed by the
+// slice-pointer cast the pattern matches. On nightly-2026-06-01 `[T]::iter()` no
+// longer lowers via `from_raw_parts`, so the matched construct is simply absent and
+// this revision now emits zero diagnostics. The lint itself stays fully covered by
+// tests/ui/clippy/cast_raw_slice_pointer_cast.rs (explicit `from_raw_parts` casts).
 
 use std::fmt::{self, Write};
 use std::marker::PhantomData;
@@ -236,7 +245,9 @@ impl<P: UriPart> Formatter<'_, P> {
 
             if !self.prefixes.is_empty() {
                 for (i, prefix) in self.prefixes.iter().enumerate() {
-                    //~[inline]^ERROR: casting the result of `from_raw_parts` to *const [&str]
+                    // (the `cast_slice_from_raw_parts` lint used to fire on this
+                    //  `iter()` in the inline revision — no longer reachable after
+                    //  inlining; see the header note.)
                     self.inner.write_str(prefix)?;
                     if i < self.prefixes.len() - 1 {
                         self.inner.write_str(".")?;

@@ -2,10 +2,10 @@ pub use inline::Inline;
 use rpl_parser::generics::Choice2;
 use rpl_parser::{collect_elems_separated_by_comma, pairs};
 use rustc_data_structures::fx::FxHashMap;
+use rustc_hir::FnHeader;
 use rustc_hir::def_id::LocalDefId;
-use rustc_hir::{Attribute, FnHeader};
 use rustc_middle::ty::TyCtxt;
-use rustc_span::Symbol;
+use rustc_span::{Span, Symbol};
 pub use safety::Safety;
 pub use visibility::Visibility;
 
@@ -17,7 +17,7 @@ mod safety;
 mod visibility;
 
 /// Extra spans that are required for diagnostics or other purposes.
-pub type ExtraSpan<'tcx> = FxHashMap<Symbol, &'tcx Attribute>;
+pub type ExtraSpan = FxHashMap<Symbol, Span>;
 
 /// Attributes for single function, including visibility, safety, and other metadata.
 #[derive(Debug, Clone, Default)]
@@ -155,19 +155,23 @@ impl FnAttr {
                 .requires_monomorphization
                 .is_none_or(|req| tcx.generics_of(def_id).requires_monomorphization(tcx) == req)
             && self.inner_unsafe.is_none_or(|inner_unsafe| {
-                inner_unsafe == contains_unsafe_block(tcx, tcx.hir().body_owned_by(def_id).value)
+                inner_unsafe == contains_unsafe_block(tcx, tcx.hir_body_owned_by(def_id).value)
                     || header.is_some_and(|header| header.is_unsafe())
             })
     }
 
     /// Returns the extra spans for this function pattern.
+    // `get_all_attrs` is deprecated in favour of `find_attr!`, but here we deliberately need
+    // every attribute so `Inline::check` can locate the *parsed* `#[inline]` (`AttributeKind`),
+    // which is exactly the parsed-kind matching `find_attr!` would do.
+    #[allow(deprecated)]
     #[instrument(level = "trace", skip(tcx), ret)]
-    pub fn extra_span<'tcx>(&self, tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> Option<ExtraSpan<'tcx>> {
+    pub fn extra_span(&self, tcx: TyCtxt<'_>, def_id: LocalDefId) -> Option<ExtraSpan> {
         let mut attr_map = ExtraSpan::default();
         if let Some(inline) = self.inline {
             let inline_ = Symbol::intern("inline");
-            let attr = inline.check(tcx.get_attrs(def_id, inline_))?;
-            _ = attr_map.try_insert(inline_, attr);
+            let span = inline.check(tcx.get_all_attrs(def_id).iter())?;
+            _ = attr_map.try_insert(inline_, span);
         }
         Some(attr_map)
     }

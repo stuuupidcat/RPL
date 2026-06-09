@@ -1,5 +1,5 @@
 error: found a count of bytes instead of a count of elements of `u16`
-  --> tests/ui/clippy/size_of_in_element_count/expressions.rs:12:62
+  --> tests/ui/clippy/size_of_in_element_count/expressions.rs:13:62
    |
 LL |     unsafe { copy_nonoverlapping(x.as_ptr(), y.as_mut_ptr(), size_of::<u16>() * SIZE) };
    |                                                              ^^^^^^^^^^^^^^^^
@@ -8,7 +8,7 @@ LL |     unsafe { copy_nonoverlapping(x.as_ptr(), y.as_mut_ptr(), size_of::<u16>
    = note: `#[deny(rpl::size_of_in_element_count)]` on by default
 
 error: found a count of bytes instead of a count of elements of `u16`
-  --> tests/ui/clippy/size_of_in_element_count/expressions.rs:30:27
+  --> tests/ui/clippy/size_of_in_element_count/expressions.rs:31:27
    |
 LL |             DOUBLE_SIZE * size_of::<u16>() / 2,
    |                           ^^^^^^^^^^^^^^^^
@@ -16,7 +16,7 @@ LL |             DOUBLE_SIZE * size_of::<u16>() / 2,
    = help: use a count of elements instead of a count of bytes, it already gets multiplied by the size of the type
 
 error: found a count of bytes instead of a count of elements of `u16`
-  --> tests/ui/clippy/size_of_in_element_count/expressions.rs:52:32
+  --> tests/ui/clippy/size_of_in_element_count/expressions.rs:53:32
    |
 LL |             DOUBLE_SIZE / (2 / size_of::<u16>()),
    |                                ^^^^^^^^^^^^^^^^

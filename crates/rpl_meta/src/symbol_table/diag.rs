@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 use std::sync::LazyLock;
 
 use parser::{SpanWrapper, collect_elems_separated_by_comma, pairs};
-use rustc_hash::FxHashMap;
+use rustc_data_structures::fx::FxHashMap;
 use rustc_lint::{Level, Lint};
 use sync_arena::declare_arena;
 

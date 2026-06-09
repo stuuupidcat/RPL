@@ -19,7 +19,11 @@ pub fn ty_res<'tcx, 'pcx>(
     let res: Vec<_> = res
         .into_iter()
         .filter_map(|res| match res {
-            Res::Def(_, def_id) => pat::Ty::from_ty_lossy(pcx, tcx.type_of(def_id).instantiate_identity(), args),
+            Res::Def(_, def_id) => pat::Ty::from_ty_lossy(
+                pcx,
+                tcx.type_of(def_id).instantiate_identity().skip_normalization(),
+                args,
+            ),
             // Res::Def(_, def_id) => pat::Ty::from_ty_lossy(pcx, tcx.type_of(def_id).instantiate(tcx, args)),
             Res::PrimTy(prim_ty) => args.is_empty().then(|| pat::Ty::from_prim_ty(pcx, prim_ty)),
             Res::SelfTyParam { .. }
@@ -28,6 +32,7 @@ pub fn ty_res<'tcx, 'pcx>(
             | Res::Local(_)
             | Res::ToolMod
             | Res::NonMacroAttr(..)
+            | Res::OpenMod(_)
             | Res::Err => None,
         })
         .collect();

@@ -15,7 +15,7 @@ use rpl_parser::generics::Choice2;
 use rpl_parser::pairs::diagMessageInner;
 use rpl_parser::{SpanWrapper, pairs};
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
-use rustc_errors::{Applicability, LintDiagnostic, MultiSpan};
+use rustc_errors::{Applicability, Diag, DiagCtxtHandle, Diagnostic, MultiSpan};
 use rustc_hir::FnDecl;
 use rustc_lint::{Level, Lint};
 use rustc_middle::mir::Body;
@@ -50,10 +50,9 @@ pub struct DynamicError {
     lint: &'static Lint,
 }
 
-impl LintDiagnostic<'_, ()> for Box<DynamicError> {
-    fn decorate_lint(self, diag: &mut rustc_errors::Diag<'_, ()>) {
-        let primary_message = self.primary.0;
-        diag.primary_message(primary_message);
+impl<'a> Diagnostic<'a, ()> for Box<DynamicError> {
+    fn into_diag(self, dcx: DiagCtxtHandle<'a>, level: rustc_errors::Level) -> Diag<'a, ()> {
+        let mut diag = Diag::new(dcx, level, self.primary.0);
         for (label, span) in self.labels {
             diag.span_label(span, label);
         }
@@ -74,6 +73,7 @@ impl LintDiagnostic<'_, ()> for Box<DynamicError> {
         for (suggestion, code, span, applicability) in self.suggestions {
             diag.span_suggestion(span, suggestion, code, applicability);
         }
+        diag
     }
 }
 
@@ -101,7 +101,7 @@ impl DynamicError {
     }
     fn missing_primary_message_error(attr: &rustc_hir::Attribute) -> Self {
         Self {
-            primary: ("Missing primary message".to_string(), MultiSpan::from_span(attr.span)),
+            primary: ("Missing primary message".to_string(), MultiSpan::from_span(attr.span())),
             labels: Vec::new(),
             notes: Vec::new(),
             helps: Vec::new(),
@@ -158,7 +158,7 @@ impl DynamicError {
         let mut notes = Vec::new();
         let mut helps = Vec::new();
         for item in items {
-            match item.name_or_empty().as_str() {
+            match item.name().unwrap_or_else(|| Symbol::intern("")).as_str() {
                 "primary_message" => {
                     primary_message = Some(Self::item_to_value_str(&item)?.to_string());
                 },

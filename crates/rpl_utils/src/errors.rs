@@ -26,32 +26,38 @@ pub(crate) struct AbortDueToDebuggingSugg {
 */
 
 #[derive(Diagnostic)]
-#[diag(rpl_utils_error_due_to_debugging)]
-#[note]
-#[note(rpl_utils_remove_note)]
+#[diag("abort due to debugging")]
+#[note("`#[rpl::dump_hir]`, `#[rpl::print_hir]` and `#[rpl::dump_mir]` are only used for debugging")]
+#[note("this error is to remind you removing these attributes")]
 pub(crate) struct ErrorDueToDebugging {
     #[primary_span]
-    #[suggestion(code = "", applicability = "machine-applicable")]
+    #[suggestion("remove this attribute", code = "", applicability = "machine-applicable")]
     pub span: Span,
 }
 
 #[derive(Diagnostic)]
-#[diag(rpl_utils_dump_or_print_diag)]
+#[diag("{$message}")]
 pub(crate) struct DumpOrPrintDiag {
     #[primary_span]
     pub span: Span,
-    #[label]
+    #[label(
+        "{$kind ->
+        [dump_hir] HIR dumped
+        [print_hir] HIR printed
+        *[other] {\"\"}
+    } because of this attribute"
+    )]
     pub attr_span: Span,
     pub message: String,
     pub kind: DumpOrPrintDiagKind,
 }
 
 #[derive(Diagnostic)]
-#[diag(rpl_utils_dump_mir)]
+#[diag("MIR of `{$def_id}`")]
 pub(crate) struct DumpMir {
     #[primary_span]
     pub span: Span,
-    #[label]
+    #[label("MIR dumped because of this attribute")]
     pub attr_span: Span,
     pub def_id: DefId,
     #[subdiagnostic]
@@ -63,21 +69,21 @@ pub(crate) struct DumpMir {
 }
 
 #[derive(Subdiagnostic)]
-#[note(rpl_utils_dump_mir_file)]
+#[note("see `{$file}` for dumped {$content}")]
 pub(crate) struct DumpMirFile {
     pub file: String,
     pub content: &'static str,
 }
 
 #[derive(Subdiagnostic)]
-#[note(rpl_utils_dump_mir_locals_and_source_scopes)]
+#[note("locals and scopes in this MIR")]
 pub(crate) struct DumpMirLocalsAndSourceScopes {
     #[primary_span]
     pub multi_span: MultiSpan,
 }
 
 #[derive(Subdiagnostic)]
-#[note(rpl_utils_dump_mir_block)]
+#[note("{$block}")]
 pub(crate) struct DumpMirBlock {
     pub block: String,
     #[primary_span]
@@ -85,7 +91,7 @@ pub(crate) struct DumpMirBlock {
 }
 
 #[derive(Diagnostic)]
-#[diag(rpl_utils_dump_mir_not_available)]
+#[diag("MIR of `{$instance}` is not available")]
 pub(crate) struct DumpMirNotAvailable<'tcx> {
     pub instance: Instance<'tcx>,
     #[primary_span]
@@ -93,27 +99,31 @@ pub(crate) struct DumpMirNotAvailable<'tcx> {
 }
 
 #[derive(Diagnostic)]
-#[diag(rpl_utils_dump_mir_not_fn_path)]
+#[diag("expect a function path")]
 pub(crate) struct DumpMirNotFnPath(#[primary_span] pub Span);
 
 #[derive(Diagnostic)]
-#[diag(rpl_utils_dump_mir_invalid)]
+#[diag("`#[rpl::dump_mir]` cannot be used here")]
 pub(crate) struct DumpMirInvalid(#[primary_span] pub Span);
 
 #[derive(Diagnostic)]
-#[diag(rpl_utils_dump_mir_expect_init)]
+#[diag("expect an initialization")]
 pub(crate) struct DumpMirExpectInit {
     #[primary_span]
     pub span: Span,
-    #[suggestion(code = "= /* expr */", applicability = "has-placeholders")]
+    #[suggestion(
+        "try add an initialization",
+        code = "= /* expr */",
+        applicability = "has-placeholders"
+    )]
     pub missing: Span,
 }
 
 pub(crate) struct DefId(pub(crate) rustc_span::def_id::DefId);
 
 impl IntoDiagArg for DefId {
-    fn into_diag_arg(self) -> DiagArgValue {
-        rustc_middle::ty::tls::with_context(|icx| icx.tcx.def_path_str(self.0)).into_diag_arg()
+    fn into_diag_arg(self, path: &mut Option<std::path::PathBuf>) -> DiagArgValue {
+        rustc_middle::ty::tls::with_context(|icx| icx.tcx.def_path_str(self.0)).into_diag_arg(path)
     }
 }
 
@@ -126,8 +136,8 @@ impl From<rustc_span::def_id::DefId> for DefId {
 pub(crate) struct Instance<'tcx>(pub(crate) rustc_middle::ty::Instance<'tcx>);
 
 impl IntoDiagArg for Instance<'_> {
-    fn into_diag_arg(self) -> DiagArgValue {
-        self.0.to_string().into_diag_arg()
+    fn into_diag_arg(self, path: &mut Option<std::path::PathBuf>) -> DiagArgValue {
+        self.0.to_string().into_diag_arg(path)
     }
 }
 

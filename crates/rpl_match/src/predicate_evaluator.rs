@@ -113,7 +113,7 @@ impl<'e, 'm, 'tcx> PredicateEvaluator<'e, 'm, 'tcx> {
                     },
                     _ => panic!(
                         "PredicateArgInstance::Location and PredicateArgInstance::Path expected, got {:?} and {:?}",
-                        &arg_instance[0], &arg_instance[1]
+                        arg_instance[0], arg_instance[1]
                     ),
                 }
             },
@@ -129,7 +129,7 @@ impl<'e, 'm, 'tcx> PredicateEvaluator<'e, 'm, 'tcx> {
                     },
                     _ => panic!(
                         "PredicateArgInstance::Ty and PredicateArgInstance::Const expected, got {:?} and {:?}",
-                        &arg_instance[0], &arg_instance[1]
+                        arg_instance[0], arg_instance[1]
                     ),
                 }
             },

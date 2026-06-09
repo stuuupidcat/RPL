@@ -66,8 +66,7 @@ impl<'mcx> SymbolTables<'mcx> {
     fn collect_rpl_pattern_name(main: &pairs::main<'mcx>) -> &'mcx str {
         let rpl_pattern = main.get_matched().1;
         let rpl_header = rpl_pattern.get_matched().0;
-        let name = rpl_header.get_matched().1.span.as_str();
-        name
+        rpl_header.get_matched().1.span.as_str()
     }
 }
 

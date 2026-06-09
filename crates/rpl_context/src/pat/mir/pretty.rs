@@ -50,7 +50,7 @@ fn fmt_projection<'pcx>(f: &mut fmt::Formatter<'_>, place: Place<'pcx>, proj: &P
         },
         PlaceElem::Downcast(variant) => write!(f, "({place:?} as {variant})"),
         PlaceElem::DowncastPat(variant) => write!(f, "({place:?} as ${variant})"),
-        PlaceElem::OpaqueCast(ty) | PlaceElem::Subtype(ty) => write!(f, "({place:?} as {ty:?})"),
+        PlaceElem::OpaqueCast(ty) => write!(f, "({place:?} as {ty:?})"),
     }
 }
 
@@ -149,14 +149,11 @@ impl fmt::Debug for Rvalue<'_> {
             Self::Repeat(elem, len) => write!(f, "[{elem:?}; {len:?}]"),
             Self::Ref(region, bor, place) => write!(f, "&{region}{}{place:?}", bor.mutability().prefix_str()),
             Self::RawPtr(mutability, place) => write!(f, "&raw {} {place:?}", mutability.ptr_str()),
-            Self::Len(place) => f.debug_tuple("Len").field(place).finish(),
             Self::Cast(cast_kind, operand, ty) => write!(f, "{operand:?} as {ty:?} ({cast_kind:?})"),
             Self::BinaryOp(op, box [lhs, rhs]) => write!(f, "{op:?}({lhs:?}, {rhs:?})"),
-            Self::NullaryOp(op, ty) => write!(f, "{op:?}({ty:?})"),
             Self::UnaryOp(op, operand) => write!(f, "{op:?}({operand:?})"),
             Self::Discriminant(place) => f.debug_tuple("discriminant").field(place).finish(),
             Self::Aggregate(agg_kind, operands) => format_aggregate(agg_kind, operands, f),
-            Self::ShallowInitBox(operand, ty) => write!(f, "Box< {ty:?} >({operand:?})"),
             Self::CopyForDeref(place) => write!(f, "&(*{place:?})"),
         }
     }
