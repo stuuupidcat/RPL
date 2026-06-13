@@ -49,6 +49,8 @@ impl fmt::Debug for BodyInfoCache {
 }
 
 impl BodyInfoCache {
+    // Helper retained for future use; it currently has no caller after the migration.
+    #[allow(dead_code)]
     #[instrument(level = "trace", skip(tcx), ret)]
     fn ty_const_is_null<'tcx>(tcx: TyCtxt<'tcx>, const_: ty::Const<'tcx>) -> Option<bool> {
         let val = const_.try_to_value()?;
@@ -91,11 +93,11 @@ impl BodyInfoCache {
                 {
                     match rhs {
                         mir::Rvalue::Cast(_, mir::Operand::Constant(box c), _)
-                        | mir::Rvalue::Use(mir::Operand::Constant(box c)) => {
+                        | mir::Rvalue::Use(mir::Operand::Constant(box c), _) => {
                             null[lhs] = Self::mir_const_is_null(tcx, typing_env, c.const_)
                         },
                         mir::Rvalue::Cast(_, mir::Operand::Copy(rhs) | mir::Operand::Move(rhs), _)
-                        | mir::Rvalue::Use(mir::Operand::Copy(rhs) | mir::Operand::Move(rhs)) => {
+                        | mir::Rvalue::Use(mir::Operand::Copy(rhs) | mir::Operand::Move(rhs), _) => {
                             if let Some(rhs) = rhs.as_local() {
                                 null[lhs] = null[rhs];
                             }
@@ -143,7 +145,7 @@ impl BodyInfoCache {
                                 product_of[lhs][rhs2] = Some(false);
                             }
                         },
-                        mir::Rvalue::Use(mir::Operand::Copy(rhs) | mir::Operand::Move(rhs))
+                        mir::Rvalue::Use(mir::Operand::Copy(rhs) | mir::Operand::Move(rhs), _)
                         | mir::Rvalue::Cast(_, mir::Operand::Copy(rhs) | mir::Operand::Move(rhs), _) => {
                             if let Some(rhs) = rhs.as_local() {
                                 product_of[lhs][rhs] = Some(true);

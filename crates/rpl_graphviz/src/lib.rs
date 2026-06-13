@@ -1,6 +1,5 @@
 #![allow(internal_features)]
 #![feature(rustc_private)]
-#![feature(iter_chain)]
 
 extern crate rustc_graphviz;
 extern crate rustc_index;

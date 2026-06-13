@@ -1,5 +1,5 @@
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:23:33
+  --> tests/ui/clippy/eager_transmute.rs:24:33
    |
 LL |     (op < 4).then_some(unsafe { std::mem::transmute(op) })
    |                                 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -7,151 +7,151 @@ LL |     (op < 4).then_some(unsafe { std::mem::transmute(op) })
    = note: `#[deny(rpl::eager_transmute)]` on by default
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:28:29
+  --> tests/ui/clippy/eager_transmute.rs:29:29
    |
 LL |     true.then_some(unsafe { std::mem::transmute::<_, Opcode>(op) }); // FIXME: false positive
    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:30:40
+  --> tests/ui/clippy/eager_transmute.rs:31:40
    |
 LL |     (unrelated < 4).then_some(unsafe { std::mem::transmute::<_, Opcode>(op) }); // FIXME: false positive
    |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:32:33
+  --> tests/ui/clippy/eager_transmute.rs:33:33
    |
 LL |     (op < 4).then_some(unsafe { std::mem::transmute::<_, Opcode>(op) });
    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:34:33
+  --> tests/ui/clippy/eager_transmute.rs:35:33
    |
 LL |     (op > 4).then_some(unsafe { std::mem::transmute::<_, Opcode>(op) });
    |                                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:36:34
+  --> tests/ui/clippy/eager_transmute.rs:37:34
    |
 LL |     (op == 0).then_some(unsafe { std::mem::transmute::<_, Opcode>(op) });
    |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:39:68
+  --> tests/ui/clippy/eager_transmute.rs:40:68
    |
 LL |     let _: Option<Opcode> = (op > 0 && op < 10).then_some(unsafe { std::mem::transmute(op) });
    |                                                                    ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:42:66
+  --> tests/ui/clippy/eager_transmute.rs:43:66
    |
 LL |         (op > 0 && op < 10 && unrelated == 0).then_some(unsafe { std::mem::transmute(op) });
    |                                                                  ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:47:64
+  --> tests/ui/clippy/eager_transmute.rs:48:64
    |
 LL |         (op2.foo[0] > 0 && op2.foo[0] < 10).then_some(unsafe { std::mem::transmute(op2.foo[0]) });
    |                                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:52:64
+  --> tests/ui/clippy/eager_transmute.rs:53:64
    |
 LL |         (op2.foo[0] > 0 && op2.foo[0] < 10).then_some(unsafe { std::mem::transmute(op2.foo[1]) }); // FIXME: false positive
    |                                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:57:64
+  --> tests/ui/clippy/eager_transmute.rs:58:64
    |
 LL |         (op2.foo[0] > 0 && op2.bar[1] < 10).then_some(unsafe { std::mem::transmute(op2.bar[0]) }); // FIXME: false positive
    |                                                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:62:64
+  --> tests/ui/clippy/eager_transmute.rs:63:64
    |
 LL |         (op2.foo[0] > 0 && op2.bar[1] < 10).then_some(unsafe { std::mem::transmute(op) }); // FIXME: false positive
    |                                                                ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:68:29
+  --> tests/ui/clippy/eager_transmute.rs:69:29
    |
 LL |         .then_some(unsafe { std::mem::transmute(op) });
    |                             ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:71:63
+  --> tests/ui/clippy/eager_transmute.rs:72:63
    |
 LL |         ((1..=3).contains(&op) || op == 4).then_some(unsafe { std::mem::transmute(op) });
    |                                                               ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:75:29
+  --> tests/ui/clippy/eager_transmute.rs:76:29
    |
 LL |         .then_some(unsafe { std::mem::transmute(op) });
    |                             ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:79:29
+  --> tests/ui/clippy/eager_transmute.rs:80:29
    |
 LL |         .then_some(unsafe { std::mem::transmute(op) });
    |                             ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:83:29
+  --> tests/ui/clippy/eager_transmute.rs:84:29
    |
 LL |         .then_some(unsafe { std::mem::transmute(op) });
    |                             ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:87:29
+  --> tests/ui/clippy/eager_transmute.rs:88:29
    |
 LL |         .then_some(unsafe { std::mem::transmute(op) });
    |                             ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:93:29
+  --> tests/ui/clippy/eager_transmute.rs:94:29
    |
 LL |         .then_some(unsafe { std::mem::transmute(op) }); // FIXME: false positive
    |                             ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:100:28
+  --> tests/ui/clippy/eager_transmute.rs:101:28
    |
 LL |         (op < 4).then_some(std::mem::transmute::<_, Opcode>(op));
    |                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:131:62
+  --> tests/ui/clippy/eager_transmute.rs:134:62
    |
 LL |     let _: Option<NonZero<u8>> = (v1 > 0).then_some(unsafe { std::mem::transmute(v1) });
    |                                                              ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:137:62
+  --> tests/ui/clippy/eager_transmute.rs:140:62
    |
 LL |         (v2 > NonZero::new(1u8).unwrap()).then_some(unsafe { std::mem::transmute(v2) }); // FIXME: false positive
    |                                                              ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:142:64
+  --> tests/ui/clippy/eager_transmute.rs:145:64
    |
 LL |         (v2 < NonZero::new(255u8).unwrap()).then_some(unsafe { std::mem::transmute(v2) });
    |                                                                ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:147:61
+  --> tests/ui/clippy/eager_transmute.rs:150:61
    |
 LL |     let _: Option<NonMaxU8> = (v3 < 255).then_some(unsafe { std::mem::transmute(v2) }); // FIXME: false positive
    |                                                             ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:153:64
+  --> tests/ui/clippy/eager_transmute.rs:156:64
    |
 LL |         (v2 < NonZero::new(255u8).unwrap()).then_some(unsafe { std::mem::transmute(v2) });
    |                                                                ^^^^^^^^^^^^^^^^^^^^^^^
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:142:64
+  --> tests/ui/clippy/eager_transmute.rs:145:64
    |
 LL |         (v2 < NonZero::new(255u8).unwrap()).then_some(unsafe { std::mem::transmute(v2) });
    |                                                                ^^^^^^^^^^^^^^^^^^^^^^^
@@ -159,7 +159,7 @@ LL |         (v2 < NonZero::new(255u8).unwrap()).then_some(unsafe { std::mem::tr
    = note: duplicate diagnostic emitted due to `-Z deduplicate-diagnostics=no`
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:147:61
+  --> tests/ui/clippy/eager_transmute.rs:150:61
    |
 LL |     let _: Option<NonMaxU8> = (v3 < 255).then_some(unsafe { std::mem::transmute(v2) }); // FIXME: false positive
    |                                                             ^^^^^^^^^^^^^^^^^^^^^^^
@@ -167,7 +167,7 @@ LL |     let _: Option<NonMaxU8> = (v3 < 255).then_some(unsafe { std::mem::trans
    = note: duplicate diagnostic emitted due to `-Z deduplicate-diagnostics=no`
 
 error: this transmute is always evaluated eagerly, even if the condition is false
-  --> tests/ui/clippy/eager_transmute.rs:153:64
+  --> tests/ui/clippy/eager_transmute.rs:156:64
    |
 LL |         (v2 < NonZero::new(255u8).unwrap()).then_some(unsafe { std::mem::transmute(v2) });
    |                                                                ^^^^^^^^^^^^^^^^^^^^^^^
@@ -175,7 +175,7 @@ LL |         (v2 < NonZero::new(255u8).unwrap()).then_some(unsafe { std::mem::tr
    = note: duplicate diagnostic emitted due to `-Z deduplicate-diagnostics=no`
 
 error: transmute from a `u8` to a `NonZero<u8>`
-  --> tests/ui/clippy/eager_transmute.rs:131:62
+  --> tests/ui/clippy/eager_transmute.rs:134:62
    |
 LL |     let _: Option<NonZero<u8>> = (v1 > 0).then_some(unsafe { std::mem::transmute(v1) });
    |                                                              ^^^^^^^^^^^^^^^^^^^^^^^ help: consider using: `NonZero::new_unchecked(v1)`

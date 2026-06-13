@@ -18,7 +18,7 @@ use rustc_span::{ErrorGuaranteed, Span, Symbol};
 
 pub fn visit_crate(tcx: TyCtxt<'_>) {
     let mut visitor = DebugVisitor::new(tcx);
-    tcx.hir().walk_toplevel_module(&mut visitor);
+    tcx.hir_walk_toplevel_module(&mut visitor);
     if !visitor.attrs.is_empty() {
         // tcx.dcx()
         //     .emit_err(crate::errors::AbortDueToDebugging::new(visitor.attrs));
@@ -88,8 +88,8 @@ impl<'tcx> DebugVisitor<'tcx> {
 impl<'tcx> Visitor<'tcx> for DebugVisitor<'tcx> {
     type NestedFilter = All;
 
-    fn nested_visit_map(&mut self) -> Self::Map {
-        self.tcx.hir()
+    fn maybe_tcx(&mut self) -> Self::MaybeTyCtxt {
+        self.tcx
     }
 
     fn visit_item(&mut self, item: &'tcx hir::Item<'tcx>) -> Self::Result {
@@ -155,15 +155,15 @@ struct DumpMirAllowed(bool);
 
 fn find_attr<'a>(attrs: &'a [hir::Attribute], expected_attr: &str) -> Option<(&'a hir::AttrItem, Span)> {
     attrs.iter().find_map(|attr| {
-        if let hir::AttrKind::Normal(normal_attr) = &attr.kind
+        if let hir::Attribute::Unparsed(normal_attr) = attr
             && normal_attr
                 .path
                 .segments
                 .iter()
-                .map(|ident| ident.as_str())
+                .map(|seg| seg.as_str())
                 .eq(expected_attr.split("::"))
         {
-            return Some((normal_attr.as_ref(), attr.span));
+            return Some((normal_attr.as_ref(), attr.span()));
         }
         None
     })
@@ -258,8 +258,8 @@ fn contains_dump_mir(attrs: &[hir::Attribute]) -> Option<DumpMirAttr> {
 
 impl DebugVisitor<'_> {
     fn debug_hir(&mut self, hir_id: hir::HirId) {
-        let attrs = self.tcx.hir().attrs(hir_id);
-        let span = self.tcx.hir().span(hir_id);
+        let attrs = self.tcx.hir_attrs(hir_id);
+        let span = self.tcx.hir_span(hir_id);
         if let Some(attr_span) = contains_attr(attrs, DUMP_HIR) {
             self.attrs.push(attr_span);
             self.tcx.dcx().emit_note(crate::errors::DumpOrPrintDiag {
@@ -271,9 +271,9 @@ impl DebugVisitor<'_> {
         }
         if let Some(attr_span) = contains_attr(attrs, PRINT_HIR) {
             self.attrs.push(attr_span);
-            let mut message = rustc_hir_pretty::id_to_string(&self.tcx.hir(), hir_id);
+            let mut message = rustc_hir_pretty::id_to_string(&self.tcx, hir_id);
             if message.is_empty() {
-                message = self.tcx.hir().node_to_string(hir_id);
+                message = format!("{:?}", self.tcx.hir_node(hir_id));
             } else {
                 message = format!("{hir_id:?} (`{message}`)");
             }
@@ -286,7 +286,7 @@ impl DebugVisitor<'_> {
         }
     }
     fn get_dump_mir_attrs(&self, hir_id: hir::HirId) -> Option<(DumpMirAttr, DumpMirAllowed)> {
-        contains_dump_mir(self.tcx.hir().attrs(hir_id)).map(|attr| {
+        contains_dump_mir(self.tcx.hir_attrs(hir_id)).map(|attr| {
             let dump_mir_allowed = matches!(
                 self.tcx.hir_node(hir_id),
                 hir::Node::Stmt(hir::Stmt {
@@ -315,7 +315,7 @@ impl DebugVisitor<'_> {
                 Err(self
                     .tcx
                     .dcx()
-                    .emit_err(crate::errors::DumpMirInvalid(self.tcx.hir().span_with_body(hir_id))))
+                    .emit_err(crate::errors::DumpMirInvalid(self.tcx.hir_span_with_body(hir_id))))
             };
         }
         Ok(None)
@@ -363,12 +363,12 @@ pub(crate) enum DumpOrPrintDiagKind {
 }
 
 impl IntoDiagArg for DumpOrPrintDiagKind {
-    fn into_diag_arg(self) -> DiagArgValue {
+    fn into_diag_arg(self, path: &mut Option<std::path::PathBuf>) -> DiagArgValue {
         match self {
             Self::DumpHir => "dump_hir",
             Self::PrintHir => "print_hir",
         }
-        .into_diag_arg()
+        .into_diag_arg(path)
     }
 }
 
@@ -410,19 +410,29 @@ fn dump_mir<'tcx>(tcx: TyCtxt<'tcx>, body: &mir::Body<'tcx>, span: Span, attr: &
     });
 }
 
-fn dump_mir_to_file<'tcx>(tcx: TyCtxt<'tcx>, body: &mir::Body<'tcx>, options: &DumpMirOptions) -> io::Result<PathBuf> {
-    use filepath::FilePath;
-    let mut file = mir::pretty::create_dump_file(tcx, "mir", false, "dump_mir", &"", body)?;
-    mir::pretty::write_mir_fn(
-        tcx,
-        body,
-        &mut |_, _| Ok(()),
-        &mut file,
-        mir::pretty::PrettyPrintMirOptions {
-            include_extra_comments: options.include_extra_comments,
-        },
-    )?;
-    file.get_ref().path()
+fn dump_mir_to_file<'tcx>(tcx: TyCtxt<'tcx>, body: &mir::Body<'tcx>, _options: &DumpMirOptions) -> io::Result<PathBuf> {
+    // Replicates `MirDumper::dump_path` + `create_dump_file`. We can't use `MirDumper` directly:
+    // `MirDumper::new` only returns `Some` when `-Z dump-mir` is set on the CLI, whereas
+    // `#[rpl::dump_mir]` forces a dump unconditionally.
+    let source = body.source;
+    let crate_name = tcx.crate_name(source.def_id().krate);
+    let item_name = tcx.def_path(source.def_id()).to_filename_friendly_no_crate();
+    let promotion_id = match source.promoted {
+        Some(id) => format!("-{id:?}"),
+        None => String::new(),
+    };
+    // Match `MirDumper`'s behaviour of producing a cwd-absolute path: the UI harness normalizes
+    // `current_dir()` to `$DIR`, and the inline annotations require a path separator before
+    // `mir_dump` (a bare relative `mir_dump/...` would not match `.*[/\\]mir_dump`).
+    let mut file_path = std::env::current_dir().unwrap_or_default();
+    file_path.push(&tcx.sess.opts.unstable_opts.dump_mir_dir);
+    file_path.push(format!("{crate_name}.{item_name}{promotion_id}.-------.dump_mir..mir"));
+    if let Some(parent) = file_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let mut file = io::BufWriter::new(File::create(&file_path)?);
+    mir::pretty::MirWriter::new(tcx).write_mir_fn(body, &mut file)?;
+    Ok(file_path)
 }
 
 fn dump_mir_cfg_to_file(body: &mir::Body<'_>, path: &Path) -> std::io::Result<PathBuf> {
@@ -446,14 +456,11 @@ fn dump_mir_locals_and_source_scopes(body: &mir::Body<'_>) -> crate::errors::Dum
     for (local, local_decl) in body.local_decls.iter_enumerated() {
         let scope = local_decl.source_info.scope;
         let ty = local_decl.ty;
-        #[allow(rustc::untranslatable_diagnostic)]
         multi_span.push_span_label(local_decl.source_info.span, format!("{local:?}: {ty}; // {scope:?}"));
     }
     for (ss, scope_data) in body.source_scopes.iter_enumerated() {
-        #[allow(rustc::untranslatable_diagnostic)]
         multi_span.push_span_label(scope_data.span, format!("{ss:?}"));
         if let Some((inlined, _)) = scope_data.inlined {
-            #[allow(rustc::untranslatable_diagnostic)]
             multi_span.push_span_label(scope_data.span, inlined.to_string());
         }
     }
@@ -482,7 +489,6 @@ fn dump_mir_block((bb, block_data): (mir::BasicBlock, &mir::BasicBlockData<'_>))
         let label = format!("{dbg:?}; // {scope:?}");
         block.push_str(&label);
         block.push('\n');
-        #[allow(rustc::untranslatable_diagnostic)]
         multi_span.push_span_label(source_info.span, label);
     }
     block.push('}');

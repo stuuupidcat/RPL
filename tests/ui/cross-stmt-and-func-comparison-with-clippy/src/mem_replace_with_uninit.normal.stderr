@@ -1,5 +1,5 @@
 error: replacing with `mem::MaybeUninit::uninit().assume_init()`
-  --> tests/ui/cross-stmt-and-func-comparison-with-clippy/src/mem_replace_with_uninit.rs:21:23
+  --> tests/ui/cross-stmt-and-func-comparison-with-clippy/src/mem_replace_with_uninit.rs:22:23
    |
 LL |         let taken_v = mem::replace(&mut v, mem::MaybeUninit::uninit().assume_init());
    |                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using: `std::ptr::read(&mut v)`

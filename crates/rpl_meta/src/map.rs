@@ -42,6 +42,7 @@ impl<K: fmt::Debug, V: fmt::Debug> fmt::Debug for FlatMap<K, V> {
     }
 }
 
+#[allow(dead_code)] // public iterator type; currently has no constructor.
 pub struct Iter<'a, K, V>(std::slice::Iter<'a, (K, V)>);
 
 impl<'a, K, V> Iterator for Iter<'a, K, V> {

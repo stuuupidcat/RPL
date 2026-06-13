@@ -4,11 +4,20 @@ patt {
     use std::mem::MaybeUninit;
     
     #[diag = "uninit_assumed_init"]
+    // Since rust 1.9x, `MaybeUninit::assume_init` lowers (when inlined) to
+    // `(&raw const self.value).cast::<T>().read()` rather than a direct `move self.value`.
     uninit_assumed_init_inline[$T: type where !can_be_uninit(self)] = fn _(..) {
         let $maybe_uninit: MaybeUninit<$T> = MaybeUninit::<$T> { uninit: _ };
+        let $value_ptr: *const core::mem::ManuallyDrop<$T> = &raw const ($maybe_uninit.value);
         'assume_init:
-        _ = move ($maybe_uninit.value);
+        let $cast_ptr: *const $T = copy $value_ptr as *const $T (PtrToPtr);
+        let $value: $T = copy (*$cast_ptr);
     }
+    // NOTE: a cross-statement/cross-function copy-bridge variant (matching `MaybeUninit { uninit }`
+    // -> `copy` -> raw read) was tried but reverted: `mem::uninitialized()` IS
+    // `MaybeUninit::uninit().assume_init()` and inlines to the identical copy-bridge shape, so the
+    // variant false-positives on every `mem::uninitialized()` call (cve_2019_15543, cve_2021_27376).
+    // The two are structurally indistinguishable after inlining.
     uninit_assumed_init[$T: type where !can_be_uninit(self)] = fn _(..) {
         let $maybe_uninit: MaybeUninit<$T> = MaybeUninit::uninit();
         'assume_init:

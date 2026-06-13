@@ -108,7 +108,7 @@ impl<'pcx, 'tcx> MatchTy<'pcx, 'tcx> for MatchTyCtxt<'pcx, 'tcx> {
     fn match_ty_const_var(&self, const_var: pat::ConstVar<'pcx>, konst: ty::Const<'tcx>) -> bool {
         match konst.kind() {
             ty::ConstKind::Param(param) => {
-                let ty = param.find_ty_from_env(self.typing_env.param_env);
+                let ty = param.find_const_ty_from_env(self.typing_env.param_env);
                 self.match_ty(const_var.ty, ty) && {
                     // We can't convert a const generic param into a `mir::Const`
                     self.const_vars[const_var.idx].borrow_mut().insert(Const::Param(param));
@@ -376,11 +376,10 @@ pub(crate) trait MatchTy<'pcx, 'tcx> {
             // pat::Path::Item(path) => matches!(self.match_item_path(path, def_id), Some([])),
             pat::Path::Item(path) => self.match_item_path_by_def_path(path, def_id),
             pat::Path::TypeRelative(ty, name) => {
-                self.tcx().item_name(def_id) == name
-                    && self
-                        .tcx()
-                        .opt_parent(def_id)
-                        .is_some_and(|did| self.match_ty(ty, self.tcx().type_of(did).instantiate_identity()))
+                self.tcx().opt_item_name(def_id) == Some(name)
+                    && self.tcx().opt_parent(def_id).is_some_and(|did| {
+                        self.match_ty(ty, self.tcx().type_of(did).instantiate_identity().skip_normalization())
+                    })
             },
             pat::Path::LangItem(lang_item) => self.tcx().is_lang_item(def_id, lang_item),
         };
@@ -426,6 +425,7 @@ pub(crate) trait MatchTy<'pcx, 'tcx> {
         }
     }
 
+    #[allow(dead_code)] // item-path matching helper; currently unused.
     #[instrument(level = "trace", skip(self), ret)]
     fn match_item_path(&self, path: pat::ItemPath<'pcx>, def_id: DefId) -> Option<&'pcx [Symbol]> {
         let &[krate, ref in_crate @ ..] = path.0 else {
@@ -494,7 +494,7 @@ pub(crate) trait MatchTy<'pcx, 'tcx> {
 
     #[instrument(level = "trace", skip(self), ret)]
     fn match_generic_arg(&self, arg_pat: pat::GenericArgKind<'pcx>, arg: ty::GenericArg<'tcx>) -> bool {
-        match (arg_pat, arg.unpack()) {
+        match (arg_pat, arg.kind()) {
             (pat::GenericArgKind::Lifetime(region_pat), ty::GenericArgKind::Lifetime(region)) => {
                 self.match_region(region_pat, region)
             },

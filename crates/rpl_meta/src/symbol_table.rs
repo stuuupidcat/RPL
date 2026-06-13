@@ -8,7 +8,7 @@ use parser::generics::{Choice3, Choice4};
 use parser::{SpanWrapper, pairs};
 use pest_typed::{Span, Spanned};
 use rpl_constraints::predicates::PredicateConjunction;
-use rustc_hash::FxHashMap;
+use rustc_data_structures::fx::FxHashMap;
 use rustc_middle::mir;
 
 use crate::FlatMap;

@@ -280,14 +280,14 @@ impl<'pcx> TyKind<'pcx> {
             ty::TyKind::Ref(_, _, _) => None?,           //FIXME
             ty::TyKind::FnDef(_, _) => None?,            //FIXME
             ty::TyKind::FnPtr(_, _) => None?,            //FIXME
-            ty::TyKind::Dynamic(_, _, _) => None?,       //FIXME
+            ty::TyKind::Dynamic(_, _) => None?,          //FIXME
             ty::TyKind::Closure(_, _) => None?,          //FIXME
             ty::TyKind::CoroutineClosure(_, _) => None?, //FIXME
             ty::TyKind::Coroutine(_, _) => None?,        //FIXME
             ty::TyKind::CoroutineWitness(_, _) => None?, //FIXME
             ty::TyKind::Never => None?,                  //FIXME
             ty::TyKind::Tuple(_) => None?,               //FIXME
-            ty::TyKind::Alias(_, _) => None?,            //FIXME
+            ty::TyKind::Alias(_) => None?,               //FIXME
             ty::TyKind::Param(_) => None?,               //FIXME
             ty::TyKind::Bound(_, _) => None?,            //FIXME
             ty::TyKind::Placeholder(_) => None?,         //FIXME

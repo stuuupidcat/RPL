@@ -1,16 +1,19 @@
 note: Item(
           Item {
-              ident: Arc#0,
               owner_id: DefId(dump_hir::{use#1}),
               kind: Use(
                   Path {
                       span: tests/ui/utils/dump_hir.rs:10:5: 10:19 (#N),
-                      res: [
-                          Def(
-                              Struct,
-                              DefId(alloc::sync::Arc),
+                      res: PerNS {
+                          value_ns: None,
+                          type_ns: Some(
+                              Def(
+                                  Struct,
+                                  DefId(alloc::sync::Arc),
+                              ),
                           ),
-                      ],
+                          macro_ns: None,
+                      },
                       segments: [
                           PathSegment {
                               ident: std#0,
@@ -41,10 +44,14 @@ note: Item(
                           },
                       ],
                   },
-                  Single,
+                  Single(
+                      Arc#0,
+                  ),
               ),
               span: tests/ui/utils/dump_hir.rs:10:1: 10:20 (#N),
               vis_span: tests/ui/utils/dump_hir.rs:10:1: 10:1 (#N),
+              has_delayed_lints: false,
+              eii: false,
           },
       )
   --> tests/ui/utils/dump_hir.rs:10:5
@@ -57,9 +64,9 @@ LL | use std::sync::Arc;
 
 note: Item(
           Item {
-              ident: m#0,
               owner_id: DefId(dump_hir::m),
               kind: Mod(
+                  m#0,
                   Mod {
                       spans: ModSpans {
                           inner_span: tests/ui/utils/dump_hir.rs:18:5: 19:2 (#N),
@@ -74,6 +81,8 @@ note: Item(
               ),
               span: tests/ui/utils/dump_hir.rs:16:1: 19:2 (#N),
               vis_span: tests/ui/utils/dump_hir.rs:16:1: 16:1 (#N),
+              has_delayed_lints: false,
+              eii: false,
           },
       )
   --> tests/ui/utils/dump_hir.rs:16:1
@@ -86,32 +95,34 @@ LL | mod m {
 
 note: Item(
           Item {
-              ident: Foo#0,
               owner_id: DefId(dump_hir::Foo),
-              kind: Trait(
-                  No,
-                  Safe,
-                  Generics {
+              kind: Trait {
+                  impl_restriction: ImplRestriction {
+                      kind: Unrestricted,
+                      span: tests/ui/utils/dump_hir.rs:25:1: 25:1 (#N),
+                  },
+                  constness: NotConst,
+                  is_auto: No,
+                  safety: Safe,
+                  ident: Foo#0,
+                  generics: Generics {
                       params: [],
                       predicates: [],
                       has_where_clause_predicates: false,
                       where_clause_span: tests/ui/utils/dump_hir.rs:25:10: 25:10 (#N),
                       span: tests/ui/utils/dump_hir.rs:25:10: 25:10 (#N),
                   },
-                  [],
-                  [
-                      TraitItemRef {
-                          id: TraitItemId {
-                              owner_id: DefId(dump_hir::Foo::N),
-                          },
-                          ident: N#0,
-                          kind: Const,
-                          span: tests/ui/utils/dump_hir.rs:31:5: 31:20 (#N),
+                  bounds: [],
+                  items: [
+                      TraitItemId {
+                          owner_id: DefId(dump_hir::Foo::N),
                       },
                   ],
-              ),
+              },
               span: tests/ui/utils/dump_hir.rs:25:1: 32:2 (#N),
               vis_span: tests/ui/utils/dump_hir.rs:25:1: 25:1 (#N),
+              has_delayed_lints: false,
+              eii: false,
           },
       )
   --> tests/ui/utils/dump_hir.rs:25:1
@@ -144,7 +155,7 @@ note: TraitItem(
                                   span: tests/ui/utils/dump_hir.rs:31:14: 31:19 (#N),
                                   res: PrimTy(
                                       Uint(
-                                          Usize,
+                                          usize,
                                       ),
                                   ),
                                   segments: [
@@ -153,7 +164,7 @@ note: TraitItem(
                                           hir_id: HirId(DefId(dump_hir::Foo::N).2),
                                           res: PrimTy(
                                               Uint(
-                                                  Usize,
+                                                  usize,
                                               ),
                                           ),
                                           args: None,
@@ -165,11 +176,13 @@ note: TraitItem(
                       ),
                   },
                   None,
+                  No,
               ),
               span: tests/ui/utils/dump_hir.rs:31:5: 31:20 (#N),
               defaultness: Default {
                   has_value: false,
               },
+              has_delayed_lints: false,
           },
       )
   --> tests/ui/utils/dump_hir.rs:31:5
@@ -182,15 +195,9 @@ LL |     const N: usize;
 
 note: Item(
           Item {
-              ident: #0,
               owner_id: DefId(dump_hir::{impl#0}),
               kind: Impl(
                   Impl {
-                      constness: NotConst,
-                      safety: Safe,
-                      polarity: "positive",
-                      defaultness: Final,
-                      defaultness_span: None,
                       generics: Generics {
                           params: [],
                           predicates: [],
@@ -199,27 +206,33 @@ note: Item(
                           span: tests/ui/utils/dump_hir.rs:38:5: 38:5 (#N),
                       },
                       of_trait: Some(
-                          TraitRef {
-                              path: Path {
-                                  span: tests/ui/utils/dump_hir.rs:38:6: 38:9 (#N),
-                                  res: Def(
-                                      Trait,
-                                      DefId(dump_hir::Foo),
-                                  ),
-                                  segments: [
-                                      PathSegment {
-                                          ident: Foo#0,
-                                          hir_id: HirId(DefId(dump_hir::{impl#0}).1),
-                                          res: Def(
-                                              Trait,
-                                              DefId(dump_hir::Foo),
-                                          ),
-                                          args: None,
-                                          infer_args: false,
-                                      },
-                                  ],
+                          TraitImplHeader {
+                              safety: Safe,
+                              polarity: "positive",
+                              defaultness: Final,
+                              defaultness_span: None,
+                              trait_ref: TraitRef {
+                                  path: Path {
+                                      span: tests/ui/utils/dump_hir.rs:38:6: 38:9 (#N),
+                                      res: Def(
+                                          Trait,
+                                          DefId(dump_hir::Foo),
+                                      ),
+                                      segments: [
+                                          PathSegment {
+                                              ident: Foo#0,
+                                              hir_id: HirId(DefId(dump_hir::{impl#0}).1),
+                                              res: Def(
+                                                  Trait,
+                                                  DefId(dump_hir::Foo),
+                                              ),
+                                              args: None,
+                                              infer_args: false,
+                                          },
+                                      ],
+                                  },
+                                  hir_ref_id: HirId(DefId(dump_hir::{impl#0}).2),
                               },
-                              hir_ref_id: HirId(DefId(dump_hir::{impl#0}).2),
                           },
                       ),
                       self_ty: Ty {
@@ -230,22 +243,17 @@ note: Item(
                           ),
                       },
                       items: [
-                          ImplItemRef {
-                              id: ImplItemId {
-                                  owner_id: DefId(dump_hir::{impl#0}::N),
-                              },
-                              ident: N#0,
-                              kind: Const,
-                              span: tests/ui/utils/dump_hir.rs:44:5: 44:30 (#N),
-                              trait_item_def_id: Some(
-                                  DefId(dump_hir::Foo::N),
-                              ),
+                          ImplItemId {
+                              owner_id: DefId(dump_hir::{impl#0}::N),
                           },
                       ],
+                      constness: NotConst,
                   },
               ),
               span: tests/ui/utils/dump_hir.rs:38:1: 45:2 (#N),
               vis_span: tests/ui/utils/dump_hir.rs:38:1: 38:1 (#N),
+              has_delayed_lints: false,
+              eii: false,
           },
       )
   --> tests/ui/utils/dump_hir.rs:38:1
@@ -278,7 +286,7 @@ note: ImplItem(
                                   span: tests/ui/utils/dump_hir.rs:44:14: 44:19 (#N),
                                   res: PrimTy(
                                       Uint(
-                                          Usize,
+                                          usize,
                                       ),
                                   ),
                                   segments: [
@@ -287,7 +295,7 @@ note: ImplItem(
                                           hir_id: HirId(DefId(dump_hir::{impl#0}::N).2),
                                           res: PrimTy(
                                               Uint(
-                                                  Usize,
+                                                  usize,
                                               ),
                                           ),
                                           args: None,
@@ -298,13 +306,20 @@ note: ImplItem(
                           ),
                       ),
                   },
-                  BodyId {
-                      hir_id: HirId(DefId(dump_hir::{impl#0}::N).3),
-                  },
+                  Body(
+                      BodyId {
+                          hir_id: HirId(DefId(dump_hir::{impl#0}::N).3),
+                      },
+                  ),
               ),
-              defaultness: Final,
+              impl_kind: Trait {
+                  defaultness: Final,
+                  trait_item_def_id: Ok(
+                      DefId(dump_hir::Foo::N),
+                  ),
+              },
               span: tests/ui/utils/dump_hir.rs:44:5: 44:30 (#N),
-              vis_span: tests/ui/utils/dump_hir.rs:44:5: 44:5 (#N),
+              has_delayed_lints: false,
           },
       )
   --> tests/ui/utils/dump_hir.rs:44:5
@@ -317,7 +332,6 @@ LL |     const N: usize = 0_usize;
 
 note: Item(
           Item {
-              ident: main#0,
               owner_id: DefId(dump_hir::main),
               kind: Fn {
                   sig: FnSig {
@@ -334,12 +348,14 @@ note: Item(
                           output: DefaultReturn(
                               tests/ui/utils/dump_hir.rs:51:10: 51:10 (#0),
                           ),
-                          c_variadic: false,
-                          implicit_self: None,
-                          lifetime_elision_allowed: false,
+                          fn_decl_kind: FnDeclFlags(
+                              "ImplicitSelfKind(None)",
+                              "NoLifetimeElision",
+                          ),
                       },
                       span: tests/ui/utils/dump_hir.rs:51:1: 51:10 (#N),
                   },
+                  ident: main#0,
                   generics: Generics {
                       params: [],
                       predicates: [],
@@ -348,12 +364,14 @@ note: Item(
                       span: tests/ui/utils/dump_hir.rs:51:8: 51:8 (#N),
                   },
                   body: BodyId {
-                      hir_id: HirId(DefId(dump_hir::main).75),
+                      hir_id: HirId(DefId(dump_hir::main).85),
                   },
                   has_body: true,
               },
               span: tests/ui/utils/dump_hir.rs:51:1: 104:2 (#N),
               vis_span: tests/ui/utils/dump_hir.rs:51:1: 51:1 (#N),
+              has_delayed_lints: false,
+              eii: false,
           },
       )
   --> tests/ui/utils/dump_hir.rs:51:1
@@ -369,6 +387,7 @@ note: Stmt(
               hir_id: HirId(DefId(dump_hir::main).2),
               kind: Let(
                   LetStmt {
+                      super_: None,
                       pat: Pat {
                           hir_id: HirId(DefId(dump_hir::main).10),
                           kind: Binding(
@@ -441,7 +460,7 @@ note: Stmt(
                                                           0,
                                                       ),
                                                       Unsigned(
-                                                          Usize,
+                                                          usize,
                                                       ),
                                                   ),
                                                   span: tests/ui/utils/dump_hir.rs:57:22: 57:29 (#N),
@@ -473,7 +492,6 @@ LL |     let x = Arc::new(0_usize);
 
 note: Item(
           Item {
-              ident: foo#0,
               owner_id: DefId(dump_hir::main::foo),
               kind: Fn {
                   sig: FnSig {
@@ -490,12 +508,14 @@ note: Item(
                           output: DefaultReturn(
                               tests/ui/utils/dump_hir.rs:63:13: 63:13 (#0),
                           ),
-                          c_variadic: false,
-                          implicit_self: None,
-                          lifetime_elision_allowed: false,
+                          fn_decl_kind: FnDeclFlags(
+                              "ImplicitSelfKind(None)",
+                              "NoLifetimeElision",
+                          ),
                       },
                       span: tests/ui/utils/dump_hir.rs:63:5: 63:13 (#N),
                   },
+                  ident: foo#0,
                   generics: Generics {
                       params: [],
                       predicates: [],
@@ -510,6 +530,8 @@ note: Item(
               },
               span: tests/ui/utils/dump_hir.rs:63:5: 70:6 (#N),
               vis_span: tests/ui/utils/dump_hir.rs:63:5: 63:5 (#N),
+              has_delayed_lints: false,
+              eii: false,
           },
       )
   --> tests/ui/utils/dump_hir.rs:63:5
@@ -550,17 +572,11 @@ note: Expr(
               hir_id: HirId(DefId(dump_hir::main).12),
               kind: If(
                   Expr {
-                      hir_id: HirId(DefId(dump_hir::main).14),
-                      kind: DropTemps(
-                          Expr {
-                              hir_id: HirId(DefId(dump_hir::main).13),
-                              kind: Lit(
-                                  Spanned {
-                                      node: Bool(
-                                          true,
-                                      ),
-                                      span: tests/ui/utils/dump_hir.rs:76:8: 76:12 (#N),
-                                  },
+                      hir_id: HirId(DefId(dump_hir::main).13),
+                      kind: Lit(
+                          Spanned {
+                              node: Bool(
+                                  true,
                               ),
                               span: tests/ui/utils/dump_hir.rs:76:8: 76:12 (#N),
                           },
@@ -568,12 +584,12 @@ note: Expr(
                       span: tests/ui/utils/dump_hir.rs:76:8: 76:12 (#N),
                   },
                   Expr {
-                      hir_id: HirId(DefId(dump_hir::main).16),
+                      hir_id: HirId(DefId(dump_hir::main).15),
                       kind: Block(
                           Block {
                               stmts: [],
                               expr: None,
-                              hir_id: HirId(DefId(dump_hir::main).15),
+                              hir_id: HirId(DefId(dump_hir::main).14),
                               rules: DefaultBlock,
                               span: tests/ui/utils/dump_hir.rs:76:13: 78:6 (#N),
                               targeted_by_break: false,
@@ -584,12 +600,12 @@ note: Expr(
                   },
                   Some(
                       Expr {
-                          hir_id: HirId(DefId(dump_hir::main).17),
+                          hir_id: HirId(DefId(dump_hir::main).16),
                           kind: Block(
                               Block {
                                   stmts: [],
                                   expr: None,
-                                  hir_id: HirId(DefId(dump_hir::main).18),
+                                  hir_id: HirId(DefId(dump_hir::main).17),
                                   rules: DefaultBlock,
                                   span: tests/ui/utils/dump_hir.rs:78:12: 79:6 (#N),
                                   targeted_by_break: false,
@@ -616,10 +632,10 @@ LL | |     }
 
 note: Expr(
           Expr {
-              hir_id: HirId(DefId(dump_hir::main).20),
+              hir_id: HirId(DefId(dump_hir::main).19),
               kind: Call(
                   Expr {
-                      hir_id: HirId(DefId(dump_hir::main).21),
+                      hir_id: HirId(DefId(dump_hir::main).20),
                       kind: Path(
                           Resolved(
                               None,
@@ -627,12 +643,12 @@ note: Expr(
                                   span: tests/ui/utils/dump_hir.rs:85:5: 85:23 (#N),
                                   res: Def(
                                       Fn,
-                                      DefId(std::thread::spawn),
+                                      DefId(std::thread::functions::spawn),
                                   ),
                                   segments: [
                                       PathSegment {
                                           ident: std#0,
-                                          hir_id: HirId(DefId(dump_hir::main).22),
+                                          hir_id: HirId(DefId(dump_hir::main).21),
                                           res: Def(
                                               Mod,
                                               DefId(std),
@@ -642,7 +658,7 @@ note: Expr(
                                       },
                                       PathSegment {
                                           ident: thread#0,
-                                          hir_id: HirId(DefId(dump_hir::main).23),
+                                          hir_id: HirId(DefId(dump_hir::main).22),
                                           res: Def(
                                               Mod,
                                               DefId(std::thread),
@@ -652,10 +668,10 @@ note: Expr(
                                       },
                                       PathSegment {
                                           ident: spawn#0,
-                                          hir_id: HirId(DefId(dump_hir::main).24),
+                                          hir_id: HirId(DefId(dump_hir::main).23),
                                           res: Def(
                                               Fn,
-                                              DefId(std::thread::spawn),
+                                              DefId(std::thread::functions::spawn),
                                           ),
                                           args: None,
                                           infer_args: true,
@@ -668,7 +684,7 @@ note: Expr(
                   },
                   [
                       Expr {
-                          hir_id: HirId(DefId(dump_hir::main).25),
+                          hir_id: HirId(DefId(dump_hir::main).24),
                           kind: Closure(
                               Closure {
                                   def_id: DefId(dump_hir::main::{closure#0}),
@@ -683,18 +699,20 @@ note: Expr(
                                       output: DefaultReturn(
                                           tests/ui/utils/dump_hir.rs:85:31: 85:31 (#0),
                                       ),
-                                      c_variadic: false,
-                                      implicit_self: None,
-                                      lifetime_elision_allowed: false,
+                                      fn_decl_kind: FnDeclFlags(
+                                          "ImplicitSelfKind(None)",
+                                          "NoLifetimeElision",
+                                      ),
                                   },
                                   body: BodyId {
-                                      hir_id: HirId(DefId(dump_hir::main).26),
+                                      hir_id: HirId(DefId(dump_hir::main).25),
                                   },
                                   fn_decl_span: tests/ui/utils/dump_hir.rs:85:24: 85:31 (#N),
                                   fn_arg_span: Some(
                                       tests/ui/utils/dump_hir.rs:85:29: 85:31 (#0),
                                   ),
                                   kind: Closure,
+                                  explicit_captures: [],
                               },
                           ),
                           span: tests/ui/utils/dump_hir.rs:85:24: 88:6 (#N),
@@ -717,9 +735,9 @@ LL | |     });
 
 note: Item(
           Item {
-              ident: mac#0,
               owner_id: DefId(dump_hir::main::mac),
               kind: Macro(
+                  mac#0,
                   MacroDef {
                       body: DelimArgs {
                           dspan: DelimSpan {
@@ -823,7 +841,7 @@ note: Item(
                                               ),
                                               Token(
                                                   Token {
-                                                      kind: Not,
+                                                      kind: Bang,
                                                       span: tests/ui/utils/dump_hir.rs:98:20: 98:21 (#N),
                                                   },
                                                   JointHidden,
@@ -877,11 +895,16 @@ note: Item(
                           ),
                       },
                       macro_rules: true,
+                      eii_declaration: None,
                   },
-                  Bang,
+                  MacroKinds(
+                      1,
+                  ),
               ),
               span: tests/ui/utils/dump_hir.rs:94:5: 100:6 (#N),
               vis_span: tests/ui/utils/dump_hir.rs:94:5: 94:5 (#N),
+              has_delayed_lints: false,
+              eii: false,
           },
       )
   --> tests/ui/utils/dump_hir.rs:94:5

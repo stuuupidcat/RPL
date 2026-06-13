@@ -24,7 +24,6 @@ kw_use             = @{ "use" ~ !WordFollowing }
 kw_type            = @{ "type" ~ !WordFollowing }
 kw_let             = @{ "let" ~ !WordFollowing }
 kw_move            = @{ "move" ~ !WordFollowing }
-kw_Len             = @{ "Len" ~ !WordFollowing }
 kw_PtrToPtr        = @{ "PtrToPtr" ~ !WordFollowing }
 kw_IntToInt        = @{ "IntToInt" ~ !WordFollowing }
 kw_Transmute       = @{ "Transmute" ~ !WordFollowing }
@@ -54,8 +53,6 @@ kw_BitAnd       = @{ "BitAnd" ~ !WordFollowing }
 kw_BitOr        = @{ "BitOr" ~ !WordFollowing }
 kw_BitXor       = @{ "BitXor" ~ !WordFollowing }
 kw_Offset       = @{ "Offset" ~ !WordFollowing }
-kw_SizeOf       = @{ "SizeOf" ~ !WordFollowing }
-kw_AlignOf      = @{ "AlignOf" ~ !WordFollowing }
 kw_Neg          = @{ "Neg" ~ !WordFollowing }
 kw_Not          = @{ "Not" ~ !WordFollowing }
 kw_PtrMetadata  = @{ "PtrMetadata" ~ !WordFollowing }
@@ -121,7 +118,6 @@ Keywords = @{
   | kw_type
   | kw_let
   | kw_move
-  | kw_Len
   | kw_PtrToPtr
   | kw_IntToInt
   | kw_Transmute
@@ -143,8 +139,6 @@ Keywords = @{
   | kw_BitOr
   | kw_BitXor
   | kw_Offset
-  | kw_SizeOf
-  | kw_AlignOf
   | kw_Neg
   | kw_Not
   | kw_PtrMetadata
@@ -581,10 +575,6 @@ MirRvalueRawPtr = {
     And ~ kw_raw ~ PtrMutability ~ MirPlace
 }
 
-MirRvalueLen = {
-    kw_Len ~ LeftParen ~ MirPlace ~ RightParen
-}
-
 PointerCoercion = { kw_Unsize }
 
 CoercionSource = { kw_Implicit }
@@ -622,15 +612,6 @@ MirBinOp = {
 
 MirRvalueBinOp = {
     MirBinOp ~ LeftParen ~ MirOperand ~ Comma ~ MirOperand ~ RightParen
-}
-
-MirNullOp = {
-    kw_SizeOf
-  | kw_AlignOf
-}
-
-MirRvalueNullOp = {
-    MirNullOp ~ LeftParen ~ Type ~ RightParen
 }
 
 MirUnOp = {
@@ -700,12 +681,10 @@ MirRvalue = {
   | MirRvalueRepeat
   | MirRvalueRef
   | MirRvalueRawPtr
-  | MirRvalueLen
   | MirRvalueBinOp
-  | MirRvalueNullOp
   | MirRvalueUnOp
   | MirRvalueDiscriminant
-  | MirRvalueAggregate // | ShallowInitBox
+  | MirRvalueAggregate
   // | CopyForDeref
 }
 

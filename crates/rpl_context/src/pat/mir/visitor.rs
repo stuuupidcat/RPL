@@ -110,7 +110,7 @@ pub trait PatternVisitor<'pcx>: Sized {
         location: Location,
     ) {
         match elem {
-            PlaceElem::OpaqueCast(ty) | PlaceElem::Subtype(ty) => {
+            PlaceElem::OpaqueCast(ty) => {
                 self.visit_ty(ty);
             },
             PlaceElem::Index(local) => {
@@ -160,14 +160,14 @@ pub trait PatternVisitor<'pcx>: Sized {
                 };
                 self.visit_place(place, ctx, location);
             },
-            &Rvalue::Len(place) | &Rvalue::Discriminant(place) | &Rvalue::CopyForDeref(place) => {
+            &Rvalue::Discriminant(place) | &Rvalue::CopyForDeref(place) => {
                 self.visit_place(
                     place,
                     PlaceContext::NonMutatingUse(NonMutatingUseContext::Inspect),
                     location,
                 );
             },
-            &Rvalue::Cast(_, ref operand, ty) | &Rvalue::ShallowInitBox(ref operand, ty) => {
+            &Rvalue::Cast(_, ref operand, ty) => {
                 self.visit_operand(operand, location);
                 self.visit_ty(ty);
             },
@@ -175,7 +175,6 @@ pub trait PatternVisitor<'pcx>: Sized {
                 self.visit_operand(lhs, location);
                 self.visit_operand(rhs, location);
             },
-            &Rvalue::NullaryOp(_op, ty) => self.visit_ty(ty),
             Rvalue::Aggregate(_agg_kind, operands) => operands
                 .iter()
                 .for_each(|operand| self.visit_operand(operand, location)),

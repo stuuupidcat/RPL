@@ -92,7 +92,12 @@ impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
     #[instrument(level = "trace", skip(self), ret)]
     fn match_field(&self, field_pat: &pat::Field<'pcx>, field: &'tcx ty::FieldDef) -> bool {
         let pat_ty = field_pat.ty;
-        let ty = self.ty.tcx.type_of(field.did).instantiate_identity();
+        let ty = self
+            .ty
+            .tcx
+            .type_of(field.did)
+            .instantiate_identity()
+            .skip_normalization();
         self.ty.match_ty(pat_ty, ty)
     }
 }

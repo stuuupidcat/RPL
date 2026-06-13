@@ -4,7 +4,7 @@ use derive_more::derive::Debug;
 use pest_typed::Span;
 use rpl_meta::collect_elems_separated_by_comma;
 use rpl_meta::symbol_table::WithPath;
-use rpl_parser::generics::{Choice2, Choice3, Choice15};
+use rpl_parser::generics::{Choice3, Choice15};
 use rpl_parser::pairs::{self};
 use rustc_middle::mir;
 use rustc_span::Symbol;
@@ -146,13 +146,6 @@ pub(crate) fn binop_from_pair(pair: &pairs::MirBinOp<'_>) -> mir::BinOp {
         Choice15::_12(_kw_bit_or) => mir::BinOp::BitOr,
         Choice15::_13(_kw_bit_xor) => mir::BinOp::BitXor,
         Choice15::_14(_kw_offset) => mir::BinOp::Offset,
-    }
-}
-
-pub(crate) fn nullop_from_pair<'pcx>(pair: &pairs::MirNullOp<'_>) -> mir::NullOp<'pcx> {
-    match pair.deref() {
-        Choice2::_0(_kw_size_of) => mir::NullOp::SizeOf,
-        Choice2::_1(_kw_align_of) => mir::NullOp::AlignOf,
     }
 }
 

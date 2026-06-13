@@ -4,7 +4,7 @@ use std::ops::Index;
 
 use either::Either;
 use rpl_meta::symbol_table::{LocalSpecial, WithPath};
-use rpl_parser::generics::{Choice5, Choice6, Choice8, Choice12};
+use rpl_parser::generics::{Choice5, Choice6, Choice8, Choice10};
 use rustc_abi::FieldIdx;
 use rustc_data_structures::fx::{FxHashSet, FxIndexMap};
 use rustc_hir::Target;
@@ -17,7 +17,7 @@ pub mod visitor;
 
 use super::utils::{
     binop_from_pair, borrow_kind_from_pair_mutability, collect_operands, mutability_from_pair_ptr_mutability,
-    nullop_from_pair, unop_from_pair,
+    unop_from_pair,
 };
 pub use super::*;
 
@@ -150,7 +150,6 @@ pub enum PlaceElem<'pcx> {
     Downcast(Symbol),
     DowncastPat(Symbol),
     OpaqueCast(Ty<'pcx>),
-    Subtype(Ty<'pcx>),
 }
 
 impl PlaceElem<'_> {
@@ -404,7 +403,7 @@ impl<'pcx> PlaceTy<'pcx> {
                 ty: self.ty,
                 variant: Some(variant),
             }),
-            PlaceElem::OpaqueCast(ty) | PlaceElem::Subtype(ty) => Some(PlaceTy::from_ty(ty)),
+            PlaceElem::OpaqueCast(ty) => Some(PlaceTy::from_ty(ty)),
         }
     }
 }
@@ -763,14 +762,11 @@ pub enum Rvalue<'pcx> {
     Repeat(Operand<'pcx>, Const<'pcx>),
     Ref(RegionKind, mir::BorrowKind, Place<'pcx>),
     RawPtr(mir::Mutability, Place<'pcx>),
-    Len(Place<'pcx>),
     Cast(mir::CastKind, Operand<'pcx>, Ty<'pcx>),
     BinaryOp(mir::BinOp, Box<[Operand<'pcx>; 2]>),
-    NullaryOp(mir::NullOp<'pcx>, Ty<'pcx>),
     UnaryOp(mir::UnOp, Operand<'pcx>),
     Discriminant(Place<'pcx>),
     Aggregate(AggKind<'pcx>, List<Operand<'pcx>>),
-    ShallowInitBox(Operand<'pcx>, Ty<'pcx>),
     CopyForDeref(Place<'pcx>),
 }
 
@@ -782,8 +778,8 @@ impl<'pcx> Rvalue<'pcx> {
     ) -> Self {
         let p = rvalue.path;
         match rvalue.inner.deref() {
-            Choice12::_0(_any) => Rvalue::Any,
-            Choice12::_1(cast) => {
+            Choice10::_0(_any) => Rvalue::Any,
+            Choice10::_1(cast) => {
                 let (operand, _, ty, _, cast_kind, _) = cast.get_matched();
                 let operand = Operand::from(with_path(p, operand), pcx, fn_sym_tab);
                 let ty = Ty::from(WithPath::new(p, ty), pcx, fn_sym_tab);
@@ -800,20 +796,20 @@ impl<'pcx> Rvalue<'pcx> {
                 };
                 Rvalue::Cast(cast_kind, operand, ty)
             },
-            Choice12::_2(rvalue_use) => {
+            Choice10::_2(rvalue_use) => {
                 let operand = match rvalue_use.deref() {
                     Choice2::_0(op) => Operand::from(with_path(p, op.get_matched().1), pcx, fn_sym_tab),
                     Choice2::_1(op) => Operand::from(with_path(p, op), pcx, fn_sym_tab),
                 };
                 Self::Use(operand)
             },
-            Choice12::_3(repeat) => {
+            Choice10::_3(repeat) => {
                 let (_, operand, _, count, _) = repeat.get_matched();
                 let operand = Operand::from(with_path(p, operand), pcx, fn_sym_tab);
                 let count = Const::from_integer(count);
                 Self::Repeat(operand, count)
             },
-            Choice12::_4(rvalue_ref) => {
+            Choice10::_4(rvalue_ref) => {
                 let (_, region, mutability, place) = rvalue_ref.get_matched();
                 let region_kind = if let Some(region) = region {
                     RegionKind::from(region)
@@ -824,42 +820,31 @@ impl<'pcx> Rvalue<'pcx> {
                 let place = Place::from(WithPath::new(p, place), pcx, fn_sym_tab);
                 Self::Ref(region_kind, mutability, place)
             },
-            Choice12::_5(raw_ptr) => {
+            Choice10::_5(raw_ptr) => {
                 let (_, _, ptr_mutability, place) = raw_ptr.get_matched();
                 let mutability = mutability_from_pair_ptr_mutability(ptr_mutability);
                 let place = Place::from(WithPath::new(p, place), pcx, fn_sym_tab);
                 Self::RawPtr(mutability, place)
             },
-            Choice12::_6(len) => {
-                let (_, _, place, _) = len.get_matched();
-                let place = Place::from(WithPath::new(p, place), pcx, fn_sym_tab);
-                Self::Len(place)
-            },
-            Choice12::_7(bin_op) => {
+            Choice10::_6(bin_op) => {
                 let (bin_op, _, lop, _, rop, _) = bin_op.get_matched();
                 let bin_op = binop_from_pair(bin_op);
                 let lop = Operand::from(with_path(p, lop), pcx, fn_sym_tab);
                 let rop = Operand::from(with_path(p, rop), pcx, fn_sym_tab);
                 Self::BinaryOp(bin_op, Box::new([lop, rop]))
             },
-            Choice12::_8(nullary_op) => {
-                let (nullary_op, _, ty, _) = nullary_op.get_matched();
-                let nullary_op = nullop_from_pair(nullary_op);
-                let ty = Ty::from(WithPath::new(p, ty), pcx, fn_sym_tab);
-                Self::NullaryOp(nullary_op, ty)
-            },
-            Choice12::_9(un_op) => {
+            Choice10::_7(un_op) => {
                 let (un_op, _, operand, _) = un_op.get_matched();
                 let un_op = unop_from_pair(un_op);
                 let operand = Operand::from(with_path(p, operand), pcx, fn_sym_tab);
                 Self::UnaryOp(un_op, operand)
             },
-            Choice12::_10(discriminant) => {
+            Choice10::_8(discriminant) => {
                 let (_, _, place, _) = discriminant.get_matched();
                 let place = Place::from(WithPath::new(p, place), pcx, fn_sym_tab);
                 Self::Discriminant(place)
             },
-            Choice12::_11(agg) => {
+            Choice10::_9(agg) => {
                 let (agg_kind, operands) = AggKind::from(WithPath::new(p, agg), pcx, fn_sym_tab);
                 Self::Aggregate(agg_kind, operands)
             },

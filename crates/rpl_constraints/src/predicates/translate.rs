@@ -44,8 +44,8 @@ impl<'tcx> FindExprBySpanAndFnPath<'tcx> {
 impl<'v> Visitor<'v> for FindExprBySpanAndFnPath<'v> {
     type NestedFilter = rustc_middle::hir::nested_filter::OnlyBodies;
 
-    fn nested_visit_map(&mut self) -> Self::Map {
-        self.tcx.hir()
+    fn maybe_tcx(&mut self) -> Self::MaybeTyCtxt {
+        self.tcx
     }
 
     fn visit_expr(&mut self, ex: &'v hir::Expr<'v>) {
@@ -79,6 +79,7 @@ fn get_body_id_from_hir_node(node: Node<'_>) -> Option<BodyId> {
         Node::Item(Item {
             kind:
                 ItemKind::Fn {
+                    ident: _,
                     sig: _,
                     generics: _,
                     body: body_id,
@@ -110,7 +111,7 @@ pub fn translate_from_function(
     };
 
     let mut expr_finder = FindExprBySpanAndFnPath::new(span, hir_fn_path, tcx);
-    expr_finder.visit_expr(tcx.hir().body(body_id).value);
+    expr_finder.visit_expr(tcx.hir_body(body_id).value);
     let Some(expr) = expr_finder.result else {
         return false;
     };

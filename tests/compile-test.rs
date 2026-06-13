@@ -1,6 +1,5 @@
 #![warn(rust_2018_idioms, unused_lifetimes)]
 #![allow(unused_extern_crates)]
-#![feature(let_chains)]
 
 use std::collections::BTreeMap;
 use std::env::{self, var_os};

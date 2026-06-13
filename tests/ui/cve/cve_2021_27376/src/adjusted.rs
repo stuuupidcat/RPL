@@ -17,9 +17,14 @@ struct Addr {
 impl Addr {
     /// Creates a raw socket address from `SocketAddr`.
     fn new(addr: std::net::SocketAddr) -> Self {
+        // In the `inline` revision, `new_v4`/`new_v6` are inlined into these match
+        // arms, so the unsound cast in each callee body is reported here too — the
+        // same finding propagated to the call site (a true-positive duplicate).
         match &addr {
             SocketAddr::V4(addr) => Self::new_v4(addr),
+            //~[inline]^ ERROR: wrong assumption of layout compatibility from `std::net::SocketAddrV4` to `libc::sockaddr`
             SocketAddr::V6(addr) => Self::new_v6(addr),
+            //~[inline]^ ERROR: wrong assumption of layout compatibility from `std::net::SocketAddrV6` to `libc::sockaddr`
         }
     }
 

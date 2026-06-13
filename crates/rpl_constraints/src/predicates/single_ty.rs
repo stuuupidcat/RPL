@@ -1,6 +1,6 @@
 use rustc_hir as hir;
 use rustc_middle::ty::{self, AdtKind, Ty, TyCtxt, TypingMode};
-use rustc_span::{Symbol, sym};
+use rustc_span::{DUMMY_SP, Symbol, sym};
 
 pub type SingleTyPredsFnPtr = for<'tcx> fn(TyCtxt<'tcx>, ty::TypingEnv<'tcx>, Ty<'tcx>) -> bool;
 
@@ -58,7 +58,7 @@ pub fn is_send<'tcx>(tcx: TyCtxt<'tcx>, typing_env: ty::TypingEnv<'tcx>, ty: Ty<
 pub fn is_sync<'tcx>(tcx: TyCtxt<'tcx>, typing_env: ty::TypingEnv<'tcx>, ty: Ty<'tcx>) -> bool {
     use rustc_infer::infer::TyCtxtInferExt;
     let infcx = tcx.infer_ctxt().build(TypingMode::PostAnalysis);
-    let trait_def_id = tcx.require_lang_item(hir::LangItem::Sync, None);
+    let trait_def_id = tcx.require_lang_item(hir::LangItem::Sync, DUMMY_SP);
     rustc_trait_selection::traits::type_known_to_meet_bound_modulo_regions(
         &infcx,
         typing_env.param_env,
@@ -124,6 +124,9 @@ pub fn is_zst<'tcx>(tcx: TyCtxt<'tcx>, typing_env: ty::TypingEnv<'tcx>, ty: Ty<'
 /// Check if ty can be uninitialized, AKA safe to be used in `std::mem::uninitialized` or similar
 /// APIs.
 // FIXME: Chances are that this function can overflow the stack.
+// `typing_env` is part of the `SingleTy` predicate signature and is threaded through the
+// recursion; this arm doesn't read it directly.
+#[allow(clippy::only_used_in_recursion)]
 #[instrument(level = "debug", skip(tcx, typing_env), ret)]
 pub fn can_be_uninit<'tcx>(tcx: TyCtxt<'tcx>, typing_env: ty::TypingEnv<'tcx>, ty: Ty<'tcx>) -> bool {
     match ty.kind() {
@@ -133,10 +136,10 @@ pub fn can_be_uninit<'tcx>(tcx: TyCtxt<'tcx>, typing_env: ty::TypingEnv<'tcx>, t
                 match adt_def.adt_kind() {
                     AdtKind::Union => adt_def
                         .all_fields()
-                        .any(|field| can_be_uninit(tcx, typing_env, field.ty(tcx, args))),
+                        .any(|field| can_be_uninit(tcx, typing_env, field.ty(tcx, args).skip_normalization())),
                     AdtKind::Struct => adt_def
                         .all_fields()
-                        .all(|field| can_be_uninit(tcx, typing_env, field.ty(tcx, args))),
+                        .all(|field| can_be_uninit(tcx, typing_env, field.ty(tcx, args).skip_normalization())),
                     _ => false,
                 }
             }
@@ -153,14 +156,14 @@ pub fn can_be_uninit<'tcx>(tcx: TyCtxt<'tcx>, typing_env: ty::TypingEnv<'tcx>, t
         ty::FnDef(_, _) => false,
         ty::FnPtr(_, _) => false,
         ty::UnsafeBinder(_) => false,
-        ty::Dynamic(_, _, _) => false,
+        ty::Dynamic(_, _) => false,
         ty::Closure(_, _) => false,
         ty::CoroutineClosure(_, _) => false,
         ty::Coroutine(_, _) => false,
         ty::CoroutineWitness(_, _) => false,
         ty::Never => true, // Never type is singular, so it can be uninitialized.
         ty::Tuple(tys) => tys.iter().all(|ty| can_be_uninit(tcx, typing_env, ty)),
-        ty::Alias(_, alias_ty) => can_be_uninit(tcx, typing_env, alias_ty.self_ty()),
+        ty::Alias(alias_ty) => can_be_uninit(tcx, typing_env, alias_ty.self_ty()),
         // If it's a type parameter, we assume it can be uninitialized if it has any unsafe traits.
         ty::Param(_) => false, // !is_all_safe_trait(tcx, typing_env, ty),
         ty::Bound(_, _) => false,

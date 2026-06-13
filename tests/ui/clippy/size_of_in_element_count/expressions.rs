@@ -1,3 +1,4 @@
+//@compile-flags: -Z mir-opt-level=0
 use std::mem::{size_of, size_of_val};
 use std::ptr::{copy, copy_nonoverlapping, write_bytes};
 // #[rpl::dump_mir(dump_cfg, dump_ddg)]

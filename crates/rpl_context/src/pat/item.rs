@@ -238,13 +238,16 @@ impl<'pcx> FnPattern<'pcx> {
         }) && self.constraints.attrs.filter(tcx, def_id, header)
     }
     /// Returns the extra spans for this function pattern.
+    // `get_all_attrs` is deprecated in favour of `find_attr!`, but here we deliberately need every
+    // attribute so `Inline::check` can locate the *parsed* `#[inline]` attribute.
+    #[allow(deprecated)]
     #[instrument(level = "trace", skip(self, tcx), fields(self = ?self.name), ret)]
-    pub fn extra_span<'tcx>(&self, tcx: TyCtxt<'tcx>, def_id: LocalDefId) -> Option<ExtraSpan<'tcx>> {
+    pub fn extra_span(&self, tcx: TyCtxt<'_>, def_id: LocalDefId) -> Option<ExtraSpan> {
         let mut attr_map = ExtraSpan::default();
         if let Some(inline) = self.constraints.attrs.inline {
             let inline_ = Symbol::intern("inline");
-            let attr = inline.check(tcx.get_attrs(def_id, inline_))?;
-            _ = attr_map.try_insert(inline_, attr);
+            let span = inline.check(tcx.get_all_attrs(def_id).iter())?;
+            _ = attr_map.try_insert(inline_, span);
         }
         Some(attr_map)
     }

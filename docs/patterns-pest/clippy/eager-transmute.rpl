@@ -1,23 +1,24 @@
 pattern eager-transmute
 
 patt {
-    // Disabled due to inefficiency in the current implementation.
-    // #[diag = "eager_transmute"]
-    // and_then_inline[$T: type, $U: type, $src: place($T)] = unsafe? fn _(..) {
-    //     'dst:
-    //     let $dst: $U = move $src as $U (Transmute);
-    //     let $cond: bool;
-    //     switchInt(copy $cond) {
-    //         0_usize => {
-    //             _ = #[Ctor] core::option::Option::<$T>::None;
-    //         }
-    //         _ => {
-    //             _ = #[Ctor] core::option::Option::<$T>::Some(move $dst);
-    //         }
-    //     }
-    // } where {
-    //     !niche_ordered($T, $U)
-    // }
+    // `bool::then_some` is now always inlined by the MIR inliner, so the call-form `and_then`
+    // pattern no longer matches in optimized MIR; this inlined form (switchInt + Some/None) does.
+    #[diag = "eager_transmute"]
+    and_then_inline[$T: type, $U: type, $src: place($T)] = unsafe? fn _(..) {
+        'dst:
+        let $dst: $U = move $src as $U (Transmute);
+        let $cond: bool;
+        switchInt(copy $cond) {
+            0_usize => {
+                _ = #[Ctor] core::option::Option::<$T>::None;
+            }
+            _ => {
+                _ = #[Ctor] core::option::Option::<$T>::Some(move $dst);
+            }
+        }
+    } where {
+        !niche_ordered($T, $U)
+    }
     #[diag = "eager_transmute"]
     and_then[$T: type, $U: type, $src: place($T)] = unsafe? fn _(..) {
         'dst:

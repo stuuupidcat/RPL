@@ -1,7 +1,7 @@
 pattern size-of-in-element-count
 
 patt {
-    use core::intrinsics::copy::copy;
+    use core::intrinsics::copy;
     use core::intrinsics::size_of_val;
     use core::intrinsics::arith_offset;
     use core::ptr::swap_nonoverlapping;
@@ -16,13 +16,37 @@ patt {
         product_of($count, $size)
     }
     #[diag = "size_of_in_element_count"]
-    copy_nonoverlapping_size_of[$T: type] = unsafe? fn _ (..) -> _ {
+    copy_nonoverlapping_size_of[$T: type, $size_const: const(usize)] = unsafe? fn _ (..) -> _ {
+        let $ptr: *mut $T = _;
         'count:
-        let $size: usize = SizeOf($T);
+        let $size: usize = const $size_const;
         let $count: usize;
-        copy_nonoverlapping(_, _, copy $count);
+        copy_nonoverlapping(copy $ptr, _, copy $count);
     } where {
-        product_of($count, $size)
+        is_size_of($T, $size_const) && product_of($count, $size)
+    }
+    // Folded-size variants: `size_of::<T>()` now lowers to the const
+    // `<T as SizedTypeProperties>::SIZE`, which const-folds *into* the count's `Mul`
+    // operand (`Mul(const <T>::SIZE, const N)`) instead of a bindable `$size` local,
+    // so `product_of` has nothing to bind. Bind the const operand directly and check
+    // it with `is_size_of`. Two rules cover either operand position of the `Mul`.
+    #[diag = "size_of_in_element_count"]
+    copy_nonoverlapping_size_of_const_l[$T: type, $size_const: const(usize)] = unsafe? fn _ (..) -> _ {
+        let $ptr: *mut $T = _;
+        'count:
+        let $count: usize = Mul(const $size_const, _);
+        copy_nonoverlapping(copy $ptr, _, copy $count);
+    } where {
+        is_size_of($T, $size_const)
+    }
+    #[diag = "size_of_in_element_count"]
+    copy_nonoverlapping_size_of_const_r[$T: type, $size_const: const(usize)] = unsafe? fn _ (..) -> _ {
+        let $ptr: *mut $T = _;
+        'count:
+        let $count: usize = Mul(_, const $size_const);
+        copy_nonoverlapping(copy $ptr, _, copy $count);
+    } where {
+        is_size_of($T, $size_const)
     }
     #[diag = "size_of_in_element_count"]
     copy_size_of_val[$T: type] = unsafe? fn _ (..) -> _ {
@@ -34,13 +58,13 @@ patt {
         product_of($count, $size)
     }
     #[diag = "size_of_in_element_count"]
-    copy_size_of[$T: type] = unsafe? fn _ (..) -> _ {
+    copy_size_of[$T: type, $size_const: const(usize)] = unsafe? fn _ (..) -> _ {
         'count:
-        let $size: usize = SizeOf($T);
+        let $size: usize = const $size_const;
         let $count: usize;
         _ = copy::<$T>(_, _, copy $count);
     } where {
-        product_of($count, $size)
+        is_size_of($T, $size_const) && product_of($count, $size)
     }
     #[diag = "size_of_in_element_count"]
     offset_size_of_val[$T: type] = unsafe? fn _ (..) -> _ {
@@ -52,13 +76,14 @@ patt {
         product_of($count, $size)
     }
     #[diag = "size_of_in_element_count"]
-    offset_size_of[$T: type] = unsafe? fn _ (..) -> _ {
+    offset_size_of[$T: type, $size_const: const(usize)] = unsafe? fn _ (..) -> _ {
+        let $ptr: *const $T = _;
         'count:
-        let $size: usize = SizeOf($T);
+        let $size: usize = const $size_const;
         let $count: usize;
-        _ = Offset(_, copy $count);
+        _ = Offset(copy $ptr, copy $count);
     } where {
-        product_of($count, $size)
+        is_size_of($T, $size_const) && product_of($count, $size)
     }
     #[diag = "size_of_in_element_count"]
     offset_isize_size_of_val[$T: type] = unsafe? fn _ (..) -> _ {
@@ -69,14 +94,29 @@ patt {
     } where {
         product_of($count, $size)
     }
+    // `Offset` with an isize count is produced by both `*const` (`.offset`) and `*mut`
+    // (`.sub`) pointer methods. The `$T`-recovering typed-pointer binding can only name one
+    // pointee mutability at a time, so we split into a `*const` and a `*mut` variant that
+    // share the same diagnostic.
     #[diag = "size_of_in_element_count"]
-    offset_isize_size_of[$T: type] = unsafe? fn _ (..) -> _ {
+    offset_isize_size_of_mut[$T: type, $size_const: const(usize)] = unsafe? fn _ (..) -> _ {
+        let $ptr: *mut $T = _;
         'count:
-        let $size: usize = SizeOf($T);
+        let $size: usize = const $size_const;
         let $count: isize;
-        _ = Offset(_, copy $count);
+        _ = Offset(copy $ptr, copy $count);
     } where {
-        product_of($count, $size)
+        is_size_of($T, $size_const) && product_of($count, $size)
+    }
+    #[diag = "size_of_in_element_count"]
+    offset_isize_size_of_const[$T: type, $size_const: const(usize)] = unsafe? fn _ (..) -> _ {
+        let $ptr: *const $T = _;
+        'count:
+        let $size: usize = const $size_const;
+        let $count: isize;
+        _ = Offset(copy $ptr, copy $count);
+    } where {
+        is_size_of($T, $size_const) && product_of($count, $size)
     }
     #[diag = "size_of_in_element_count"]
     arith_offset_size_of_val[$T: type] = unsafe? fn _ (..) -> _ {
@@ -88,13 +128,13 @@ patt {
         product_of($count, $size)
     }
     #[diag = "size_of_in_element_count"]
-    arith_offset_size_of[$T: type] = unsafe? fn _ (..) -> _ {
+    arith_offset_size_of[$T: type, $size_const: const(usize)] = unsafe? fn _ (..) -> _ {
         'count:
-        let $size: usize = SizeOf($T);
+        let $size: usize = const $size_const;
         let $count: isize;
         _ = arith_offset::<$T>(_, copy $count);
     } where {
-        product_of($count, $size)
+        is_size_of($T, $size_const) && product_of($count, $size)
     }
     #[diag = "size_of_in_element_count"]
     const_from_raw_parts_size_of_val[$T: type] = unsafe? fn _ (..) -> _ {
@@ -106,13 +146,13 @@ patt {
         product_of($count, $size)
     }
     #[diag = "size_of_in_element_count"]
-    const_from_raw_parts_size_of[$T: type] = unsafe? fn _ (..) -> _ {
+    const_from_raw_parts_size_of[$T: type, $size_const: const(usize)] = unsafe? fn _ (..) -> _ {
         'count:
-        let $size: usize = SizeOf($T);
+        let $size: usize = const $size_const;
         let $count: usize;
         _ = *const [$T] from (_, copy $count);
     } where {
-        product_of($count, $size)
+        is_size_of($T, $size_const) && product_of($count, $size)
     }
     #[diag = "size_of_in_element_count"]
     mut_from_raw_parts_size_of_val[$T: type] = unsafe? fn _ (..) -> _ {
@@ -124,13 +164,13 @@ patt {
         product_of($count, $size)
     }
     #[diag = "size_of_in_element_count"]
-    mut_from_raw_parts_size_of[$T: type] = unsafe? fn _ (..) -> _ {
+    mut_from_raw_parts_size_of[$T: type, $size_const: const(usize)] = unsafe? fn _ (..) -> _ {
         'count:
-        let $size: usize = SizeOf($T);
+        let $size: usize = const $size_const;
         let $count: usize;
         _ = *mut [$T] from (_, copy $count);
     } where {
-        product_of($count, $size)
+        is_size_of($T, $size_const) && product_of($count, $size)
     }
     #[diag = "size_of_in_element_count"]
     swap_nonoverlapping_size_of_val[$T: type] = unsafe? fn _ (..) -> _ {
@@ -142,13 +182,13 @@ patt {
         product_of($count, $size)
     }
     #[diag = "size_of_in_element_count"]
-    swap_nonoverlapping_size_of[$T: type] = unsafe? fn _ (..) -> _ {
+    swap_nonoverlapping_size_of[$T: type, $size_const: const(usize)] = unsafe? fn _ (..) -> _ {
         'count:
-        let $size: usize = SizeOf($T);
+        let $size: usize = const $size_const;
         let $count: usize;
         _ = swap_nonoverlapping::runtime::<$T>(_, _, copy $count);
     } where {
-        product_of($count, $size)
+        is_size_of($T, $size_const) && product_of($count, $size)
     }
 }
 

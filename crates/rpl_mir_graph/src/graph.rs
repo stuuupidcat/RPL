@@ -740,13 +740,13 @@ impl Access {
             },
             MutatingUse(pcx) => {
                 use MutatingUseContext::{
-                    AsmOutput, Borrow, Call, Deinit, Drop, Projection, RawBorrow, Retag, SetDiscriminant, Store, Yield,
+                    AsmOutput, Borrow, Call, Drop, Projection, RawBorrow, Retag, SetDiscriminant, Store, Yield,
                 };
                 match pcx {
                     Store | AsmOutput | Call | Yield => Self::Write,
                     Borrow | RawBorrow | Projection => Self::Read,
                     SetDiscriminant | Drop => Self::ReadWrite,
-                    Retag | Deinit => Self::NoAccess,
+                    Retag => Self::NoAccess,
                 }
             },
             NonUse(_) => Self::NoAccess,

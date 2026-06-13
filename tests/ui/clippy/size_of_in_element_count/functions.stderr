@@ -138,6 +138,14 @@ LL |     unsafe { from_raw_parts(y.as_ptr(), size_of::<u16>() * SIZE) };
    = help: use a count of elements instead of a count of bytes, it already gets multiplied by the size of the type
 
 error: found a count of bytes instead of a count of elements of `u16`
+  --> tests/ui/clippy/size_of_in_element_count/functions.rs:47:66
+   |
+LL |     unsafe { swap_nonoverlapping(y.as_mut_ptr(), x.as_mut_ptr(), size_of::<u16>() * SIZE) };
+   |                                                                  ^^^^^^^^^^^^^^^^
+   |
+   = help: use a count of elements instead of a count of bytes, it already gets multiplied by the size of the type
+
+error: found a count of bytes instead of a count of elements of `u16`
   --> tests/ui/clippy/size_of_in_element_count/functions.rs:50:46
    |
 LL |     slice_from_raw_parts_mut(y.as_mut_ptr(), size_of::<u16>() * SIZE);
@@ -150,14 +158,6 @@ error: found a count of bytes instead of a count of elements of `u16`
    |
 LL |     unsafe { from_raw_parts_mut(y.as_mut_ptr(), size_of::<u16>() * SIZE) };
    |                                                 ^^^^^^^^^^^^^^^^
-   |
-   = help: use a count of elements instead of a count of bytes, it already gets multiplied by the size of the type
-
-error: found a count of bytes instead of a count of elements of `u16`
-  --> tests/ui/clippy/size_of_in_element_count/functions.rs:47:66
-   |
-LL |     unsafe { swap_nonoverlapping(y.as_mut_ptr(), x.as_mut_ptr(), size_of::<u16>() * SIZE) };
-   |                                                                  ^^^^^^^^^^^^^^^^
    |
    = help: use a count of elements instead of a count of bytes, it already gets multiplied by the size of the type
 

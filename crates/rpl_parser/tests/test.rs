@@ -59,6 +59,7 @@ util {
         $T1: type,
         $T2: type,
         $T3: type,
+        $tsize_const: const(usize),
     ] = fn _ (..) -> _ {
         let $from_vec: Vec::<$T1> = _;
         let mut $from_vec_mut_borrow: &mut Vec::<$T1> = &mut $from_vec;
@@ -68,7 +69,7 @@ util {
         let mut $from_vec_inmutable_borrow: &Vec::<$T1> = &$from_vec;
         let mut $from_vec_cap: usize = copy (*$from_vec_inmutable_borrow).buf.inner.cap.0;
         let mut $from_vec_len: usize = copy (*$from_vec_inmutable_borrow).len;
-        let mut $tsize: usize = SizeOf($T2);
+        let mut $tsize: usize = const $tsize_const;
         let mut $to_vec_cap: usize = $Op(move $from_vec_cap, copy $tsize);
         let mut $to_vec_len: usize = $Op(move $from_vec_len, copy $tsize);
         let mut $to_vec_wrong_cap: Cap = #[Ctor] Cap(copy $to_vec_len);
@@ -169,12 +170,13 @@ fn cve_2020_25016() {
 pattern CVE-2020-25016
 patt {
     p_unsound_cast_const[
-        $T: type
+        $T: type,
+        $ty_size_const: const(usize)
     ] = fn _ (..) -> _ {
         let $from_slice: &[$T] = _;
         let $from_raw: *const [$T] = &raw const *$from_slice;
         let $from_len: usize = PtrMetadata(copy $from_slice);
-        let $ty_size: usize = SizeOf($T);
+        let $ty_size: usize = const $ty_size_const;
         let $to_ptr: *const u8 = copy $from_raw as *const u8 (PtrToPtr);
         let $to_len: usize = Mul(move $from_len, move $ty_size);
         let $to_raw: *const [u8] = *const [u8] from (copy $to_ptr, copy $to_len);
@@ -183,12 +185,13 @@ patt {
         safety = safe
     }
     p_unsound_cast_mut[
-        $T: type
+        $T: type,
+        $ty_size_mut_const: const(usize)
     ] = fn _ (..) -> _ {
         let $from_slice_mut: &mut [$T] = _;
         let $from_raw_mut: *mut [$T] = &raw mut *$from_slice_mut;
         let $from_len_mut: usize = PtrMetadata(copy $from_slice_mut);
-        let $ty_size_mut: usize = SizeOf($T);
+        let $ty_size_mut: usize = const $ty_size_mut_const;
         let $to_ptr_mut: *mut u8 = copy $from_raw_mut as *mut u8 (PtrToPtr);
         let $to_len_mut: usize = Mul(move $from_len_mut, move $ty_size_mut);
         let $to_raw_mut: *mut [u8] = *mut [u8] from (copy $to_ptr_mut, copy $to_len_mut);

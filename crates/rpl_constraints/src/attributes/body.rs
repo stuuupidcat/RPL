@@ -14,8 +14,8 @@ pub fn contains_unsafe_block<'tcx>(tcx: TyCtxt<'tcx>, e: &'tcx Expr<'tcx>) -> bo
         type Result = ControlFlow<()>;
         type NestedFilter = nested_filter::OnlyBodies;
 
-        fn nested_visit_map(&mut self) -> Self::Map {
-            self.tcx.hir()
+        fn maybe_tcx(&mut self) -> Self::MaybeTyCtxt {
+            self.tcx
         }
 
         fn visit_block(&mut self, b: &'tcx Block<'_>) -> Self::Result {

@@ -54,9 +54,13 @@ pub fn swap_index_range_loop_next(bla: std::ops::Range<u32>) -> Vec<u32> {
         }
     }
 
+    // `bla` is a concrete `Range<u32>`: after inlining `len()` folds to a bare
+    // `Sub(end, start)`, so no `ExactSizeIterator::len` call survives to match —
+    // `trust_exact_size_iterator` fires only in `normal` here. (The generic
+    // `impl ExactSizeIterator` sites keep the trait call and fire in both revisions.)
     unsafe {
         vec.set_len(len);
-        //~^ ERROR: it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
+        //~[normal]^ ERROR: it is unsound to trust return value of `std::iter::ExactSizeIterator::len` and pass it to an unsafe function like `std::vec::Vec::set_len`, which may leak uninitialized memory
         //~[normal]| ERROR: it violates the precondition of `Vec::set_len` to extend a `Vec`'s length without initializing its content in advance
     }
     vec
