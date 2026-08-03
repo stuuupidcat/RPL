@@ -34,12 +34,13 @@ extern crate tracing;
 mod adt;
 mod counted;
 mod fns;
-pub mod graph; // FIXME: visibility
-pub mod matches; // FIXME: visibility
-pub mod mir; // FIXME: visibility
+pub mod graph;
+pub mod matches;
+pub mod mir;
 mod place;
 pub mod predicate_evaluator;
 pub mod resolve;
+pub mod solver;
 mod statement;
 mod ty;
 

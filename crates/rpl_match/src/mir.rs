@@ -17,7 +17,13 @@ use crate::statement::MatchStatement;
 use crate::ty::MatchTy as _;
 use crate::{MatchPlaceCtxt, MatchTyCtxt};
 
-pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
+/// Read-only context for pattern matching against MIR.
+///
+/// Holds all the immutable data needed for matching: the MIR body,
+/// the pattern, graph representations, and type/place matching contexts.
+/// Interior mutability (RefCell) is used for candidate accumulation
+/// during the candidate-building phase.
+pub struct MatchContext<'a, 'pcx, 'tcx> {
     pub(crate) ty: MatchTyCtxt<'pcx, 'tcx>,
     pub(crate) place: MatchPlaceCtxt<'pcx, 'tcx>,
     pub(crate) body: &'a mir::Body<'tcx>,
@@ -30,13 +36,11 @@ pub struct CheckMirCtxt<'a, 'pcx, 'tcx> {
     pub(crate) pat_ddg: PatDataDepGraph,
     pub(crate) mir_cfg: &'a MirControlFlowGraph,
     pub(crate) mir_ddg: &'a MirDataDepGraph,
-    // pat_pdg: PatProgramDepGraph,
-    // mir_pdg: MirProgramDepGraph,
     pub(crate) locals: IndexVec<pat::Local, RefCell<MixedBitSet<mir::Local>>>,
     pub(crate) places: IndexVec<pat::PlaceVarIdx, RefCell<FxIndexSet<mir::PlaceRef<'tcx>>>>,
 }
 
-impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
+impl<'a, 'pcx, 'tcx> MatchContext<'a, 'pcx, 'tcx> {
     #[expect(clippy::too_many_arguments)]
     #[instrument(level = "debug", skip_all, fields(
         def_id = ?body.source.def_id(),
@@ -59,10 +63,7 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
         let typing_env = ty::TypingEnv::post_analysis(tcx, body.source.def_id());
         let ty = MatchTyCtxt::new(tcx, pcx, typing_env, self_ty, pat, &fn_pat.meta);
         let place = MatchPlaceCtxt::new(tcx, pcx, &fn_pat.meta);
-        // let places = pat.locals.iter().map(|&local| ty.mk_ty(pat.locals[local].ty)).collect();
         let mir_pat = fn_pat.expect_body();
-        // let pat_pdg = crate::graph::pat_program_dep_graph(&patterns, tcx.pointer_size().bytes_usize());
-        // let mir_pdg = crate::graph::mir_program_dep_graph(body);
         let pat_cfg = crate::graph::pat_control_flow_graph(mir_pat, tcx.pointer_size().bytes());
         let pat_ddg = crate::graph::pat_data_dep_graph(mir_pat, &pat_cfg);
         Self {
@@ -78,8 +79,6 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
             pat_ddg,
             mir_cfg,
             mir_ddg,
-            // pat_pdg,
-            // mir_pdg,
             locals: IndexVec::from_elem_n(
                 RefCell::new(MixedBitSet::new_empty(body.local_decls.len())),
                 mir_pat.locals.len(),
@@ -94,152 +93,9 @@ impl<'a, 'pcx, 'tcx> CheckMirCtxt<'a, 'pcx, 'tcx> {
     pub fn check(&self) -> Vec<Matched<'tcx>> {
         matches(self)
     }
-    /*
-    pub fn check(&self) {
-        use NodeKind::{BlockEnter, BlockExit, Local, StmtOrTerm};
-        for (bb_pat, block_pat) in self.patterns.basic_blocks.iter_enumerated() {
-            for (bb, block) in self.body.basic_blocks.iter_enumerated() {}
-        }
-        for (pat_node_idx, pat_node) in self.pat_pdg.nodes() {
-            for (mir_node_idx, mir_node) in self.mir_pdg.nodes() {
-                let matched = match (pat_node, mir_node) {
-                    (StmtOrTerm(bb_pat, stmt_pat), StmtOrTerm(block, statement_index)) => self
-                        .match_statement_or_terminator(
-                            (bb_pat, stmt_pat).into(),
-                            mir::Location { block, statement_index },
-                        ),
-                    (BlockEnter(_), BlockEnter(_)) | (BlockExit(_), BlockExit(_)) => true,
-                    (Local(local_pat), Local(local)) => self.match_local(local_pat, local),
-                    _ => continue,
-                };
-                if matched {
-                    self.candidates[pat_node_idx].push(NodeMatch {
-                        mir_node_idx,
-                        edges_matched: 0,
-                    });
-                }
-            }
-        }
-        // Pattern:               MIR:
-        //             alignment
-        // pat_node(u1) ------> mir_node(u2)
-        //     |                   |
-        //     | pat_edge          | mir_edge
-        //     |                   |
-        //     v       alignment   v
-        // pat_node(v1) ------> mir_node(v2)
-        //
-        for (pat_node_idx, _) in self.pat_pdg.nodes() {
-            let mut iter = self.candidates[pat_node_idx].iter().enumerate().skip(0);
-            while let Some((candidate_idx, &NodeMatch { mir_node_idx, .. })) = iter.next() {
-                let edges_matched = self
-                    .pat_pdg
-                    .edges_from(pat_node_idx)
-                    .iter()
-                    .filter(|pat_edge| {
-                        self.candidates[pat_edge.to].iter().any(
-                            |&NodeMatch {
-                                 mir_node_idx: mir_node_to,
-                                 ..
-                             }| {
-                                self.mir_pdg.find_edge(mir_node_idx, mir_node_to).is_some()
-                            },
-                        )
-                    })
-                    .count();
-                self.candidates[pat_node_idx][candidate_idx].edges_matched = edges_matched;
-                iter = self.candidates[pat_node_idx].iter().enumerate().skip(candidate_idx + 1);
-            }
-        }
-        for candidate in &mut self.candidates {
-            candidate.sort_unstable_by_key(|candidate| std::cmp::Reverse(candidate.edges_matched));
-        }
-    }
-    */
-
-    /*
-    #[instrument(level = "info", skip(self), fields(def_id = ?self.body.source.def_id()))]
-    pub fn check(&mut self) {
-        self.check_args();
-        let mut visited = BitSet::new_empty(self.body.basic_blocks.len());
-        let mut block = Some(mir::START_BLOCK);
-        let next_block = |b: mir::BasicBlock| {
-            if b.as_usize() + 1 == self.body.basic_blocks.len() {
-                mir::START_BLOCK
-            } else {
-                b.plus(1)
-            }
-        };
-        let mut num_visited = 0;
-        while let Some(b) = block {
-            if !visited.insert(b) {
-                debug!("skip visited block {b:?}");
-                block = Some(next_block(b));
-                continue;
-            }
-            let matched = self.check_block(b).is_some();
-            let &mut b = block.insert(match self.body[b].terminator().edges() {
-                mir::TerminatorEdges::None => next_block(b),
-                mir::TerminatorEdges::Single(next) => next,
-                mir::TerminatorEdges::Double(next, _) => next,
-                mir::TerminatorEdges::AssignOnReturn { return_: &[next], .. } => next,
-                _ => next_block(b),
-                // mir::TerminatorEdges::AssignOnReturn { .. } => todo!(),
-                // mir::TerminatorEdges::SwitchInt { targets, discr } => todo!(),
-            });
-            debug!("jump to block {b:?}");
-            if matched {
-                visited.remove(b);
-            }
-            num_visited += 1;
-            if num_visited >= self.body.basic_blocks.len() {
-                debug!("all blocks has been visited");
-                break;
-            }
-        }
-    }
-
-    fn check_args(&mut self) {
-        for (pat, pattern) in self.patterns.ready_patterns() {
-            let pat::PatternKind::Init(local) = pattern.kind else {
-                continue;
-            };
-            for arg in self.body.args_iter() {
-                if self.match_local(local, arg) {
-                    self.patterns.add_match(pat, pat::MatchKind::Argument(arg));
-                }
-            }
-        }
-    }
-
-    #[instrument(level = "info", skip(self))]
-    fn check_block(&mut self, block: mir::BasicBlock) -> Option<pat::MatchIdx> {
-        info!("BasicBlock: {}", {
-            let mut buffer = Vec::new();
-            mir::pretty::write_basic_block(self.tcx, block, self.body, &mut |_, _| Ok(()), &mut buffer).unwrap();
-            String::from_utf8_lossy(&buffer).into_owned()
-        });
-        for (statement_index, statement) in self.body[block].statements.iter().enumerate() {
-            let location = mir::Location { block, statement_index };
-            self.check_statement(location, statement);
-        }
-        self.check_terminator(block, self.body[block].terminator())
-    }
-
-    fn check_statement(&mut self, location: mir::Location, statement: &mir::Statement<'tcx>) {
-        self.match_statement(location, statement);
-    }
-    fn check_terminator(
-        &mut self,
-        block: mir::BasicBlock,
-        terminator: &'tcx mir::Terminator<'tcx>,
-    ) -> Option<pat::MatchIdx> {
-        self.match_terminator(block, terminator)
-    }
-    */
 }
 
-impl<'pcx, 'tcx> MatchStatement<'pcx, 'tcx> for CheckMirCtxt<'_, 'pcx, 'tcx> {
+impl<'pcx, 'tcx> MatchStatement<'pcx, 'tcx> for MatchContext<'_, 'pcx, 'tcx> {
     fn body(&self) -> &mir::Body<'tcx> {
         self.body
     }
@@ -326,6 +182,5 @@ impl<'pcx, 'tcx> MatchStatement<'pcx, 'tcx> for CheckMirCtxt<'_, 'pcx, 'tcx> {
 
     fn get_place_ty_from_place_var(&self, var: pat::PlaceVarIdx) -> pat::PlaceTy<'pcx> {
         pat::PlaceTy::from_ty(self.place.places[var])
-        // pat::PlaceTy::from_ty(var.ty)
     }
 }

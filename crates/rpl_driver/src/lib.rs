@@ -28,7 +28,7 @@ use rpl_match::graph::{MirControlFlowGraph, MirDataDepGraph};
 use rpl_match::matches::Matched;
 use rpl_match::matches::artifact::NormalizedMatched;
 use rpl_match::mir::pat::PatternItem;
-use rpl_match::mir::{CheckMirCtxt, pat};
+use rpl_match::mir::{MatchContext, pat};
 use rpl_match::predicate_evaluator::PredicateEvaluator;
 use rpl_meta::context::MetaContext;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
@@ -276,7 +276,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
                     //     continue;
                     // }
 
-                    CheckMirCtxt::new(
+                    MatchContext::new(
                         self.tcx,
                         self.pcx,
                         body,
@@ -392,7 +392,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
             .filter(move |fn_pat| fn_pat.filter(self.tcx, def_id, header, body))
             .filter_map(move |fn_pat| Some((fn_pat, fn_pat.extra_span(self.tcx, def_id)?)))
             .flat_map(move |(fn_pat, attr_map)| {
-                CheckMirCtxt::new(
+                MatchContext::new(
                     self.tcx,
                     self.pcx,
                     body,
