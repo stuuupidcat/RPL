@@ -1,0 +1,18 @@
+pattern explicit-sync-impl
+
+patt {
+    use core::marker::Sync;
+
+    explicit_sync[$Wrapper: adt] = {
+        struct $Wrapper<..> {
+            ..
+        }
+
+        $marker:
+        unsafe impl<..> Sync for $Wrapper<..>
+        where ..
+        {}
+    } where {
+        true()
+    }
+}

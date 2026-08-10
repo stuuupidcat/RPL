@@ -259,8 +259,6 @@ fn non_local_item_children_by_name(tcx: TyCtxt<'_>, def_id: DefId, name: Symbol)
 
 // #[instrument(level = "trace", skip(tcx), ret)]
 fn local_item_children_by_name(tcx: TyCtxt<'_>, local_id: LocalDefId, name: Symbol) -> Vec<Res> {
-    let hir = tcx.hir();
-
     let root_mod;
     let item_kind = match tcx.hir_node_by_def_id(local_id) {
         Node::Crate(r#mod) => {
@@ -287,18 +285,11 @@ fn local_item_children_by_name(tcx: TyCtxt<'_>, local_id: LocalDefId, name: Symb
     };
 
     match item_kind {
-        ItemKind::Mod(r#mod) => r#mod
-            .item_ids
+        ItemKind::Mod(_) => tcx
+            .module_children_local(local_id)
             .iter()
-            .filter_map(|&item_id| {
-                let item = hir.item(item_id);
-                match item.kind {
-                    ItemKind::ForeignMod { abi: _, items } => {
-                        items.iter().find_map(|item| res(item.ident, item.id.owner_id))
-                    },
-                    _ => res(item.ident, item_id.owner_id),
-                }
-            })
+            .filter(|child| child.ident.name == name)
+            .map(|child| child.res.expect_non_local())
             .collect(),
         ItemKind::Impl(r#impl) => r#impl
             .items

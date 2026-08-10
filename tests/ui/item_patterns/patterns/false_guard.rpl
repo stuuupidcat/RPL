@@ -1,0 +1,18 @@
+pattern explicit-send-impl
+
+patt {
+    use core::marker::Send;
+
+    explicit_send[$Wrapper: adt] = {
+        struct $Wrapper<..> {
+            ..
+        }
+
+        $marker:
+        unsafe impl<..> Send for $Wrapper<..>
+        where ..
+        {}
+    } where {
+        false()
+    }
+}

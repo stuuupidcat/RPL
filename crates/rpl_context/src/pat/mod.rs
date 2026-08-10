@@ -510,6 +510,370 @@ impl<'pcx> Pattern<'pcx> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use pest_typed::ParsableTypedNode as _;
+    use rpl_meta::arena::Arena;
+    use rpl_meta::context::MetaContext;
+    use rpl_meta::symbol_table::SymbolTable;
+    use rpl_parser::pairs;
+    use rustc_span::Symbol;
+
+    use super::{ImplPolarityPat, Path as PatPath, PattOrUtil, RestPat, SafetyPat, WithPath};
+    use crate::PatternCtxt;
+
+    fn item_meta_errors(source: &str, import_sources: &[&str]) -> Vec<String> {
+        let arena = &*Box::leak(Box::new(Arena::default()));
+        let mctx = &*Box::leak(Box::new(MetaContext::new(arena)));
+        let source = arena.alloc_str(source);
+        let item = &*Box::leak(Box::new(
+            pairs::RPLPatternItem::try_parse(source).expect("parse item pattern"),
+        ));
+        let imports: Vec<_> = import_sources
+            .iter()
+            .map(|source| {
+                &*Box::leak(Box::new(
+                    pairs::UsePath::try_parse(arena.alloc_str(source)).expect("parse import"),
+                ))
+            })
+            .collect();
+        let path = Path::new("/synthetic/item-pattern.rpl");
+        mctx.set_active_path(Some(path));
+        let mut errors = Vec::new();
+
+        SymbolTable::collect_symbol_tables(mctx, &imports, std::iter::once(item), &mut errors);
+        errors.into_iter().map(|error| error.to_string()).collect()
+    }
+
+    #[test]
+    fn lowers_item_pattern_syntax_flags() {
+        let arena = &*Box::leak(Box::new(Arena::default()));
+        let mctx = &*Box::leak(Box::new(MetaContext::new(arena)));
+        let source = arena.alloc_str(
+            r#"
+send_variance[
+    $Wrapper: adt where true(),
+    $Parameter: type,
+    $MappedType: type,
+] = {
+    struct $Wrapper<..> { .. }
+
+    $send_impl:
+    unsafe impl<..> Send for $Wrapper<..>
+    where ..
+    {}
+
+    $sync_impl:
+    unsafe impl<..> Sync for $Wrapper<..>
+    where ..
+    {}
+} where {
+    true()
+}
+"#,
+        );
+        let item = &*Box::leak(Box::new(
+            pairs::RPLPatternItem::try_parse(source).expect("parse item pattern"),
+        ));
+        let path = Path::new("/synthetic/item-pattern.rpl");
+        mctx.set_active_path(Some(path));
+        let send_import = &*Box::leak(Box::new(
+            pairs::UsePath::try_parse(arena.alloc_str("use core::marker::Send;")).expect("parse Send import"),
+        ));
+        let sync_import = &*Box::leak(Box::new(
+            pairs::UsePath::try_parse(arena.alloc_str("use core::marker::Sync;")).expect("parse Sync import"),
+        ));
+        let imports = [send_import, sync_import];
+
+        let mut errors = Vec::new();
+        let symbol_tables = SymbolTable::collect_symbol_tables(mctx, &imports, std::iter::once(item), &mut errors);
+        assert!(errors.is_empty(), "meta errors: {errors:#?}");
+        let symbol_tables = &*Box::leak(Box::new(symbol_tables));
+
+        PatternCtxt::entered_no_tcx(|pcx| {
+            let pattern = pcx.new_pattern();
+            pattern.add_pattern_item(WithPath::new(path, item), symbol_tables, PattOrUtil::Patt);
+
+            let rust_items = pattern
+                .patt_block
+                .values()
+                .next()
+                .expect("lowered pattern item")
+                .expect_rust_items();
+            assert_eq!(rust_items.adts.len(), 1);
+            assert_eq!(rust_items.impls.len(), 2, "impl patterns must not overwrite each other");
+            assert_eq!(
+                rust_items
+                    .item_constraints
+                    .as_ref()
+                    .expect("item constraints")
+                    .preds
+                    .len(),
+                1
+            );
+            assert_eq!(rust_items.meta.adt_vars.len(), 1);
+            assert_eq!(
+                rust_items
+                    .meta
+                    .adt_vars
+                    .iter()
+                    .next()
+                    .expect("ADT variable")
+                    .pred
+                    .clauses
+                    .len(),
+                1
+            );
+
+            let adt = rust_items.adts.values().next().expect("struct pattern");
+            assert_eq!(adt.generics.rest, RestPat::Rest);
+            assert_eq!(adt.non_enum_variant().rest, RestPat::Rest);
+
+            let send_impl = &rust_items.impls[0];
+            assert_eq!(send_impl.binding.expect("impl binding").as_str(), "$send_impl");
+            assert_eq!(send_impl.safety, SafetyPat::Unsafe);
+            assert_eq!(send_impl.polarity, ImplPolarityPat::Positive);
+            assert_eq!(send_impl.generics.rest, RestPat::Rest);
+            assert_eq!(send_impl.self_ty.generic_args, RestPat::Rest);
+            assert_eq!(send_impl.where_clause, RestPat::Rest);
+            let PatPath::Item(send_path) = send_impl.trait_path.expect("Send trait path") else {
+                panic!("Send should lower as an item path")
+            };
+            assert_eq!(
+                send_path.0,
+                &[Symbol::intern("core"), Symbol::intern("marker"), Symbol::intern("Send")]
+            );
+
+            let sync_impl = &rust_items.impls[1];
+            assert_eq!(sync_impl.binding.expect("impl binding").as_str(), "$sync_impl");
+            assert_eq!(sync_impl.safety, SafetyPat::Unsafe);
+            let PatPath::Item(sync_path) = sync_impl.trait_path.expect("Sync trait path") else {
+                panic!("Sync should lower as an item path")
+            };
+            assert_eq!(
+                sync_path.0,
+                &[Symbol::intern("core"), Symbol::intern("marker"), Symbol::intern("Sync")]
+            );
+            assert!(
+                !rust_items.legacy_function_matching_enabled(),
+                "item-guarded bundles must wait for the item matcher"
+            );
+            assert!(rust_items.legacy_impl_for_function_matching().is_none());
+        });
+    }
+
+    #[test]
+    fn rejects_unimported_bare_impl_trait_path() {
+        let errors = item_meta_errors(
+            r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+    $marker: unsafe impl<..> Send for $Wrapper<..> {}
+}
+"#,
+            &[],
+        );
+
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("Impl trait path `Send` is unqualified")),
+            "expected unimported-trait-path error, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_impl_trait_path_imports_and_arguments() {
+        let pattern = r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+    $marker: unsafe impl<..> Send for $Wrapper<..> {}
+}
+"#;
+        let errors = item_meta_errors(pattern, &["use Send;"]);
+        assert!(
+            errors.iter().any(|error| error.contains("Cyclic imports")),
+            "expected self-import cycle error, got: {errors:#?}"
+        );
+
+        let recursive_pattern = r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+    $marker: unsafe impl<..> A for $Wrapper<..> {}
+}
+"#;
+        let errors = item_meta_errors(recursive_pattern, &["use B::A;", "use A::B;"]);
+        assert!(
+            errors.iter().any(|error| error.contains("Cyclic imports")),
+            "expected recursive-import cycle error, got: {errors:#?}"
+        );
+
+        let generic_pattern = r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+    $marker: unsafe impl<..> Send<u8> for $Wrapper<..> {}
+}
+"#;
+        let errors = item_meta_errors(generic_pattern, &["use core::marker::Send;"]);
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("Generic arguments in impl trait paths are not supported")),
+            "expected generic-argument error, got: {errors:#?}"
+        );
+        let errors = item_meta_errors(pattern, &["use core::marker::Send<u8>;"]);
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("Generic arguments in impl trait paths are not supported")),
+            "expected imported generic-argument error, got: {errors:#?}"
+        );
+
+        let absolute_bare_pattern = r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+    $marker: unsafe impl<..> ::Send for $Wrapper<..> {}
+}
+"#;
+        let errors = item_meta_errors(absolute_bare_pattern, &[]);
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("Impl trait path `::Send` is unqualified")),
+            "expected absolute-bare-path error, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_impl_bindings() {
+        let arena = &*Box::leak(Box::new(Arena::default()));
+        let mctx = &*Box::leak(Box::new(MetaContext::new(arena)));
+        let source = arena.alloc_str(
+            r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+    $marker: unsafe impl<..> core::marker::Send for $Wrapper<..> {}
+    $marker: unsafe impl<..> core::marker::Sync for $Wrapper<..> {}
+}
+"#,
+        );
+        let item = &*Box::leak(Box::new(
+            pairs::RPLPatternItem::try_parse(source).expect("parse item pattern"),
+        ));
+        let path = Path::new("/synthetic/duplicate-item-binding.rpl");
+        mctx.set_active_path(Some(path));
+        let mut errors = Vec::new();
+
+        SymbolTable::collect_symbol_tables(mctx, &[], std::iter::once(item), &mut errors);
+
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.to_string().contains("Symbol `$marker` is already declared")),
+            "expected duplicate item-binding error, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn validates_bundle_predicates_during_meta_checking() {
+        let arena = &*Box::leak(Box::new(Arena::default()));
+        let mctx = &*Box::leak(Box::new(MetaContext::new(arena)));
+        let source = arena.alloc_str(
+            r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+} where {
+    not_a_predicate()
+}
+"#,
+        );
+        let item = &*Box::leak(Box::new(
+            pairs::RPLPatternItem::try_parse(source).expect("parse item pattern"),
+        ));
+        let path = Path::new("/synthetic/invalid-bundle-predicate.rpl");
+        mctx.set_active_path(Some(path));
+        let mut errors = Vec::new();
+
+        SymbolTable::collect_symbol_tables(mctx, &[], std::iter::once(item), &mut errors);
+
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.to_string().contains("Invalid predicate: not_a_predicate")),
+            "expected invalid-predicate error, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn rejects_predicates_other_than_true_and_false_in_item_guards() {
+        let arena = &*Box::leak(Box::new(Arena::default()));
+        let mctx = &*Box::leak(Box::new(MetaContext::new(arena)));
+        let source = arena.alloc_str(
+            r#"
+p[$Wrapper: adt, $T: type] = {
+    struct $Wrapper<..> { .. }
+} where {
+    is_send($T)
+}
+"#,
+        );
+        let item = &*Box::leak(Box::new(
+            pairs::RPLPatternItem::try_parse(source).expect("parse item pattern"),
+        ));
+        let path = Path::new("/synthetic/unsupported-item-predicate.rpl");
+        mctx.set_active_path(Some(path));
+        let mut errors = Vec::new();
+
+        SymbolTable::collect_symbol_tables(mctx, &[], std::iter::once(item), &mut errors);
+
+        assert!(
+            errors.iter().any(|error| error
+                .to_string()
+                .contains("Predicate `is_send` is not supported in an item guard")),
+            "expected unsupported-item-predicate error, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn rejects_arguments_and_attributes_in_item_guards() {
+        let arena = &*Box::leak(Box::new(Arena::default()));
+        let mctx = &*Box::leak(Box::new(MetaContext::new(arena)));
+        let source = arena.alloc_str(
+            r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+} where {
+    true($Wrapper),
+    safety = safe
+}
+"#,
+        );
+        let item = &*Box::leak(Box::new(
+            pairs::RPLPatternItem::try_parse(source).expect("parse item pattern"),
+        ));
+        let path = Path::new("/synthetic/invalid-item-guard.rpl");
+        mctx.set_active_path(Some(path));
+        let mut errors = Vec::new();
+
+        SymbolTable::collect_symbol_tables(mctx, &[], std::iter::once(item), &mut errors);
+
+        assert!(
+            errors.iter().any(|error| error
+                .to_string()
+                .contains("Item guard predicate `true` does not accept arguments")),
+            "expected item-predicate-arguments error, got: {errors:#?}"
+        );
+        assert!(
+            errors.iter().any(|error| error
+                .to_string()
+                .contains("Attributes are not supported in an item guard")),
+            "expected unsupported-item-attribute error, got: {errors:#?}"
+        );
+    }
+}
+
 impl<'pcx> Pattern<'pcx> {
     pub fn add_pattern_item(
         &mut self,
