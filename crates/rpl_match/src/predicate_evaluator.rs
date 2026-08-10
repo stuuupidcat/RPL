@@ -218,6 +218,9 @@ impl<'e, 'm, 'tcx> PredicateEvaluator<'e, 'm, 'tcx> {
             },
             PredicateKind::FlowsTo => self.eval_flows_to(&arg_instance),
             PredicateKind::MayPanic => self.eval_may_panic(&arg_instance),
+            PredicateKind::Item(predicate) => {
+                unreachable!("item predicate {predicate:?} reached the MIR predicate evaluator")
+            },
         };
         if term.is_neg { !result } else { result }
     }

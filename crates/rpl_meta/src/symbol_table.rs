@@ -7,7 +7,7 @@ use either::Either;
 use parser::generics::{Choice3, Choice4};
 use parser::{SpanWrapper, pairs};
 use pest_typed::{Span, Spanned};
-use rpl_constraints::predicates::PredicateConjunction;
+use rpl_constraints::predicates::{ItemPredicateArgKind, PredicateConjunction};
 use rustc_hash::FxHashMap;
 use rustc_middle::mir;
 
@@ -319,6 +319,21 @@ impl<'i> SymbolTable<'i> {
 
     pub fn item_binding(&self, name: &str) -> Option<ItemBindingType> {
         self.item_bindings.get(name).copied()
+    }
+
+    pub fn item_bindings(&self) -> impl Iterator<Item = (&'i str, ItemBindingType)> + '_ {
+        self.item_bindings.iter().map(|(name, kind)| (*name, *kind))
+    }
+
+    pub fn item_predicate_arg_kind(&self, name: &str) -> Option<ItemPredicateArgKind> {
+        match self.meta_vars.get_meta_var_from_name(name) {
+            Some(MetaVariable::Type(..)) => Some(ItemPredicateArgKind::Type),
+            Some(MetaVariable::AdtPat(..)) => Some(ItemPredicateArgKind::Adt),
+            Some(MetaVariable::Const(..) | MetaVariable::Place(..)) => None,
+            None => self.item_binding(name).map(|kind| match kind {
+                ItemBindingType::Impl => ItemPredicateArgKind::Impl,
+            }),
+        }
     }
 
     pub fn add_enum(

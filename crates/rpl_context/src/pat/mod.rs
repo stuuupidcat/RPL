@@ -547,6 +547,18 @@ mod tests {
         errors.into_iter().map(|error| error.to_string()).collect()
     }
 
+    fn send_item_pattern(guard: &str) -> String {
+        [
+            "p[$Wrapper: adt, $Parameter: type, $MappedType: type] = {",
+            "    struct $Wrapper<..> { .. }",
+            "    $marker: unsafe impl<..> core::marker::Send for $Wrapper<..> where .. {}",
+            "} where {",
+            guard,
+            "}",
+        ]
+        .join("\n")
+    }
+
     #[test]
     fn lowers_item_pattern_syntax_flags() {
         let arena = &*Box::leak(Box::new(Arena::default()));
@@ -570,7 +582,11 @@ send_variance[
     where ..
     {}
 } where {
-    true()
+    has_type_parameters($Wrapper)
+    && type_parameter_of($Parameter, $Wrapper)
+    && type_parameter_maps_to($Parameter, $MappedType, $send_impl)
+    && owns_type($Wrapper, $Parameter)
+    && !is_send_in($MappedType, $send_impl)
 }
 "#,
         );
@@ -807,7 +823,7 @@ p[$Wrapper: adt] = {
     }
 
     #[test]
-    fn rejects_predicates_other_than_true_and_false_in_item_guards() {
+    fn rejects_function_predicates_in_item_guards() {
         let arena = &*Box::leak(Box::new(Arena::default()));
         let mctx = &*Box::leak(Box::new(MetaContext::new(arena)));
         let source = arena.alloc_str(
@@ -870,6 +886,56 @@ p[$Wrapper: adt] = {
                 .to_string()
                 .contains("Attributes are not supported in an item guard")),
             "expected unsupported-item-attribute error, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn validates_item_predicate_modes_and_sorts() {
+        let errors = item_meta_errors(&send_item_pattern("has_type_parameters()"), &[]);
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("expects 1 arguments, but received 0")),
+            "expected arity error, got: {errors:#?}"
+        );
+
+        let errors = item_meta_errors(&send_item_pattern("owns_type($Parameter, $Parameter)"), &[]);
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("Argument `$Parameter`") && error.contains("must be a adt")),
+            "expected argument-sort error, got: {errors:#?}"
+        );
+
+        let errors = item_meta_errors(
+            &send_item_pattern(
+                "type_parameter_maps_to($Parameter, $MappedType, $marker)\n\
+                 && type_parameter_of($Parameter, $Wrapper)",
+            ),
+            &[],
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|error| { error.contains("Input `$Parameter`") && error.contains("is not bound") }),
+            "expected binding-order error, got: {errors:#?}"
+        );
+
+        let errors = item_meta_errors(&send_item_pattern("!type_parameter_of($Parameter, $Wrapper)"), &[]);
+        assert!(
+            errors.iter().any(|error| error.contains("cannot be negated")),
+            "expected closed-negation error, got: {errors:#?}"
+        );
+
+        let errors = item_meta_errors(
+            &send_item_pattern("(type_parameter_of($Parameter, $Wrapper) || true())"),
+            &[],
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("not supported inside a disjunction")),
+            "expected relational-disjunction error, got: {errors:#?}"
         );
     }
 }

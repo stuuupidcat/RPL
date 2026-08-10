@@ -8,6 +8,7 @@ use rustc_span::Symbol;
 // Attention:
 // When you add a new module here,
 // Try to keep all predicate signatures consistent in it.
+mod item;
 mod item_attr;
 mod locals;
 mod multiple_consts;
@@ -20,6 +21,7 @@ mod translate;
 mod trivial;
 mod ty_const;
 
+pub use item::*;
 pub use locals::*;
 pub use multiple_consts::*;
 pub use multiple_tys::*;
@@ -40,8 +42,36 @@ pub enum PredicateError<'i> {
     InvalidPredicate { pred: &'i str, span: SpanWrapper<'i> },
     #[display("Predicate `{pred}` is not supported in an item guard\n{span}")]
     UnsupportedItemGuardPredicate { pred: &'i str, span: SpanWrapper<'i> },
+    #[display("Predicate `{pred}` is only supported in an item guard\n{span}")]
+    ItemPredicateOutsideItemGuard { pred: &'i str, span: SpanWrapper<'i> },
     #[display("Item guard predicate `{pred}` does not accept arguments\n{span}")]
     ItemGuardPredicateTakesNoArgs { pred: &'i str, span: SpanWrapper<'i> },
+    #[display("Item guard predicate `{pred}` expects {expected} arguments, but received {actual}\n{span}")]
+    InvalidItemGuardArity {
+        pred: &'i str,
+        expected: usize,
+        actual: usize,
+        span: SpanWrapper<'i>,
+    },
+    #[display("Argument `{arg}` of item guard predicate `{pred}` must be a {expected}\n{span}")]
+    InvalidItemGuardArgument {
+        pred: &'i str,
+        arg: &'i str,
+        expected: &'static str,
+        span: SpanWrapper<'i>,
+    },
+    #[display(
+        "Input `{arg}` of item guard predicate `{pred}` is not bound; reorder the predicates so its producer runs first\n{span}"
+    )]
+    UnboundItemGuardInput {
+        pred: &'i str,
+        arg: &'i str,
+        span: SpanWrapper<'i>,
+    },
+    #[display("Output-producing item guard predicate `{pred}` cannot be negated\n{span}")]
+    NegatedItemGuardOutput { pred: &'i str, span: SpanWrapper<'i> },
+    #[display("Output-producing item guard predicate `{pred}` is not supported inside a disjunction\n{span}")]
+    ItemGuardOutputInDisjunction { pred: &'i str, span: SpanWrapper<'i> },
     #[display("Attributes are not supported in an item guard\n{span}")]
     UnsupportedItemGuardAttribute { span: SpanWrapper<'i> },
     #[display("Invalid predicate argument: {_0}")]
@@ -69,6 +99,12 @@ pub const ALL_PREDICATES: &[&str] = &[
     "is_ref",
     "is_zst",
     "needs_drop",
+    // item predicates
+    "has_type_parameters",
+    "type_parameter_of",
+    "type_parameter_maps_to",
+    "owns_type",
+    "is_send_in",
     // translate_preds
     "translate_from_function",
     // trivial_preds
@@ -118,6 +154,7 @@ pub enum PredicateKind {
     FlowsTo,
     /// `may_panic('sink)` — potential panic site; evaluated in matcher.
     MayPanic,
+    Item(ItemPredicate),
 }
 
 impl<'i> TryFrom<SpanWrapper<'i>> for PredicateKind {
@@ -158,6 +195,11 @@ impl<'i> TryFrom<SpanWrapper<'i>> for PredicateKind {
             "has_attr" => Self::ItemAttr(has_attr),
             "flows_to" => Self::FlowsTo,
             "may_panic" => Self::MayPanic,
+            "has_type_parameters" => Self::Item(ItemPredicate::HasTypeParameters),
+            "type_parameter_of" => Self::Item(ItemPredicate::TypeParameterOf),
+            "type_parameter_maps_to" => Self::Item(ItemPredicate::TypeParameterMapsTo),
+            "owns_type" => Self::Item(ItemPredicate::OwnsType),
+            "is_send_in" => Self::Item(ItemPredicate::IsSendIn),
             _ => {
                 return Err(PredicateError::InvalidPredicate {
                     pred: span.inner().as_str(),
