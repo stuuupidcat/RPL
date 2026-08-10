@@ -1,5 +1,3 @@
-use rpl_constraints::Constraints;
-use rpl_constraints::predicates::PredicateKind;
 use rpl_context::pat;
 use rpl_resolve::{PatItemKind, def_path_res};
 use rustc_data_structures::fx::FxHashMap;
@@ -8,6 +6,10 @@ use rustc_hir::def::Res;
 use rustc_hir::def_id::{DefId, LocalDefId};
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::Symbol;
+
+mod predicate;
+
+pub use predicate::{ItemPredicateEvaluator, UnsupportedItemPredicate};
 
 #[derive(Debug)]
 pub struct ItemMatched<'tcx> {
@@ -82,7 +84,6 @@ impl<'pat, 'pcx, 'tcx> MatchItemCtxt<'pat, 'pcx, 'tcx> {
                 .adt_vars
                 .iter()
                 .any(|adt_var| !adt_var.pred.clauses.is_empty())
-            || !self.pat.meta.ty_vars.is_empty()
             || !self.pat.meta.const_vars.is_empty()
             || !self.pat.meta.place_vars.is_empty()
         {
@@ -128,97 +129,4 @@ fn trait_path_matches(tcx: TyCtxt<'_>, path: pat::Path<'_>, actual: DefId) -> bo
         return false;
     };
     expected == actual && resolved.all(|def_id| def_id == expected)
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UnsupportedItemPredicate {
-    pub name: String,
-}
-
-pub struct ItemPredicateEvaluator<'matched, 'tcx> {
-    matched: &'matched ItemMatched<'tcx>,
-}
-
-impl<'matched, 'tcx> ItemPredicateEvaluator<'matched, 'tcx> {
-    pub fn new(matched: &'matched ItemMatched<'tcx>) -> Self {
-        Self { matched }
-    }
-
-    #[instrument(level = "debug", skip(self, constraints), fields(root_impl = ?self.matched.root_impl), ret)]
-    pub fn evaluate(&self, constraints: Option<&Constraints>) -> Result<bool, UnsupportedItemPredicate> {
-        evaluate_item_constraints(constraints)
-    }
-}
-
-fn evaluate_item_constraints(constraints: Option<&Constraints>) -> Result<bool, UnsupportedItemPredicate> {
-    let Some(constraints) = constraints else {
-        return Ok(true);
-    };
-    if constraints.has_attributes {
-        return Err(UnsupportedItemPredicate {
-            name: "<attribute>".to_string(),
-        });
-    }
-
-    let mut result = true;
-    for conjunction in &constraints.preds {
-        let mut conjunction_result = true;
-        for clause in &conjunction.clauses {
-            let mut clause_result = false;
-            for term in &clause.terms {
-                let term_result = match term.kind {
-                    PredicateKind::Trivial(predicate)
-                        if matches!(term.name.as_str(), "true" | "false") && term.args.is_empty() =>
-                    {
-                        predicate()
-                    },
-                    _ => {
-                        return Err(UnsupportedItemPredicate {
-                            name: term.name.clone(),
-                        });
-                    },
-                };
-                clause_result |= if term.is_neg { !term_result } else { term_result };
-            }
-            conjunction_result &= clause_result;
-        }
-        result &= conjunction_result;
-    }
-    Ok(result)
-}
-
-#[cfg(test)]
-mod tests {
-    use rpl_constraints::Constraints;
-    use rpl_constraints::predicates::{
-        PredicateClause, PredicateConjunction, PredicateKind, PredicateTerm, TrivialPredsFnPtr,
-    };
-
-    use super::evaluate_item_constraints;
-
-    fn guard(name: &str, predicate: TrivialPredsFnPtr) -> Constraints {
-        Constraints {
-            preds: vec![PredicateConjunction {
-                clauses: vec![PredicateClause {
-                    terms: vec![PredicateTerm {
-                        name: name.to_string(),
-                        kind: PredicateKind::Trivial(predicate),
-                        args: Vec::new(),
-                        is_neg: false,
-                    }],
-                }],
-            }],
-            attrs: Default::default(),
-            has_attributes: false,
-        }
-    }
-
-    #[test]
-    fn evaluates_true_and_false_item_guards() {
-        let true_guard = guard("true", rpl_constraints::predicates::r#true);
-        let false_guard = guard("false", rpl_constraints::predicates::r#false);
-
-        assert_eq!(evaluate_item_constraints(Some(&true_guard)), Ok(true));
-        assert_eq!(evaluate_item_constraints(Some(&false_guard)), Ok(false));
-    }
 }

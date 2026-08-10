@@ -20,6 +20,7 @@ use std::cell::RefCell;
 use std::convert::identity;
 
 use rpl_constraints::predicates::BodyInfoCache;
+use rpl_constraints::tribool::TriBool;
 use rpl_context::PatCtxt;
 use rpl_context::pat::{DynamicError, PatternItem};
 use rpl_match::item::{ItemPredicateEvaluator, MatchItemCtxt};
@@ -316,8 +317,8 @@ impl<'tcx> CheckFnCtxt<'_, 'tcx> {
                 let Some(matched) = MatchItemCtxt::new(self.tcx, rust_items).match_impl(impl_def_id, impl_) else {
                     continue;
                 };
-                match ItemPredicateEvaluator::new(&matched).evaluate(rust_items.item_constraints.as_ref()) {
-                    Ok(true) => {
+                match ItemPredicateEvaluator::new(self.tcx, &matched).evaluate(rust_items.item_constraints.as_ref()) {
+                    Ok(TriBool::True) => {
                         let error = Box::new(DynamicError::default_diagnostic(name, span));
                         self.tcx.emit_node_span_lint(
                             error.lint(),
@@ -326,7 +327,10 @@ impl<'tcx> CheckFnCtxt<'_, 'tcx> {
                             error,
                         );
                     },
-                    Ok(false) => {},
+                    Ok(TriBool::False) => {},
+                    Ok(TriBool::Unknown) => {
+                        debug!(?name, "item pattern evaluation was incomplete");
+                    },
                     Err(error) => {
                         debug!(
                             ?error,
