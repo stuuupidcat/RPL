@@ -22,6 +22,7 @@ kw_as              = @{ "as" ~ !WordFollowing }
 kw_crate           = @{ "crate" ~ !WordFollowing }
 kw_use             = @{ "use" ~ !WordFollowing }
 kw_type            = @{ "type" ~ !WordFollowing }
+kw_adt             = @{ "adt" ~ !WordFollowing }
 kw_let             = @{ "let" ~ !WordFollowing }
 kw_move            = @{ "move" ~ !WordFollowing }
 kw_Len             = @{ "Len" ~ !WordFollowing }
@@ -295,6 +296,7 @@ MetaVariable = ${ Dollar ~ Word }
 
 MetaVariableType = {
     kw_type
+  | kw_adt
   | kw_const ~ LeftParen ~ Type ~ RightParen
   | kw_place ~ LeftParen ~ Type ~ RightParen
 }
@@ -882,8 +884,21 @@ FieldsSeparatedByComma = {
     Field ~ (Comma ~ Field)* ~ Comma?
 }
 
+NonExhaustiveFields = {
+    (Field ~ Comma)* ~ Dot2 ~ Comma?
+}
+
+StructFields = {
+    NonExhaustiveFields
+  | FieldsSeparatedByComma
+}
+
+ItemGenericWildcard = {
+    LessThan ~ Dot2 ~ GreaterThan
+}
+
 Struct = {
-    kw_pub? ~ kw_struct ~ MetaVariable ~ LeftBrace ~ FieldsSeparatedByComma? ~ RightBrace
+    kw_pub? ~ kw_struct ~ MetaVariable ~ ItemGenericWildcard? ~ LeftBrace ~ StructFields? ~ RightBrace
 }
 
 EnumVariant = {
@@ -904,8 +919,25 @@ ImplKind = {
     Path ~ kw_for
 }
 
+ItemBinding = {
+    MetaVariable ~ Colon
+}
+
+ItemAdtType = {
+    MetaVariable ~ ItemGenericWildcard
+}
+
+ImplSelfType = {
+    ItemAdtType
+  | Type
+}
+
+ImplWhereClause = {
+    kw_where ~ Dot2
+}
+
 Impl = {
-    kw_unsafe? ~ kw_impl ~ ImplKind? ~ Type ~ LeftBrace ~ (Fn ~ WhereBlock?)* ~ RightBrace
+    ItemBinding? ~ kw_unsafe? ~ kw_impl ~ ItemGenericWildcard? ~ ImplKind? ~ ImplSelfType ~ ImplWhereClause? ~ LeftBrace ~ (Fn ~ WhereBlock?)* ~ RightBrace
 }
 
 RustItem                = {
@@ -917,7 +949,9 @@ RustItem                = {
 RustItemWithConstraint  = {
     Attr* ~ RustItem ~ WhereBlock?
 }
-RustItemsWithConstraint = { LeftBrace ~ (RustItemWithConstraint)+ ~ RightBrace }
+RustItemsWithConstraint = {
+    LeftBrace ~ (RustItemWithConstraint)+ ~ RightBrace ~ WhereBlock?
+}
 
 PatternConfiguration = {
     Identifier ~ MetaVariableAssignList?

@@ -38,6 +38,12 @@ use crate::predicates::item_attr::{ItemAttrPredsFnPtr, has_attr};
 pub enum PredicateError<'i> {
     #[display("Invalid predicate: {pred}\n{span}")]
     InvalidPredicate { pred: &'i str, span: SpanWrapper<'i> },
+    #[display("Predicate `{pred}` is not supported in an item guard\n{span}")]
+    UnsupportedItemGuardPredicate { pred: &'i str, span: SpanWrapper<'i> },
+    #[display("Item guard predicate `{pred}` does not accept arguments\n{span}")]
+    ItemGuardPredicateTakesNoArgs { pred: &'i str, span: SpanWrapper<'i> },
+    #[display("Attributes are not supported in an item guard\n{span}")]
+    UnsupportedItemGuardAttribute { span: SpanWrapper<'i> },
     #[display("Invalid predicate argument: {_0}")]
     InvalidArgs(String),
 }
@@ -212,6 +218,7 @@ impl PredicateClause {
 
 #[derive(Clone, Debug)]
 pub struct PredicateTerm {
+    pub name: String,
     pub kind: PredicateKind,
     pub args: Vec<PredicateArg>,
     pub is_neg: bool,
@@ -224,6 +231,7 @@ impl PredicateTerm {
             Choice2::_1(pred) => (pred.get_matched().1, true),
         };
         let (pred_name, _, args, _) = pred.get_matched();
+        let name = pred_name.span.as_str().to_string();
         let kind = PredicateKind::try_from(SpanWrapper::new(pred_name.span, path))?;
         let args = if let Some(args) = args {
             let (first, following, _) = args.get_matched();
@@ -237,7 +245,12 @@ impl PredicateTerm {
         } else {
             vec![]
         };
-        Ok(Self { kind, is_neg, args })
+        Ok(Self {
+            name,
+            kind,
+            is_neg,
+            args,
+        })
     }
 }
 

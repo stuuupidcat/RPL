@@ -136,6 +136,20 @@ error_type!(
                 span: SpanWrapper<'i>,
             }
                 "Invalid field index `{index}` ({source}). \n{span}",
+            323 UnqualifiedImplTraitPath {
+                value: &'i str,
+                span: SpanWrapper<'i>,
+            }
+                "Impl trait path `{value}` is unqualified; import it or use a qualified path. \n{span}",
+            324 CyclicImplTraitPathImport {
+                value: &'i str,
+                span: SpanWrapper<'i>,
+            }
+                "Cyclic imports while resolving impl trait path `{value}`. \n{span}",
+            325 UnsupportedImplTraitGenericArguments {
+                span: SpanWrapper<'i>,
+            }
+                "Generic arguments in impl trait paths are not supported yet. \n{span}",
             /* 4xx for diagnostic errors */
             400 MissingPropertyInDiag {
                 property: &'static str,

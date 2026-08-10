@@ -26,6 +26,10 @@ impl<'a, 'pcx, 'tcx> MatchSession<'a, 'pcx, 'tcx> {
         index: &CrateItemIndex,
         rust_items: &'pcx pat::RustItems<'pcx>,
     ) -> Vec<SessionResult<'tcx>> {
+        // Item guards need ADT/impl bindings from the item-rooted matcher.
+        if !rust_items.legacy_function_matching_enabled() {
+            return Vec::new();
+        }
         let (fn_slots, adt_slots) = collect_slot_descs(rust_items);
 
         if fn_slots.is_empty() && adt_slots.is_empty() {

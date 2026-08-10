@@ -105,7 +105,7 @@ impl<'pcx> PatternItem<'pcx> {
                         map.extend(body.labels.iter().map(|(&k, &v)| (k, v)));
                     }
                 }
-                for impl_pat in items.impls.values() {
+                for impl_pat in &items.impls {
                     for fn_pat in impl_pat.fns.values() {
                         if let Some(body) = fn_pat.body {
                             map.extend(body.labels.iter().map(|(&k, &v)| (k, v)));
@@ -133,18 +133,25 @@ pub struct RustItems<'pcx> {
     pub meta: Arc<NonLocalMetaVars<'pcx>>,
     pub adts: FxHashMap<Symbol, Adt<'pcx>>,
     pub fns: FnPatterns<'pcx>,
-    pub impls: FxHashMap<Symbol, Impl<'pcx>>,
+    pub impls: Vec<Impl<'pcx>>,
+    pub item_constraints: Option<Constraints>,
     pub attr: PatAttr<'pcx>,
 }
 
 impl<'pcx> RustItems<'pcx> {
-    pub(crate) fn new(pcx: PatCtxt<'pcx>, meta: Arc<NonLocalMetaVars<'pcx>>, attr: PatAttr<'pcx>) -> Self {
+    pub(crate) fn new(
+        pcx: PatCtxt<'pcx>,
+        meta: Arc<NonLocalMetaVars<'pcx>>,
+        item_constraints: Option<Constraints>,
+        attr: PatAttr<'pcx>,
+    ) -> Self {
         Self {
             pcx,
             meta,
             adts: Default::default(),
             fns: Default::default(),
             impls: Default::default(),
+            item_constraints,
             attr,
         }
     }
@@ -212,9 +219,22 @@ impl<'pcx> RustItems<'pcx> {
         constraints: Constraints,
     ) {
         let mut struct_inner = StructInner::default();
-        let name = rust_struct.MetaVariable();
-        if let Some(fields) = rust_struct.get_matched().4 {
-            let fields = collect_elems_separated_by_comma!(fields);
+        let (_, _, name, generic_wildcard, _, fields, _) = rust_struct.get_matched();
+        if let Some(fields) = fields {
+            let (fields, rest): (Vec<_>, RestPat) = if let Some(fields) = fields.NonExhaustiveFields() {
+                (fields.Field(), RestPat::Rest)
+            } else {
+                (
+                    collect_elems_separated_by_comma!(
+                        fields
+                            .FieldsSeparatedByComma()
+                            .expect("StructFields must contain one alternative")
+                    )
+                    .collect(),
+                    RestPat::Exact,
+                )
+            };
+            struct_inner.rest = rest;
             for field in fields {
                 let (name, _, ty) = field.get_matched();
                 let name = Symbol::intern(name.span.as_str());
@@ -224,7 +244,18 @@ impl<'pcx> RustItems<'pcx> {
             }
         }
 
-        let struct_pat = Adt::new_struct(struct_inner, meta, constraints);
+        let struct_pat = Adt::new_struct(
+            struct_inner,
+            meta,
+            ItemGenericsPat {
+                rest: if generic_wildcard.is_some() {
+                    RestPat::Rest
+                } else {
+                    RestPat::Exact
+                },
+            },
+            constraints,
+        );
         // let struct_pat = self.pcx.alloc_struct(struct_pat);
         self.adts.insert(Symbol::intern(name.span.as_str()), struct_pat);
     }
@@ -282,19 +313,35 @@ impl<'pcx> RustItems<'pcx> {
     #[instrument(level = "debug", skip(self, rust_impl, meta, symbol_table))]
     fn add_impl<'mcx: 'pcx>(
         &mut self,
-        pat_name: Option<Symbol>,
+        _pat_name: Option<Symbol>,
         rust_impl: WithPath<'pcx, &'pcx pairs::Impl<'pcx>>,
         meta: Arc<NonLocalMetaVars<'pcx>>,
         symbol_table: &'mcx rpl_meta::symbol_table::SymbolTable<'mcx>,
         constraints: Constraints,
     ) {
         let p = rust_impl.path;
-        let (_, _, impl_kind, ty, _, fns, _) = rust_impl.get_matched();
-        let impl_sym_tab = symbol_table.get_impl(ty, impl_kind.as_ref()).unwrap();
-        let ty = Ty::from(WithPath::new(p, ty), self.pcx, symbol_table);
-        let trait_id = impl_kind
-            .as_ref()
-            .map(|impl_kind| Path::from_pairs(impl_kind.get_matched().0, self.pcx));
+        let (binding, unsafety, _, generics, impl_kind, self_ty, where_clause, _, fns, _) = rust_impl.get_matched();
+        let impl_sym_tab = symbol_table.get_impl(self_ty, impl_kind.as_ref()).unwrap();
+        let self_ty = if let Some(adt_ty) = self_ty.ItemAdtType() {
+            ImplSelfTy {
+                ty: self
+                    .pcx
+                    .mk_adt_pat_ty(Symbol::intern(adt_ty.MetaVariable().span.as_str())),
+                generic_args: RestPat::Rest,
+            }
+        } else {
+            ImplSelfTy {
+                ty: Ty::from(
+                    WithPath::new(p, self_ty.Type().expect("ImplSelfType must contain one alternative")),
+                    self.pcx,
+                    symbol_table,
+                ),
+                generic_args: RestPat::Exact,
+            }
+        };
+        let trait_path = impl_kind.as_ref().map(|impl_kind| {
+            Path::from_imported_pairs(WithPath::new(p, impl_kind.get_matched().0), self.pcx, symbol_table)
+        });
         let fns = fns
             .iter_matched()
             .map(|rust_fn| {
@@ -315,16 +362,39 @@ impl<'pcx> RustItems<'pcx> {
             })
             .collect();
         let impl_pat = Impl {
+            binding: binding
+                .as_ref()
+                .map(|binding| Symbol::intern(binding.MetaVariable().span.as_str())),
+            safety: if unsafety.is_some() {
+                SafetyPat::Unsafe
+            } else {
+                SafetyPat::Safe
+            },
+            polarity: ImplPolarityPat::Positive,
+            generics: ItemGenericsPat {
+                rest: if generics.is_some() {
+                    RestPat::Rest
+                } else {
+                    RestPat::Exact
+                },
+            },
             meta,
-            ty,
-            trait_id,
+            self_ty,
+            trait_path,
+            where_clause: if where_clause.is_some() {
+                RestPat::Rest
+            } else {
+                RestPat::Exact
+            },
             fns,
             constraints,
         };
-        debug!(ty = ?impl_pat.ty, trait_id = ?impl_pat.trait_id, fns = ?impl_pat.fns.keys());
-        if let Some(pat_name) = pat_name {
-            self.impls.insert(pat_name, impl_pat);
-        }
+        debug!(
+            ty = ?impl_pat.self_ty,
+            trait_path = ?impl_pat.trait_path,
+            fns = ?impl_pat.fns.keys()
+        );
+        self.impls.push(impl_pat);
     }
 
     #[instrument(level = "trace", skip(self), fields(adts = ?self.adts.keys()), ret)]
@@ -332,14 +402,26 @@ impl<'pcx> RustItems<'pcx> {
         self.adts.get(&adt)
     }
 
+    /// Compatibility bridge for the function-rooted matcher.
+    ///
+    /// Preserve the old effective last-impl-wins behavior for function-rooted
+    /// matching while retaining every impl in [`Self::impls`] for item matching.
+    pub fn legacy_impl_for_function_matching(&self) -> Option<&Impl<'pcx>> {
+        self.legacy_function_matching_enabled()
+            .then(|| self.impls.last())
+            .flatten()
+    }
+
+    /// Item constraints may refer to ADT and impl bindings, which the
+    /// function-rooted matcher cannot represent.
+    pub fn legacy_function_matching_enabled(&self) -> bool {
+        self.item_constraints.is_none()
+    }
+
     fn table_head(&self) -> TableHead {
         let mut columns = FxHashMap::default();
 
         self.meta.table_head(&mut columns);
-
-        for name in self.adts.keys() {
-            columns.try_insert(*name, ColumnType::Ty).unwrap();
-        }
 
         // FIX: should self.attr be included in the table head?
 
@@ -474,16 +556,23 @@ impl<'pcx> Pattern<'pcx> {
                     with_path(p, std::iter::once(item)),
                     symbol_table,
                     meta,
+                    None,
                     block_type,
                 );
             },
             Choice3::_1(items) => {
+                let (_, rust_items, _, where_block) = items.get_matched();
+                let item_constraints = where_block.as_ref().map(|_| {
+                    Constraints::from_where_block_opt(std::iter::empty(), where_block, p)
+                        .unwrap_or_else(|err| panic!("unexpected error in pattern constraints:\n{err}"))
+                });
                 self.add_items(
                     pat_name,
                     attr,
-                    with_path(p, items.get_matched().1.iter_matched()),
+                    with_path(p, rust_items.iter_matched()),
                     symbol_table,
                     meta,
+                    item_constraints,
                     block_type,
                 );
             },
@@ -550,6 +639,7 @@ impl<'pcx> Pattern<'pcx> {
         .table_head();
     }
 
+    #[expect(clippy::too_many_arguments)]
     #[instrument(level = "debug", skip(self, attr, items, symbol_table, meta))]
     fn add_items(
         &mut self,
@@ -558,6 +648,7 @@ impl<'pcx> Pattern<'pcx> {
         items: WithPath<'pcx, impl Iterator<Item = &'pcx pairs::RustItemWithConstraint<'pcx>>>,
         symbol_table: &'pcx rpl_meta::symbol_table::SymbolTable<'_>,
         meta: Arc<NonLocalMetaVars<'pcx>>,
+        item_constraints: Option<Constraints>,
         block_type: PattOrUtil,
     ) {
         let p = items.path;
@@ -565,7 +656,7 @@ impl<'pcx> Pattern<'pcx> {
             PattOrUtil::Patt => {
                 self.patt_block.entry(pat_name).or_insert_with(|| {
                     let attr = PatAttr::parse_all(attr);
-                    let mut rpl_rust_items = RustItems::new(self.pcx, meta.clone(), attr);
+                    let mut rpl_rust_items = RustItems::new(self.pcx, meta.clone(), item_constraints, attr);
                     for item in items.inner {
                         rpl_rust_items.add_item(Some(pat_name), with_path(p, item), meta.clone(), symbol_table);
                     }
@@ -575,7 +666,7 @@ impl<'pcx> Pattern<'pcx> {
             PattOrUtil::Util => {
                 self.util_block.entry(pat_name).or_insert_with(|| {
                     let attr = PatAttr::parse_all(attr);
-                    let mut rpl_rust_items = RustItems::new(self.pcx, meta.clone(), attr);
+                    let mut rpl_rust_items = RustItems::new(self.pcx, meta.clone(), item_constraints, attr);
                     for item in items.inner {
                         rpl_rust_items.add_item(Some(pat_name), with_path(p, item), meta.clone(), symbol_table);
                     }

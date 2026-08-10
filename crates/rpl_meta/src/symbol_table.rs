@@ -52,8 +52,9 @@ pub enum MetaVariableType {
     Place,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AdtPatType {
+    Any,
     Struct,
     Enum,
 }
@@ -67,6 +68,7 @@ pub type Type<'i> = &'i pairs::Type<'i>;
 #[derive(Default, Debug)]
 pub struct NonLocalMetaSymTab<'i> {
     type_vars: FlatMap<&'i str, (usize, PredicateConjunction)>,
+    adt_vars: FlatMap<&'i str, PredicateConjunction>,
     const_vars: FlatMap<&'i str, (usize, Type<'i>, PredicateConjunction)>,
     place_vars: FlatMap<&'i str, (usize, Type<'i>, PredicateConjunction)>,
 }
@@ -74,6 +76,9 @@ pub struct NonLocalMetaSymTab<'i> {
 impl<'i> NonLocalMetaSymTab<'i> {
     pub fn type_vars(&self) -> impl Iterator<Item = (&'i str, usize)> {
         self.type_vars.iter().map(|(symbol, (idx, _))| (*symbol, *idx))
+    }
+    pub fn adt_vars(&self) -> impl Iterator<Item = &'i str> + '_ {
+        self.adt_vars.keys().copied()
     }
     pub fn const_vars(&self) -> impl Iterator<Item = (&'i str, usize)> {
         self.const_vars.iter().map(|(symbol, (idx, _, _))| (*symbol, *idx))
@@ -96,7 +101,7 @@ impl<'i> NonLocalMetaSymTab<'i> {
         errors: &mut Vec<RPLMetaError<'i>>,
     ) {
         match meta_var_ty.deref() {
-            Choice3::_0(_) => {
+            Choice4::_0(_) => {
                 let existed = self
                     .type_vars
                     .insert(meta_var.span.as_str(), (self.type_vars.len(), preds));
@@ -108,7 +113,17 @@ impl<'i> NonLocalMetaSymTab<'i> {
                     errors.push(err);
                 }
             },
-            Choice3::_1(kind) => {
+            Choice4::_1(_) => {
+                let existed = self.adt_vars.insert(meta_var.span.as_str(), preds);
+                if existed.is_some() {
+                    let err = RPLMetaError::NonLocalMetaVariableAlreadyDeclared {
+                        meta_var: meta_var.span.as_str(),
+                        span: SpanWrapper::new(meta_var.span, mctx.get_active_path()),
+                    };
+                    errors.push(err);
+                }
+            },
+            Choice4::_2(kind) => {
                 let (_, _, ty, _) = kind.get_matched();
                 let existed = self
                     .const_vars
@@ -121,7 +136,7 @@ impl<'i> NonLocalMetaSymTab<'i> {
                     errors.push(err);
                 }
             },
-            Choice3::_2(kind) => {
+            Choice4::_3(kind) => {
                 let (_, _, ty, _) = kind.get_matched();
                 let existed = self
                     .place_vars
@@ -170,6 +185,8 @@ impl<'i> NonLocalMetaSymTab<'i> {
     pub fn get_meta_var_from_name(&self, name: &str) -> Option<MetaVariable<'i>> {
         if let Some((idx, preds)) = self.type_vars.get(&name) {
             Some(MetaVariable::Type(*idx, preds.clone()))
+        } else if let Some(stored_name) = self.adt_vars.keys().copied().find(|stored_name| *stored_name == name) {
+            Some(MetaVariable::AdtPat(AdtPatType::Any, stored_name))
         } else if let Some((idx, ty, preds)) = self.const_vars.get(&name) {
             Some(MetaVariable::Const(*idx, ty, preds.clone()))
         } else if let Some((idx, ty, preds)) = self.place_vars.get(&name) {
@@ -258,6 +275,11 @@ macro_rules! map_inner {
 pub type Imports<'i> = FxHashMap<&'i str, &'i pairs::Path<'i>>;
 pub type AdtPats<'i> = FlatMap<&'i str, AdtPatType>;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ItemBindingType {
+    Impl,
+}
+
 #[derive(Default, AsRef)]
 pub struct SymbolTable<'i> {
     // meta variables in p[$T: ty]
@@ -272,10 +294,33 @@ pub struct SymbolTable<'i> {
     enums: FxHashMap<&'i str, Enum<'i>>,
     fns: FxHashMap<&'i str, Fn<'i>>,
     unnamed_fns: Vec<Fn<'i>>,
-    impls: FxHashMap<(&'i pairs::Type<'i>, Option<&'i pairs::ImplKind<'i>>), Impl<'i>>,
+    impls: FxHashMap<(&'i pairs::ImplSelfType<'i>, Option<&'i pairs::ImplKind<'i>>), Impl<'i>>,
+    item_bindings: FxHashMap<&'i str, ItemBindingType>,
 }
 
 impl<'i> SymbolTable<'i> {
+    pub fn add_item_binding(
+        &mut self,
+        mctx: &MetaContext<'i>,
+        binding: &'i pairs::MetaVariable<'i>,
+        binding_ty: ItemBindingType,
+        errors: &mut Vec<RPLMetaError<'i>>,
+    ) {
+        let name = binding.span.as_str();
+        if self.meta_vars.get_meta_var_from_name(name).is_some()
+            || self.item_bindings.try_insert(name, binding_ty).is_err()
+        {
+            errors.push(RPLMetaError::SymbolAlreadyDeclared {
+                ident: name,
+                span: SpanWrapper::new(binding.span, mctx.get_active_path()),
+            });
+        }
+    }
+
+    pub fn item_binding(&self, name: &str) -> Option<ItemBindingType> {
+        self.item_bindings.get(name).copied()
+    }
+
     pub fn add_enum(
         &mut self,
         mctx: &MetaContext<'i>,
@@ -362,7 +407,7 @@ impl<'i> SymbolTable<'i> {
     ) -> Option<(&mut Impl<'i>, &Imports<'i>, &AdtPats<'i>)> {
         self.impls
             .try_insert(
-                (impl_pat.Type(), impl_pat.ImplKind()),
+                (impl_pat.ImplSelfType(), impl_pat.ImplKind()),
                 (ImplInner::new(impl_pat), self.meta_vars.clone(), &self.adt_pats).into(),
             )
             .map_err(|_| {
@@ -472,7 +517,11 @@ impl<'i> SymbolTable<'i> {
         self.fns.get(&name)
     }
     /// See [`SymbolTable::add_impl`].
-    pub fn get_impl(&self, ty: &'i pairs::Type<'i>, impl_kind: Option<&'i pairs::ImplKind<'i>>) -> Option<&Impl<'i>> {
+    pub fn get_impl(
+        &self,
+        ty: &'i pairs::ImplSelfType<'i>,
+        impl_kind: Option<&'i pairs::ImplKind<'i>>,
+    ) -> Option<&Impl<'i>> {
         // FIXME: how to identify an impl?
         self.impls.get(&(ty, impl_kind))
     }
@@ -897,17 +946,17 @@ pub struct ImplInner<'i> {
     #[allow(dead_code)]
     trait_: Option<&'i pairs::Path<'i>>,
     #[allow(dead_code)]
-    ty: &'i pairs::Type<'i>,
+    ty: &'i pairs::ImplSelfType<'i>,
     fns: FxHashMap<&'i str, Fn<'i>>,
 }
 
 impl<'i> ImplInner<'i> {
     pub fn new(impl_pat: &'i pairs::Impl<'i>) -> Self {
         let impl_pat = impl_pat.get_matched();
-        let trait_ = impl_pat.2.as_ref().map(|trait_| trait_.get_matched().0);
+        let trait_ = impl_pat.4.as_ref().map(|trait_| trait_.get_matched().0);
         Self {
             trait_,
-            ty: impl_pat.3,
+            ty: impl_pat.5,
             fns: FxHashMap::default(),
         }
     }

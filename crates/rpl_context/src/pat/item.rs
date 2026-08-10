@@ -26,9 +26,22 @@ pub type Struct<'pcx> = WithMetaTable<'pcx, StructInner<'pcx>>;
 pub type EnumInner<'pcx> = FxIndexMap<Symbol, Variant<'pcx>>;
 pub type Enum<'pcx> = WithMetaTable<'pcx, EnumInner<'pcx>>;
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RestPat {
+    #[default]
+    Exact,
+    Rest,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct ItemGenericsPat {
+    pub rest: RestPat,
+}
+
 #[derive(Debug)]
 pub struct Adt<'pcx> {
     pub meta: Arc<NonLocalMetaVars<'pcx>>,
+    pub generics: ItemGenericsPat,
     pub kind: AdtKind<'pcx>,
     pub constraints: Constraints,
 }
@@ -37,10 +50,12 @@ impl<'pcx> Adt<'pcx> {
     pub(crate) fn new_struct(
         inner: StructInner<'pcx>,
         meta: Arc<NonLocalMetaVars<'pcx>>,
+        generics: ItemGenericsPat,
         constraints: Constraints,
     ) -> Self {
         Self {
             meta,
+            generics,
             kind: AdtKind::Struct(inner),
             constraints,
         }
@@ -52,6 +67,7 @@ impl<'pcx> Adt<'pcx> {
     ) -> Self {
         Self {
             meta,
+            generics: ItemGenericsPat::default(),
             kind: AdtKind::Enum(inner),
             constraints,
         }
@@ -108,6 +124,7 @@ pub enum AdtKind<'pcx> {
 #[derive(Default, Debug)]
 pub struct Variant<'pcx> {
     pub fields: FxIndexMap<Symbol, Field<'pcx>>,
+    pub rest: RestPat,
 }
 
 impl<'pcx> Variant<'pcx> {
@@ -134,10 +151,33 @@ pub struct Field<'pcx> {
     pub ty: Ty<'pcx>,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct ImplSelfTy<'pcx> {
+    pub ty: Ty<'pcx>,
+    pub generic_args: RestPat,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SafetyPat {
+    Safe,
+    Unsafe,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ImplPolarityPat {
+    Positive,
+}
+
+#[derive(Debug)]
 pub struct Impl<'pcx> {
+    pub binding: Option<Symbol>,
+    pub safety: SafetyPat,
+    pub polarity: ImplPolarityPat,
+    pub generics: ItemGenericsPat,
     pub meta: Arc<NonLocalMetaVars<'pcx>>,
-    pub(crate) ty: Ty<'pcx>,
-    pub(crate) trait_id: Option<Path<'pcx>>,
+    pub self_ty: ImplSelfTy<'pcx>,
+    pub trait_path: Option<Path<'pcx>>,
+    pub where_clause: RestPat,
     pub fns: FxHashMap<Symbol, FnPattern<'pcx>>,
     pub constraints: Constraints,
 }

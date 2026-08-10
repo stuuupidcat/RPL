@@ -17,6 +17,24 @@ use crate::PatCtxt;
 use crate::cvt_prim_ty::CvtPrimTy;
 use crate::pat::non_local_meta_vars::{ConstVar, TyVar};
 
+fn expand_imported_path<'mcx>(
+    path: WithPath<'mcx, &'mcx pairs::Path<'mcx>>,
+    symbol_table: &impl GetType<'mcx>,
+) -> utils::Path<'mcx> {
+    let source_path = path.path;
+    let mut path = utils::Path::from(path.inner);
+    let mut used = FxHashSet::default();
+    while let Some(ident) = path.leading_ident()
+        && let Ok(TypeOrPath::Path(mapped)) = symbol_table.get_type_or_path(&WithPath::new(source_path, ident))
+    {
+        if !used.insert(mapped) {
+            break;
+        }
+        path = path.replace_leading_ident(utils::Path::from(mapped));
+    }
+    path
+}
+
 // FIXME: Use interning for the types
 #[derive(Clone, Copy)]
 #[rustc_pass_by_value]
@@ -381,6 +399,14 @@ impl<'pcx> Path<'pcx> {
         //FIXME: how about the path arguments?
         items.extend(path.segments.iter().map(|seg| Symbol::intern(seg.0.span.as_str())));
         ItemPath(pcx.mk_slice(&items)).into()
+    }
+
+    pub(crate) fn from_imported_pairs<'mcx>(
+        path: WithPath<'mcx, &'mcx pairs::Path<'mcx>>,
+        pcx: PatCtxt<'pcx>,
+        symbol_table: &impl GetType<'mcx>,
+    ) -> Self {
+        Self::from(expand_imported_path(path, symbol_table), pcx)
     }
 }
 
