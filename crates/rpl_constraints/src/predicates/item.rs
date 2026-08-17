@@ -6,6 +6,12 @@ pub enum ItemPredicate {
     OwnsType,
     IsSendIn,
     IsSyncIn,
+    /// Emits resource types whose exclusive authority can cross threads through safe operations
+    /// that start from a shared reference to the wrapper.
+    ResourceExclusivelyAccessibleFromSharedRefIn,
+    /// Emits resource types that safe operations starting from a shared reference to the wrapper
+    /// can access concurrently.
+    ResourceConcurrentlyAccessibleFromSharedRefIn,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -76,6 +82,13 @@ const IS_SEND_IN_ARGS: &[ItemPredicateArgSpec] =
     &[ItemPredicateArgSpec::input(Type), ItemPredicateArgSpec::input(Impl)];
 const IS_SYNC_IN_ARGS: &[ItemPredicateArgSpec] =
     &[ItemPredicateArgSpec::input(Type), ItemPredicateArgSpec::input(Impl)];
+const RESOURCE_FROM_SHARED_REF_ARGS: &[ItemPredicateArgSpec] = &[
+    ItemPredicateArgSpec::output(Type),
+    ItemPredicateArgSpec::input(Adt),
+    ItemPredicateArgSpec::input(Type),
+    ItemPredicateArgSpec::input(Type),
+    ItemPredicateArgSpec::input(Impl),
+];
 
 const TRUE: ItemPredicateSpec = ItemPredicateSpec {
     predicate: None,
@@ -117,6 +130,16 @@ const IS_SYNC_IN: ItemPredicateSpec = ItemPredicateSpec {
     name: "is_sync_in",
     args: IS_SYNC_IN_ARGS,
 };
+const RESOURCE_EXCLUSIVELY_ACCESSIBLE_FROM_SHARED_REF_IN: ItemPredicateSpec = ItemPredicateSpec {
+    predicate: Some(ItemPredicate::ResourceExclusivelyAccessibleFromSharedRefIn),
+    name: "resource_exclusively_accessible_from_shared_ref_in",
+    args: RESOURCE_FROM_SHARED_REF_ARGS,
+};
+const RESOURCE_CONCURRENTLY_ACCESSIBLE_FROM_SHARED_REF_IN: ItemPredicateSpec = ItemPredicateSpec {
+    predicate: Some(ItemPredicate::ResourceConcurrentlyAccessibleFromSharedRefIn),
+    name: "resource_concurrently_accessible_from_shared_ref_in",
+    args: RESOURCE_FROM_SHARED_REF_ARGS,
+};
 
 pub fn item_predicate_spec(name: &str) -> Option<&'static ItemPredicateSpec> {
     match name {
@@ -128,6 +151,12 @@ pub fn item_predicate_spec(name: &str) -> Option<&'static ItemPredicateSpec> {
         "owns_type" => Some(&OWNS_TYPE),
         "is_send_in" => Some(&IS_SEND_IN),
         "is_sync_in" => Some(&IS_SYNC_IN),
+        "resource_exclusively_accessible_from_shared_ref_in" => {
+            Some(&RESOURCE_EXCLUSIVELY_ACCESSIBLE_FROM_SHARED_REF_IN)
+        },
+        "resource_concurrently_accessible_from_shared_ref_in" => {
+            Some(&RESOURCE_CONCURRENTLY_ACCESSIBLE_FROM_SHARED_REF_IN)
+        },
         _ => None,
     }
 }
@@ -155,5 +184,13 @@ mod tests {
         assert_eq!(is_sync_in.args[0].mode, ItemPredicateArgMode::Input);
         assert_eq!(is_sync_in.args[0].kind, ItemPredicateArgKind::Type);
         assert_eq!(is_sync_in.args[1].kind, ItemPredicateArgKind::Impl);
+
+        let accessible =
+            item_predicate_spec("resource_exclusively_accessible_from_shared_ref_in").expect("registered predicate");
+        assert_eq!(accessible.args.len(), 5);
+        assert_eq!(accessible.args[0].mode, ItemPredicateArgMode::Output);
+        assert_eq!(accessible.args[0].kind, ItemPredicateArgKind::Type);
+        assert_eq!(accessible.args[1].kind, ItemPredicateArgKind::Adt);
+        assert_eq!(accessible.args[4].kind, ItemPredicateArgKind::Impl);
     }
 }

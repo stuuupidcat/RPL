@@ -4,7 +4,9 @@ use rpl_constraints::predicates::{
 };
 use rpl_constraints::tribool::TriBool;
 use rustc_data_structures::fx::{FxHashMap, FxHashSet};
+use rustc_hir::def::DefKind;
 use rustc_hir::def_id::{DefId, LocalDefId};
+use rustc_hir::{Mutability, Safety};
 use rustc_middle::ty::{self, Ty, TyCtxt};
 use rustc_span::Symbol;
 
@@ -30,6 +32,12 @@ enum ItemValue<'tcx> {
     Impl(LocalDefId),
     TypeParameter(TypeParameter<'tcx>),
     Ty(Ty<'tcx>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SharedRefAccessKind {
+    Exclusive,
+    Concurrent,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -255,6 +263,12 @@ impl<'matched, 'tcx> ItemPredicateEvaluator<'matched, 'tcx> {
             ItemPredicate::OwnsType => self.owns_type(row, term),
             ItemPredicate::IsSendIn => self.is_send_in(row, term),
             ItemPredicate::IsSyncIn => self.is_sync_in(row, term),
+            ItemPredicate::ResourceExclusivelyAccessibleFromSharedRefIn => {
+                self.resource_accessible_from_shared_ref_in(row, term, SharedRefAccessKind::Exclusive)
+            },
+            ItemPredicate::ResourceConcurrentlyAccessibleFromSharedRefIn => {
+                self.resource_accessible_from_shared_ref_in(row, term, SharedRefAccessKind::Concurrent)
+            },
         }
     }
 
@@ -418,6 +432,251 @@ impl<'matched, 'tcx> ItemPredicateEvaluator<'matched, 'tcx> {
         // decision later without changing the predicate contract.
         let result = rpl_constraints::predicates::is_sync(self.tcx, typing_env, ty);
         Ok(EvalRows::decision(row, result.into()))
+    }
+
+    fn resource_accessible_from_shared_ref_in(
+        &self,
+        row: ItemBindings<'tcx>,
+        term: &PredicateTerm,
+        kind: SharedRefAccessKind,
+    ) -> Result<EvalRows<'tcx>, UnsupportedItemPredicate> {
+        let output = self.meta_arg(term, 0)?;
+        let wrapper = self.adt_arg(&row, term, 1)?;
+        let parameter = self.type_parameter_arg(&row, term, 2)?;
+        let mapped = self.ty_arg(&row, term, 3)?;
+        let marker = self.impl_arg(&row, term, 4)?;
+
+        if parameter.owner != wrapper || !self.marker_maps_parameter_to(marker, parameter, mapped) {
+            return Ok(EvalRows::empty());
+        }
+
+        // Phase one recognizes direct safe `&self` signatures and uses the matched type
+        // argument as the resource. The public relation is intentionally broader: a future
+        // implementation may emit projected or carrier types after analyzing method bodies,
+        // guards, trait APIs, and specialized substitutions.
+        match self.shared_ref_access_kind(wrapper, parameter, kind) {
+            TriBool::True => Ok(row
+                .bind(output, ItemValue::Ty(mapped))
+                .map_or_else(EvalRows::empty, EvalRows::one)),
+            TriBool::False => Ok(EvalRows::empty()),
+            TriBool::Unknown => Ok(EvalRows::unknown()),
+        }
+    }
+
+    fn marker_maps_parameter_to(&self, marker: LocalDefId, parameter: TypeParameter<'tcx>, mapped: Ty<'tcx>) -> bool {
+        let Some(trait_ref) = self.tcx.impl_trait_ref(marker.to_def_id()) else {
+            return false;
+        };
+        let trait_ref = trait_ref.instantiate_identity();
+        let ty::Adt(adt, args) = *trait_ref.self_ty().kind() else {
+            return false;
+        };
+        adt.did() == parameter.owner
+            && args
+                .get(parameter.index as usize)
+                .and_then(|arg| arg.as_type())
+                .is_some_and(|ty| ty == mapped)
+    }
+
+    fn shared_ref_access_kind(
+        &self,
+        wrapper: DefId,
+        parameter: TypeParameter<'tcx>,
+        kind: SharedRefAccessKind,
+    ) -> TriBool {
+        let mut result = TriBool::False;
+        for &impl_def_id in self.tcx.inherent_impls(wrapper).iter() {
+            let impl_self_ty = self.tcx.type_of(impl_def_id).instantiate_identity();
+            let ty::Adt(adt, args) = *impl_self_ty.kind() else {
+                continue;
+            };
+            if adt.did() != wrapper {
+                continue;
+            }
+            let Some(impl_parameter) = args.get(parameter.index as usize).and_then(|arg| arg.as_type()) else {
+                result = result | TriBool::Unknown;
+                continue;
+            };
+            if !matches!(impl_parameter.kind(), ty::Param(_)) {
+                // Specialized inherent impls need unification with the matched marker impl. Keep
+                // this incomplete rather than joining evidence from incompatible substitutions.
+                result = result | TriBool::Unknown;
+                continue;
+            }
+
+            for &method in self.tcx.associated_item_def_ids(impl_def_id) {
+                if self.tcx.def_kind(method) != DefKind::AssocFn {
+                    continue;
+                }
+                let signature = self.tcx.fn_sig(method).instantiate_identity().skip_binder();
+                if signature.safety != Safety::Safe {
+                    continue;
+                }
+                let inputs = signature.inputs();
+                let Some((&receiver, arguments)) = inputs.split_first() else {
+                    continue;
+                };
+                if !self.is_direct_shared_receiver(receiver, wrapper) {
+                    continue;
+                }
+
+                let method_result = match kind {
+                    SharedRefAccessKind::Exclusive => {
+                        arguments.iter().copied().fold(TriBool::False, |found, ty| {
+                            found | self.contains_owned_parameter(ty, impl_parameter, &mut FxHashSet::default())
+                        }) | self.contains_exclusive_output_parameter(
+                            signature.output(),
+                            impl_parameter,
+                            &mut FxHashSet::default(),
+                        )
+                    },
+                    SharedRefAccessKind::Concurrent => self.contains_shared_output_parameter(
+                        signature.output(),
+                        impl_parameter,
+                        &mut FxHashSet::default(),
+                    ),
+                };
+                result = result | method_result;
+                if result == TriBool::True {
+                    return result;
+                }
+            }
+        }
+        result
+    }
+
+    fn is_direct_shared_receiver(&self, receiver: Ty<'tcx>, wrapper: DefId) -> bool {
+        let ty::Ref(_, self_ty, Mutability::Not) = *receiver.kind() else {
+            return false;
+        };
+        matches!(self_ty.kind(), ty::Adt(adt, _) if adt.did() == wrapper)
+    }
+
+    fn contains_owned_parameter(
+        &self,
+        ty: Ty<'tcx>,
+        parameter: Ty<'tcx>,
+        visited: &mut FxHashSet<Ty<'tcx>>,
+    ) -> TriBool {
+        if ty == parameter {
+            return TriBool::True;
+        }
+        if !visited.insert(ty) {
+            return TriBool::False;
+        }
+        match ty.kind() {
+            ty::Tuple(types) => types.iter().fold(TriBool::False, |found, ty| {
+                found | self.contains_owned_parameter(ty, parameter, visited)
+            }),
+            ty::Array(element, _) | ty::Slice(element) | ty::Pat(element, _) => {
+                self.contains_owned_parameter(*element, parameter, visited)
+            },
+            ty::Adt(adt, _) if adt.is_phantom_data() => TriBool::False,
+            ty::Adt(_, args) => args
+                .iter()
+                .filter_map(|arg| arg.as_type())
+                .fold(TriBool::False, |found, ty| {
+                    found | self.contains_owned_parameter(ty, parameter, visited)
+                }),
+            ty::Alias(..) => TriBool::Unknown,
+            ty::Ref(..) | ty::RawPtr(..) | ty::FnDef(..) | ty::FnPtr(..) => TriBool::False,
+            _ => TriBool::False,
+        }
+    }
+
+    fn contains_exclusive_output_parameter(
+        &self,
+        ty: Ty<'tcx>,
+        parameter: Ty<'tcx>,
+        visited: &mut FxHashSet<Ty<'tcx>>,
+    ) -> TriBool {
+        if ty == parameter {
+            return TriBool::True;
+        }
+        if !visited.insert(ty) {
+            return TriBool::False;
+        }
+        match ty.kind() {
+            ty::Ref(_, referent, Mutability::Mut) => self.contains_parameter_dependency(*referent, parameter, visited),
+            ty::Ref(_, _, Mutability::Not) | ty::RawPtr(..) => TriBool::False,
+            ty::Tuple(types) => types.iter().fold(TriBool::False, |found, ty| {
+                found | self.contains_exclusive_output_parameter(ty, parameter, visited)
+            }),
+            ty::Array(element, _) | ty::Slice(element) | ty::Pat(element, _) => {
+                self.contains_exclusive_output_parameter(*element, parameter, visited)
+            },
+            ty::Adt(adt, _) if adt.is_phantom_data() => TriBool::False,
+            ty::Adt(_, args) => args
+                .iter()
+                .filter_map(|arg| arg.as_type())
+                .fold(TriBool::False, |found, ty| {
+                    self.contains_exclusive_output_parameter(ty, parameter, visited) | found
+                }),
+            ty::Alias(..) => TriBool::Unknown,
+            ty::FnDef(..) | ty::FnPtr(..) => TriBool::False,
+            _ => TriBool::False,
+        }
+    }
+
+    fn contains_shared_output_parameter(
+        &self,
+        ty: Ty<'tcx>,
+        parameter: Ty<'tcx>,
+        visited: &mut FxHashSet<Ty<'tcx>>,
+    ) -> TriBool {
+        if !visited.insert(ty) {
+            return TriBool::False;
+        }
+        match ty.kind() {
+            ty::Ref(_, referent, Mutability::Not) => self.contains_parameter_dependency(*referent, parameter, visited),
+            ty::Ref(_, _, Mutability::Mut) | ty::RawPtr(..) => TriBool::False,
+            ty::Tuple(types) => types.iter().fold(TriBool::False, |found, ty| {
+                found | self.contains_shared_output_parameter(ty, parameter, visited)
+            }),
+            ty::Array(element, _) | ty::Slice(element) | ty::Pat(element, _) => {
+                self.contains_shared_output_parameter(*element, parameter, visited)
+            },
+            ty::Adt(adt, _) if adt.is_phantom_data() => TriBool::False,
+            ty::Adt(_, args) => args
+                .iter()
+                .filter_map(|arg| arg.as_type())
+                .fold(TriBool::False, |found, ty| {
+                    found | self.contains_shared_output_parameter(ty, parameter, visited)
+                }),
+            ty::Alias(..) => TriBool::Unknown,
+            _ => TriBool::False,
+        }
+    }
+
+    fn contains_parameter_dependency(
+        &self,
+        ty: Ty<'tcx>,
+        parameter: Ty<'tcx>,
+        visited: &mut FxHashSet<Ty<'tcx>>,
+    ) -> TriBool {
+        if ty == parameter {
+            return TriBool::True;
+        }
+        if !visited.insert(ty) {
+            return TriBool::False;
+        }
+        match ty.kind() {
+            ty::Tuple(types) => types.iter().fold(TriBool::False, |found, ty| {
+                found | self.contains_parameter_dependency(ty, parameter, visited)
+            }),
+            ty::Array(element, _) | ty::Slice(element) | ty::Pat(element, _) | ty::Ref(_, element, _) => {
+                self.contains_parameter_dependency(*element, parameter, visited)
+            },
+            ty::RawPtr(element, _) => self.contains_parameter_dependency(*element, parameter, visited),
+            ty::Adt(_, args) | ty::FnDef(_, args) => args
+                .iter()
+                .filter_map(|arg| arg.as_type())
+                .fold(TriBool::False, |found, ty| {
+                    found | self.contains_parameter_dependency(ty, parameter, visited)
+                }),
+            ty::Alias(..) => TriBool::Unknown,
+            _ => TriBool::False,
+        }
     }
 
     fn meta_arg(&self, term: &PredicateTerm, index: usize) -> Result<Symbol, UnsupportedItemPredicate> {

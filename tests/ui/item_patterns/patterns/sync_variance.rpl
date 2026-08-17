@@ -1,0 +1,61 @@
+pattern sync-variance
+
+patt {
+    use core::marker::Sync;
+
+    sync_requires_send[
+        $Wrapper: adt,
+        $Parameter: type,
+        $MappedType: type,
+        $Resource: type,
+    ] = {
+        struct $Wrapper<..> {
+            ..
+        }
+
+        $marker:
+        unsafe impl<..> Sync for $Wrapper<..>
+        where ..
+        {}
+    } where {
+        has_type_parameters($Wrapper)
+        && type_parameter_of($Parameter, $Wrapper)
+        && type_parameter_maps_to($Parameter, $MappedType, $marker)
+        && resource_exclusively_accessible_from_shared_ref_in(
+            $Resource,
+            $Wrapper,
+            $Parameter,
+            $MappedType,
+            $marker,
+        )
+        && !is_send_in($Resource, $marker)
+    }
+
+    sync_requires_sync[
+        $Wrapper: adt,
+        $Parameter: type,
+        $MappedType: type,
+        $Resource: type,
+    ] = {
+        struct $Wrapper<..> {
+            ..
+        }
+
+        $marker:
+        unsafe impl<..> Sync for $Wrapper<..>
+        where ..
+        {}
+    } where {
+        has_type_parameters($Wrapper)
+        && type_parameter_of($Parameter, $Wrapper)
+        && type_parameter_maps_to($Parameter, $MappedType, $marker)
+        && resource_concurrently_accessible_from_shared_ref_in(
+            $Resource,
+            $Wrapper,
+            $Parameter,
+            $MappedType,
+            $marker,
+        )
+        && !is_sync_in($Resource, $marker)
+    }
+}
