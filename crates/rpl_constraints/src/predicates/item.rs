@@ -5,6 +5,7 @@ pub enum ItemPredicate {
     TypeParameterMapsTo,
     OwnsType,
     IsSendIn,
+    IsSyncIn,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -73,6 +74,8 @@ const TYPE_PARAMETER_MAPS_TO_ARGS: &[ItemPredicateArgSpec] = &[
 const OWNS_TYPE_ARGS: &[ItemPredicateArgSpec] = &[ItemPredicateArgSpec::input(Adt), ItemPredicateArgSpec::input(Type)];
 const IS_SEND_IN_ARGS: &[ItemPredicateArgSpec] =
     &[ItemPredicateArgSpec::input(Type), ItemPredicateArgSpec::input(Impl)];
+const IS_SYNC_IN_ARGS: &[ItemPredicateArgSpec] =
+    &[ItemPredicateArgSpec::input(Type), ItemPredicateArgSpec::input(Impl)];
 
 const TRUE: ItemPredicateSpec = ItemPredicateSpec {
     predicate: None,
@@ -109,6 +112,11 @@ const IS_SEND_IN: ItemPredicateSpec = ItemPredicateSpec {
     name: "is_send_in",
     args: IS_SEND_IN_ARGS,
 };
+const IS_SYNC_IN: ItemPredicateSpec = ItemPredicateSpec {
+    predicate: Some(ItemPredicate::IsSyncIn),
+    name: "is_sync_in",
+    args: IS_SYNC_IN_ARGS,
+};
 
 pub fn item_predicate_spec(name: &str) -> Option<&'static ItemPredicateSpec> {
     match name {
@@ -119,6 +127,7 @@ pub fn item_predicate_spec(name: &str) -> Option<&'static ItemPredicateSpec> {
         "type_parameter_maps_to" => Some(&TYPE_PARAMETER_MAPS_TO),
         "owns_type" => Some(&OWNS_TYPE),
         "is_send_in" => Some(&IS_SEND_IN),
+        "is_sync_in" => Some(&IS_SYNC_IN),
         _ => None,
     }
 }
@@ -140,5 +149,11 @@ mod tests {
         assert_eq!(maps_to.args.len(), 3);
         assert_eq!(maps_to.args[1].mode, ItemPredicateArgMode::Output);
         assert_eq!(maps_to.args[2].kind, ItemPredicateArgKind::Impl);
+
+        let is_sync_in = item_predicate_spec("is_sync_in").expect("registered predicate");
+        assert_eq!(is_sync_in.args.len(), 2);
+        assert_eq!(is_sync_in.args[0].mode, ItemPredicateArgMode::Input);
+        assert_eq!(is_sync_in.args[0].kind, ItemPredicateArgKind::Type);
+        assert_eq!(is_sync_in.args[1].kind, ItemPredicateArgKind::Impl);
     }
 }

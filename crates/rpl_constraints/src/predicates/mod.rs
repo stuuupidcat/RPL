@@ -105,6 +105,7 @@ pub const ALL_PREDICATES: &[&str] = &[
     "type_parameter_maps_to",
     "owns_type",
     "is_send_in",
+    "is_sync_in",
     // translate_preds
     "translate_from_function",
     // trivial_preds
@@ -200,6 +201,7 @@ impl<'i> TryFrom<SpanWrapper<'i>> for PredicateKind {
             "type_parameter_maps_to" => Self::Item(ItemPredicate::TypeParameterMapsTo),
             "owns_type" => Self::Item(ItemPredicate::OwnsType),
             "is_send_in" => Self::Item(ItemPredicate::IsSendIn),
+            "is_sync_in" => Self::Item(ItemPredicate::IsSyncIn),
             _ => {
                 return Err(PredicateError::InvalidPredicate {
                     pred: span.inner().as_str(),

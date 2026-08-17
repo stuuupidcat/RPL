@@ -254,6 +254,7 @@ impl<'matched, 'tcx> ItemPredicateEvaluator<'matched, 'tcx> {
             ItemPredicate::TypeParameterMapsTo => self.type_parameter_maps_to(row, term),
             ItemPredicate::OwnsType => self.owns_type(row, term),
             ItemPredicate::IsSendIn => self.is_send_in(row, term),
+            ItemPredicate::IsSyncIn => self.is_sync_in(row, term),
         }
     }
 
@@ -400,6 +401,22 @@ impl<'matched, 'tcx> ItemPredicateEvaluator<'matched, 'tcx> {
         // evaluator already carries incompleteness separately, so a future analysis can return
         // `Unknown` instead of treating every failed trait proof as `False`.
         let result = rpl_constraints::predicates::is_send(self.tcx, typing_env, ty);
+        Ok(EvalRows::decision(row, result.into()))
+    }
+
+    fn is_sync_in(
+        &self,
+        row: ItemBindings<'tcx>,
+        term: &PredicateTerm,
+    ) -> Result<EvalRows<'tcx>, UnsupportedItemPredicate> {
+        let ty = self.ty_arg(&row, term, 0)?;
+        let marker = self.impl_arg(&row, term, 1)?;
+        let typing_env = ty::TypingEnv::post_analysis(self.tcx, marker.to_def_id());
+
+        // Keep the same deliberately naive proof backend as `is_send_in`. The relational
+        // evaluator already preserves `Unknown`, so this can become a complete three-valued
+        // decision later without changing the predicate contract.
+        let result = rpl_constraints::predicates::is_sync(self.tcx, typing_env, ty);
         Ok(EvalRows::decision(row, result.into()))
     }
 
