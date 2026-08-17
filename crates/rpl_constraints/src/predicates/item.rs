@@ -12,11 +12,13 @@ pub enum ItemPredicate {
     /// Decides whether the resource satisfies `Sync` under the correlated access's applicability
     /// context and the matched impl substitution.
     IsSyncForAccessIn,
-    /// Emits correlated access witnesses and resource types whose exclusive authority can cross
-    /// threads through safe operations that start from a shared reference to the wrapper.
+    /// Emits access/resource pairs, correlated with the supplied parameter mapping and matched
+    /// impl applicability, whose exclusive authority can cross threads through safe operations
+    /// that start from a shared reference to the wrapper.
     ResourceExclusivelyAccessibleFromSharedRefIn,
-    /// Emits correlated access witnesses and resource types that safe operations starting from a
-    /// shared reference to the wrapper can access concurrently.
+    /// Emits access/resource pairs, correlated with the supplied parameter mapping and matched
+    /// impl applicability, that safe operations starting from a shared reference to the wrapper
+    /// can access concurrently.
     ResourceConcurrentlyAccessibleFromSharedRefIn,
 }
 
