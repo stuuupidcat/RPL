@@ -294,9 +294,13 @@ Identifier   = @{ !(Keywords) ~ Word }
 LabelName    = @{ Word }
 MetaVariable = ${ Dollar ~ Word }
 
+// Item-analysis witness type. Keep it soft so `access` remains available as a Rust identifier.
+kw_access = @{ "access" ~ !WordFollowing }
+
 MetaVariableType = {
     kw_type
   | kw_adt
+  | kw_access
   | kw_const ~ LeftParen ~ Type ~ RightParen
   | kw_place ~ LeftParen ~ Type ~ RightParen
 }

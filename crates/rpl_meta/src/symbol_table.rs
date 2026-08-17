@@ -4,7 +4,7 @@ use std::sync::Arc;
 use derive_more::derive::{AsRef, Debug, From};
 pub use diag::DiagSymbolTable;
 use either::Either;
-use parser::generics::{Choice3, Choice4};
+use parser::generics::{Choice3, Choice4, Choice5};
 use parser::{SpanWrapper, pairs};
 use pest_typed::{Span, Spanned};
 use rpl_constraints::predicates::{ItemPredicateArgKind, PredicateConjunction};
@@ -50,6 +50,7 @@ pub enum MetaVariableType {
     Type,
     Const,
     Place,
+    Access,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -69,6 +70,7 @@ pub type Type<'i> = &'i pairs::Type<'i>;
 pub struct NonLocalMetaSymTab<'i> {
     type_vars: FlatMap<&'i str, (usize, PredicateConjunction)>,
     adt_vars: FlatMap<&'i str, PredicateConjunction>,
+    access_vars: FlatMap<&'i str, PredicateConjunction>,
     const_vars: FlatMap<&'i str, (usize, Type<'i>, PredicateConjunction)>,
     place_vars: FlatMap<&'i str, (usize, Type<'i>, PredicateConjunction)>,
 }
@@ -79,6 +81,9 @@ impl<'i> NonLocalMetaSymTab<'i> {
     }
     pub fn adt_vars(&self) -> impl Iterator<Item = &'i str> + '_ {
         self.adt_vars.keys().copied()
+    }
+    pub fn access_vars(&self) -> impl Iterator<Item = &'i str> + '_ {
+        self.access_vars.keys().copied()
     }
     pub fn const_vars(&self) -> impl Iterator<Item = (&'i str, usize)> {
         self.const_vars.iter().map(|(symbol, (idx, _, _))| (*symbol, *idx))
@@ -101,7 +106,7 @@ impl<'i> NonLocalMetaSymTab<'i> {
         errors: &mut Vec<RPLMetaError<'i>>,
     ) {
         match meta_var_ty.deref() {
-            Choice4::_0(_) => {
+            Choice5::_0(_) => {
                 let existed = self
                     .type_vars
                     .insert(meta_var.span.as_str(), (self.type_vars.len(), preds));
@@ -113,7 +118,7 @@ impl<'i> NonLocalMetaSymTab<'i> {
                     errors.push(err);
                 }
             },
-            Choice4::_1(_) => {
+            Choice5::_1(_) => {
                 let existed = self.adt_vars.insert(meta_var.span.as_str(), preds);
                 if existed.is_some() {
                     let err = RPLMetaError::NonLocalMetaVariableAlreadyDeclared {
@@ -123,7 +128,17 @@ impl<'i> NonLocalMetaSymTab<'i> {
                     errors.push(err);
                 }
             },
-            Choice4::_2(kind) => {
+            Choice5::_2(_) => {
+                let existed = self.access_vars.insert(meta_var.span.as_str(), preds);
+                if existed.is_some() {
+                    let err = RPLMetaError::NonLocalMetaVariableAlreadyDeclared {
+                        meta_var: meta_var.span.as_str(),
+                        span: SpanWrapper::new(meta_var.span, mctx.get_active_path()),
+                    };
+                    errors.push(err);
+                }
+            },
+            Choice5::_3(kind) => {
                 let (_, _, ty, _) = kind.get_matched();
                 let existed = self
                     .const_vars
@@ -136,7 +151,7 @@ impl<'i> NonLocalMetaSymTab<'i> {
                     errors.push(err);
                 }
             },
-            Choice4::_3(kind) => {
+            Choice5::_4(kind) => {
                 let (_, _, ty, _) = kind.get_matched();
                 let existed = self
                     .place_vars
@@ -187,6 +202,14 @@ impl<'i> NonLocalMetaSymTab<'i> {
             Some(MetaVariable::Type(*idx, preds.clone()))
         } else if let Some(stored_name) = self.adt_vars.keys().copied().find(|stored_name| *stored_name == name) {
             Some(MetaVariable::AdtPat(AdtPatType::Any, stored_name))
+        } else if let Some(stored_name) = self
+            .access_vars
+            .keys()
+            .copied()
+            .find(|stored_name| *stored_name == name)
+        {
+            let preds = self.access_vars.get(&stored_name).expect("stored access metavariable");
+            Some(MetaVariable::Access(stored_name, preds.clone()))
         } else if let Some((idx, ty, preds)) = self.const_vars.get(&name) {
             Some(MetaVariable::Const(*idx, ty, preds.clone()))
         } else if let Some((idx, ty, preds)) = self.place_vars.get(&name) {
@@ -329,6 +352,7 @@ impl<'i> SymbolTable<'i> {
         match self.meta_vars.get_meta_var_from_name(name) {
             Some(MetaVariable::Type(..)) => Some(ItemPredicateArgKind::Type),
             Some(MetaVariable::AdtPat(..)) => Some(ItemPredicateArgKind::Adt),
+            Some(MetaVariable::Access(..)) => Some(ItemPredicateArgKind::Access),
             Some(MetaVariable::Const(..) | MetaVariable::Place(..)) => None,
             None => self.item_binding(name).map(|kind| match kind {
                 ItemBindingType::Impl => ItemPredicateArgKind::Impl,
@@ -1015,6 +1039,7 @@ pub enum MetaVariable<'i> {
     Const(usize, &'i pairs::Type<'i>, PredicateConjunction),
     Place(usize, &'i pairs::Type<'i>, PredicateConjunction),
     AdtPat(AdtPatType, &'i str),
+    Access(&'i str, PredicateConjunction),
 }
 
 impl<'i> MetaVariable<'i> {
@@ -1024,6 +1049,7 @@ impl<'i> MetaVariable<'i> {
             MetaVariable::Const(_, _, _) => Either::Left(MetaVariableType::Const),
             MetaVariable::Place(_, _, _) => Either::Left(MetaVariableType::Place),
             MetaVariable::AdtPat(kind, _) => Either::Right(*kind),
+            MetaVariable::Access(..) => Either::Left(MetaVariableType::Access),
         }
     }
     pub fn expect_const(self) -> (usize, &'i pairs::Type<'i>, PredicateConjunction) {
@@ -1032,6 +1058,7 @@ impl<'i> MetaVariable<'i> {
             MetaVariable::Const(idx, ty, pred) => (idx, ty, pred),
             MetaVariable::Place(_, _, _) => panic!("Expected place meta variable, found ADT"),
             MetaVariable::AdtPat(_, _) => panic!("Expected const meta variable, found ADT"),
+            MetaVariable::Access(..) => panic!("Expected const meta variable, found access"),
         }
     }
     pub fn expect_non_adt(self) -> (MetaVariableType, usize, PredicateConjunction) {
@@ -1040,6 +1067,7 @@ impl<'i> MetaVariable<'i> {
             MetaVariable::Const(idx, _, pred) => (MetaVariableType::Const, idx, pred),
             MetaVariable::Place(idx, _, pred) => (MetaVariableType::Place, idx, pred),
             MetaVariable::AdtPat(_, _) => panic!("Expected non-ADT meta variable, found ADT"),
+            MetaVariable::Access(..) => panic!("Expected indexed meta variable, found access"),
         }
     }
 }

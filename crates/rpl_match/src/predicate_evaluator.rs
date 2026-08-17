@@ -302,6 +302,7 @@ impl<'e, 'm, 'tcx> PredicateEvaluator<'e, 'm, 'tcx> {
                             Ok(PredicateArgInstance::Place(place_var))
                         },
                         MetaVariable::AdtPat(_, _) => Err(format!("meta_var `{}` is an ADT pattern", name)),
+                        MetaVariable::Access(_, _) => Err(format!("meta_var `{}` is an item access", name)),
                     }
                 } else if let Some(idx) = self.symbol_table.inner.try_get_local_idx(name.as_str()) {
                     let local = pat::Local::from_usize(idx);

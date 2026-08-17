@@ -146,7 +146,7 @@ impl<'pcx> Ty<'pcx> {
                     };
                     pcx.mk_var_ty(ty_meta_var)
                 },
-                MetaVariable::Const(..) | MetaVariable::Place(..) => {
+                MetaVariable::Const(..) | MetaVariable::Place(..) | MetaVariable::Access(..) => {
                     panic!("A non-type meta variable used as a type variable")
                 },
                 MetaVariable::AdtPat(_, name) => pcx.mk_adt_pat_ty(Symbol::intern(name)),

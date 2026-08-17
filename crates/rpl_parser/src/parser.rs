@@ -152,6 +152,7 @@ pub enum Rule {
     r#Identifier,
     r#LabelName,
     r#MetaVariable,
+    r#kw_access,
     r#MetaVariableType,
     r#Predicate,
     r#PredicateTerm,
@@ -1344,19 +1345,19 @@ mod constant_wrappers {
     impl ::pest_typed::StringWrapper for r#w_145 {
         const CONTENT: &'static ::core::primitive::str = "-";
     }
-    #[doc = "A wrapper for `\"Group\"`."]
+    #[doc = "A wrapper for `\"access\"`."]
     #[allow(non_camel_case_types)]
     #[derive(Clone, Hash, PartialEq, Eq)]
     pub struct r#w_146;
     impl ::pest_typed::StringWrapper for r#w_146 {
-        const CONTENT: &'static ::core::primitive::str = "Group";
+        const CONTENT: &'static ::core::primitive::str = "access";
     }
-    #[doc = "A wrapper for `\"\\\"\"`."]
+    #[doc = "A wrapper for `\"Group\"`."]
     #[allow(non_camel_case_types)]
     #[derive(Clone, Hash, PartialEq, Eq)]
     pub struct r#w_147;
     impl ::pest_typed::StringWrapper for r#w_147 {
-        const CONTENT: &'static ::core::primitive::str = "\"";
+        const CONTENT: &'static ::core::primitive::str = "Group";
     }
     #[doc = "A wrapper for `\"\\\"\"`."]
     #[allow(non_camel_case_types)]
@@ -1370,6 +1371,13 @@ mod constant_wrappers {
     #[derive(Clone, Hash, PartialEq, Eq)]
     pub struct r#w_149;
     impl ::pest_typed::StringWrapper for r#w_149 {
+        const CONTENT: &'static ::core::primitive::str = "\"";
+    }
+    #[doc = "A wrapper for `\"\\\"\"`."]
+    #[allow(non_camel_case_types)]
+    #[derive(Clone, Hash, PartialEq, Eq)]
+    pub struct r#w_150;
+    impl ::pest_typed::StringWrapper for r#w_150 {
         const CONTENT: &'static ::core::primitive::str = "\"";
     }
 }
@@ -2209,7 +2217,9 @@ pub mod rules_impl {
                 }
             }
         }
-        :: pest_typed :: rule ! (r#MetaVariableType , "Corresponds to expression: `(kw_type | kw_adt | (kw_const ~ LeftParen ~ Type ~ RightParen) | (kw_place ~ LeftParen ~ Type ~ RightParen))`. Normal rule." "" , super :: super :: Rule , super :: super :: Rule :: r#MetaVariableType , super :: super :: generics :: Choice4 :: < super :: super :: rules :: r#kw_type :: < 'i , INHERITED > , super :: super :: rules :: r#kw_adt :: < 'i , INHERITED > , super :: super :: generics :: Seq4 :: < (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#kw_const :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#LeftParen :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#Type :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#RightParen :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , > , super :: super :: generics :: Seq4 :: < (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#kw_place :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#LeftParen :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#Type :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#RightParen :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , > , > , super :: super :: generics :: Skipped :: < 'i > , INHERITED , Both , true);
+        :: pest_typed :: rule ! (r#kw_access , "Corresponds to expression: `(\"access\" ~ !WordFollowing)`. Atomic rule." "" , super :: super :: Rule , super :: super :: Rule :: r#kw_access , super :: super :: generics :: Seq2 :: < (:: pest_typed :: predefined_node :: Skipped < super :: super :: generics :: Str :: < super :: super :: constant_wrappers :: r#w_146 > , super :: super :: generics :: Skipped < 'i > , 0 >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: generics :: Negative :: < super :: super :: rules :: r#WordFollowing :: < 'i , 0 > > , super :: super :: generics :: Skipped < 'i > , 0 >) , > , super :: super :: generics :: Skipped :: < 'i > , true , Span , true);
+        impl<'i, const INHERITED: ::core::primitive::usize> r#kw_access<'i, INHERITED> {}
+        :: pest_typed :: rule ! (r#MetaVariableType , "Corresponds to expression: `(kw_type | kw_adt | kw_access | (kw_const ~ LeftParen ~ Type ~ RightParen) | (kw_place ~ LeftParen ~ Type ~ RightParen))`. Normal rule." "" , super :: super :: Rule , super :: super :: Rule :: r#MetaVariableType , super :: super :: generics :: Choice5 :: < super :: super :: rules :: r#kw_type :: < 'i , INHERITED > , super :: super :: rules :: r#kw_adt :: < 'i , INHERITED > , super :: super :: rules :: r#kw_access :: < 'i , INHERITED > , super :: super :: generics :: Seq4 :: < (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#kw_const :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#LeftParen :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#Type :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#RightParen :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , > , super :: super :: generics :: Seq4 :: < (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#kw_place :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#LeftParen :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#Type :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#RightParen :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , > , > , super :: super :: generics :: Skipped :: < 'i > , INHERITED , Both , true);
         impl<'i, const INHERITED: ::core::primitive::usize> r#MetaVariableType<'i, INHERITED> {
             #[doc = "A helper function to access [`LeftParen`]."]
             #[allow(non_snake_case)]
@@ -2223,14 +2233,14 @@ pub mod rules_impl {
                 {
                     let res = (
                         {
-                            let res = res._2().map(|res| {
+                            let res = res._3().map(|res| {
                                 let res = &res.content.1.matched;
                                 res
                             });
                             res
                         },
                         {
-                            let res = res._3().map(|res| {
+                            let res = res._4().map(|res| {
                                 let res = &res.content.1.matched;
                                 res
                             });
@@ -2252,14 +2262,14 @@ pub mod rules_impl {
                 {
                     let res = (
                         {
-                            let res = res._2().map(|res| {
+                            let res = res._3().map(|res| {
                                 let res = &res.content.3.matched;
                                 res
                             });
                             res
                         },
                         {
-                            let res = res._3().map(|res| {
+                            let res = res._4().map(|res| {
                                 let res = &res.content.3.matched;
                                 res
                             });
@@ -2281,20 +2291,31 @@ pub mod rules_impl {
                 {
                     let res = (
                         {
-                            let res = res._2().map(|res| {
-                                let res = &res.content.2.matched;
-                                res
-                            });
-                            res
-                        },
-                        {
                             let res = res._3().map(|res| {
                                 let res = &res.content.2.matched;
                                 res
                             });
                             res
                         },
+                        {
+                            let res = res._4().map(|res| {
+                                let res = &res.content.2.matched;
+                                res
+                            });
+                            res
+                        },
                     );
+                    res
+                }
+            }
+            #[doc = "A helper function to access [`kw_access`]."]
+            #[allow(non_snake_case)]
+            pub fn r#kw_access<'s>(
+                &'s self,
+            ) -> ::pest_typed::re_exported::Option<&'s super::super::rules::r#kw_access<'i, INHERITED>> {
+                let res = &*self.content;
+                {
+                    let res = res._2().map(|res| res);
                     res
                 }
             }
@@ -2316,7 +2337,7 @@ pub mod rules_impl {
             ) -> ::pest_typed::re_exported::Option<&'s super::super::rules::r#kw_const<'i, INHERITED>> {
                 let res = &*self.content;
                 {
-                    let res = res._2().map(|res| {
+                    let res = res._3().map(|res| {
                         let res = &res.content.0.matched;
                         res
                     });
@@ -2330,7 +2351,7 @@ pub mod rules_impl {
             ) -> ::pest_typed::re_exported::Option<&'s super::super::rules::r#kw_place<'i, INHERITED>> {
                 let res = &*self.content;
                 {
-                    let res = res._3().map(|res| {
+                    let res = res._4().map(|res| {
                         let res = &res.content.0.matched;
                         res
                     });
@@ -4117,7 +4138,7 @@ pub mod rules_impl {
                 }
             }
         }
-        :: pest_typed :: rule ! (r#TypeGroup , "Corresponds to expression: `(\"Group\" ~ Type)`. Normal rule." "" , super :: super :: Rule , super :: super :: Rule :: r#TypeGroup , super :: super :: generics :: Seq2 :: < (:: pest_typed :: predefined_node :: Skipped < super :: super :: generics :: Str :: < super :: super :: constant_wrappers :: r#w_146 > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#Type :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , > , super :: super :: generics :: Skipped :: < 'i > , INHERITED , Both , true);
+        :: pest_typed :: rule ! (r#TypeGroup , "Corresponds to expression: `(\"Group\" ~ Type)`. Normal rule." "" , super :: super :: Rule , super :: super :: Rule :: r#TypeGroup , super :: super :: generics :: Seq2 :: < (:: pest_typed :: predefined_node :: Skipped < super :: super :: generics :: Str :: < super :: super :: constant_wrappers :: r#w_147 > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#Type :: < 'i , INHERITED > , super :: super :: generics :: Skipped < 'i > , INHERITED >) , > , super :: super :: generics :: Skipped :: < 'i > , INHERITED , Both , true);
         impl<'i, const INHERITED: ::core::primitive::usize> r#TypeGroup<'i, INHERITED> {
             #[doc = "A helper function to access [`Type`]."]
             #[allow(non_snake_case)]
@@ -10225,7 +10246,7 @@ pub mod rules_impl {
                 }
             }
         }
-        :: pest_typed :: rule ! (r#diagMessageText , "Corresponds to expression: `(!(\"\\\"\" | LeftBrace) ~ ANY)+`. Atomic rule." "" , super :: super :: Rule , super :: super :: Rule :: r#diagMessageText , super :: super :: generics :: RepOnce :: < 'i , 0 , super :: super :: generics :: Seq2 :: < (:: pest_typed :: predefined_node :: Skipped < super :: super :: generics :: Negative :: < super :: super :: generics :: Choice2 :: < super :: super :: generics :: Str :: < super :: super :: constant_wrappers :: r#w_147 > , super :: super :: rules :: r#LeftBrace :: < 'i , 0 > , > > , super :: super :: generics :: Skipped < 'i > , 0 >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#ANY , super :: super :: generics :: Skipped < 'i > , 0 >) , > > , super :: super :: generics :: Skipped :: < 'i > , true , Span , true);
+        :: pest_typed :: rule ! (r#diagMessageText , "Corresponds to expression: `(!(\"\\\"\" | LeftBrace) ~ ANY)+`. Atomic rule." "" , super :: super :: Rule , super :: super :: Rule :: r#diagMessageText , super :: super :: generics :: RepOnce :: < 'i , 0 , super :: super :: generics :: Seq2 :: < (:: pest_typed :: predefined_node :: Skipped < super :: super :: generics :: Negative :: < super :: super :: generics :: Choice2 :: < super :: super :: generics :: Str :: < super :: super :: constant_wrappers :: r#w_148 > , super :: super :: rules :: r#LeftBrace :: < 'i , 0 > , > > , super :: super :: generics :: Skipped < 'i > , 0 >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#ANY , super :: super :: generics :: Skipped < 'i > , 0 >) , > > , super :: super :: generics :: Skipped :: < 'i > , true , Span , true);
         impl<'i, const INHERITED: ::core::primitive::usize> r#diagMessageText<'i, INHERITED> {}
         :: pest_typed :: rule ! (r#diagMessageInner , "Corresponds to expression: `(diagMessageArg | diagMessageText)*`. Atomic rule." "" , super :: super :: Rule , super :: super :: Rule :: r#diagMessageInner , super :: super :: generics :: Rep :: < 'i , 0 , super :: super :: generics :: Choice2 :: < super :: super :: rules :: r#diagMessageArg :: < 'i , 0 > , super :: super :: rules :: r#diagMessageText :: < 'i , 0 > , > > , super :: super :: generics :: Skipped :: < 'i > , true , Both , true);
         impl<'i, const INHERITED: ::core::primitive::usize> r#diagMessageInner<'i, INHERITED> {
@@ -10276,7 +10297,7 @@ pub mod rules_impl {
                 }
             }
         }
-        :: pest_typed :: rule ! (r#diagMessage , "Corresponds to expression: `(\"\\\"\" ~ diagMessageInner ~ \"\\\"\")`. Atomic rule." "" , super :: super :: Rule , super :: super :: Rule :: r#diagMessage , super :: super :: generics :: Seq3 :: < (:: pest_typed :: predefined_node :: Skipped < super :: super :: generics :: Str :: < super :: super :: constant_wrappers :: r#w_148 > , super :: super :: generics :: Skipped < 'i > , 0 >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#diagMessageInner :: < 'i , 0 > , super :: super :: generics :: Skipped < 'i > , 0 >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: generics :: Str :: < super :: super :: constant_wrappers :: r#w_149 > , super :: super :: generics :: Skipped < 'i > , 0 >) , > , super :: super :: generics :: Skipped :: < 'i > , true , Both , true);
+        :: pest_typed :: rule ! (r#diagMessage , "Corresponds to expression: `(\"\\\"\" ~ diagMessageInner ~ \"\\\"\")`. Atomic rule." "" , super :: super :: Rule , super :: super :: Rule :: r#diagMessage , super :: super :: generics :: Seq3 :: < (:: pest_typed :: predefined_node :: Skipped < super :: super :: generics :: Str :: < super :: super :: constant_wrappers :: r#w_149 > , super :: super :: generics :: Skipped < 'i > , 0 >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: rules :: r#diagMessageInner :: < 'i , 0 > , super :: super :: generics :: Skipped < 'i > , 0 >) , (:: pest_typed :: predefined_node :: Skipped < super :: super :: generics :: Str :: < super :: super :: constant_wrappers :: r#w_150 > , super :: super :: generics :: Skipped < 'i > , 0 >) , > , super :: super :: generics :: Skipped :: < 'i > , true , Both , true);
         impl<'i, const INHERITED: ::core::primitive::usize> r#diagMessage<'i, INHERITED> {
             #[doc = "A helper function to access [`diagMessageInner`]."]
             #[allow(non_snake_case)]

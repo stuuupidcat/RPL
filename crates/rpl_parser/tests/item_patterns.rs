@@ -210,6 +210,37 @@ patt {
 }
 
 #[test]
+fn parses_access_metavariable_type() {
+    let main = parse(
+        r#"
+pattern access-witness
+patt {
+    p[$Access: access] = {
+        struct $Wrapper<..> { .. }
+    } where {
+        true()
+    }
+}
+"#,
+    );
+    let access_ty = main
+        .RPLPattern()
+        .Block()
+        .into_iter()
+        .find_map(|block| block.pattBlock())
+        .expect("patt block")
+        .RPLPatternItem()[0]
+        .MetaVariableDeclList()
+        .expect("meta variable declarations")
+        .MetaVariableDeclsSeparatedByComma()
+        .expect("non-empty meta variable declarations")
+        .MetaVariableDecl()
+        .0
+        .MetaVariableType();
+    assert!(access_ty.kw_access().is_some());
+}
+
+#[test]
 fn bundle_guard_is_unambiguous_and_cannot_be_repeated() {
     let result = parse_main(
         r#"

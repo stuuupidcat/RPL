@@ -6,11 +6,17 @@ pub enum ItemPredicate {
     OwnsType,
     IsSendIn,
     IsSyncIn,
-    /// Emits resource types whose exclusive authority can cross threads through safe operations
-    /// that start from a shared reference to the wrapper.
+    /// Decides whether the resource satisfies `Send` under the correlated access's applicability
+    /// context and the matched impl substitution.
+    IsSendForAccessIn,
+    /// Decides whether the resource satisfies `Sync` under the correlated access's applicability
+    /// context and the matched impl substitution.
+    IsSyncForAccessIn,
+    /// Emits correlated access witnesses and resource types whose exclusive authority can cross
+    /// threads through safe operations that start from a shared reference to the wrapper.
     ResourceExclusivelyAccessibleFromSharedRefIn,
-    /// Emits resource types that safe operations starting from a shared reference to the wrapper
-    /// can access concurrently.
+    /// Emits correlated access witnesses and resource types that safe operations starting from a
+    /// shared reference to the wrapper can access concurrently.
     ResourceConcurrentlyAccessibleFromSharedRefIn,
 }
 
@@ -25,6 +31,7 @@ pub enum ItemPredicateArgKind {
     Adt,
     Type,
     Impl,
+    Access,
 }
 
 impl ItemPredicateArgKind {
@@ -33,6 +40,7 @@ impl ItemPredicateArgKind {
             Self::Adt => "adt",
             Self::Type => "type",
             Self::Impl => "impl binding",
+            Self::Access => "access",
         }
     }
 }
@@ -66,7 +74,7 @@ pub struct ItemPredicateSpec {
     pub args: &'static [ItemPredicateArgSpec],
 }
 
-use ItemPredicateArgKind::{Adt, Impl, Type};
+use ItemPredicateArgKind::{Access, Adt, Impl, Type};
 
 const NO_ARGS: &[ItemPredicateArgSpec] = &[];
 const ADT_INPUT: &[ItemPredicateArgSpec] = &[ItemPredicateArgSpec::input(Adt)];
@@ -82,7 +90,13 @@ const IS_SEND_IN_ARGS: &[ItemPredicateArgSpec] =
     &[ItemPredicateArgSpec::input(Type), ItemPredicateArgSpec::input(Impl)];
 const IS_SYNC_IN_ARGS: &[ItemPredicateArgSpec] =
     &[ItemPredicateArgSpec::input(Type), ItemPredicateArgSpec::input(Impl)];
+const IS_TRAIT_FOR_ACCESS_IN_ARGS: &[ItemPredicateArgSpec] = &[
+    ItemPredicateArgSpec::input(Type),
+    ItemPredicateArgSpec::input(Access),
+    ItemPredicateArgSpec::input(Impl),
+];
 const RESOURCE_FROM_SHARED_REF_ARGS: &[ItemPredicateArgSpec] = &[
+    ItemPredicateArgSpec::output(Access),
     ItemPredicateArgSpec::output(Type),
     ItemPredicateArgSpec::input(Adt),
     ItemPredicateArgSpec::input(Type),
@@ -130,6 +144,16 @@ const IS_SYNC_IN: ItemPredicateSpec = ItemPredicateSpec {
     name: "is_sync_in",
     args: IS_SYNC_IN_ARGS,
 };
+const IS_SEND_FOR_ACCESS_IN: ItemPredicateSpec = ItemPredicateSpec {
+    predicate: Some(ItemPredicate::IsSendForAccessIn),
+    name: "is_send_for_access_in",
+    args: IS_TRAIT_FOR_ACCESS_IN_ARGS,
+};
+const IS_SYNC_FOR_ACCESS_IN: ItemPredicateSpec = ItemPredicateSpec {
+    predicate: Some(ItemPredicate::IsSyncForAccessIn),
+    name: "is_sync_for_access_in",
+    args: IS_TRAIT_FOR_ACCESS_IN_ARGS,
+};
 const RESOURCE_EXCLUSIVELY_ACCESSIBLE_FROM_SHARED_REF_IN: ItemPredicateSpec = ItemPredicateSpec {
     predicate: Some(ItemPredicate::ResourceExclusivelyAccessibleFromSharedRefIn),
     name: "resource_exclusively_accessible_from_shared_ref_in",
@@ -151,6 +175,8 @@ pub fn item_predicate_spec(name: &str) -> Option<&'static ItemPredicateSpec> {
         "owns_type" => Some(&OWNS_TYPE),
         "is_send_in" => Some(&IS_SEND_IN),
         "is_sync_in" => Some(&IS_SYNC_IN),
+        "is_send_for_access_in" => Some(&IS_SEND_FOR_ACCESS_IN),
+        "is_sync_for_access_in" => Some(&IS_SYNC_FOR_ACCESS_IN),
         "resource_exclusively_accessible_from_shared_ref_in" => {
             Some(&RESOURCE_EXCLUSIVELY_ACCESSIBLE_FROM_SHARED_REF_IN)
         },
@@ -187,10 +213,16 @@ mod tests {
 
         let accessible =
             item_predicate_spec("resource_exclusively_accessible_from_shared_ref_in").expect("registered predicate");
-        assert_eq!(accessible.args.len(), 5);
+        assert_eq!(accessible.args.len(), 6);
         assert_eq!(accessible.args[0].mode, ItemPredicateArgMode::Output);
-        assert_eq!(accessible.args[0].kind, ItemPredicateArgKind::Type);
-        assert_eq!(accessible.args[1].kind, ItemPredicateArgKind::Adt);
-        assert_eq!(accessible.args[4].kind, ItemPredicateArgKind::Impl);
+        assert_eq!(accessible.args[0].kind, ItemPredicateArgKind::Access);
+        assert_eq!(accessible.args[1].mode, ItemPredicateArgMode::Output);
+        assert_eq!(accessible.args[1].kind, ItemPredicateArgKind::Type);
+        assert_eq!(accessible.args[2].kind, ItemPredicateArgKind::Adt);
+        assert_eq!(accessible.args[5].kind, ItemPredicateArgKind::Impl);
+
+        let access_support = item_predicate_spec("is_sync_for_access_in").expect("registered predicate");
+        assert_eq!(access_support.args.len(), 3);
+        assert_eq!(access_support.args[1].kind, ItemPredicateArgKind::Access);
     }
 }

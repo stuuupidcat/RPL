@@ -7,6 +7,7 @@ patt {
         $Wrapper: adt,
         $Parameter: type,
         $MappedType: type,
+        $Access: access,
         $Resource: type,
     ] = {
         struct $Wrapper<..> {
@@ -22,19 +23,21 @@ patt {
         && type_parameter_of($Parameter, $Wrapper)
         && type_parameter_maps_to($Parameter, $MappedType, $marker)
         && resource_exclusively_accessible_from_shared_ref_in(
+            $Access,
             $Resource,
             $Wrapper,
             $Parameter,
             $MappedType,
             $marker,
         )
-        && !is_send_in($Resource, $marker)
+        && !is_send_for_access_in($Resource, $Access, $marker)
     }
 
     sync_requires_sync[
         $Wrapper: adt,
         $Parameter: type,
         $MappedType: type,
+        $Access: access,
         $Resource: type,
     ] = {
         struct $Wrapper<..> {
@@ -50,12 +53,13 @@ patt {
         && type_parameter_of($Parameter, $Wrapper)
         && type_parameter_maps_to($Parameter, $MappedType, $marker)
         && resource_concurrently_accessible_from_shared_ref_in(
+            $Access,
             $Resource,
             $Wrapper,
             $Parameter,
             $MappedType,
             $marker,
         )
-        && !is_sync_in($Resource, $marker)
+        && !is_sync_for_access_in($Resource, $Access, $marker)
     }
 }

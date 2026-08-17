@@ -106,6 +106,8 @@ pub const ALL_PREDICATES: &[&str] = &[
     "owns_type",
     "is_send_in",
     "is_sync_in",
+    "is_send_for_access_in",
+    "is_sync_for_access_in",
     "resource_exclusively_accessible_from_shared_ref_in",
     "resource_concurrently_accessible_from_shared_ref_in",
     // translate_preds
@@ -204,6 +206,8 @@ impl<'i> TryFrom<SpanWrapper<'i>> for PredicateKind {
             "owns_type" => Self::Item(ItemPredicate::OwnsType),
             "is_send_in" => Self::Item(ItemPredicate::IsSendIn),
             "is_sync_in" => Self::Item(ItemPredicate::IsSyncIn),
+            "is_send_for_access_in" => Self::Item(ItemPredicate::IsSendForAccessIn),
+            "is_sync_for_access_in" => Self::Item(ItemPredicate::IsSyncForAccessIn),
             "resource_exclusively_accessible_from_shared_ref_in" => {
                 Self::Item(ItemPredicate::ResourceExclusivelyAccessibleFromSharedRefIn)
             },
