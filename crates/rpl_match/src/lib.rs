@@ -40,6 +40,7 @@ pub mod mir; // FIXME: visibility
 mod place;
 pub mod predicate_evaluator;
 pub mod resolve;
+mod rudra_paths;
 pub mod session;
 mod statement;
 mod ty;

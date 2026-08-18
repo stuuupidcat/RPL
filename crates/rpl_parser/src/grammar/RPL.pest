@@ -726,7 +726,8 @@ MirRvalue = {
 }
 
 MirFnOperand = {
-    LeftParen ~ MirOperandCopy ~ RightParen
+    PlaceHolder
+  | LeftParen ~ MirOperandCopy ~ RightParen
   | LeftParen ~ MirOperandMove ~ RightParen
   | TypePath
   | LangItemWithArgs

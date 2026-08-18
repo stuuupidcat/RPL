@@ -892,6 +892,8 @@ impl<'pcx> Rvalue<'pcx> {
 #[derive(Clone)]
 pub enum Operand<'pcx> {
     Any,
+    /// `..` in an argument list: match any number of arguments (including zero).
+    AnyArgs,
     Copy(Place<'pcx>),
     Move(Place<'pcx>),
     Constant(ConstOperand<'pcx>),
@@ -907,7 +909,7 @@ impl<'pcx> Operand<'pcx> {
         let p = op.path;
         match op.inner.deref() {
             Choice6::_0(_any) => Self::Any,
-            Choice6::_1(_any_multiple) => Self::Any, // FIXME
+            Choice6::_1(_any_multiple) => Self::AnyArgs,
             Choice6::_2(meta_var) => Self::from_meta_var(meta_var),
             Choice6::_3(move_) => Self::from_move(WithPath::new(p, move_), pcx, fn_sym_tab),
             Choice6::_4(copy_) => Self::from_copy(WithPath::new(p, copy_), pcx, fn_sym_tab),
@@ -949,20 +951,22 @@ impl<'pcx> Operand<'pcx> {
         fn_sym_tab: &'pcx FnSymbolTable<'pcx>,
     ) -> Self {
         let p = op.path;
+        // After adding PlaceHolder as the first alternative, Choice6 indices shift by one.
         match op.inner.deref() {
-            Choice5::_0(copy_) => Self::from_copy(WithPath::new(p, copy_.get_matched().1), pcx, fn_sym_tab),
-            Choice5::_1(move_) => Self::from_move(WithPath::new(p, move_.get_matched().1), pcx, fn_sym_tab),
-            Choice5::_2(type_path) => Self::Constant(ConstOperand::from_type_path(
+            Choice6::_0(_placeholder) => Self::Any,
+            Choice6::_1(copy_) => Self::from_copy(WithPath::new(p, copy_.get_matched().1), pcx, fn_sym_tab),
+            Choice6::_2(move_) => Self::from_move(WithPath::new(p, move_.get_matched().1), pcx, fn_sym_tab),
+            Choice6::_3(type_path) => Self::Constant(ConstOperand::from_type_path(
                 WithPath::new(p, type_path),
                 pcx,
                 fn_sym_tab,
             )),
-            Choice5::_3(lang_item) => Self::Constant(ConstOperand::from_lang_item(
+            Choice6::_4(lang_item) => Self::Constant(ConstOperand::from_lang_item(
                 WithPath::new(p, lang_item),
                 pcx,
                 fn_sym_tab,
             )),
-            Choice5::_4(meta_var) => Self::from_meta_var(meta_var),
+            Choice6::_5(meta_var) => Self::from_meta_var(meta_var),
         }
     }
 }

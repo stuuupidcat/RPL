@@ -100,7 +100,9 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
         .check();
         mir_matches
             .into_iter()
-            .filter(|matched| self.check_constraints(fn_pat, item.def_id, body, matched, Some(&mir_ddg)))
+            .filter(|matched| {
+                self.check_constraints(fn_pat, item.def_id, body, matched, Some(&mir_ddg), Some(&mir_cfg))
+            })
             .map(|matched| {
                 let labels = &fn_pat.expect_body().labels;
                 let normalized = NormalizedMatched::new(&matched, labels, &attr_map);
@@ -132,7 +134,7 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
             place_vars: Default::default(),
             adt_fields: Default::default(),
         };
-        if !self.check_constraints(fn_pat, item.def_id, body, &matched, None) {
+        if !self.check_constraints(fn_pat, item.def_id, body, &matched, None, None) {
             return Vec::new();
         }
         let normalized = NormalizedMatched::new(&matched, labels, &attr_map);
@@ -186,6 +188,7 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
         body: &mir::Body<'tcx>,
         matched: &crate::matches::Matched<'tcx>,
         mir_ddg: Option<&MirDataDepGraph>,
+        mir_cfg: Option<&MirControlFlowGraph>,
     ) -> bool {
         let typing_env = ty::TypingEnv::post_analysis(self.tcx, body.source.def_id());
         let mut caches = self.body_caches.borrow_mut();
@@ -202,6 +205,7 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
             cache,
             fn_pat.symbol_table,
             mir_ddg,
+            mir_cfg,
         );
         evaluator.evaluate_constraint(&fn_pat.constraints)
     }

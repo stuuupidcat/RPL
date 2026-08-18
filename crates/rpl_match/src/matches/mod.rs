@@ -718,6 +718,10 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
 
     #[instrument(level = "info", skip(self), ret)]
     fn match_ddg(&self) -> bool {
+        // Open queries that only require CFG reachability between labeled Calls skip DDG adjacency.
+        if self.cx.fn_pat.constraints.mentions_cfg_reaches() {
+            return true;
+        }
         self.loc_pats().all(|loc_pat| {
             let StatementMatch::Location(loc) = self.matching[loc_pat].force_get_matched() else {
                 return true;

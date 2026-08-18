@@ -1,14 +1,27 @@
-error: calling a potentially panicking iterator after relocating elements may leave chunk holes on unwind
-  --> tests/ui/cve/cve_2020_25795/minimal.rs:23:23
+error: lifetime-bypassing operation reaches potentially panicking / unresolvable generic code
+  --> tests/ui/cve/cve_2020_25795/minimal.rs:20:23
    |
 LL |         ptr::copy_nonoverlapping(src, dst, count);
-   |         ----------------------------------------- elements relocated here, potentially leaving holes
+   |         ----------------------------------------- lifetime bypass here
 ...
-LL |             let opt = take_next(iter);
-   |                       ^^^^^^^^^^^^^^^ iterator advanced here (may panic)
+LL |             let opt = iter.next();
+   |                       ^^^^^^^^^^^ unresolvable generic or `drop_in_place` here
    |
-   = help: restore invariants (or use a drop guard) before calling code that may panic, such as `Iterator::next`
+   = help: restore container invariants (or use a drop guard) before calling code that may panic
    = note: `#[deny(rpl::panic_safety)]` on by default
 
-error: aborting due to 1 previous error
+error: weak lifetime-bypassing operation reaches potentially panicking / unresolvable generic code
+  --> tests/ui/cve/cve_2020_25795/minimal.rs:20:23
+   |
+LL |             let opt = iter.next();
+   |                       ^^^^^^^^^^^ unresolvable generic or `drop_in_place` here
+...
+LL |                     ptr::write(write, value);
+   |                     ------------------------ lifetime bypass here
+   |
+   = help: restore container invariants (or use a drop guard) before calling code that may panic
+   = note: `-D rpl::panic-safety` implied by `-D warnings`
+   = help: to override `-D warnings` add `#[allow(rpl::panic_safety)]`
+
+error: aborting due to 2 previous errors
 

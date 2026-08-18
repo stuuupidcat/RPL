@@ -252,7 +252,7 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
                 },
             ) => {
                 self.match_operand(func_pat, func)
-                    && self.match_spanned_operands(args_pat, args)
+                    && self.match_call_args(args_pat, args)
                     && destination_pat.is_none_or(|destination_pat| self.match_place(destination_pat, destination))
             },
             (
@@ -522,6 +522,7 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
                 }),
             ) if let &ty::FnDef(fn_did, _args) = ty.kind() => self.match_fn_pat(fn_pat, fn_did),
             (pat::Operand::Any, mir::Operand::Copy(_) | mir::Operand::Move(_) | mir::Operand::Constant(_)) => true,
+            (pat::Operand::AnyArgs, _) => true,
             (
                 pat::Operand::Copy(_) | pat::Operand::Move(_) | pat::Operand::Constant(_) | pat::Operand::FnPat(_),
                 mir::Operand::Copy(_) | mir::Operand::Move(_) | mir::Operand::Constant(_),
@@ -551,7 +552,22 @@ pub(crate) trait MatchStatement<'pcx, 'tcx> {
             && zip(pat, operands).all(|(operand_pat, operand)| self.match_operand(operand_pat, &operand.node))
     }
 
+    /// Match call arguments; a lone `..` (`AnyArgs`) matches any arity.
+    fn match_call_args(
+        &self,
+        pat: &[pat::Operand<'pcx>],
+        operands: &[rustc_span::source_map::Spanned<mir::Operand<'tcx>>],
+    ) -> bool {
+        if pat.len() == 1 && matches!(pat[0], pat::Operand::AnyArgs) {
+            return true;
+        }
+        self.match_spanned_operands(pat, operands)
+    }
+
     fn match_operands(&self, operands_pat: &[pat::Operand<'pcx>], operands: &[mir::Operand<'tcx>]) -> bool {
+        if operands_pat.len() == 1 && matches!(operands_pat[0], pat::Operand::AnyArgs) {
+            return true;
+        }
         operands_pat.len() == operands.len()
             && zip(operands_pat, operands).all(|(operand_pat, operand)| self.match_operand(operand_pat, operand))
     }
