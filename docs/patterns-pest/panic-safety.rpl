@@ -45,7 +45,7 @@ diag {
         label(src)      = "lifetime bypass here",
         label(sink)     = "unresolvable generic or `drop_in_place` here",
         help            = "restore container invariants (or use a drop guard) before calling code that may panic",
-        name            = "panic_safety",
+        name            = "panic_safety_strong",
         level           = "deny",
     }
     weak_ud = {
@@ -53,7 +53,7 @@ diag {
         label(src)      = "lifetime bypass here",
         label(sink)     = "unresolvable generic or `drop_in_place` here",
         help            = "restore container invariants (or use a drop guard) before calling code that may panic",
-        name            = "panic_safety",
+        name            = "panic_safety_weak",
         level           = "warn",
     }
 }
