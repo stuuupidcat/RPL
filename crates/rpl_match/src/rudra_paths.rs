@@ -51,7 +51,11 @@ pub fn def_path_names(tcx: TyCtxt<'_>, def_id: DefId) -> Vec<String> {
 }
 
 fn path_ends_with(path: &[String], suffix: &[&str]) -> bool {
-    path.len() >= suffix.len() && path[path.len() - suffix.len()..].iter().zip(suffix).all(|(a, b)| a == b)
+    path.len() >= suffix.len()
+        && path[path.len() - suffix.len()..]
+            .iter()
+            .zip(suffix)
+            .all(|(a, b)| a == b)
 }
 
 fn path_matches_any(path: &[String], suffixes: &[&[&str]]) -> bool {

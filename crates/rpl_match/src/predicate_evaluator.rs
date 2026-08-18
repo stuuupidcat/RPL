@@ -455,7 +455,11 @@ fn call_fn_def<'a, 'tcx>(
     tcx: TyCtxt<'tcx>,
     body: &'a mir::Body<'tcx>,
     loc: mir::Location,
-) -> Option<(DefId, ty::GenericArgsRef<'tcx>, &'a [rustc_span::source_map::Spanned<Operand<'tcx>>])> {
+) -> Option<(
+    DefId,
+    ty::GenericArgsRef<'tcx>,
+    &'a [rustc_span::source_map::Spanned<Operand<'tcx>>],
+)> {
     let term = terminator_at(body, loc)?;
     let (func, args) = match &term.kind {
         TerminatorKind::Call { func, args, .. } | TerminatorKind::TailCall { func, args, .. } => (func, args.as_ref()),
