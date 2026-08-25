@@ -1,0 +1,12 @@
+error: usage of cpuid intrinsic without proper checks can lead to undefined behavior on unsupported platforms
+  --> tests/ui/cve/cve_2021_26307/minimal_patched.rs:16:31
+   |
+LL |         let result = unsafe { self::arch::__cpuid_count(a, c) };
+   |                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: consider upgrade to Rust 1.94 or later, which ensures that the `cpuid` is available statically
+   = note: the `cpuid` intrinsic is only supported on x86 and x86_64 architectures, and may not be available in certain environments such as SGX
+   = note: `#[deny(rpl::unchecked_cpuid)]` on by default
+
+error: aborting due to 1 previous error
+
