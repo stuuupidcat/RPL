@@ -1,9 +1,9 @@
-//@ignore-on-host
+//@only-target: linux
 //@compile-flags: -Z deduplicate-diagnostics=yes
 use cassandra_cpp_sys::CassIterator as _CassIterator;
 use cassandra_cpp_sys::{
-    cass_false, cass_iterator_get_aggregate_meta, cass_iterator_next, cass_true,
-    CassAggregateMeta as _CassAggregateMeta,
+    CassAggregateMeta as _CassAggregateMeta, cass_false, cass_iterator_get_aggregate_meta,
+    cass_iterator_next, cass_true,
 };
 
 use std::iter::Iterator;
@@ -30,7 +30,8 @@ impl Iterator for AggregateIterator {
             match cass_iterator_next(self.0) {
                 //~^ ERROR: it will be an undefined behavior to pass a pointer returned by `cass_iterator_next` to `cass_iterator_get_*` in a `std::iter::Iterator` implementation
                 //~| HELP: consider implementing a `LendingIterator` instead
-                //~| NOTE: `#[deny(cassandra_iter_next_ptr_passed_to_cass_iter_get)]` on by default
+                //~| NOTE: `cass_iterator_next` will invalidate the current item when called
+                //~| NOTE: `#[deny(rpl::cassandra_iter_next_ptr_passed_to_cass_iter_get)]` on by default
                 cass_false => None,
                 cass_true => {
                     let field_value = cass_iterator_get_aggregate_meta(self.0);

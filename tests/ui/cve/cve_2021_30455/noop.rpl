@@ -1,8 +1,0 @@
-// Empty pattern file so UI stubs compile under RPL without default pattern noise.
-pattern noop
-
-patt {
-}
-
-diag {
-}

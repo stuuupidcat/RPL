@@ -1,5 +1,4 @@
-//@ignore-on-host: experimental unified $poison→$sink; smoke results in CVE-2021-30455.md
-//@rustc-env: RPL_PATS=docs/patterns-pest/cve/CVE-2021-30455.rpl
+//@check-pass: no pattern yet
 //@compile-flags: -Z inline-mir=false
 // Experimental: unified $poison→$sink; see CVE note (also fires unexpectedly — not a clean miss).
 

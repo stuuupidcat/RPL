@@ -1,5 +1,3 @@
-//@ ignore-on-host
-
 use std::{mem::MaybeUninit, ptr};
 
 pub trait Unsigned: Copy + Default + 'static {
@@ -75,28 +73,37 @@ where
     /// Get the length of the chunk.
     #[inline]
     pub fn len(&self) -> usize {
+        //~^ generic_function_marked_inline
         self.right - self.left
     }
 
     #[inline]
     unsafe fn force_write(index: usize, value: A, chunk: &mut Self) {
-        chunk.mut_ptr(index).write(value)
+        //~^ private_function_marked_inline
+        //~| generic_function_marked_inline
+        unsafe { chunk.mut_ptr(index).write(value) }
     }
 
     #[inline]
     unsafe fn mut_ptr(&mut self, index: usize) -> *mut A {
-        (&mut self.data as *mut _ as *mut A).add(index)
+        //~^ private_function_marked_inline
+        //~| generic_function_marked_inline
+        unsafe { (&mut self.data as *mut _ as *mut A).add(index) }
     }
 
     #[inline]
     unsafe fn ptr(&self, index: usize) -> *const A {
-        (&self.data as *const _ as *const A).add(index)
+        //~^ private_function_marked_inline
+        //~| generic_function_marked_inline
+        unsafe { (&self.data as *const _ as *const A).add(index) }
     }
 
     #[inline]
     unsafe fn force_copy(from: usize, to: usize, count: usize, chunk: &mut Self) {
+        //~^ private_function_marked_inline
+        //~| generic_function_marked_inline
         if count > 0 {
-            ptr::copy(chunk.ptr(from), chunk.mut_ptr(to), count)
+            unsafe { ptr::copy(chunk.ptr(from), chunk.mut_ptr(to), count) }
         }
     }
 

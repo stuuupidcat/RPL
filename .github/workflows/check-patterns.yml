@@ -1,0 +1,35 @@
+name: Check RPL Patterns
+
+on:
+  push:
+    branches: [dev, pest]
+    paths:
+      - "docs/patterns-pest/**"
+      - "crates/rpl_patterns/src/patterns.rs"
+      - "tests/ui/**"
+      - "scripts/check_rpl_patterns.py"
+      - ".github/workflows/check-patterns.yml"
+  pull_request:
+    branches: [master, pest]
+    paths:
+      - "docs/patterns-pest/**"
+      - "crates/rpl_patterns/src/patterns.rs"
+      - "tests/ui/**"
+      - "scripts/check_rpl_patterns.py"
+      - ".github/workflows/check-patterns.yml"
+  workflow_dispatch:
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check-patterns:
+    name: Pattern sync, coverage, and stderr hygiene
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Run pattern checks
+        run: python3 scripts/check_rpl_patterns.py

@@ -1,4 +1,3 @@
-//@ignore-on-host
 #![warn(clippy::swap_ptr_to_ref)]
 
 macro_rules! addr_of_mut_to_ref {
