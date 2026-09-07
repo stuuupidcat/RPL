@@ -1,4 +1,3 @@
-//@check-pass: no pattern yet
 //@compile-flags: -Z inline-mir=false
 //@rustc-env: RPL_PATS=docs/patterns-pest/panic-safety.rpl
 
