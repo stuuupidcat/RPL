@@ -35,6 +35,7 @@ mod adt;
 mod counted;
 mod fns;
 pub mod graph; // FIXME: visibility
+pub mod item;
 pub mod matches; // FIXME: visibility
 pub mod mir; // FIXME: visibility
 mod place;

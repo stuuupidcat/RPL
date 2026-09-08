@@ -19,7 +19,7 @@ pub(super) struct CheckImplCtxt<'i, 'r> {
 
 impl<'i> CheckImplCtxt<'i, '_> {
     pub(super) fn check_impl(&mut self, mctx: &MetaContext<'i>, rust_impl: &'i pairs::Impl<'i>) {
-        let (_, _, _, _, _, fns, _) = rust_impl.get_matched();
+        let (_, _, _, _, _, _, _, _, fns, _) = rust_impl.get_matched();
         for rust_fn in fns.iter_matched() {
             // FIXME: check constraints
             let (rust_fn, _where_block) = rust_fn.get_matched();

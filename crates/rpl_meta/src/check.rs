@@ -4,14 +4,14 @@ use std::sync::Arc;
 use impls::CheckImplCtxt;
 use parser::generics::{Choice2, Choice3, Choice4, Choice5, Choice6, Choice9, Choice12, Choice14};
 use parser::{SpanWrapper, pairs};
-use rpl_constraints::predicates::{PredicateConjunction, PredicateError};
-use rustc_data_structures::fx::FxHashMap;
+use rpl_constraints::predicates::{ItemPredicateArgMode, PredicateConjunction, PredicateError, item_predicate_spec};
+use rustc_data_structures::fx::{FxHashMap, FxHashSet};
 
 use crate::check::lang_item::is_lang_item;
 use crate::context::MetaContext;
 use crate::symbol_table::{
-    AdtPatType, AdtPats, EnumInner, FnInner, GetType as _, ImplInner, MetaVariable, NonLocalMetaSymTab, SymbolTable,
-    Variant, WithMetaTable, WithPath, ident_is_primitive,
+    AdtPatType, AdtPats, EnumInner, FnInner, GetType as _, ImplInner, ItemBindingType, MetaVariable,
+    NonLocalMetaSymTab, SymbolTable, Variant, WithMetaTable, WithPath, ident_is_primitive,
 };
 use crate::utils::{Path, Record};
 use crate::{RPLMetaError, collect_elems_separated_by_comma};
@@ -117,7 +117,15 @@ impl<'i> CheckCtxt<'i> {
             Choice2::_1(pred) => pred.get_matched().1,
         };
         let pred_name = pred.get_matched().0.span.as_str();
-        if !rpl_constraints::predicates::ALL_PREDICATES.contains(&pred_name) {
+        if item_predicate_spec(pred_name).is_some_and(|spec| spec.predicate.is_some()) {
+            self.errors.push(
+                PredicateError::ItemPredicateOutsideItemGuard {
+                    pred: pred_name,
+                    span: SpanWrapper::new(pred.span, mctx.get_active_path()),
+                }
+                .into(),
+            );
+        } else if !rpl_constraints::predicates::ALL_PREDICATES.contains(&pred_name) {
             self.errors.push(
                 PredicateError::InvalidPredicate {
                     pred: pred_name,
@@ -140,30 +148,237 @@ impl<'i> CheckCtxt<'i> {
             _ => {
                 let item = rust_item_or_patt_operation.RustItemWithConstraint();
                 let items = rust_item_or_patt_operation.RustItemsWithConstraint();
-                let rust_items = if let Some(items) = items {
-                    items.get_matched().1.iter_matched().collect::<Vec<_>>()
+                if let Some(items) = items {
+                    let (_, rust_items, _, where_block) = items.get_matched();
+                    self.check_rust_items(mctx, rust_items.iter_matched().collect());
+                    self.check_item_where_block(mctx, where_block.as_ref());
                 } else {
                     // unwrap here is safe because the `RustItem` or `RustItems` is not `None`
-                    vec![item.unwrap()]
-                };
-                self.check_rust_items(mctx, rust_items)
+                    self.check_rust_items(mctx, vec![item.unwrap()]);
+                }
             },
         }
     }
 
     fn check_rust_items(&mut self, mctx: &MetaContext<'i>, rust_items: Vec<&'i pairs::RustItemWithConstraint<'i>>) {
-        // FIXME: check the constraints in meta_pass
-        let rust_items = rust_items
-            .into_iter()
-            .map(|item| item.get_matched().1)
-            .collect::<Vec<_>>();
-        for rust_item in rust_items {
+        for item in rust_items {
+            let (_, rust_item, where_block) = item.get_matched();
+            self.check_where_block(mctx, where_block.as_ref());
             match rust_item.deref() {
                 Choice4::_0(rust_fn) => self.check_fn(mctx, rust_fn),
                 Choice4::_1(rust_struct) => self.check_struct(mctx, rust_struct),
                 Choice4::_2(rust_enum) => self.check_enum(mctx, rust_enum),
                 Choice4::_3(rust_impl) => self.check_impl(mctx, rust_impl),
             }
+        }
+    }
+
+    fn check_where_block(&mut self, mctx: &MetaContext<'i>, where_block: Option<&'i pairs::WhereBlock<'i>>) {
+        let Some(constraints) = where_block.and_then(|where_block| where_block.ConstraintsSeparatedByComma()) else {
+            return;
+        };
+        let (first, following, _) = constraints.get_matched();
+        std::iter::once(first)
+            .chain(following.iter_matched().map(|constraint| constraint.get_matched().1))
+            .filter_map(|constraint| constraint.PredicateConjunction())
+            .for_each(|predicates| self.check_pred_conjunction_opt(mctx, Some(predicates)));
+    }
+
+    fn check_item_where_block(&mut self, mctx: &MetaContext<'i>, where_block: Option<&'i pairs::WhereBlock<'i>>) {
+        let Some(constraints) = where_block.and_then(|where_block| where_block.ConstraintsSeparatedByComma()) else {
+            return;
+        };
+        let mut bound: FxHashSet<&'i str> = self
+            .symbol_table
+            .meta_vars
+            .adt_vars()
+            .filter(|name| self.symbol_table.get_adt(name).is_some())
+            .collect();
+        bound.extend(self.symbol_table.item_bindings().map(|(name, _)| name));
+        let (first, following, _) = constraints.get_matched();
+        for constraint in
+            std::iter::once(first).chain(following.iter_matched().map(|constraint| constraint.get_matched().1))
+        {
+            match constraint.deref() {
+                Choice2::_0(attribute) => {
+                    self.errors.push(
+                        PredicateError::UnsupportedItemGuardAttribute {
+                            span: SpanWrapper::new(attribute.span, mctx.get_active_path()),
+                        }
+                        .into(),
+                    );
+                },
+                Choice2::_1(predicates) => self.check_item_pred_conjunction(mctx, predicates, &mut bound),
+            }
+        }
+    }
+
+    fn check_item_pred_conjunction(
+        &mut self,
+        mctx: &MetaContext<'i>,
+        predicates: &'i pairs::PredicateConjunction<'i>,
+        bound: &mut FxHashSet<&'i str>,
+    ) {
+        let (first, following) = predicates.get_matched();
+        std::iter::once(first)
+            .chain(
+                following
+                    .iter_matched()
+                    .map(|and_predicate| and_predicate.get_matched().1),
+            )
+            .for_each(|predicate| self.check_item_pred_clause(mctx, predicate, bound));
+    }
+
+    fn check_item_pred_clause(
+        &mut self,
+        mctx: &MetaContext<'i>,
+        predicate: &'i pairs::PredicateClause<'i>,
+        bound: &mut FxHashSet<&'i str>,
+    ) {
+        match predicate.deref() {
+            Choice2::_0(predicate) => self.check_item_pred_literal(mctx, predicate, bound, false),
+            Choice2::_1(predicates) => {
+                let (_, first, following, _) = predicates.get_matched();
+                std::iter::once(first)
+                    .chain(
+                        following
+                            .iter_matched()
+                            .map(|or_predicate| or_predicate.get_matched().1),
+                    )
+                    .for_each(|predicate| {
+                        self.check_item_pred_literal(mctx, predicate, &mut bound.clone(), true);
+                    });
+            },
+        }
+    }
+
+    fn check_item_pred_literal(
+        &mut self,
+        mctx: &MetaContext<'i>,
+        predicate: &'i pairs::PredicateTerm<'i>,
+        bound: &mut FxHashSet<&'i str>,
+        in_disjunction: bool,
+    ) {
+        let (predicate, is_negated) = match predicate.deref() {
+            Choice2::_0(predicate) => (predicate, false),
+            Choice2::_1(predicate) => (predicate.get_matched().1, true),
+        };
+        let (name, _, args, _) = predicate.get_matched();
+        let name = name.span.as_str();
+        let Some(spec) = item_predicate_spec(name) else {
+            let error = if rpl_constraints::predicates::ALL_PREDICATES.contains(&name) {
+                PredicateError::UnsupportedItemGuardPredicate {
+                    pred: name,
+                    span: SpanWrapper::new(predicate.span, mctx.get_active_path()),
+                }
+            } else {
+                PredicateError::InvalidPredicate {
+                    pred: name,
+                    span: SpanWrapper::new(predicate.span, mctx.get_active_path()),
+                }
+            };
+            self.errors.push(error.into());
+            return;
+        };
+
+        let args = args
+            .as_ref()
+            .map(|args| {
+                let (first, following, _) = args.get_matched();
+                std::iter::once(first)
+                    .chain(following.iter_matched().map(|arg| arg.get_matched().1))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        if args.len() != spec.args.len() {
+            let error = if spec.args.is_empty() {
+                PredicateError::ItemGuardPredicateTakesNoArgs {
+                    pred: name,
+                    span: SpanWrapper::new(predicate.span, mctx.get_active_path()),
+                }
+            } else {
+                PredicateError::InvalidItemGuardArity {
+                    pred: name,
+                    expected: spec.args.len(),
+                    actual: args.len(),
+                    span: SpanWrapper::new(predicate.span, mctx.get_active_path()),
+                }
+            };
+            self.errors.push(error.into());
+            return;
+        }
+
+        let produces_output = spec.args.iter().any(|arg| arg.mode == ItemPredicateArgMode::Output);
+        let mut valid = true;
+        if is_negated && produces_output {
+            self.errors.push(
+                PredicateError::NegatedItemGuardOutput {
+                    pred: name,
+                    span: SpanWrapper::new(predicate.span, mctx.get_active_path()),
+                }
+                .into(),
+            );
+            valid = false;
+        }
+        if in_disjunction && produces_output {
+            self.errors.push(
+                PredicateError::ItemGuardOutputInDisjunction {
+                    pred: name,
+                    span: SpanWrapper::new(predicate.span, mctx.get_active_path()),
+                }
+                .into(),
+            );
+            valid = false;
+        }
+
+        let mut outputs = Vec::new();
+        for (arg, expected) in args.into_iter().zip(spec.args) {
+            let Choice4::_1(meta_var) = arg.deref() else {
+                self.errors.push(
+                    PredicateError::InvalidItemGuardArgument {
+                        pred: name,
+                        arg: arg.span.as_str(),
+                        expected: expected.kind.name(),
+                        span: SpanWrapper::new(arg.span, mctx.get_active_path()),
+                    }
+                    .into(),
+                );
+                valid = false;
+                continue;
+            };
+            let arg_name = meta_var.span.as_str();
+            if self.symbol_table.item_predicate_arg_kind(arg_name) != Some(expected.kind) {
+                self.errors.push(
+                    PredicateError::InvalidItemGuardArgument {
+                        pred: name,
+                        arg: arg_name,
+                        expected: expected.kind.name(),
+                        span: SpanWrapper::new(meta_var.span, mctx.get_active_path()),
+                    }
+                    .into(),
+                );
+                valid = false;
+                continue;
+            }
+            match expected.mode {
+                ItemPredicateArgMode::Input if !bound.contains(arg_name) => {
+                    self.errors.push(
+                        PredicateError::UnboundItemGuardInput {
+                            pred: name,
+                            arg: arg_name,
+                            span: SpanWrapper::new(meta_var.span, mctx.get_active_path()),
+                        }
+                        .into(),
+                    );
+                    valid = false;
+                },
+                ItemPredicateArgMode::Output => outputs.push(arg_name),
+                ItemPredicateArgMode::Input => {},
+            }
+        }
+
+        if valid && !is_negated && !in_disjunction {
+            bound.extend(outputs);
         }
     }
 
@@ -214,6 +429,13 @@ impl<'i> CheckCtxt<'i> {
     }
 
     fn check_impl(&mut self, mctx: &MetaContext<'i>, rust_impl: &'i pairs::Impl<'i>) {
+        if let Some(impl_kind) = rust_impl.ImplKind() {
+            self.check_impl_trait_path(mctx, impl_kind.get_matched().0);
+        }
+        if let Some(binding) = rust_impl.ItemBinding() {
+            self.symbol_table
+                .add_item_binding(mctx, binding.MetaVariable(), ItemBindingType::Impl, &mut self.errors);
+        }
         let meta_vars = self.symbol_table.meta_vars.clone();
         let impl_def = self.symbol_table.add_impl(mctx, rust_impl, &mut self.errors);
         if let Some((impl_def, imports, adt_pats)) = impl_def {
@@ -225,6 +447,42 @@ impl<'i> CheckCtxt<'i> {
                 errors: &mut self.errors,
             }
             .check_impl(mctx, rust_impl);
+        }
+    }
+
+    fn check_impl_trait_path(&mut self, mctx: &MetaContext<'i>, path: &'i pairs::Path<'i>) {
+        let source = path.span.as_str().trim();
+        let span = || SpanWrapper::new(path.span, mctx.get_active_path());
+        let mut resolved: Path<'i> = path.into();
+
+        let mut used = FxHashSet::default();
+        while let Some(ident) = resolved.leading_ident()
+            && let Some(mapped) = self.symbol_table.imports.get(ident.span.as_str()).copied()
+        {
+            if !used.insert(mapped) {
+                self.errors.push(RPLMetaError::CyclicImplTraitPathImport {
+                    value: source,
+                    span: span(),
+                });
+                return;
+            }
+            resolved = resolved.replace_leading_ident(Path::from(mapped));
+        }
+
+        if resolved.segments.iter().any(|(_, args)| !args.is_empty()) {
+            self.errors
+                .push(RPLMetaError::UnsupportedImplTraitGenericArguments { span: span() });
+            return;
+        }
+
+        let is_local = resolved
+            .leading
+            .is_some_and(|leading| leading.get_matched().0.is_some());
+        if !is_local && resolved.segments.len() < 2 {
+            self.errors.push(RPLMetaError::UnqualifiedImplTraitPath {
+                value: source,
+                span: span(),
+            });
         }
     }
 }
@@ -802,10 +1060,14 @@ struct CheckVariantCtxt<'i, 'r> {
 
 impl<'i> CheckVariantCtxt<'i, '_> {
     fn check_struct(mut self, mctx: &MetaContext<'i>, struct_: &'i pairs::Struct<'i>) {
-        let (_, _, _, _, fields, _) = struct_.get_matched();
+        let (_, _, _, _, _, fields, _) = struct_.get_matched();
         if let Some(fields) = fields {
-            let fields = collect_elems_separated_by_comma!(fields).collect::<Vec<_>>();
-            self.check_fields(mctx, fields.into_iter());
+            if let Some(fields) = fields.NonExhaustiveFields() {
+                self.check_fields(mctx, fields.Field().into_iter());
+            } else if let Some(fields) = fields.FieldsSeparatedByComma() {
+                let fields = collect_elems_separated_by_comma!(fields).collect::<Vec<_>>();
+                self.check_fields(mctx, fields.into_iter());
+            }
         }
     }
 

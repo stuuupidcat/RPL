@@ -1,0 +1,26 @@
+pattern send-variance
+
+patt {
+    use core::marker::Send;
+
+    send_variance[
+        $Wrapper: adt,
+        $Parameter: type,
+        $MappedType: type,
+    ] = {
+        struct $Wrapper<..> {
+            ..
+        }
+
+        $marker:
+        unsafe impl<..> Send for $Wrapper<..>
+        where ..
+        {}
+    } where {
+        has_type_parameters($Wrapper)
+        && type_parameter_of($Parameter, $Wrapper)
+        && type_parameter_maps_to($Parameter, $MappedType, $marker)
+        && owns_type($Wrapper, $Parameter)
+        && !is_send_in($MappedType, $marker)
+    }
+}

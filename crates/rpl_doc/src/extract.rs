@@ -189,8 +189,14 @@ fn build_doc_item<'i>(item: &pairs::RPLPatternItem<'i>, source: &'i str) -> DocI
         .MetaVariableDeclList()
         .map(|m| collapse_whitespace(m.span.as_str()));
 
-    let (signature, body_raw) = split_signature_and_body(item.RustItemsOrPatternOperation());
+    let node = item.RustItemsOrPatternOperation();
+    let (signature, body_raw) = split_signature_and_body(node);
     let body_source = dedent(&body_raw);
+    let where_source = node
+        .RustItemsWithConstraint()
+        .and_then(|items| items.WhereBlock())
+        .or_else(|| node.RustItemWithConstraint().and_then(|item| item.WhereBlock()))
+        .map(|where_block| where_block.span.as_str().trim().to_string());
 
     DocItem {
         name,
@@ -199,6 +205,7 @@ fn build_doc_item<'i>(item: &pairs::RPLPatternItem<'i>, source: &'i str) -> DocI
         diag_attr,
         signature,
         body_source,
+        where_source,
     }
 }
 
@@ -285,9 +292,9 @@ fn extract_diag_attr_value(attr: &pairs::Attr<'_>) -> Option<String> {
 /// Layout per variant:
 /// - `PatternOperation`: pure expression (e.g. `divergent[$T = $T]`). The entire text is the
 ///   signature; there is no body.
-/// - `RustItemsWithConstraint` (`{ item+ }`): a wrapping brace block whose contents are several
-///   items. The signature is empty; the body is the text strictly between the outer `LeftBrace` and
-///   `RightBrace`.
+/// - `RustItemsWithConstraint` (`{ item+ } where { ... }?`): a wrapping brace block whose contents
+///   are several items. The signature is empty; the body is the text strictly between the outer
+///   `LeftBrace` and `RightBrace`. The optional bundle constraint is extracted separately.
 /// - `RustItemWithConstraint` (`Attr* ~ RustItem ~ WhereBlock?`): unwraps to one `RustItem`
 ///   (`Fn`/`Struct`/`Enum`/`Impl`). The signature runs from the start of the node up to the item's
 ///   opening brace, and the body is the text between that brace and its matching closer:
@@ -308,7 +315,8 @@ fn split_signature_and_body(node: &pairs::RustItemsOrPatternOperation<'_>) -> (S
     }
 
     // `RustItemsWithConstraint` is `LeftBrace ~ RustItemWithConstraint+ ~
-    // RightBrace`. There is no signature; the body is the inside-of-braces.
+    // RightBrace ~ WhereBlock?`. There is no signature; the body is the
+    // inside-of-braces.
     if let Some(items) = node.RustItemsWithConstraint() {
         let lb = items.LeftBrace().span;
         let rb = items.RightBrace().span;
@@ -611,6 +619,26 @@ patt {
         assert!(!mv.contains('\n'));
         assert!(mv.contains("$T: type"));
         assert!(mv.contains("$U: type"));
+    }
+
+    #[test]
+    fn bundle_where_block_is_preserved() {
+        let src = r#"
+pattern Foo
+patt {
+    p_foo[$Wrapper: adt] = {
+        struct $Wrapper<..> { .. }
+    } where {
+        true()
+    }
+}
+"#;
+        let main = parse(src);
+        let doc = build_doc_file(Path::new("/x/Foo.rpl"), src, &main);
+        assert_eq!(
+            doc.patterns[0].where_source.as_deref(),
+            Some("where {\n        true()\n    }")
+        );
     }
 
     #[test]

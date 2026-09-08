@@ -44,6 +44,7 @@ pub mod tribool;
 pub struct Constraints {
     pub preds: Vec<predicates::PredicateConjunction>,
     pub attrs: attributes::FnAttr,
+    pub has_attributes: bool,
 }
 
 impl Constraints {
@@ -52,6 +53,8 @@ impl Constraints {
         where_block: &Option<pairs::WhereBlock<'i>>,
         path: &'i std::path::Path,
     ) -> Result<Self, PredicateError<'i>> {
+        let mut pre_attrs = pre_attrs.peekable();
+        let has_pre_attrs = pre_attrs.peek().is_some();
         if let Some(where_block) = where_block
             && let Some(constraints) = where_block.ConstraintsSeparatedByComma()
         {
@@ -70,12 +73,21 @@ impl Constraints {
                     }
                     Ok((preds, attrs))
                 })?;
+            let has_attributes = has_pre_attrs || !attrs.is_empty();
             let attrs = FnAttr::parse(pre_attrs, &attrs);
-            Ok(Self { preds, attrs })
+            Ok(Self {
+                preds,
+                attrs,
+                has_attributes,
+            })
         } else {
             let preds = Vec::new();
             let attrs = FnAttr::parse(pre_attrs, &[]);
-            Ok(Self { preds, attrs })
+            Ok(Self {
+                preds,
+                attrs,
+                has_attributes: has_pre_attrs,
+            })
         }
     }
 }

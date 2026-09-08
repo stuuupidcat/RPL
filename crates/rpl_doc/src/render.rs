@@ -130,6 +130,11 @@ fn render_item(out: &mut String, item: &DocItem) {
         out.push_str(&format!("**Diagnostic:** [`{diag}`](#diagnostic-{diag})\n\n",));
     }
     out.push_str(&format!("**Signature:** {}\n\n", inline_code(&item.signature)));
+    if let Some(where_source) = &item.where_source {
+        out.push_str("**Constraints:**\n\n");
+        write_fence(out, "rpl", where_source);
+        out.push('\n');
+    }
     out.push_str("<details><summary>Pattern body</summary>\n\n");
     write_fence(out, "rpl", &item.body_source);
     out.push_str("</details>\n\n");
@@ -263,6 +268,7 @@ mod render_doc_file_tests {
             diag_attr: Some("p_diag".into()),
             signature: "fn _ (..) -> _".into(),
             body_source: "let x = 1;".into(),
+            where_source: Some("where {\n    true()\n}".into()),
         });
         let out = render(&doc);
         assert!(out.contains("## Patterns"));
@@ -270,6 +276,8 @@ mod render_doc_file_tests {
         assert!(out.contains("docs"));
         assert!(out.contains("[`p_diag`](#diagnostic-p_diag)"));
         assert!(out.contains("**Signature:** `fn _ (..) -> _`"));
+        assert!(out.contains("**Constraints:**"));
+        assert!(out.contains("```rpl\nwhere {\n    true()\n}\n```"));
         assert!(out.contains("```rpl\nlet x = 1;\n```"));
     }
 
@@ -321,6 +329,7 @@ mod render_doc_file_tests {
             diag_attr: None,
             signature: "fn _ (..) -> _".into(),
             body_source: "let x = 1;".into(),
+            where_source: None,
         });
         let out = render(&doc);
         assert!(out.contains("### `p_foo[$T: type]`"));

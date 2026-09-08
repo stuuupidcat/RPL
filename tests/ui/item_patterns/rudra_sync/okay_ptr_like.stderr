@@ -1,0 +1,21 @@
+error: A pattern instance found in this span
+  --> tests/ui/item_patterns/rudra_sync/okay_ptr_like.rs:7:1
+   |
+LL | unsafe impl<P: Sync> Send for Atom1<P> {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: This is a fallback diagnostic message.
+   = note: You are seeing this because there is no corresponding diagnostic item for pattern "send_variance" in the RPL pattern file.
+   = note: `#[deny(rpl::missing_diagnostic)]` on by default
+
+error: A pattern instance found in this span
+  --> tests/ui/item_patterns/rudra_sync/okay_ptr_like.rs:11:1
+   |
+LL | unsafe impl<P> Send for Atom2<P> where P: Sync {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: This is a fallback diagnostic message.
+   = note: You are seeing this because there is no corresponding diagnostic item for pattern "send_variance" in the RPL pattern file.
+
+error: aborting due to 2 previous errors
+

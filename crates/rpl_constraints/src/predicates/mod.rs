@@ -8,6 +8,7 @@ use rustc_span::Symbol;
 // Attention:
 // When you add a new module here,
 // Try to keep all predicate signatures consistent in it.
+mod item;
 mod item_attr;
 mod locals;
 mod multiple_consts;
@@ -20,6 +21,7 @@ mod translate;
 mod trivial;
 mod ty_const;
 
+pub use item::*;
 pub use locals::*;
 pub use multiple_consts::*;
 pub use multiple_tys::*;
@@ -38,6 +40,40 @@ use crate::predicates::item_attr::{ItemAttrPredsFnPtr, has_attr};
 pub enum PredicateError<'i> {
     #[display("Invalid predicate: {pred}\n{span}")]
     InvalidPredicate { pred: &'i str, span: SpanWrapper<'i> },
+    #[display("Predicate `{pred}` is not supported in an item guard\n{span}")]
+    UnsupportedItemGuardPredicate { pred: &'i str, span: SpanWrapper<'i> },
+    #[display("Predicate `{pred}` is only supported in an item guard\n{span}")]
+    ItemPredicateOutsideItemGuard { pred: &'i str, span: SpanWrapper<'i> },
+    #[display("Item guard predicate `{pred}` does not accept arguments\n{span}")]
+    ItemGuardPredicateTakesNoArgs { pred: &'i str, span: SpanWrapper<'i> },
+    #[display("Item guard predicate `{pred}` expects {expected} arguments, but received {actual}\n{span}")]
+    InvalidItemGuardArity {
+        pred: &'i str,
+        expected: usize,
+        actual: usize,
+        span: SpanWrapper<'i>,
+    },
+    #[display("Argument `{arg}` of item guard predicate `{pred}` must be a {expected}\n{span}")]
+    InvalidItemGuardArgument {
+        pred: &'i str,
+        arg: &'i str,
+        expected: &'static str,
+        span: SpanWrapper<'i>,
+    },
+    #[display(
+        "Input `{arg}` of item guard predicate `{pred}` is not bound; reorder the predicates so its producer runs first\n{span}"
+    )]
+    UnboundItemGuardInput {
+        pred: &'i str,
+        arg: &'i str,
+        span: SpanWrapper<'i>,
+    },
+    #[display("Output-producing item guard predicate `{pred}` cannot be negated\n{span}")]
+    NegatedItemGuardOutput { pred: &'i str, span: SpanWrapper<'i> },
+    #[display("Output-producing item guard predicate `{pred}` is not supported inside a disjunction\n{span}")]
+    ItemGuardOutputInDisjunction { pred: &'i str, span: SpanWrapper<'i> },
+    #[display("Attributes are not supported in an item guard\n{span}")]
+    UnsupportedItemGuardAttribute { span: SpanWrapper<'i> },
     #[display("Invalid predicate argument: {_0}")]
     InvalidArgs(String),
 }
@@ -63,6 +99,17 @@ pub const ALL_PREDICATES: &[&str] = &[
     "is_ref",
     "is_zst",
     "needs_drop",
+    // item predicates
+    "has_type_parameters",
+    "type_parameter_of",
+    "type_parameter_maps_to",
+    "owns_type",
+    "is_send_in",
+    "is_sync_in",
+    "is_send_for_access_in",
+    "is_sync_for_access_in",
+    "resource_exclusively_accessible_from_shared_ref_in",
+    "resource_concurrently_accessible_from_shared_ref_in",
     // translate_preds
     "translate_from_function",
     // trivial_preds
@@ -76,6 +123,8 @@ pub const ALL_PREDICATES: &[&str] = &[
     // single_fn_preds
     "requires_monomorphization",
     "runs_outside_main",
+    // item_attr_preds
+    "has_attr",
     // ty_const_preds
     "maybe_misaligned",
     // single_const_preds
@@ -112,6 +161,7 @@ pub enum PredicateKind {
     FlowsTo,
     /// `may_panic('sink)` — potential panic site; evaluated in matcher.
     MayPanic,
+    Item(ItemPredicate),
 }
 
 impl<'i> TryFrom<SpanWrapper<'i>> for PredicateKind {
@@ -152,6 +202,20 @@ impl<'i> TryFrom<SpanWrapper<'i>> for PredicateKind {
             "has_attr" => Self::ItemAttr(has_attr),
             "flows_to" => Self::FlowsTo,
             "may_panic" => Self::MayPanic,
+            "has_type_parameters" => Self::Item(ItemPredicate::HasTypeParameters),
+            "type_parameter_of" => Self::Item(ItemPredicate::TypeParameterOf),
+            "type_parameter_maps_to" => Self::Item(ItemPredicate::TypeParameterMapsTo),
+            "owns_type" => Self::Item(ItemPredicate::OwnsType),
+            "is_send_in" => Self::Item(ItemPredicate::IsSendIn),
+            "is_sync_in" => Self::Item(ItemPredicate::IsSyncIn),
+            "is_send_for_access_in" => Self::Item(ItemPredicate::IsSendForAccessIn),
+            "is_sync_for_access_in" => Self::Item(ItemPredicate::IsSyncForAccessIn),
+            "resource_exclusively_accessible_from_shared_ref_in" => {
+                Self::Item(ItemPredicate::ResourceExclusivelyAccessibleFromSharedRefIn)
+            },
+            "resource_concurrently_accessible_from_shared_ref_in" => {
+                Self::Item(ItemPredicate::ResourceConcurrentlyAccessibleFromSharedRefIn)
+            },
             _ => {
                 return Err(PredicateError::InvalidPredicate {
                     pred: span.inner().as_str(),
@@ -212,6 +276,7 @@ impl PredicateClause {
 
 #[derive(Clone, Debug)]
 pub struct PredicateTerm {
+    pub name: String,
     pub kind: PredicateKind,
     pub args: Vec<PredicateArg>,
     pub is_neg: bool,
@@ -224,6 +289,7 @@ impl PredicateTerm {
             Choice2::_1(pred) => (pred.get_matched().1, true),
         };
         let (pred_name, _, args, _) = pred.get_matched();
+        let name = pred_name.span.as_str().to_string();
         let kind = PredicateKind::try_from(SpanWrapper::new(pred_name.span, path))?;
         let args = if let Some(args) = args {
             let (first, following, _) = args.get_matched();
@@ -237,7 +303,12 @@ impl PredicateTerm {
         } else {
             vec![]
         };
-        Ok(Self { kind, is_neg, args })
+        Ok(Self {
+            name,
+            kind,
+            is_neg,
+            args,
+        })
     }
 }
 

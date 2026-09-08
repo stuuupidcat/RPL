@@ -170,7 +170,7 @@ pub fn collect_slot_descs<'pcx>(
         .collect();
 
     let mut next_idx = fn_slots.len();
-    for impl_pat in rust_items.impls.values() {
+    for impl_pat in rust_items.legacy_impl_for_function_matching().into_iter() {
         for fn_pat in impl_pat.fns.values() {
             fn_slots.push(FnSlotDesc {
                 slot: MatchSlot::Fn(next_idx),

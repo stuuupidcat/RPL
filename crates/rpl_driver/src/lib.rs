@@ -20,8 +20,10 @@ use std::cell::RefCell;
 use std::convert::identity;
 
 use rpl_constraints::predicates::BodyInfoCache;
+use rpl_constraints::tribool::TriBool;
 use rpl_context::PatCtxt;
-use rpl_context::pat::DynamicError;
+use rpl_context::pat::{DynamicError, PatternItem};
+use rpl_match::item::{ItemPredicateEvaluator, MatchItemCtxt};
 use rpl_match::matches::artifact::{NormalizedMatched, NormalizedSpanned};
 use rpl_match::session::{MatchCollectCtxt, MatchSession, SessionConfig};
 use rpl_match::{CrateItemIndex, MatchSlot, MultiMatched, OwnedLintMatch};
@@ -38,6 +40,7 @@ use rustc_middle::util::Providers;
 use rustc_session::declare_tool_lint;
 use rustc_span::symbol::Ident;
 use rustc_span::{Span, Symbol};
+use tracing::{debug, instrument};
 
 #[cfg(feature = "timing")]
 mod errors;
@@ -258,6 +261,7 @@ impl<'tcx> Visitor<'tcx> for CheckFnCtxt<'_, 'tcx> {
                 }
             },
             hir::ItemKind::Impl(impl_) => {
+                self.check_item_impl(item.owner_id.def_id, impl_);
                 for impl_item in impl_.items {
                     self.visit_impl_item_ref(impl_item);
                 }
@@ -300,5 +304,42 @@ impl<'tcx> CheckFnCtxt<'_, 'tcx> {
 
     fn visit_impl_item_ref(&mut self, impl_item: &'tcx hir::ImplItemRef) {
         let _ = impl_item;
+    }
+
+    #[instrument(level = "debug", skip(self, impl_))]
+    fn check_item_impl(&self, impl_def_id: LocalDefId, impl_: &hir::Impl<'tcx>) {
+        let span = self.tcx.def_span(impl_def_id);
+        self.pcx.for_each_rpl_pattern(|_id, pattern| {
+            for (&name, pat_item) in &pattern.patt_block {
+                let PatternItem::RustItems(rust_items) = pat_item else {
+                    continue;
+                };
+                let Some(matched) = MatchItemCtxt::new(self.tcx, rust_items).match_impl(impl_def_id, impl_) else {
+                    continue;
+                };
+                match ItemPredicateEvaluator::new(self.tcx, &matched).evaluate(rust_items.item_constraints.as_ref()) {
+                    Ok(TriBool::True) => {
+                        let error = Box::new(DynamicError::default_diagnostic(name, span));
+                        self.tcx.emit_node_span_lint(
+                            error.lint(),
+                            self.tcx.local_def_id_to_hir_id(impl_def_id),
+                            error.primary_span().clone(),
+                            error,
+                        );
+                    },
+                    Ok(TriBool::False) => {},
+                    Ok(TriBool::Unknown) => {
+                        debug!(?name, "item pattern evaluation was incomplete");
+                    },
+                    Err(error) => {
+                        debug!(
+                            ?error,
+                            ?name,
+                            "item pattern uses a predicate unsupported by the item matcher"
+                        );
+                    },
+                }
+            }
+        });
     }
 }

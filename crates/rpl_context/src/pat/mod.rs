@@ -105,7 +105,7 @@ impl<'pcx> PatternItem<'pcx> {
                         map.extend(body.labels.iter().map(|(&k, &v)| (k, v)));
                     }
                 }
-                for impl_pat in items.impls.values() {
+                for impl_pat in &items.impls {
                     for fn_pat in impl_pat.fns.values() {
                         if let Some(body) = fn_pat.body {
                             map.extend(body.labels.iter().map(|(&k, &v)| (k, v)));
@@ -133,18 +133,25 @@ pub struct RustItems<'pcx> {
     pub meta: Arc<NonLocalMetaVars<'pcx>>,
     pub adts: FxHashMap<Symbol, Adt<'pcx>>,
     pub fns: FnPatterns<'pcx>,
-    pub impls: FxHashMap<Symbol, Impl<'pcx>>,
+    pub impls: Vec<Impl<'pcx>>,
+    pub item_constraints: Option<Constraints>,
     pub attr: PatAttr<'pcx>,
 }
 
 impl<'pcx> RustItems<'pcx> {
-    pub(crate) fn new(pcx: PatCtxt<'pcx>, meta: Arc<NonLocalMetaVars<'pcx>>, attr: PatAttr<'pcx>) -> Self {
+    pub(crate) fn new(
+        pcx: PatCtxt<'pcx>,
+        meta: Arc<NonLocalMetaVars<'pcx>>,
+        item_constraints: Option<Constraints>,
+        attr: PatAttr<'pcx>,
+    ) -> Self {
         Self {
             pcx,
             meta,
             adts: Default::default(),
             fns: Default::default(),
             impls: Default::default(),
+            item_constraints,
             attr,
         }
     }
@@ -212,9 +219,22 @@ impl<'pcx> RustItems<'pcx> {
         constraints: Constraints,
     ) {
         let mut struct_inner = StructInner::default();
-        let name = rust_struct.MetaVariable();
-        if let Some(fields) = rust_struct.get_matched().4 {
-            let fields = collect_elems_separated_by_comma!(fields);
+        let (_, _, name, generic_wildcard, _, fields, _) = rust_struct.get_matched();
+        if let Some(fields) = fields {
+            let (fields, rest): (Vec<_>, RestPat) = if let Some(fields) = fields.NonExhaustiveFields() {
+                (fields.Field(), RestPat::Rest)
+            } else {
+                (
+                    collect_elems_separated_by_comma!(
+                        fields
+                            .FieldsSeparatedByComma()
+                            .expect("StructFields must contain one alternative")
+                    )
+                    .collect(),
+                    RestPat::Exact,
+                )
+            };
+            struct_inner.rest = rest;
             for field in fields {
                 let (name, _, ty) = field.get_matched();
                 let name = Symbol::intern(name.span.as_str());
@@ -224,7 +244,18 @@ impl<'pcx> RustItems<'pcx> {
             }
         }
 
-        let struct_pat = Adt::new_struct(struct_inner, meta, constraints);
+        let struct_pat = Adt::new_struct(
+            struct_inner,
+            meta,
+            ItemGenericsPat {
+                rest: if generic_wildcard.is_some() {
+                    RestPat::Rest
+                } else {
+                    RestPat::Exact
+                },
+            },
+            constraints,
+        );
         // let struct_pat = self.pcx.alloc_struct(struct_pat);
         self.adts.insert(Symbol::intern(name.span.as_str()), struct_pat);
     }
@@ -282,19 +313,35 @@ impl<'pcx> RustItems<'pcx> {
     #[instrument(level = "debug", skip(self, rust_impl, meta, symbol_table))]
     fn add_impl<'mcx: 'pcx>(
         &mut self,
-        pat_name: Option<Symbol>,
+        _pat_name: Option<Symbol>,
         rust_impl: WithPath<'pcx, &'pcx pairs::Impl<'pcx>>,
         meta: Arc<NonLocalMetaVars<'pcx>>,
         symbol_table: &'mcx rpl_meta::symbol_table::SymbolTable<'mcx>,
         constraints: Constraints,
     ) {
         let p = rust_impl.path;
-        let (_, _, impl_kind, ty, _, fns, _) = rust_impl.get_matched();
-        let impl_sym_tab = symbol_table.get_impl(ty, impl_kind.as_ref()).unwrap();
-        let ty = Ty::from(WithPath::new(p, ty), self.pcx, symbol_table);
-        let trait_id = impl_kind
-            .as_ref()
-            .map(|impl_kind| Path::from_pairs(impl_kind.get_matched().0, self.pcx));
+        let (binding, unsafety, _, generics, impl_kind, self_ty, where_clause, _, fns, _) = rust_impl.get_matched();
+        let impl_sym_tab = symbol_table.get_impl(self_ty, impl_kind.as_ref()).unwrap();
+        let self_ty = if let Some(adt_ty) = self_ty.ItemAdtType() {
+            ImplSelfTy {
+                ty: self
+                    .pcx
+                    .mk_adt_pat_ty(Symbol::intern(adt_ty.MetaVariable().span.as_str())),
+                generic_args: RestPat::Rest,
+            }
+        } else {
+            ImplSelfTy {
+                ty: Ty::from(
+                    WithPath::new(p, self_ty.Type().expect("ImplSelfType must contain one alternative")),
+                    self.pcx,
+                    symbol_table,
+                ),
+                generic_args: RestPat::Exact,
+            }
+        };
+        let trait_path = impl_kind.as_ref().map(|impl_kind| {
+            Path::from_imported_pairs(WithPath::new(p, impl_kind.get_matched().0), self.pcx, symbol_table)
+        });
         let fns = fns
             .iter_matched()
             .map(|rust_fn| {
@@ -315,16 +362,39 @@ impl<'pcx> RustItems<'pcx> {
             })
             .collect();
         let impl_pat = Impl {
+            binding: binding
+                .as_ref()
+                .map(|binding| Symbol::intern(binding.MetaVariable().span.as_str())),
+            safety: if unsafety.is_some() {
+                SafetyPat::Unsafe
+            } else {
+                SafetyPat::Safe
+            },
+            polarity: ImplPolarityPat::Positive,
+            generics: ItemGenericsPat {
+                rest: if generics.is_some() {
+                    RestPat::Rest
+                } else {
+                    RestPat::Exact
+                },
+            },
             meta,
-            ty,
-            trait_id,
+            self_ty,
+            trait_path,
+            where_clause: if where_clause.is_some() {
+                RestPat::Rest
+            } else {
+                RestPat::Exact
+            },
             fns,
             constraints,
         };
-        debug!(ty = ?impl_pat.ty, trait_id = ?impl_pat.trait_id, fns = ?impl_pat.fns.keys());
-        if let Some(pat_name) = pat_name {
-            self.impls.insert(pat_name, impl_pat);
-        }
+        debug!(
+            ty = ?impl_pat.self_ty,
+            trait_path = ?impl_pat.trait_path,
+            fns = ?impl_pat.fns.keys()
+        );
+        self.impls.push(impl_pat);
     }
 
     #[instrument(level = "trace", skip(self), fields(adts = ?self.adts.keys()), ret)]
@@ -332,14 +402,26 @@ impl<'pcx> RustItems<'pcx> {
         self.adts.get(&adt)
     }
 
+    /// Compatibility bridge for the function-rooted matcher.
+    ///
+    /// Preserve the old effective last-impl-wins behavior for function-rooted
+    /// matching while retaining every impl in [`Self::impls`] for item matching.
+    pub fn legacy_impl_for_function_matching(&self) -> Option<&Impl<'pcx>> {
+        self.legacy_function_matching_enabled()
+            .then(|| self.impls.last())
+            .flatten()
+    }
+
+    /// Item constraints may refer to ADT and impl bindings, which the
+    /// function-rooted matcher cannot represent.
+    pub fn legacy_function_matching_enabled(&self) -> bool {
+        self.item_constraints.is_none()
+    }
+
     fn table_head(&self) -> TableHead {
         let mut columns = FxHashMap::default();
 
         self.meta.table_head(&mut columns);
-
-        for name in self.adts.keys() {
-            columns.try_insert(*name, ColumnType::Ty).unwrap();
-        }
 
         // FIX: should self.attr be included in the table head?
 
@@ -428,6 +510,436 @@ impl<'pcx> Pattern<'pcx> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use std::path::Path;
+
+    use pest_typed::ParsableTypedNode as _;
+    use rpl_meta::arena::Arena;
+    use rpl_meta::context::MetaContext;
+    use rpl_meta::symbol_table::SymbolTable;
+    use rpl_parser::pairs;
+    use rustc_span::Symbol;
+
+    use super::{ImplPolarityPat, Path as PatPath, PattOrUtil, RestPat, SafetyPat, WithPath};
+    use crate::PatternCtxt;
+
+    fn item_meta_errors(source: &str, import_sources: &[&str]) -> Vec<String> {
+        let arena = &*Box::leak(Box::new(Arena::default()));
+        let mctx = &*Box::leak(Box::new(MetaContext::new(arena)));
+        let source = arena.alloc_str(source);
+        let item = &*Box::leak(Box::new(
+            pairs::RPLPatternItem::try_parse(source).expect("parse item pattern"),
+        ));
+        let imports: Vec<_> = import_sources
+            .iter()
+            .map(|source| {
+                &*Box::leak(Box::new(
+                    pairs::UsePath::try_parse(arena.alloc_str(source)).expect("parse import"),
+                ))
+            })
+            .collect();
+        let path = Path::new("/synthetic/item-pattern.rpl");
+        mctx.set_active_path(Some(path));
+        let mut errors = Vec::new();
+
+        SymbolTable::collect_symbol_tables(mctx, &imports, std::iter::once(item), &mut errors);
+        errors.into_iter().map(|error| error.to_string()).collect()
+    }
+
+    fn send_item_pattern(guard: &str) -> String {
+        [
+            "p[$Wrapper: adt, $Parameter: type, $MappedType: type] = {",
+            "    struct $Wrapper<..> { .. }",
+            "    $marker: unsafe impl<..> core::marker::Send for $Wrapper<..> where .. {}",
+            "} where {",
+            guard,
+            "}",
+        ]
+        .join("\n")
+    }
+
+    #[test]
+    fn lowers_item_pattern_syntax_flags() {
+        let arena = &*Box::leak(Box::new(Arena::default()));
+        let mctx = &*Box::leak(Box::new(MetaContext::new(arena)));
+        let source = arena.alloc_str(
+            r#"
+send_variance[
+    $Wrapper: adt where true(),
+    $Parameter: type,
+    $MappedType: type,
+] = {
+    struct $Wrapper<..> { .. }
+
+    $send_impl:
+    unsafe impl<..> Send for $Wrapper<..>
+    where ..
+    {}
+
+    $sync_impl:
+    unsafe impl<..> Sync for $Wrapper<..>
+    where ..
+    {}
+} where {
+    has_type_parameters($Wrapper)
+    && type_parameter_of($Parameter, $Wrapper)
+    && type_parameter_maps_to($Parameter, $MappedType, $send_impl)
+    && owns_type($Wrapper, $Parameter)
+    && !is_send_in($MappedType, $send_impl)
+}
+"#,
+        );
+        let item = &*Box::leak(Box::new(
+            pairs::RPLPatternItem::try_parse(source).expect("parse item pattern"),
+        ));
+        let path = Path::new("/synthetic/item-pattern.rpl");
+        mctx.set_active_path(Some(path));
+        let send_import = &*Box::leak(Box::new(
+            pairs::UsePath::try_parse(arena.alloc_str("use core::marker::Send;")).expect("parse Send import"),
+        ));
+        let sync_import = &*Box::leak(Box::new(
+            pairs::UsePath::try_parse(arena.alloc_str("use core::marker::Sync;")).expect("parse Sync import"),
+        ));
+        let imports = [send_import, sync_import];
+
+        let mut errors = Vec::new();
+        let symbol_tables = SymbolTable::collect_symbol_tables(mctx, &imports, std::iter::once(item), &mut errors);
+        assert!(errors.is_empty(), "meta errors: {errors:#?}");
+        let symbol_tables = &*Box::leak(Box::new(symbol_tables));
+
+        PatternCtxt::entered_no_tcx(|pcx| {
+            let pattern = pcx.new_pattern();
+            pattern.add_pattern_item(WithPath::new(path, item), symbol_tables, PattOrUtil::Patt);
+
+            let rust_items = pattern
+                .patt_block
+                .values()
+                .next()
+                .expect("lowered pattern item")
+                .expect_rust_items();
+            assert_eq!(rust_items.adts.len(), 1);
+            assert_eq!(rust_items.impls.len(), 2, "impl patterns must not overwrite each other");
+            assert_eq!(
+                rust_items
+                    .item_constraints
+                    .as_ref()
+                    .expect("item constraints")
+                    .preds
+                    .len(),
+                1
+            );
+            assert_eq!(rust_items.meta.adt_vars.len(), 1);
+            assert_eq!(
+                rust_items
+                    .meta
+                    .adt_vars
+                    .iter()
+                    .next()
+                    .expect("ADT variable")
+                    .pred
+                    .clauses
+                    .len(),
+                1
+            );
+
+            let adt = rust_items.adts.values().next().expect("struct pattern");
+            assert_eq!(adt.generics.rest, RestPat::Rest);
+            assert_eq!(adt.non_enum_variant().rest, RestPat::Rest);
+
+            let send_impl = &rust_items.impls[0];
+            assert_eq!(send_impl.binding.expect("impl binding").as_str(), "$send_impl");
+            assert_eq!(send_impl.safety, SafetyPat::Unsafe);
+            assert_eq!(send_impl.polarity, ImplPolarityPat::Positive);
+            assert_eq!(send_impl.generics.rest, RestPat::Rest);
+            assert_eq!(send_impl.self_ty.generic_args, RestPat::Rest);
+            assert_eq!(send_impl.where_clause, RestPat::Rest);
+            let PatPath::Item(send_path) = send_impl.trait_path.expect("Send trait path") else {
+                panic!("Send should lower as an item path")
+            };
+            assert_eq!(
+                send_path.0,
+                &[Symbol::intern("core"), Symbol::intern("marker"), Symbol::intern("Send")]
+            );
+
+            let sync_impl = &rust_items.impls[1];
+            assert_eq!(sync_impl.binding.expect("impl binding").as_str(), "$sync_impl");
+            assert_eq!(sync_impl.safety, SafetyPat::Unsafe);
+            let PatPath::Item(sync_path) = sync_impl.trait_path.expect("Sync trait path") else {
+                panic!("Sync should lower as an item path")
+            };
+            assert_eq!(
+                sync_path.0,
+                &[Symbol::intern("core"), Symbol::intern("marker"), Symbol::intern("Sync")]
+            );
+            assert!(
+                !rust_items.legacy_function_matching_enabled(),
+                "item-guarded bundles must wait for the item matcher"
+            );
+            assert!(rust_items.legacy_impl_for_function_matching().is_none());
+        });
+    }
+
+    #[test]
+    fn rejects_unimported_bare_impl_trait_path() {
+        let errors = item_meta_errors(
+            r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+    $marker: unsafe impl<..> Send for $Wrapper<..> {}
+}
+"#,
+            &[],
+        );
+
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("Impl trait path `Send` is unqualified")),
+            "expected unimported-trait-path error, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn rejects_invalid_impl_trait_path_imports_and_arguments() {
+        let pattern = r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+    $marker: unsafe impl<..> Send for $Wrapper<..> {}
+}
+"#;
+        let errors = item_meta_errors(pattern, &["use Send;"]);
+        assert!(
+            errors.iter().any(|error| error.contains("Cyclic imports")),
+            "expected self-import cycle error, got: {errors:#?}"
+        );
+
+        let recursive_pattern = r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+    $marker: unsafe impl<..> A for $Wrapper<..> {}
+}
+"#;
+        let errors = item_meta_errors(recursive_pattern, &["use B::A;", "use A::B;"]);
+        assert!(
+            errors.iter().any(|error| error.contains("Cyclic imports")),
+            "expected recursive-import cycle error, got: {errors:#?}"
+        );
+
+        let generic_pattern = r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+    $marker: unsafe impl<..> Send<u8> for $Wrapper<..> {}
+}
+"#;
+        let errors = item_meta_errors(generic_pattern, &["use core::marker::Send;"]);
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("Generic arguments in impl trait paths are not supported")),
+            "expected generic-argument error, got: {errors:#?}"
+        );
+        let errors = item_meta_errors(pattern, &["use core::marker::Send<u8>;"]);
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("Generic arguments in impl trait paths are not supported")),
+            "expected imported generic-argument error, got: {errors:#?}"
+        );
+
+        let absolute_bare_pattern = r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+    $marker: unsafe impl<..> ::Send for $Wrapper<..> {}
+}
+"#;
+        let errors = item_meta_errors(absolute_bare_pattern, &[]);
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("Impl trait path `::Send` is unqualified")),
+            "expected absolute-bare-path error, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn rejects_duplicate_impl_bindings() {
+        let arena = &*Box::leak(Box::new(Arena::default()));
+        let mctx = &*Box::leak(Box::new(MetaContext::new(arena)));
+        let source = arena.alloc_str(
+            r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+    $marker: unsafe impl<..> core::marker::Send for $Wrapper<..> {}
+    $marker: unsafe impl<..> core::marker::Sync for $Wrapper<..> {}
+}
+"#,
+        );
+        let item = &*Box::leak(Box::new(
+            pairs::RPLPatternItem::try_parse(source).expect("parse item pattern"),
+        ));
+        let path = Path::new("/synthetic/duplicate-item-binding.rpl");
+        mctx.set_active_path(Some(path));
+        let mut errors = Vec::new();
+
+        SymbolTable::collect_symbol_tables(mctx, &[], std::iter::once(item), &mut errors);
+
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.to_string().contains("Symbol `$marker` is already declared")),
+            "expected duplicate item-binding error, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn validates_bundle_predicates_during_meta_checking() {
+        let arena = &*Box::leak(Box::new(Arena::default()));
+        let mctx = &*Box::leak(Box::new(MetaContext::new(arena)));
+        let source = arena.alloc_str(
+            r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+} where {
+    not_a_predicate()
+}
+"#,
+        );
+        let item = &*Box::leak(Box::new(
+            pairs::RPLPatternItem::try_parse(source).expect("parse item pattern"),
+        ));
+        let path = Path::new("/synthetic/invalid-bundle-predicate.rpl");
+        mctx.set_active_path(Some(path));
+        let mut errors = Vec::new();
+
+        SymbolTable::collect_symbol_tables(mctx, &[], std::iter::once(item), &mut errors);
+
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.to_string().contains("Invalid predicate: not_a_predicate")),
+            "expected invalid-predicate error, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn rejects_function_predicates_in_item_guards() {
+        let arena = &*Box::leak(Box::new(Arena::default()));
+        let mctx = &*Box::leak(Box::new(MetaContext::new(arena)));
+        let source = arena.alloc_str(
+            r#"
+p[$Wrapper: adt, $T: type] = {
+    struct $Wrapper<..> { .. }
+} where {
+    is_send($T)
+}
+"#,
+        );
+        let item = &*Box::leak(Box::new(
+            pairs::RPLPatternItem::try_parse(source).expect("parse item pattern"),
+        ));
+        let path = Path::new("/synthetic/unsupported-item-predicate.rpl");
+        mctx.set_active_path(Some(path));
+        let mut errors = Vec::new();
+
+        SymbolTable::collect_symbol_tables(mctx, &[], std::iter::once(item), &mut errors);
+
+        assert!(
+            errors.iter().any(|error| error
+                .to_string()
+                .contains("Predicate `is_send` is not supported in an item guard")),
+            "expected unsupported-item-predicate error, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn rejects_arguments_and_attributes_in_item_guards() {
+        let arena = &*Box::leak(Box::new(Arena::default()));
+        let mctx = &*Box::leak(Box::new(MetaContext::new(arena)));
+        let source = arena.alloc_str(
+            r#"
+p[$Wrapper: adt] = {
+    struct $Wrapper<..> { .. }
+} where {
+    true($Wrapper),
+    safety = safe
+}
+"#,
+        );
+        let item = &*Box::leak(Box::new(
+            pairs::RPLPatternItem::try_parse(source).expect("parse item pattern"),
+        ));
+        let path = Path::new("/synthetic/invalid-item-guard.rpl");
+        mctx.set_active_path(Some(path));
+        let mut errors = Vec::new();
+
+        SymbolTable::collect_symbol_tables(mctx, &[], std::iter::once(item), &mut errors);
+
+        assert!(
+            errors.iter().any(|error| error
+                .to_string()
+                .contains("Item guard predicate `true` does not accept arguments")),
+            "expected item-predicate-arguments error, got: {errors:#?}"
+        );
+        assert!(
+            errors.iter().any(|error| error
+                .to_string()
+                .contains("Attributes are not supported in an item guard")),
+            "expected unsupported-item-attribute error, got: {errors:#?}"
+        );
+    }
+
+    #[test]
+    fn validates_item_predicate_modes_and_sorts() {
+        let errors = item_meta_errors(&send_item_pattern("has_type_parameters()"), &[]);
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("expects 1 arguments, but received 0")),
+            "expected arity error, got: {errors:#?}"
+        );
+
+        let errors = item_meta_errors(&send_item_pattern("owns_type($Parameter, $Parameter)"), &[]);
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("Argument `$Parameter`") && error.contains("must be a adt")),
+            "expected argument-sort error, got: {errors:#?}"
+        );
+
+        let errors = item_meta_errors(
+            &send_item_pattern(
+                "type_parameter_maps_to($Parameter, $MappedType, $marker)\n\
+                 && type_parameter_of($Parameter, $Wrapper)",
+            ),
+            &[],
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|error| { error.contains("Input `$Parameter`") && error.contains("is not bound") }),
+            "expected binding-order error, got: {errors:#?}"
+        );
+
+        let errors = item_meta_errors(&send_item_pattern("!type_parameter_of($Parameter, $Wrapper)"), &[]);
+        assert!(
+            errors.iter().any(|error| error.contains("cannot be negated")),
+            "expected closed-negation error, got: {errors:#?}"
+        );
+
+        let errors = item_meta_errors(
+            &send_item_pattern("(type_parameter_of($Parameter, $Wrapper) || true())"),
+            &[],
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|error| error.contains("not supported inside a disjunction")),
+            "expected relational-disjunction error, got: {errors:#?}"
+        );
+    }
+}
+
 impl<'pcx> Pattern<'pcx> {
     pub fn add_pattern_item(
         &mut self,
@@ -474,16 +986,23 @@ impl<'pcx> Pattern<'pcx> {
                     with_path(p, std::iter::once(item)),
                     symbol_table,
                     meta,
+                    None,
                     block_type,
                 );
             },
             Choice3::_1(items) => {
+                let (_, rust_items, _, where_block) = items.get_matched();
+                let item_constraints = where_block.as_ref().map(|_| {
+                    Constraints::from_where_block_opt(std::iter::empty(), where_block, p)
+                        .unwrap_or_else(|err| panic!("unexpected error in pattern constraints:\n{err}"))
+                });
                 self.add_items(
                     pat_name,
                     attr,
-                    with_path(p, items.get_matched().1.iter_matched()),
+                    with_path(p, rust_items.iter_matched()),
                     symbol_table,
                     meta,
+                    item_constraints,
                     block_type,
                 );
             },
@@ -550,6 +1069,7 @@ impl<'pcx> Pattern<'pcx> {
         .table_head();
     }
 
+    #[expect(clippy::too_many_arguments)]
     #[instrument(level = "debug", skip(self, attr, items, symbol_table, meta))]
     fn add_items(
         &mut self,
@@ -558,6 +1078,7 @@ impl<'pcx> Pattern<'pcx> {
         items: WithPath<'pcx, impl Iterator<Item = &'pcx pairs::RustItemWithConstraint<'pcx>>>,
         symbol_table: &'pcx rpl_meta::symbol_table::SymbolTable<'_>,
         meta: Arc<NonLocalMetaVars<'pcx>>,
+        item_constraints: Option<Constraints>,
         block_type: PattOrUtil,
     ) {
         let p = items.path;
@@ -565,7 +1086,7 @@ impl<'pcx> Pattern<'pcx> {
             PattOrUtil::Patt => {
                 self.patt_block.entry(pat_name).or_insert_with(|| {
                     let attr = PatAttr::parse_all(attr);
-                    let mut rpl_rust_items = RustItems::new(self.pcx, meta.clone(), attr);
+                    let mut rpl_rust_items = RustItems::new(self.pcx, meta.clone(), item_constraints, attr);
                     for item in items.inner {
                         rpl_rust_items.add_item(Some(pat_name), with_path(p, item), meta.clone(), symbol_table);
                     }
@@ -575,7 +1096,7 @@ impl<'pcx> Pattern<'pcx> {
             PattOrUtil::Util => {
                 self.util_block.entry(pat_name).or_insert_with(|| {
                     let attr = PatAttr::parse_all(attr);
-                    let mut rpl_rust_items = RustItems::new(self.pcx, meta.clone(), attr);
+                    let mut rpl_rust_items = RustItems::new(self.pcx, meta.clone(), item_constraints, attr);
                     for item in items.inner {
                         rpl_rust_items.add_item(Some(pat_name), with_path(p, item), meta.clone(), symbol_table);
                     }

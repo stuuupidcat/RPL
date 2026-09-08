@@ -1,0 +1,18 @@
+pattern explicit-custom-marker-impl
+
+patt {
+    use $crate::api::Marker;
+
+    explicit_custom_marker[$Wrapper: adt] = {
+        struct $Wrapper<..> {
+            ..
+        }
+
+        $marker:
+        unsafe impl<..> Marker for $Wrapper<..>
+        where ..
+        {}
+    } where {
+        true()
+    }
+}

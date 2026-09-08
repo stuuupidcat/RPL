@@ -44,6 +44,8 @@ pub struct DocItem {
     pub signature: String,
     /// Body text between matching `{` and `}`, uniformly dedented.
     pub body_source: String,
+    /// Trailing `where { ... }` block attached to the item or item bundle.
+    pub where_source: Option<String>,
 }
 
 /// A diagnostic group: `[/// docs]* name = { fields... }`.

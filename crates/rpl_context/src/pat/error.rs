@@ -9,7 +9,7 @@
 // )]
 
 use derive_more::{Debug, Display};
-use rpl_meta::symbol_table::{DiagSymbolTable, MetaVariableType, NonLocalMetaSymTab, WithPath};
+use rpl_meta::symbol_table::{DiagSymbolTable, MetaVariable, MetaVariableType, NonLocalMetaSymTab, WithPath};
 use rpl_meta::{DYNAMIC, collect_elems_separated_by_comma};
 use rpl_parser::generics::Choice2;
 use rpl_parser::pairs::diagMessageInner;
@@ -279,15 +279,19 @@ impl<'i> SubMsg<'i> {
                     } else if labels.contains(&name) {
                         msgs.push(SubMsg::Label(name))
                     } else {
-                        let (var_type, idx, _) = meta_vars
-                            .get_meta_var_from_name(meta_var)
-                            .unwrap_or_else(|| {
-                                panic!(
-                                    "Meta variable `{}` not found:\n    non-local meta symbol table {:?}\n    labels: {:?}",
-                                    meta_var, meta_vars, labels
-                                )
-                            })
-                            .expect_non_adt();
+                        let meta_var = meta_vars.get_meta_var_from_name(meta_var).unwrap_or_else(|| {
+                            panic!(
+                                "Meta variable `{}` not found:\n    non-local meta symbol table {:?}\n    labels: {:?}",
+                                meta_var, meta_vars, labels
+                            )
+                        });
+                        if matches!(meta_var, MetaVariable::Access(..)) {
+                            panic!(
+                                "Unexpected access meta variable in diagnostic message: {}",
+                                arg.span.as_str()
+                            );
+                        }
+                        let (var_type, idx, _) = meta_var.expect_non_adt();
                         match var_type {
                             MetaVariableType::Type => msgs.push(SubMsg::Ty(idx.into())),
                             MetaVariableType::Const => msgs.push(SubMsg::Const(idx.into())),
@@ -295,6 +299,7 @@ impl<'i> SubMsg<'i> {
                                 "Unexpected place meta variable in diagnostic message: {}",
                                 arg.span.as_str()
                             ),
+                            MetaVariableType::Access => unreachable!("access handled before indexed metavariables"),
                         }
                     }
                 },

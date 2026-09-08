@@ -3,7 +3,7 @@ use std::ops::Deref;
 use rpl_constraints::predicates::PredicateConjunction;
 use rpl_meta::collect_elems_separated_by_comma;
 use rpl_meta::symbol_table::{GetType, WithPath};
-use rpl_parser::generics::Choice3;
+use rpl_parser::generics::Choice5;
 use rpl_parser::pairs;
 use rustc_index::IndexVec;
 use rustc_span::Symbol;
@@ -24,6 +24,12 @@ rustc_index::newtype_index! {
 }
 
 rustc_index::newtype_index! {
+    #[debug_format = "?A{}"]
+    #[orderable]
+    pub struct AdtVarIdx {}
+}
+
+rustc_index::newtype_index! {
     #[debug_format = "?P{}"]
     #[orderable]
     pub struct PlaceVarIdx {}
@@ -32,6 +38,13 @@ rustc_index::newtype_index! {
 #[derive(Clone)]
 pub struct TyVar {
     pub idx: TyVarIdx,
+    pub name: Symbol,
+    pub pred: PredicateConjunction,
+}
+
+#[derive(Clone, Debug)]
+pub struct AdtVar {
+    pub idx: AdtVarIdx,
     pub name: Symbol,
     pub pred: PredicateConjunction,
 }
@@ -82,6 +95,12 @@ pub struct LocalVar<'pcx> {
     pub ty: Ty<'pcx>,
 }
 
+#[derive(Clone, Debug)]
+pub struct AccessVar {
+    pub name: Symbol,
+    pub pred: PredicateConjunction,
+}
+
 impl<'pcx> LocalVar<'pcx> {
     pub fn new(idx: Local, name: Symbol, ty: Ty<'pcx>) -> Self {
         Self { idx, name, ty }
@@ -95,6 +114,8 @@ pub struct NonLocalMetaVars<'pcx> {
     pub place_var_names: IndexVec<PlaceVarIdx, Symbol>,
     pub local_names: IndexVec<Local, Symbol>,
     pub ty_vars: IndexVec<TyVarIdx, TyVar>,
+    pub adt_vars: IndexVec<AdtVarIdx, AdtVar>,
+    pub access_vars: Vec<AccessVar>,
     pub const_vars: IndexVec<ConstVarIdx, ConstVar<'pcx>>,
     pub place_vars: IndexVec<PlaceVarIdx, PlaceVar<'pcx>>,
     pub locals: IndexVec<Local, LocalVar<'pcx>>,
@@ -106,6 +127,17 @@ impl<'pcx> NonLocalMetaVars<'pcx> {
         let pred = preds.unwrap_or_default();
         let ty_var = TyVar { idx, name, pred };
         self.ty_vars.push(ty_var);
+    }
+    pub fn add_adt_var(&mut self, name: Symbol, preds: Option<PredicateConjunction>) {
+        let idx = self.adt_vars.next_index();
+        let pred = preds.unwrap_or_default();
+        self.adt_vars.push(AdtVar { idx, name, pred });
+    }
+    pub fn add_access_var(&mut self, name: Symbol, preds: Option<PredicateConjunction>) {
+        self.access_vars.push(AccessVar {
+            name,
+            pred: preds.unwrap_or_default(),
+        });
     }
     pub fn add_const_var(&mut self, name: Symbol, ty: Ty<'pcx>) {
         let idx = self.const_vars.next_index();
@@ -131,6 +163,8 @@ impl<'pcx> NonLocalMetaVars<'pcx> {
             let decls = collect_elems_separated_by_comma!(decls).collect::<Vec<_>>();
             // handle the type meta variable first
             let mut type_vars = Vec::new();
+            let mut adt_vars = Vec::new();
+            let mut access_vars = Vec::new();
             let mut konst_vars = Vec::new();
             let mut place_vars = Vec::new();
             for decl in decls {
@@ -143,13 +177,21 @@ impl<'pcx> NonLocalMetaVars<'pcx> {
                     .transpose()
                     .expect("invalid predicates in meta variable decls");
                 match ty.deref() {
-                    Choice3::_0(_ty) => type_vars.push((ident, preds)),
-                    Choice3::_1(konst) => konst_vars.push((ident, konst)),
-                    Choice3::_2(place) => place_vars.push((ident, place)),
+                    Choice5::_0(_ty) => type_vars.push((ident, preds)),
+                    Choice5::_1(_adt) => adt_vars.push((ident, preds)),
+                    Choice5::_2(_access) => access_vars.push((ident, preds)),
+                    Choice5::_3(konst) => konst_vars.push((ident, konst)),
+                    Choice5::_4(place) => place_vars.push((ident, place)),
                 }
             }
             for (ident, pred_opt) in type_vars {
                 meta.add_ty_var(ident, pred_opt);
+            }
+            for (ident, pred_opt) in adt_vars {
+                meta.add_adt_var(ident, pred_opt);
+            }
+            for (ident, pred_opt) in access_vars {
+                meta.add_access_var(ident, pred_opt);
             }
             for (ident, konst) in konst_vars {
                 let ty = Ty::from(with_path(p, konst.get_matched().2), pcx, fn_sym_tab);
