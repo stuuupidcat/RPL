@@ -123,6 +123,8 @@ pub const ALL_PREDICATES: &[&str] = &[
     // single_fn_preds
     "requires_monomorphization",
     "runs_outside_main",
+    // item_attr_preds
+    "has_attr",
     // ty_const_preds
     "maybe_misaligned",
     // single_const_preds
