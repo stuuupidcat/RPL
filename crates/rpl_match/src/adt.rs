@@ -74,9 +74,16 @@ impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
     /// Field metvars with a single type-compatible candidate are bound immediately; ambiguous
     /// metvars (e.g. Slab `$len` vs `capacity`/`len`) stay unresolved until
     /// [`PlaceElem::FieldPat`](pat::PlaceElem::FieldPat) during statement matching.
-    #[instrument(level = "trace", skip(self))]
-    pub fn match_adt_for_fn_mir(&self, adt: ty::AdtDef<'tcx>) -> Option<AdtMatch<'tcx>> {
-        let adt_match = self.match_adt_structure(adt)?;
+    ///
+    /// `args` are the rustc generic arguments of the matched `Adt` type (`instantiate`, not
+    /// identity).
+    #[instrument(level = "trace", skip(self, args))]
+    pub fn match_adt_for_fn_mir(
+        &self,
+        adt: ty::AdtDef<'tcx>,
+        args: ty::GenericArgsRef<'tcx>,
+    ) -> Option<AdtMatch<'tcx>> {
+        let adt_match = self.match_adt_structure(adt, args)?;
         adt_match.field_candidates().candidates.commit_unique_field_candidates();
         Some(adt_match)
     }
@@ -85,11 +92,11 @@ impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
     ///
     /// Used by fn MIR matching: field metavar → `FieldIdx` bindings are established later via
     /// [`PlaceElem::FieldPat`](pat::PlaceElem::FieldPat) during statement matching.
-    #[instrument(level = "trace", skip(self))]
-    pub fn match_adt_structure(&self, adt: ty::AdtDef<'tcx>) -> Option<AdtMatch<'tcx>> {
+    #[instrument(level = "trace", skip(self, args))]
+    pub fn match_adt_structure(&self, adt: ty::AdtDef<'tcx>, args: ty::GenericArgsRef<'tcx>) -> Option<AdtMatch<'tcx>> {
         match (&self.adt_pat.kind, adt.adt_kind()) {
             (pat::AdtKind::Struct(variant_pat), ty::AdtKind::Struct) => {
-                let fields = self.build_field_candidates(&variant_pat.fields, &adt.non_enum_variant().fields)?;
+                let fields = self.build_field_candidates(&variant_pat.fields, &adt.non_enum_variant().fields, args)?;
                 Some(AdtMatch::new_struct(adt, fields))
             },
             (pat::AdtKind::Enum(variants_pat), ty::AdtKind::Enum) => {
@@ -103,7 +110,7 @@ impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
                         continue;
                     };
                     let variant = adt.variant(variant_idx);
-                    let Some(fields) = self.build_field_candidates(&variant_pat.fields, &variant.fields) else {
+                    let Some(fields) = self.build_field_candidates(&variant_pat.fields, &variant.fields, args) else {
                         continue;
                     };
                     return Some(AdtMatch::new_enum(adt, variant_idx, fields));
@@ -124,11 +131,13 @@ impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
     pub fn match_adt(&self, adt: ty::AdtDef<'tcx>) -> Option<AdtMatch<'tcx>> {
         match (&self.adt_pat.kind, adt.adt_kind()) {
             (pat::AdtKind::Struct(variant_pat), ty::AdtKind::Struct) => {
-                let fields = self.build_field_candidates(&variant_pat.fields, &adt.non_enum_variant().fields)?;
+                let args = ty::GenericArgs::identity_for_item(self.ty.tcx, adt.did());
+                let fields = self.build_field_candidates(&variant_pat.fields, &adt.non_enum_variant().fields, args)?;
                 self.match_field_candidates(&fields, &variant_pat.fields, 0)
                     .then(|| AdtMatch::new_struct(adt, fields))
             },
             (pat::AdtKind::Enum(variants_pat), ty::AdtKind::Enum) => {
+                let args = ty::GenericArgs::identity_for_item(self.ty.tcx, adt.did());
                 for (variant_name, variant_pat) in variants_pat.iter() {
                     let Some(variant_idx) = adt
                         .variants()
@@ -139,7 +148,7 @@ impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
                         continue;
                     };
                     let variant = adt.variant(variant_idx);
-                    let fields = self.build_field_candidates(&variant_pat.fields, &variant.fields)?;
+                    let fields = self.build_field_candidates(&variant_pat.fields, &variant.fields, args)?;
                     if self.match_field_candidates(&fields, &variant_pat.fields, 0) {
                         return Some(AdtMatch::new_enum(adt, variant_idx, fields));
                     }
@@ -162,12 +171,13 @@ impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
         &self,
         fields_pat: &FxIndexMap<Symbol, pat::Field<'pcx>>,
         fields: &'tcx IndexSlice<FieldIdx, ty::FieldDef>,
+        args: ty::GenericArgsRef<'tcx>,
     ) -> Option<FieldCandidates<'tcx>> {
         let mut candidates = FieldCandidates::new(fields_pat, fields);
         // Match by field type only — field metvars (e.g. `$len`) are not Rust field names.
         for (field_name, field_pat) in fields_pat.iter() {
             for (field_idx, field) in fields.iter_enumerated() {
-                if self.match_field(field_pat, field) {
+                if self.match_field(field_pat, field, args) {
                     candidates.candidates.candidates[field_name].insert(field_idx);
                 }
             }
@@ -198,10 +208,15 @@ impl<'a, 'pcx, 'tcx> MatchAdtCtxt<'a, 'pcx, 'tcx> {
         false
     }
 
-    #[instrument(level = "trace", skip(self), ret)]
-    fn match_field(&self, field_pat: &pat::Field<'pcx>, field: &'tcx ty::FieldDef) -> bool {
+    #[instrument(level = "trace", skip(self, args), ret)]
+    fn match_field(
+        &self,
+        field_pat: &pat::Field<'pcx>,
+        field: &'tcx ty::FieldDef,
+        args: ty::GenericArgsRef<'tcx>,
+    ) -> bool {
         let pat_ty = field_pat.ty;
-        let ty = self.ty.tcx.type_of(field.did).instantiate_identity();
+        let ty = self.ty.tcx.type_of(field.did).instantiate(self.ty.tcx, args);
         self.ty.match_ty(pat_ty, ty)
     }
 }

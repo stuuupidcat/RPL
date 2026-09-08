@@ -1,8 +1,7 @@
 pattern session-shared-ty-mismatch-sig
 
 patt {
-    // Signature-only companion to the MIR mismatch test: arity-only matching is a known FP until
-    // signature slots run `match_ty`.
+    // Signature-only companion to the MIR mismatch test.
     p[$T: type, $U: type] = {
         struct $Pair {
             $first: $T,

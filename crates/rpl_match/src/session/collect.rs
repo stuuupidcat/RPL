@@ -123,19 +123,41 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
 
     fn collect_sig_candidates(
         &self,
-        _rust_items: &'pcx pat::RustItems<'pcx>,
+        rust_items: &'pcx pat::RustItems<'pcx>,
         fn_pat: &FnPattern<'pcx>,
         item: CrateFnItem,
         attr_map: rpl_constraints::attributes::ExtraSpan<'tcx>,
     ) -> Vec<FnSlotCandidate<'tcx>> {
         let body = self.body(item.def_id);
+        let typing_env = ty::TypingEnv::post_analysis(self.tcx, item.def_id.to_def_id());
+        let self_ty = self.self_ty(item.def_id);
+        let cx = crate::MatchFnCtxt::with_typing_env(self.tcx, self.pcx, rust_items, fn_pat, typing_env, self_ty);
+        if !cx.match_fn(item.def_id.to_def_id()) {
+            return Vec::new();
+        }
+        let Some(adt_defs) = crate::collect_adt_def_bindings(cx.ty()) else {
+            return Vec::new();
+        };
+        let Some(ty_vars) = project_unique_ty_vars(cx.ty()) else {
+            return Vec::new();
+        };
+        let Some(const_vars) = project_unique_const_vars(cx.ty()) else {
+            return Vec::new();
+        };
+        let meta = rust_items.meta.as_ref();
         let labels = &fn_pat.expect_body().labels;
         let matched = crate::matches::Matched {
             basic_blocks: Default::default(),
             locals: Default::default(),
-            ty_vars: Default::default(),
-            const_vars: Default::default(),
-            place_vars: Default::default(),
+            ty_vars,
+            const_vars,
+            place_vars: rustc_index::IndexVec::from_fn_n(
+                |_| mir::PlaceRef {
+                    local: mir::Local::from_u32(0),
+                    projection: &[],
+                },
+                meta.place_vars.len(),
+            ),
             adt_fields: Default::default(),
         };
         if !self.check_constraints(fn_pat, item.def_id, body, &matched, None, None) {
@@ -144,7 +166,7 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
         let normalized = NormalizedMatched::new(&matched, labels, &attr_map);
         vec![FnSlotCandidate {
             def_id: item.def_id,
-            snapshot: BindingSnapshot::from_normalized(&normalized),
+            snapshot: BindingSnapshot::from_normalized_with_adt_defs(&normalized, adt_defs),
             normalized,
             matched,
         }]
@@ -213,4 +235,51 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
         );
         evaluator.evaluate_constraint(&fn_pat.constraints)
     }
+}
+
+fn project_unique_ty_vars<'tcx>(
+    ty: &crate::MatchTyCtxt<'_, 'tcx>,
+) -> Option<rustc_index::IndexVec<pat::TyVarIdx, ty::Ty<'tcx>>> {
+    let mut failed = false;
+    let out = rustc_index::IndexVec::from_fn_n(
+        |i| {
+            let set = ty.ty_vars[i].borrow();
+            match set.len() {
+                0 => ty.tcx.types.never,
+                1 => *set.iter().next().expect("len == 1"),
+                _ => {
+                    failed = true;
+                    ty.tcx.types.never
+                },
+            }
+        },
+        ty.ty_vars.len(),
+    );
+    (!failed).then_some(out)
+}
+
+fn project_unique_const_vars<'tcx>(
+    ty: &crate::MatchTyCtxt<'_, 'tcx>,
+) -> Option<rustc_index::IndexVec<pat::ConstVarIdx, rpl_constraints::Const<'tcx>>> {
+    use rpl_constraints::Const;
+    let dummy = Const::Param(ty::ParamConst {
+        index: 0,
+        name: Symbol::intern("_"),
+    });
+    let mut failed = false;
+    let out = rustc_index::IndexVec::from_fn_n(
+        |i| {
+            let set = ty.const_vars[i].borrow();
+            match set.len() {
+                0 => dummy,
+                1 => *set.iter().next().expect("len == 1"),
+                _ => {
+                    failed = true;
+                    dummy
+                },
+            }
+        },
+        ty.const_vars.len(),
+    );
+    (!failed).then_some(out)
 }

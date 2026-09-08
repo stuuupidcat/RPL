@@ -147,6 +147,46 @@ impl<'pcx, 'tcx> MatchTy<'pcx, 'tcx> for MatchTyCtxt<'pcx, 'tcx> {
         true
     }
 
+    fn bind_adtpat_substs(&self, adt_pat: &pat::Adt<'pcx>, args: ty::GenericArgsRef<'tcx>) {
+        use pat::visitor::PatternVisitor;
+        use rustc_data_structures::fx::FxHashSet;
+
+        struct Collect {
+            vars: Vec<pat::TyVar>,
+            seen: FxHashSet<pat::TyVarIdx>,
+        }
+
+        impl<'pcx> PatternVisitor<'pcx> for Collect {
+            fn visit_ty_var(&mut self, ty_var: &pat::TyVar) {
+                if self.seen.insert(ty_var.idx) {
+                    self.vars.push(ty_var.clone());
+                }
+            }
+        }
+
+        let mut collect = Collect {
+            vars: Vec::new(),
+            seen: FxHashSet::default(),
+        };
+        match &adt_pat.kind {
+            pat::AdtKind::Struct(variant) => {
+                for field in variant.fields.values() {
+                    collect.visit_ty(field.ty);
+                }
+            },
+            pat::AdtKind::Enum(variants) => {
+                for variant in variants.values() {
+                    for field in variant.fields.values() {
+                        collect.visit_ty(field.ty);
+                    }
+                }
+            },
+        }
+        for (ty_var, ty) in collect.vars.iter().zip(args.types()) {
+            let _ = self.match_ty_var(ty_var.clone(), ty);
+        }
+    }
+
     fn adt_matched(&self, adt_pat: Symbol, adt: ty::AdtDef<'tcx>, f: impl FnOnce(&AdtMatch<'tcx>)) {
         let adt_matches = self.adt_matches.borrow();
         adt_matches
@@ -171,6 +211,12 @@ pub(crate) trait MatchTy<'pcx, 'tcx> {
     fn match_mir_const_var(&self, const_var: pat::ConstVar<'pcx>, konst: mir::Const<'tcx>) -> bool;
     #[must_use]
     fn match_adt_matches(&self, pat: Symbol, adt_match: AdtMatch<'tcx>) -> bool;
+
+    /// Bind AdtPat field ty-vars from the rustc type's generic arguments (source-field order).
+    ///
+    /// Default: no-op (MIR `MatchCtxt` keeps FieldPat as the authority).
+    /// [`MatchTyCtxt`] (signature / probe) uses this so `Pair<u8, u16>` commits `$T`/`$U`.
+    fn bind_adtpat_substs(&self, _adt_pat: &pat::Adt<'pcx>, _args: ty::GenericArgsRef<'tcx>) {}
 
     #[instrument(level = "trace", skip(self), ret)]
     fn match_ty(&self, ty_pat: pat::Ty<'pcx>, ty: ty::Ty<'tcx>) -> bool {
@@ -248,10 +294,12 @@ pub(crate) trait MatchTy<'pcx, 'tcx> {
                 .map(|ty_pat| self.match_ty(ty_pat, ty))
                 .unwrap_or(false)
             },
-            (pat::TyKind::AdtPat(pat), ty::Adt(adt, _)) => {
+            (pat::TyKind::AdtPat(pat), ty::Adt(adt, args)) => {
                 if let Some(adt_pat) = self.pat().get_adt(pat)
-                    && let Some(adt_match) = self.match_adt(adt_pat, adt) {
-                        self.match_adt_matches(pat, adt_match)
+                    && let Some(adt_match) = self.match_adt(adt_pat, adt, args)
+                {
+                    self.bind_adtpat_substs(adt_pat, args);
+                    self.match_adt_matches(pat, adt_match)
                 } else {
                     false
                 }
@@ -316,12 +364,17 @@ pub(crate) trait MatchTy<'pcx, 'tcx> {
         matched
     }
 
-    #[instrument(level = "trace", skip(self), ret)]
-    fn match_adt(&self, adt_pat: &pat::Adt<'pcx>, adt: ty::AdtDef<'tcx>) -> Option<AdtMatch<'tcx>> {
+    #[instrument(level = "trace", skip(self, args), ret)]
+    fn match_adt(
+        &self,
+        adt_pat: &pat::Adt<'pcx>,
+        adt: ty::AdtDef<'tcx>,
+        args: ty::GenericArgsRef<'tcx>,
+    ) -> Option<AdtMatch<'tcx>> {
         // Structure + unique commits; ambiguous fields stay for FieldPat.
         // Use caller TypingEnv so predicates like is_not_unpin do not fail-open.
         MatchAdtCtxt::with_typing_env(self.tcx(), self.pcx(), self.pat(), adt_pat, self.typing_env())
-            .match_adt_for_fn_mir(adt)
+            .match_adt_for_fn_mir(adt, args)
     }
 
     #[instrument(level = "trace", skip(self), ret)]

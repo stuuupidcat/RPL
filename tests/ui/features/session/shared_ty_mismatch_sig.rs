@@ -2,8 +2,7 @@
 //@check-pass
 //@compile-flags: -Z inline-mir=false
 //
-// Expected: no match once signature slots match types.
-// Currently red: empty bodies only check arity.
+// Expected: no match — `$T`/`$U` disagree across the two signature-only functions.
 
 #![allow(dead_code)]
 
