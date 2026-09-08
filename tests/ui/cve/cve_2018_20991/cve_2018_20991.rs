@@ -1,3 +1,4 @@
+//@revisions: inline normal
 //@check-pass: no pattern yet
 // Copied and modified from https://github.com/servo/rust-smallvec/blob/bfdd7ee/lib.rs
 

@@ -1,5 +1,4 @@
 //@compile-flags: -Z inline-mir=false
-//@rustc-env: RPL_PATS=docs/patterns-pest/panic-safety.rpl
 
 //! CVE-2021-30456-shaped: `get_unchecked_mut` (weak) then user `F`.
 
@@ -15,8 +14,11 @@ struct IdMap<T> {
 impl<T> IdMap<T> {
     fn with_capacity(cap: usize) -> Self {
         let mut values = Vec::with_capacity(cap);
+        //~^ uninit_vec
+        // false positive above
         unsafe {
             values.set_len(cap);
+            //~^ set_len_uninitialized
         }
         Self {
             occupied: vec![false; cap],

@@ -1,5 +1,4 @@
 //@compile-flags: -Z inline-mir=false
-//@rustc-env: RPL_PATS=docs/patterns-pest/panic-safety.rpl
 
 //! CVE-2021-30457-shaped: `get_unchecked_mut` (weak) then `drop_in_place`.
 
@@ -26,6 +25,8 @@ impl<T> IdMap<T> {
         }
         if self.values.len() <= id {
             self.values.reserve(id + 1 - self.values.len());
+            //~^ uninit_vec
+            // false positive above
             unsafe {
                 self.values.set_len(id + 1);
             }

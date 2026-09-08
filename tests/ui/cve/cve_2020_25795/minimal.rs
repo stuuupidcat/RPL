@@ -1,5 +1,4 @@
 //@compile-flags: -Z inline-mir=false
-//@rustc-env: RPL_PATS=docs/patterns-pest/panic-safety.rpl
 
 //! Minimal CVE-2020-25795 / sized-chunks `insert_from` panic-safety motif:
 //! relocate elements (holes), then user/generic code may panic before fill.

@@ -78,6 +78,8 @@ pub fn patterns() -> Vec<(&'static str, &'static str)> {
         "cve/CVE-2021-29941-2.rpl",
         "cve/CVE-2022-23639.rpl",
         "cve/CVE-2024-27284.rpl",
+        // Rudra patterns
+        "rudra/panic-safety.rpl",
         // Common patterns based on Rust's UB
         "ub/allow-unchecked.rpl",
         "ub/manually-drop.rpl",

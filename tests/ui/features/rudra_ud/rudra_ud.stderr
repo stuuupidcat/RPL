@@ -1,5 +1,5 @@
 error: lifetime-bypassing operation reaches potentially panicking / unresolvable generic code
-  --> tests/ui/features/rudra_ud/rudra_ud.rs:12:9
+  --> tests/ui/features/rudra_ud/rudra_ud.rs:11:9
    |
 LL |         ptr::copy_nonoverlapping(src, dst, 1);
    |         ------------------------------------- lifetime bypass here
@@ -10,7 +10,7 @@ LL |         ptr::drop_in_place(dst);
    = note: `#[deny(rpl::panic_safety_strong)]` on by default
 
 error: lifetime-bypassing operation reaches potentially panicking / unresolvable generic code
-  --> tests/ui/features/rudra_ud/rudra_ud.rs:21:9
+  --> tests/ui/features/rudra_ud/rudra_ud.rs:20:9
    |
 LL |         let _v = ptr::read(p);
    |                  ------------ lifetime bypass here
@@ -20,7 +20,7 @@ LL |         f();
    = help: restore container invariants (or use a drop guard) before calling code that may panic
 
 error: lifetime-bypassing operation reaches potentially panicking / unresolvable generic code
-  --> tests/ui/features/rudra_ud/rudra_ud.rs:47:9
+  --> tests/ui/features/rudra_ud/rudra_ud.rs:46:9
    |
 LL |         let _v = ptr::read(p);
    |                  ------------ lifetime bypass here

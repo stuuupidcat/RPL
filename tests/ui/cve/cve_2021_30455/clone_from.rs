@@ -1,5 +1,4 @@
 //@compile-flags: -Z inline-mir=false
-//@rustc-env: RPL_PATS=docs/patterns-pest/panic-safety.rpl
 
 //! CVE-2021-30455-shaped: `ptr::read` then unresolvable `clone`.
 

@@ -1,5 +1,5 @@
 error: lifetime-bypassing operation reaches potentially panicking / unresolvable generic code
-  --> tests/ui/cve/cve_2021_30455/clone_from.rs:59:34
+  --> tests/ui/cve/cve_2021_30455/clone_from.rs:58:34
    |
 LL |                     let src = ptr::read(other.values.as_ptr().add(id));
    |                               ---------------------------------------- lifetime bypass here
@@ -10,7 +10,7 @@ LL |                     let cloned = (<T as Clone>::clone)(&src);
    = note: `#[deny(rpl::panic_safety_strong)]` on by default
 
 error: weak lifetime-bypassing operation reaches potentially panicking / unresolvable generic code
-  --> tests/ui/cve/cve_2021_30455/clone_from.rs:59:34
+  --> tests/ui/cve/cve_2021_30455/clone_from.rs:58:34
    |
 LL |                     let cloned = (<T as Clone>::clone)(&src);
    |                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^ unresolvable generic or `drop_in_place` here

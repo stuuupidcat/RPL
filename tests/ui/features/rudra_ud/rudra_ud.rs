@@ -1,4 +1,3 @@
-//@rustc-env: RPL_PATS=docs/patterns-pest/panic-safety.rpl
 //@compile-flags: -Z inline-mir=false
 
 #![allow(dead_code)]
