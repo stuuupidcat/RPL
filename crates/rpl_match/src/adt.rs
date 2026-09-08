@@ -15,8 +15,9 @@ use derive_more::derive::Debug;
 use rpl_context::PatCtxt;
 use rpl_context::pat::{self};
 use rustc_abi::FieldIdx;
-use rustc_data_structures::fx::{FxHashMap, FxIndexMap};
+use rustc_data_structures::fx::{FxHashMap, FxHashSet, FxIndexMap};
 use rustc_data_structures::stack::ensure_sufficient_stack;
+use rustc_hir::def_id::DefId;
 use rustc_index::bit_set::MixedBitSet;
 use rustc_index::{Idx, IndexSlice, IndexVec};
 use rustc_middle::ty::{self, TyCtxt};
@@ -366,6 +367,25 @@ pub fn collect_adt_field_bindings(ty: &MatchTyCtxt<'_, '_>) -> AdtFieldMap {
     map
 }
 
+/// Project `AdtPat → AdtDef` pins from a fn MIR match context for SharedEnv merge.
+///
+/// Returns `None` when any AdtPat is bound to more than one `DefId` in this context
+/// (ambiguous for session unify). Empty map means the body did not pin any AdtPat.
+pub fn collect_adt_def_bindings(ty: &MatchTyCtxt<'_, '_>) -> Option<FxHashMap<Symbol, DefId>> {
+    let mut map = FxHashMap::default();
+    for (adt_pat, per_def) in ty.adt_matches.borrow().iter() {
+        match per_def.len() {
+            0 => continue,
+            1 => {
+                let def_id = *per_def.keys().next().expect("len == 1");
+                map.insert(*adt_pat, def_id);
+            },
+            _ => return None,
+        }
+    }
+    Some(map)
+}
+
 /// Reset FieldPat bindings left behind by statement candidate probing, then re-commit
 /// unambiguous fields. Call after [`CheckMirCtxt`] `build_candidates`.
 pub fn reset_adt_field_bindings_after_probe(ty: &MatchTyCtxt<'_, '_>) {
@@ -430,26 +450,71 @@ pub fn seed_ty_vars_from_adt_field_candidates(ty: &MatchTyCtxt<'_, '_>) {
     }
 }
 
-/// Whether every registered `AdtMatch` has resolved all of its pattern field metvars.
+/// Whether every **used** ADT field metavar has a committed binding.
 ///
-/// Used as a gate before accepting a MIR match candidate: unresolved (ambiguous) fields
-/// mean the match is incomplete and should be discarded.
-pub fn all_adt_fields_resolved(ty: &MatchTyCtxt<'_, '_>) -> bool {
+/// `used_field_pats` are `FieldPat` symbols appearing in the current fn MIR pattern.
+/// Declared-but-unused field metvars (e.g. `$second` when the body only reads `$first`)
+/// may stay unbound so they do not block a match or invent permutations.
+///
+/// Ambiguous fields that *are* used via `FieldPat` (e.g. Slab `$len`) must still be resolved.
+pub fn all_adt_fields_resolved(ty: &MatchTyCtxt<'_, '_>, used_field_pats: &FxHashSet<Symbol>) -> bool {
     ty.adt_matches.borrow().iter().all(|(adt_pat_sym, per_def)| {
         let Some(adt_pat) = ty.pat.get_adt(*adt_pat_sym) else {
             return false;
         };
         per_def.values().all(|adt_match| match &adt_pat.kind {
-            pat::AdtKind::Struct(variant) => adt_match.all_fields_resolved(&variant.fields),
-            // Enum: FieldCandidates was built for one matched variant; require those metvars.
-            pat::AdtKind::Enum(_) => adt_match
-                .field_candidates()
-                .candidates
-                .matches
-                .values()
-                .all(|m| m.get().is_some()),
+            pat::AdtKind::Struct(variant) => used_field_pats.iter().all(|field_name| {
+                if !variant.fields.contains_key(field_name) {
+                    return true;
+                }
+                adt_match
+                    .field_candidates()
+                    .candidates
+                    .matches
+                    .get(field_name)
+                    .is_some_and(|m| m.get().is_some())
+            }),
+            // Enum: FieldCandidates was built for one matched variant; require used metvars.
+            pat::AdtKind::Enum(_) => used_field_pats.iter().all(|field_name| {
+                match adt_match.field_candidates().candidates.matches.get(field_name) {
+                    None => true,
+                    Some(m) => m.get().is_some(),
+                }
+            }),
         })
     })
+}
+
+/// Collect `FieldPat` metavar names referenced in a fn MIR pattern body.
+pub fn collect_used_field_pats(mir_pat: &pat::FnPatternBody<'_>) -> FxHashSet<Symbol> {
+    use pat::visitor::{PatternVisitor, PlaceContext};
+
+    struct Collect {
+        fields: FxHashSet<Symbol>,
+    }
+
+    impl<'pcx> PatternVisitor<'pcx> for Collect {
+        fn visit_projection_elem(
+            &mut self,
+            place_ref: pat::Place<'pcx>,
+            elem: pat::PlaceElem<'pcx>,
+            context: PlaceContext,
+            location: pat::Location,
+        ) {
+            if let pat::PlaceElem::FieldPat(field) = elem {
+                self.fields.insert(field);
+            }
+            self.super_projection_elem(place_ref, elem, context, location);
+        }
+    }
+
+    let mut collect = Collect {
+        fields: FxHashSet::default(),
+    };
+    for (bb, block) in mir_pat.basic_blocks.iter_enumerated() {
+        collect.visit_basic_block_data(bb, block);
+    }
+    collect.fields
 }
 
 #[cfg(test)]

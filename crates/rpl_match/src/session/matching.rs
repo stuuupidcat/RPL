@@ -1,9 +1,9 @@
 //! Unified multi-slot matching with function-owned locals/locations.
 //!
 //! All [`RustItems`](rpl_context::pat::RustItems) matching goes through [`SessionMatching`]:
-//! shared metavars live in one context; MIR locals/locations are keyed by [`MatchSlot`] and
-//! carry [`LocalDefId`]. Search fills all slots (optional slots may be skipped), then pushes
-//! one [`SessionResult`] per complete assignment.
+//! shared metavars live in one [`MetaBindings`] (SharedEnv); MIR locals/locations are keyed by
+//! [`MatchSlot`] and carry [`LocalDefId`]. Search fills all slots (optional slots may be skipped),
+//! then pushes one [`SessionResult`] per complete assignment.
 
 use std::cell::Cell;
 
@@ -78,7 +78,9 @@ impl OwnedStmtMatches {
 
 #[derive(Debug, Default)]
 struct TyVarMatches<'tcx> {
+    #[expect(dead_code, reason = "ty vars commit at slot assign; no outer cartesian product")]
     candidates: FxIndexSet<Ty<'tcx>>,
+    #[expect(dead_code, reason = "ty vars commit at slot assign; no outer cartesian product")]
     matched: CountedMatch<Ty<'tcx>>,
 }
 
@@ -113,6 +115,7 @@ pub struct SessionMatching<'a, 'pcx, 'tcx> {
     fn_slots: &'a [FnSlotDesc<'pcx>],
     adt_slots: &'a [AdtSlotDesc<'pcx>],
 
+    #[allow(dead_code)]
     ty_vars: IndexVec<TyVarIdx, TyVarMatches<'tcx>>,
     #[allow(dead_code)]
     const_vars: IndexVec<ConstVarIdx, ConstVarMatches<'tcx>>,
@@ -131,6 +134,7 @@ pub struct SessionMatching<'a, 'pcx, 'tcx> {
     fn_mir_cache: FnMirCache<'tcx>,
 
     results: Vec<SessionResult<'tcx>>,
+    truncated: bool,
 }
 
 impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
@@ -161,6 +165,7 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
             fn_skipped: FxHashMap::default(),
             fn_mir_cache: FxHashMap::default(),
             results: Vec::new(),
+            truncated: false,
         };
 
         for desc in fn_slots {
@@ -173,6 +178,13 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
 
         matching.probe(index);
         matching.match_candidates();
+        if matching.truncated {
+            warn!(
+                pat = ?matching.collect.pat_name,
+                max_results = matching.config.max_results,
+                "session matching truncated at max_results; results may be incomplete"
+            );
+        }
         matching.results
     }
 
@@ -184,11 +196,6 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
                         .get_mut(&desc.slot)
                         .expect("adt slot")
                         .add_candidate(adt_cand.def_id);
-                    for (idx, ty) in adt_cand.ty_bindings.iter_enumerated() {
-                        if !MetaBindings::should_skip_ty_binding(*ty) {
-                            self.ty_vars[idx].candidates.insert(*ty);
-                        }
-                    }
                     self.adt_probes
                         .insert((desc.slot, adt_cand.def_id), AdtProbe { candidate: adt_cand });
                 }
@@ -217,43 +224,16 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
         let mut bindings = MetaBindings::new(self.rust_items.meta.as_ref());
         let mut used_defs = Vec::new();
         let mut assignments = Vec::new();
-        self.match_ty_vars(TyVarIdx::from_u32(0), &mut bindings, &mut used_defs, &mut assignments);
+        // Types commit when slots assign; do not cartesian-product ty_vars first.
+        self.match_adt_slots(0, &mut bindings, &mut used_defs, &mut assignments);
     }
 
-    fn match_ty_vars(
-        &mut self,
-        idx: TyVarIdx,
-        bindings: &mut MetaBindings<'tcx>,
-        used_defs: &mut Vec<LocalDefId>,
-        assignments: &mut Vec<SlotAssignment<'tcx>>,
-    ) {
+    fn at_max_results(&mut self) -> bool {
         if self.config.max_results > 0 && self.results.len() >= self.config.max_results {
-            return;
-        }
-        if idx.index() >= self.ty_vars.len() {
-            self.match_adt_slots(0, bindings, used_defs, assignments);
-            return;
-        }
-
-        let cands: Vec<Ty<'tcx>> = self.ty_vars[idx].candidates.iter().copied().collect();
-        if cands.is_empty() {
-            self.match_ty_vars(TyVarIdx::from_usize(idx.index() + 1), bindings, used_defs, assignments);
-            return;
-        }
-
-        for ty in cands {
-            if !self.ty_vars[idx].matched.r#match(ty) {
-                continue;
-            }
-            let prev = bindings.ty_vars[idx];
-            if bindings.ty_vars[idx].is_some_and(|b| b != ty) {
-                self.ty_vars[idx].matched.unmatch();
-                continue;
-            }
-            bindings.ty_vars[idx] = Some(ty);
-            self.match_ty_vars(TyVarIdx::from_usize(idx.index() + 1), bindings, used_defs, assignments);
-            bindings.ty_vars[idx] = prev;
-            self.ty_vars[idx].matched.unmatch();
+            self.truncated = true;
+            true
+        } else {
+            false
         }
     }
 
@@ -264,7 +244,7 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
         used_defs: &mut Vec<LocalDefId>,
         assignments: &mut Vec<SlotAssignment<'tcx>>,
     ) {
-        if self.config.max_results > 0 && self.results.len() >= self.config.max_results {
+        if self.at_max_results() {
             return;
         }
         if slot_i >= self.adt_slots.len() {
@@ -274,26 +254,34 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
 
         let desc = self.adt_slots[slot_i];
         let def_cands = self.adt_defs[&desc.slot].candidates.clone();
+        // Required ADT with empty domain fails the whole prefix (no skip).
         if def_cands.is_empty() {
-            self.match_adt_slots(slot_i + 1, bindings, used_defs, assignments);
             return;
         }
 
         for def_id in def_cands {
+            if used_defs.contains(&def_id) {
+                continue;
+            }
             let probe = self.adt_probes[&(desc.slot, def_id)].clone();
             let mut trial = bindings.clone();
             if !trial.merge_adt_ty_bindings(&probe.candidate.ty_bindings) {
                 continue;
             }
+            if !trial.bind_adt_def(desc.adt_pat_name, def_id.to_def_id()) {
+                continue;
+            }
             if !self.adt_defs.get_mut(&desc.slot).unwrap().matched.r#match(def_id) {
                 continue;
             }
+            used_defs.push(def_id);
             assignments.push(SlotAssignment {
                 slot: desc.slot,
                 candidate: SlotCandidate::Adt(probe.candidate.clone()),
             });
             self.match_adt_slots(slot_i + 1, &mut trial, used_defs, assignments);
             assignments.pop();
+            used_defs.pop();
             self.adt_defs.get_mut(&desc.slot).unwrap().matched.unmatch();
         }
     }
@@ -305,7 +293,7 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
         used_defs: &mut Vec<LocalDefId>,
         assignments: &mut Vec<SlotAssignment<'tcx>>,
     ) {
-        if self.config.max_results > 0 && self.results.len() >= self.config.max_results {
+        if self.at_max_results() {
             return;
         }
         if slot_i >= self.fn_slots.len() {
@@ -329,6 +317,10 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
                 self.try_fn_candidate(desc, def_id, slot_i, bindings, used_defs, assignments);
             }
         } else {
+            // Required fn with empty domain fails this prefix.
+            if def_cands.is_empty() {
+                return;
+            }
             for def_id in def_cands {
                 if used_defs.contains(&def_id) {
                     continue;

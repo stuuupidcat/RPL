@@ -85,7 +85,7 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
         let (mir_cfg, mir_ddg) = self.graphs(body);
         let self_ty = self.self_ty(item.def_id);
 
-        let mir_matches = CheckMirCtxt::new(
+        let cx = CheckMirCtxt::new(
             self.tcx,
             self.pcx,
             body,
@@ -96,8 +96,12 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
             fn_pat,
             &mir_cfg,
             &mir_ddg,
-        )
-        .check();
+        );
+        let mir_matches = cx.check();
+        // Project AdtPat→AdtDef for SharedEnv. Ambiguous multi-DefId bindings fail the candidate set.
+        let Some(adt_defs) = crate::collect_adt_def_bindings(&cx.ty) else {
+            return Vec::new();
+        };
         mir_matches
             .into_iter()
             .filter(|matched| {
@@ -106,7 +110,7 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
             .map(|matched| {
                 let labels = &fn_pat.expect_body().labels;
                 let normalized = NormalizedMatched::new(&matched, labels, &attr_map);
-                let snapshot = BindingSnapshot::from_normalized(&normalized);
+                let snapshot = BindingSnapshot::from_normalized_with_adt_defs(&normalized, adt_defs.clone());
                 FnSlotCandidate {
                     def_id: item.def_id,
                     normalized,

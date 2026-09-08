@@ -46,8 +46,9 @@ mod statement;
 mod ty;
 
 pub use adt::{
-    AdtFieldMap, AdtMatch, Candidates, MatchAdtCtxt, all_adt_fields_resolved, collect_adt_field_bindings,
-    reset_adt_field_bindings_after_probe, seed_ty_vars_from_adt_field_candidates,
+    AdtFieldMap, AdtMatch, Candidates, MatchAdtCtxt, all_adt_fields_resolved, collect_adt_def_bindings,
+    collect_adt_field_bindings, collect_used_field_pats, reset_adt_field_bindings_after_probe,
+    seed_ty_vars_from_adt_field_candidates,
 };
 pub use counted::CountedMatch;
 pub use fns::MatchFnCtxt;

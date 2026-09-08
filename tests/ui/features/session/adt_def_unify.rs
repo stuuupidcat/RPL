@@ -3,7 +3,6 @@
 //@compile-flags: -Z inline-mir=false
 //
 // Expected: no match — one `$Pair` cannot bind two distinct AdtDefs.
-// Currently may FP until session AdtDef pin/unify lands.
 
 #![allow(dead_code)]
 

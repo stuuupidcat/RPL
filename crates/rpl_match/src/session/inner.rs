@@ -4,7 +4,7 @@ use rustc_hir::def_id::LocalDefId;
 use crate::session::collect::MatchCollectCtxt;
 use crate::session::config::SessionConfig;
 use crate::session::matching::SessionMatching;
-use crate::session::slot::{CrateItemIndex, SessionResult, SlotCandidate, collect_slot_descs};
+use crate::session::slot::{CrateItemIndex, MatchSlot, SessionResult, SlotCandidate, collect_slot_descs};
 
 /// Orchestrates candidate collection and multi-slot matching for one pattern item.
 pub struct MatchSession<'a, 'pcx, 'tcx> {
@@ -33,43 +33,8 @@ impl<'a, 'pcx, 'tcx> MatchSession<'a, 'pcx, 'tcx> {
         }
 
         let mut results = SessionMatching::run(&self.collect, self.config, index, rust_items, &fn_slots, &adt_slots);
-        results = Self::deduplicate_fn_slot_permutations(results);
         self.enrich_results(index, &mut results);
         Self::deduplicate_results(rust_items.attr.should_deduplicate(), results)
-    }
-
-    fn deduplicate_fn_slot_permutations(results: Vec<SessionResult<'tcx>>) -> Vec<SessionResult<'tcx>> {
-        let (single_fn, multi_fn): (Vec<_>, Vec<_>) = results
-            .into_iter()
-            .partition(|result| Self::fn_assignment_signature(result).len() <= 1);
-
-        let mut kept_multi = Vec::new();
-        for result in multi_fn {
-            let signature = Self::fn_assignment_signature(&result);
-            if kept_multi
-                .iter()
-                .all(|existing| Self::fn_assignment_signature(existing) != signature)
-            {
-                kept_multi.push(result);
-            }
-        }
-
-        let mut kept = single_fn;
-        kept.extend(kept_multi);
-        kept
-    }
-
-    fn fn_assignment_signature(result: &SessionResult<'tcx>) -> Vec<LocalDefId> {
-        let mut defs: Vec<_> = result
-            .assignments
-            .iter()
-            .filter_map(|a| match &a.candidate {
-                SlotCandidate::Fn(c) => Some(c.def_id),
-                SlotCandidate::Adt(_) => None,
-            })
-            .collect();
-        defs.sort_by_key(|def_id| def_id.local_def_index);
-        defs
     }
 
     fn deduplicate_results(deduplicate: bool, results: Vec<SessionResult<'tcx>>) -> Vec<SessionResult<'tcx>> {
@@ -162,8 +127,10 @@ impl SessionResult<'_> {
             .into_iter()
             .map(|mut a| {
                 if let SlotCandidate::Fn(ref mut c) = a.candidate {
+                    let adt_defs = c.snapshot.adt_defs.clone();
                     c.normalized = c.normalized.clone().map(map);
-                    c.snapshot = super::bindings::BindingSnapshot::from_normalized(&c.normalized);
+                    c.snapshot =
+                        super::bindings::BindingSnapshot::from_normalized_with_adt_defs(&c.normalized, adt_defs);
                 }
                 a
             })
@@ -175,14 +142,21 @@ impl SessionResult<'_> {
         }
     }
 
+    /// Slot → DefId assignment key (order-sensitive by slot identity, not DefId set).
+    fn slot_def_signature(&self) -> Vec<(MatchSlot, LocalDefId)> {
+        let mut sig: Vec<_> = self
+            .assignments
+            .iter()
+            .filter_map(|a| match &a.candidate {
+                SlotCandidate::Fn(c) => Some((a.slot, c.def_id)),
+                SlotCandidate::Adt(c) => Some((a.slot, c.def_id)),
+            })
+            .collect();
+        sig.sort_by_key(|(slot, def_id)| (*slot, def_id.local_def_index));
+        sig
+    }
+
     pub fn equivalent(&self, other: &Self) -> bool {
-        self.bindings.equivalent_to(&other.bindings)
-            && self.assignments.len() == other.assignments.len()
-            && self.primary_fn_slot() == other.primary_fn_slot()
-            && match (self.primary_fn_candidate(), other.primary_fn_candidate()) {
-                (Some(a), Some(b)) => a.def_id == b.def_id && a.normalized == b.normalized,
-                (None, None) => true,
-                _ => false,
-            }
+        self.slot_def_signature() == other.slot_def_signature() && self.bindings.equivalent_to(&other.bindings)
     }
 }

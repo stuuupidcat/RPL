@@ -10,7 +10,7 @@ use crate::matches::artifact::NormalizedMatched;
 use crate::session::bindings::BindingSnapshot;
 
 /// Identifies a pattern slot within a [`MatchSession`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MatchSlot {
     /// Function pattern at index in `RustItems.fns.all_fns`.
     Fn(usize),
