@@ -88,7 +88,6 @@ pub fn check_crate<'tcx, 'pcx, 'mcx: 'pcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>
         tcx,
         pcx,
         body_caches: RefCell::default(),
-        fn_candidate_cache: RefCell::default(),
         index,
     };
 
@@ -127,7 +126,6 @@ struct CheckFnCtxt<'pcx, 'tcx> {
     tcx: TyCtxt<'tcx>,
     pcx: PatCtxt<'pcx>,
     body_caches: RefCell<FxHashMap<DefId, BodyInfoCache>>,
-    fn_candidate_cache: RefCell<FxHashMap<(DefId, usize, usize), Vec<rpl_match::FnSlotCandidate<'tcx>>>>,
     index: CrateItemIndex,
 }
 
@@ -144,13 +142,7 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
 
         self.pcx.for_each_rpl_pattern(|_id, pattern| {
             for (pat_idx, (&pat_name, pat_item)) in pattern.patt_block.iter().enumerate() {
-                let collect = MatchCollectCtxt::new(
-                    self.tcx,
-                    self.pcx,
-                    pat_name,
-                    &self.body_caches,
-                    &self.fn_candidate_cache,
-                );
+                let collect = MatchCollectCtxt::new(self.tcx, self.pcx, pat_name, &self.body_caches);
                 let session = MatchSession::new(collect, SessionConfig::default());
                 for result in session.match_pattern_item(&self.index, pat_item) {
                     for target in result.lint_targets() {

@@ -438,6 +438,9 @@ pub fn seed_ty_vars_from_adt_field_candidates(ty: &MatchTyCtxt<'_, '_>) {
                 let pat::TyKind::TyVar(ty_var) = field_pat.ty.kind() else {
                     continue;
                 };
+                if ty.is_ty_var_pinned(ty_var.idx) {
+                    continue;
+                }
                 // Put FieldIdx-ordered field types at the front of the candidate set.
                 let mut typed: Vec<_> = bitset
                     .iter()

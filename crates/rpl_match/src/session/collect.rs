@@ -13,17 +13,14 @@ use crate::graph::{MirControlFlowGraph, MirDataDepGraph};
 use crate::matches::artifact::NormalizedMatched;
 use crate::mir::CheckMirCtxt;
 use crate::predicate_evaluator::PredicateEvaluator;
-use crate::session::bindings::BindingSnapshot;
+use crate::session::bindings::{BindingSnapshot, MetaBindings};
 use crate::session::slot::{AdtSlotCandidate, AdtSlotDesc, CrateAdtItem, CrateFnItem, FnSlotCandidate};
-
-type FnCandidateCache<'tcx> = RefCell<FxHashMap<(DefId, usize, usize), Vec<FnSlotCandidate<'tcx>>>>;
 
 pub struct MatchCollectCtxt<'a, 'pcx, 'tcx> {
     pub tcx: TyCtxt<'tcx>,
     pub pcx: PatCtxt<'pcx>,
     pub pat_name: Symbol,
     pub body_caches: &'a RefCell<FxHashMap<DefId, BodyInfoCache>>,
-    fn_candidate_cache: &'a FnCandidateCache<'tcx>,
 }
 
 impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
@@ -32,59 +29,38 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
         pcx: PatCtxt<'pcx>,
         pat_name: Symbol,
         body_caches: &'a RefCell<FxHashMap<DefId, BodyInfoCache>>,
-        fn_candidate_cache: &'a FnCandidateCache<'tcx>,
     ) -> Self {
         Self {
             tcx,
             pcx,
             pat_name,
             body_caches,
-            fn_candidate_cache,
         }
     }
 
-    pub fn collect_fn_candidates(
+    /// Run inner matching for one `(fn_pat, def_id)` under the current SharedEnv prefix.
+    pub fn match_fn_slot(
         &self,
         rust_items: &'pcx pat::RustItems<'pcx>,
+        env: &MetaBindings<'tcx>,
         fn_pat: &FnPattern<'pcx>,
         item: CrateFnItem,
-    ) -> Vec<FnSlotCandidate<'tcx>> {
-        let cache_key = (
-            item.def_id.to_def_id(),
-            fn_pat as *const FnPattern<'pcx> as usize,
-            rust_items as *const pat::RustItems<'pcx> as usize,
-        );
-        if let Some(cached) = self.fn_candidate_cache.borrow().get(&cache_key) {
-            return cached.clone();
-        }
-        let candidates = self.collect_fn_candidates_uncached(rust_items, fn_pat, item);
-        self.fn_candidate_cache
-            .borrow_mut()
-            .insert(cache_key, candidates.clone());
-        candidates
-    }
-
-    fn collect_fn_candidates_uncached(
-        &self,
-        rust_items: &'pcx pat::RustItems<'pcx>,
-        fn_pat: &FnPattern<'pcx>,
-        item: CrateFnItem,
-    ) -> Vec<FnSlotCandidate<'tcx>> {
-        if !fn_pat.filter(self.tcx, item.def_id, item.header, self.body(item.def_id)) {
-            return Vec::new();
-        }
+        mut on_cand: impl FnMut(FnSlotCandidate<'tcx>),
+    ) {
         let Some(attr_map) = fn_pat.extra_span(self.tcx, item.def_id) else {
-            return Vec::new();
+            return;
         };
 
         if fn_pat.is_signature_only() {
-            return self.collect_sig_candidates(rust_items, fn_pat, item, attr_map);
+            if let Some(cand) = self.match_sig_candidate(rust_items, env, fn_pat, item, attr_map) {
+                on_cand(cand);
+            }
+            return;
         }
 
         let body = self.body(item.def_id);
         let (mir_cfg, mir_ddg) = self.graphs(body);
         let self_ty = self.self_ty(item.def_id);
-
         let cx = CheckMirCtxt::new(
             self.tcx,
             self.pcx,
@@ -97,53 +73,45 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
             &mir_cfg,
             &mir_ddg,
         );
-        let mir_matches = cx.check();
-        // Project AdtPat→AdtDef for SharedEnv. Ambiguous multi-DefId bindings fail the candidate set.
-        let Some(adt_defs) = crate::collect_adt_def_bindings(&cx.ty) else {
-            return Vec::new();
-        };
-        mir_matches
-            .into_iter()
-            .filter(|matched| {
-                self.check_constraints(fn_pat, item.def_id, body, matched, Some(&mir_ddg), Some(&mir_cfg))
-            })
-            .map(|matched| {
-                let labels = &fn_pat.expect_body().labels;
-                let normalized = NormalizedMatched::new(&matched, labels, &attr_map);
-                let snapshot = BindingSnapshot::from_normalized_with_adt_defs(&normalized, adt_defs.clone());
-                FnSlotCandidate {
-                    def_id: item.def_id,
-                    normalized,
-                    matched,
-                    snapshot,
-                }
-            })
-            .collect()
+        seed_from_env(&cx.ty, env);
+        cx.check_with(|matched| {
+            if !self.check_constraints(fn_pat, item.def_id, body, matched, Some(&mir_ddg), Some(&mir_cfg)) {
+                return;
+            }
+            let Some(adt_defs) = crate::collect_adt_def_bindings(&cx.ty) else {
+                return;
+            };
+            let labels = &fn_pat.expect_body().labels;
+            let normalized = NormalizedMatched::new(matched, labels, &attr_map);
+            let snapshot = BindingSnapshot::from_normalized_with_adt_defs(&normalized, adt_defs);
+            on_cand(FnSlotCandidate {
+                def_id: item.def_id,
+                snapshot,
+                normalized,
+                matched: matched.clone(),
+            });
+        });
     }
 
-    fn collect_sig_candidates(
+    fn match_sig_candidate(
         &self,
         rust_items: &'pcx pat::RustItems<'pcx>,
+        env: &MetaBindings<'tcx>,
         fn_pat: &FnPattern<'pcx>,
         item: CrateFnItem,
         attr_map: rpl_constraints::attributes::ExtraSpan<'tcx>,
-    ) -> Vec<FnSlotCandidate<'tcx>> {
+    ) -> Option<FnSlotCandidate<'tcx>> {
         let body = self.body(item.def_id);
         let typing_env = ty::TypingEnv::post_analysis(self.tcx, item.def_id.to_def_id());
         let self_ty = self.self_ty(item.def_id);
         let cx = crate::MatchFnCtxt::with_typing_env(self.tcx, self.pcx, rust_items, fn_pat, typing_env, self_ty);
+        seed_from_env(cx.ty(), env);
         if !cx.match_fn(item.def_id.to_def_id()) {
-            return Vec::new();
+            return None;
         }
-        let Some(adt_defs) = crate::collect_adt_def_bindings(cx.ty()) else {
-            return Vec::new();
-        };
-        let Some(ty_vars) = project_unique_ty_vars(cx.ty()) else {
-            return Vec::new();
-        };
-        let Some(const_vars) = project_unique_const_vars(cx.ty()) else {
-            return Vec::new();
-        };
+        let adt_defs = crate::collect_adt_def_bindings(cx.ty())?;
+        let ty_vars = project_unique_ty_vars(cx.ty())?;
+        let const_vars = project_unique_const_vars(cx.ty())?;
         let meta = rust_items.meta.as_ref();
         let labels = &fn_pat.expect_body().labels;
         let matched = crate::matches::Matched {
@@ -161,15 +129,15 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
             adt_fields: Default::default(),
         };
         if !self.check_constraints(fn_pat, item.def_id, body, &matched, None, None) {
-            return Vec::new();
+            return None;
         }
         let normalized = NormalizedMatched::new(&matched, labels, &attr_map);
-        vec![FnSlotCandidate {
+        Some(FnSlotCandidate {
             def_id: item.def_id,
             snapshot: BindingSnapshot::from_normalized_with_adt_defs(&normalized, adt_defs),
             normalized,
             matched,
-        }]
+        })
     }
 
     pub fn collect_adt_candidates(
@@ -234,6 +202,24 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
             mir_cfg,
         );
         evaluator.evaluate_constraint(&fn_pat.constraints)
+    }
+}
+
+fn seed_from_env<'pcx, 'tcx>(ty: &crate::MatchTyCtxt<'pcx, 'tcx>, env: &MetaBindings<'tcx>) {
+    for (idx, bound) in env.ty_vars.iter_enumerated() {
+        if let Some(bound_ty) = *bound {
+            ty.pin_ty_var(idx, bound_ty);
+        }
+    }
+    for (idx, bound) in env.const_vars.iter_enumerated() {
+        if let Some(konst) = *bound
+            && !MetaBindings::should_skip_const_binding(konst)
+        {
+            ty.pin_const_var(idx, konst);
+        }
+    }
+    for (&name, &def_id) in &env.adt_defs {
+        ty.pin_adt_def(name, def_id);
     }
 }
 

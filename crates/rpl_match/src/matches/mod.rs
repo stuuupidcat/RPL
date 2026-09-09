@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::fmt;
 use std::ops::Index;
 
@@ -166,9 +166,14 @@ impl<'tcx> Index<pat::PlaceVarIdx> for Matched<'tcx> {
 }
 
 pub fn matches<'tcx>(cx: &CheckMirCtxt<'_, '_, 'tcx>) -> Vec<Matched<'tcx>> {
-    let mut matching = MatchCtxt::new(cx);
+    let mut out = Vec::new();
+    matches_with(cx, |m| out.push(m.clone()));
+    out
+}
+
+pub fn matches_with<'a, 'pcx, 'tcx>(cx: &'a CheckMirCtxt<'a, 'pcx, 'tcx>, on_match: impl FnMut(&Matched<'tcx>) + 'a) {
+    let mut matching = MatchCtxt::with_on_match(cx, Box::new(on_match));
     matching.do_match();
-    matching.matched.take()
 }
 
 /// Ty metavars mentioned in a fn MIR body (locals / statements), excluding AdtPat field decls.
@@ -416,15 +421,15 @@ pub fn local_is_arg(local: mir::Local, body: &mir::Body<'_>) -> bool {
 struct MatchCtxt<'a, 'pcx, 'tcx> {
     cx: &'a CheckMirCtxt<'a, 'pcx, 'tcx>,
     matching: Matching<'tcx>,
-    matched: Cell<Vec<Matched<'tcx>>>,
+    on_match: RefCell<Box<dyn FnMut(&Matched<'tcx>) + 'a>>,
 }
 
 impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
-    fn new(cx: &'a CheckMirCtxt<'a, 'pcx, 'tcx>) -> Self {
+    fn with_on_match(cx: &'a CheckMirCtxt<'a, 'pcx, 'tcx>, on_match: Box<dyn FnMut(&Matched<'tcx>) + 'a>) -> Self {
         Self {
             cx,
             matching: Self::new_checking(cx),
-            matched: Cell::new(Vec::new()),
+            on_match: RefCell::new(on_match),
         }
     }
     fn new_checking(cx: &'a CheckMirCtxt<'a, 'pcx, 'tcx>) -> Matching<'tcx> {
@@ -579,17 +584,7 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         self.matching.log_candidates();
         if !self.matching.has_empty_candidates(self.cx) {
             self.match_candidates();
-            self.log_matched();
         }
-    }
-    fn log_matched(&self) {
-        let matched = self.matched.take();
-        debug!("log matched candidates: {}", matched.len());
-        for (index, matched) in matched.iter().enumerate() {
-            debug!("candidate {index}");
-            matched.log_matched();
-        }
-        self.matched.set(matched);
     }
     fn assert_ty_var_free(&self) {
         #[cfg(feature = "strict")]
@@ -719,9 +714,9 @@ impl<'a, 'pcx, 'tcx> MatchCtxt<'a, 'pcx, 'tcx> {
         let Some((&loc_pat, loc_pats)) = loc_pats.split_first() else {
             if self.match_graph() && all_adt_fields_resolved(&self.cx.ty, &collect_used_field_pats(self.cx.mir_pat)) {
                 self.matching.log_matched(self.cx);
-                let mut matched = self.matched.take();
-                matched.push(self.matching.to_matched(self.cx));
-                self.matched.set(matched);
+                let matched = self.matching.to_matched(self.cx);
+                matched.log_matched();
+                (self.on_match.borrow_mut())(&matched);
             }
             return;
         };

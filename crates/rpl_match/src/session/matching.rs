@@ -105,8 +105,6 @@ struct AdtProbe<'tcx> {
     candidate: AdtSlotCandidate<'tcx>,
 }
 
-type FnMirCache<'tcx> = FxHashMap<(MatchSlot, LocalDefId), Vec<FnSlotCandidate<'tcx>>>;
-
 /// Unified session matching context for all [`RustItems`](rpl_context::pat::RustItems).
 pub struct SessionMatching<'a, 'pcx, 'tcx> {
     collect: &'a MatchCollectCtxt<'a, 'pcx, 'tcx>,
@@ -131,7 +129,6 @@ pub struct SessionMatching<'a, 'pcx, 'tcx> {
     stmts: FxHashMap<OwnedLocationPat, OwnedStmtMatches>,
 
     fn_skipped: FxHashMap<MatchSlot, Cell<bool>>,
-    fn_mir_cache: FnMirCache<'tcx>,
 
     results: Vec<SessionResult<'tcx>>,
     truncated: bool,
@@ -163,7 +160,6 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
             locals: FxHashMap::default(),
             stmts: FxHashMap::default(),
             fn_skipped: FxHashMap::default(),
-            fn_mir_cache: FxHashMap::default(),
             results: Vec::new(),
             truncated: false,
         };
@@ -339,38 +335,58 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
         used_defs: &mut Vec<LocalDefId>,
         assignments: &mut Vec<SlotAssignment<'tcx>>,
     ) {
-        let mir_cands = self.fn_mir_for(desc.slot, desc.fn_pat, def_id);
-        for cand in mir_cands {
-            let mut trial = bindings.clone();
-            if !trial.merge_snapshot(&cand.snapshot) {
-                continue;
-            }
-            self.ingest_fn_matched(desc.slot, &cand);
+        let item = self.fn_items.get(&(desc.slot, def_id)).copied().unwrap_or(CrateFnItem {
+            def_id,
+            header: None,
+            has_self: false,
+            fn_name: None,
+        });
+        let env = bindings.clone();
+        let collect = self.collect;
+        collect.match_fn_slot(self.rust_items, &env, desc.fn_pat, item, |cand| {
+            self.commit_fn_candidate(desc, def_id, slot_i, bindings, used_defs, assignments, cand);
+        });
+    }
 
-            if !self.fn_defs.get_mut(&desc.slot).unwrap().matched.r#match(def_id) {
-                self.unenest_fn_matched(desc.slot, &cand);
-                continue;
-            }
+    fn commit_fn_candidate(
+        &mut self,
+        desc: FnSlotDesc<'pcx>,
+        def_id: LocalDefId,
+        slot_i: usize,
+        bindings: &mut MetaBindings<'tcx>,
+        used_defs: &mut Vec<LocalDefId>,
+        assignments: &mut Vec<SlotAssignment<'tcx>>,
+        cand: FnSlotCandidate<'tcx>,
+    ) {
+        let mut trial = bindings.clone();
+        if !trial.merge_snapshot(&cand.snapshot) {
+            return;
+        }
+        self.ingest_fn_matched(desc.slot, &cand);
 
-            if !self.locals_consistent_with_def(desc.slot, def_id) {
-                self.fn_defs.get_mut(&desc.slot).unwrap().matched.unmatch();
-                self.unenest_fn_matched(desc.slot, &cand);
-                continue;
-            }
+        if !self.fn_defs.get_mut(&desc.slot).unwrap().matched.r#match(def_id) {
+            self.unenest_fn_matched(desc.slot, &cand);
+            return;
+        }
 
-            used_defs.push(def_id);
-            assignments.push(SlotAssignment {
-                slot: desc.slot,
-                candidate: SlotCandidate::Fn(cand.clone()),
-            });
-
-            self.match_fn_slots(slot_i + 1, &mut trial, used_defs, assignments);
-
-            assignments.pop();
-            used_defs.pop();
+        if !self.locals_consistent_with_def(desc.slot, def_id) {
             self.fn_defs.get_mut(&desc.slot).unwrap().matched.unmatch();
             self.unenest_fn_matched(desc.slot, &cand);
+            return;
         }
+
+        used_defs.push(def_id);
+        assignments.push(SlotAssignment {
+            slot: desc.slot,
+            candidate: SlotCandidate::Fn(cand.clone()),
+        });
+
+        self.match_fn_slots(slot_i + 1, &mut trial, used_defs, assignments);
+
+        assignments.pop();
+        used_defs.pop();
+        self.fn_defs.get_mut(&desc.slot).unwrap().matched.unmatch();
+        self.unenest_fn_matched(desc.slot, &cand);
     }
 
     fn locals_consistent_with_def(&self, slot: MatchSlot, def_id: LocalDefId) -> bool {
@@ -383,27 +399,6 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
                 None => true,
             }
         })
-    }
-
-    fn fn_mir_for(
-        &mut self,
-        slot: MatchSlot,
-        fn_pat: &'pcx pat::FnPattern<'pcx>,
-        def_id: LocalDefId,
-    ) -> Vec<FnSlotCandidate<'tcx>> {
-        let key = (slot, def_id);
-        if let Some(cached) = self.fn_mir_cache.get(&key) {
-            return cached.clone();
-        }
-        let item = self.fn_items.get(&key).copied().unwrap_or(CrateFnItem {
-            def_id,
-            header: None,
-            has_self: false,
-            fn_name: None,
-        });
-        let cands = self.collect.collect_fn_candidates(self.rust_items, fn_pat, item);
-        self.fn_mir_cache.insert(key, cands.clone());
-        cands
     }
 
     fn ingest_fn_matched(&mut self, slot: MatchSlot, cand: &FnSlotCandidate<'tcx>) {
