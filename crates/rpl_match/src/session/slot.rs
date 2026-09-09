@@ -10,7 +10,7 @@ use crate::matches::artifact::NormalizedMatched;
 use crate::session::bindings::BindingSnapshot;
 
 /// Identifies a pattern slot within a [`MatchSession`].
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum MatchSlot {
     /// Function pattern at index in `RustItems.fns.all_fns`.
     Fn(usize),
@@ -79,6 +79,23 @@ pub struct SessionResult<'tcx> {
     pub primary_fn: Option<FnMatchContext<'tcx>>,
 }
 
+/// Session match output, including whether [`super::config::SessionConfig::max_results`] stopped
+/// the search.
+#[derive(Debug, Clone)]
+pub struct SessionOutcome<'tcx> {
+    pub results: Vec<SessionResult<'tcx>>,
+    pub truncated: bool,
+}
+
+impl<'tcx> SessionOutcome<'tcx> {
+    pub fn empty() -> Self {
+        Self {
+            results: Vec::new(),
+            truncated: false,
+        }
+    }
+}
+
 impl<'tcx> SessionResult<'tcx> {
     pub fn fn_assignment(&self, slot: MatchSlot) -> Option<&FnSlotCandidate<'tcx>> {
         self.assignments.iter().find_map(|a| {
@@ -129,10 +146,46 @@ impl<'tcx> SessionResult<'tcx> {
             })
     }
 
-    /// Key for [`PatternOperation`](rpl_context::pat::PatternOperation) negative filtering:
-    /// compare matches within the same function using full [`NormalizedMatched`] equality.
-    pub fn operation_match_key(&self) -> Option<(LocalDefId, &NormalizedMatched<'tcx>)> {
-        self.primary_fn_candidate().map(|c| (c.def_id, &c.normalized))
+    /// Whether this result can participate in
+    /// [`PatternOperation`](rpl_context::pat::PatternOperation) subtraction (`p - q`). Results
+    /// with no function slot are never filtered.
+    pub fn has_operation_key(&self) -> bool {
+        self.primary_fn_candidate().is_some()
+    }
+
+    /// Negative filter for `p - q`: mapped SharedEnv plus alignable slot DefIds.
+    ///
+    /// Does **not** compare [`NormalizedMatched`] (MIR locations). Slots present on only
+    /// one side (e.g. a single-fn negative vs a multi-fn positive) are ignored.
+    pub fn subtracted_by(&self, neg: &Self) -> bool {
+        let Some(pos_primary) = self.primary_fn_candidate() else {
+            return false;
+        };
+        let Some(neg_primary) = neg.primary_fn_candidate() else {
+            return false;
+        };
+        if pos_primary.def_id != neg_primary.def_id {
+            return false;
+        }
+        if !self.bindings.equivalent_to(&neg.bindings) {
+            return false;
+        }
+        for a in &self.assignments {
+            let Some(neg_a) = neg.assignments.iter().find(|b| b.slot == a.slot) else {
+                continue;
+            };
+            if assignment_def_id(a) != assignment_def_id(neg_a) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+fn assignment_def_id(a: &SlotAssignment<'_>) -> LocalDefId {
+    match &a.candidate {
+        SlotCandidate::Fn(c) => c.def_id,
+        SlotCandidate::Adt(c) => c.def_id,
     }
 }
 
@@ -169,15 +222,13 @@ pub fn collect_slot_descs<'pcx>(
         })
         .collect();
 
-    let mut next_idx = fn_slots.len();
-    for impl_pat in rust_items.impls.values() {
-        for fn_pat in impl_pat.fns.values() {
+    for (&impl_name, impl_pat) in &rust_items.impls {
+        for (&fn_name, fn_pat) in &impl_pat.fns {
             fn_slots.push(FnSlotDesc {
-                slot: MatchSlot::Fn(next_idx),
+                slot: MatchSlot::ImplFn { impl_name, fn_name },
                 fn_pat,
                 optional: fn_pat.name.as_str() == "_",
             });
-            next_idx += 1;
         }
     }
 

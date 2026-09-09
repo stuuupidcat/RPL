@@ -100,7 +100,7 @@ impl<'pcx> PatternItem<'pcx> {
         match self {
             PatternItem::RustItems(items) => {
                 let mut map = FxHashMap::default();
-                for fn_pat in &items.fns {
+                for fn_pat in &items.fns.all_fns {
                     if let Some(body) = fn_pat.body {
                         map.extend(body.labels.iter().map(|(&k, &v)| (k, v)));
                     }

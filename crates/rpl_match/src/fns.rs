@@ -19,9 +19,23 @@ impl<'a, 'pcx, 'tcx> MatchFnCtxt<'a, 'pcx, 'tcx> {
         pat: &'pcx pat::RustItems<'pcx>,
         fn_pat: &'a pat::FnPattern<'pcx>,
     ) -> Self {
-        // FIXME: `self_ty` should be passed from the caller.
-        let ty = MatchTyCtxt::new(tcx, pcx, ty::TypingEnv::fully_monomorphized(), None, pat, &fn_pat.meta); // FIXME
+        Self::with_typing_env(tcx, pcx, pat, fn_pat, ty::TypingEnv::fully_monomorphized(), None)
+    }
+
+    pub fn with_typing_env(
+        tcx: TyCtxt<'tcx>,
+        pcx: PatCtxt<'pcx>,
+        pat: &'pcx pat::RustItems<'pcx>,
+        fn_pat: &'a pat::FnPattern<'pcx>,
+        typing_env: ty::TypingEnv<'tcx>,
+        self_ty: Option<ty::Ty<'tcx>>,
+    ) -> Self {
+        let ty = MatchTyCtxt::new(tcx, pcx, typing_env, self_ty, pat, &fn_pat.meta);
         Self { ty, fn_pat }
+    }
+
+    pub fn ty(&self) -> &MatchTyCtxt<'pcx, 'tcx> {
+        &self.ty
     }
 
     #[instrument(level = "debug", skip_all, fields(fn_pat = %self.fn_pat, fn_did = ?fn_did.into()), ret)]
@@ -34,12 +48,18 @@ impl<'a, 'pcx, 'tcx> MatchFnCtxt<'a, 'pcx, 'tcx> {
         };
         let fn_sig = self.ty.tcx.liberate_late_bound_regions(fn_did, poly_fn_sig);
         debug!(?fn_sig);
-        (self.fn_pat.params.len() <= fn_sig.inputs().len() || self.fn_pat.params.non_exhaustive)
+        let params_ok = (self.fn_pat.params.len() <= fn_sig.inputs().len() || self.fn_pat.params.non_exhaustive)
             && zip(self.fn_pat.params.iter(), fn_sig.inputs())
-                .all(|(param_pat, &param_ty)| self.match_param(param_pat, param_ty))
-            && self
-                .ty
-                .match_ty(self.fn_pat.ret.unwrap_or(self.ty.pcx.mk_unit_ty()), fn_sig.output())
+                .all(|(param_pat, &param_ty)| self.match_param(param_pat, param_ty));
+        if !params_ok {
+            return false;
+        }
+        // Omitted `ret` is unconstrained (`fn $f(..) {}` must not require `()`), so
+        // signature-only patterns like generic `#[inline]` still match `-> T`.
+        match self.fn_pat.ret {
+            Some(ret_pat) => self.ty.match_ty(ret_pat, fn_sig.output()),
+            None => true,
+        }
     }
 
     fn match_param(&self, param_pat: &pat::Param<'pcx>, ty: ty::Ty<'tcx>) -> bool {

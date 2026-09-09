@@ -24,7 +24,7 @@ use rpl_context::PatCtxt;
 use rpl_context::pat::DynamicError;
 use rpl_match::matches::artifact::{NormalizedMatched, NormalizedSpanned};
 use rpl_match::session::{MatchCollectCtxt, MatchSession, SessionConfig};
-use rpl_match::{CrateItemIndex, MatchSlot, MultiMatched, OwnedLintMatch};
+use rpl_match::{CrateItemIndex, MatchSlot, MultiMatched, OwnedLintMatch, SessionOutcome};
 use rpl_meta::context::MetaContext;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_hir::def_id::{DefId, LocalDefId};
@@ -88,7 +88,6 @@ pub fn check_crate<'tcx, 'pcx, 'mcx: 'pcx>(tcx: TyCtxt<'tcx>, pcx: PatCtxt<'pcx>
         tcx,
         pcx,
         body_caches: RefCell::default(),
-        fn_candidate_cache: RefCell::default(),
         index,
     };
 
@@ -127,7 +126,6 @@ struct CheckFnCtxt<'pcx, 'tcx> {
     tcx: TyCtxt<'tcx>,
     pcx: PatCtxt<'pcx>,
     body_caches: RefCell<FxHashMap<DefId, BodyInfoCache>>,
-    fn_candidate_cache: RefCell<FxHashMap<(DefId, usize, usize), Vec<rpl_match::FnSlotCandidate<'tcx>>>>,
     index: CrateItemIndex,
 }
 
@@ -144,15 +142,20 @@ impl<'tcx, 'pcx> CheckFnCtxt<'pcx, 'tcx> {
 
         self.pcx.for_each_rpl_pattern(|_id, pattern| {
             for (pat_idx, (&pat_name, pat_item)) in pattern.patt_block.iter().enumerate() {
-                let collect = MatchCollectCtxt::new(
-                    self.tcx,
-                    self.pcx,
-                    pat_name,
-                    &self.body_caches,
-                    &self.fn_candidate_cache,
-                );
+                let collect = MatchCollectCtxt::new(self.tcx, self.pcx, pat_name, &self.body_caches);
                 let session = MatchSession::new(collect, SessionConfig::default());
-                for result in session.match_pattern_item(&self.index, pat_item) {
+                let SessionOutcome { results, truncated } = session.match_pattern_item(&self.index, pat_item);
+                if truncated {
+                    let hir_id = rustc_hir::hir_id::CRATE_HIR_ID;
+                    self.tcx.dcx().span_warn(
+                        self.tcx.hir().span(hir_id),
+                        format!(
+                            "session matching for pattern `{pat_name}` truncated at {} results; matches may be incomplete",
+                            SessionConfig::default().max_results
+                        ),
+                    );
+                }
+                for result in results {
                     for target in result.lint_targets() {
                         pending.push(PendingLint {
                             pattern,
