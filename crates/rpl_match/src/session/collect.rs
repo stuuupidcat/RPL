@@ -1,8 +1,10 @@
 use std::cell::RefCell;
 
-use rpl_constraints::predicates::BodyInfoCache;
+use rpl_constraints::Constraints;
+use rpl_constraints::predicates::{BodyInfoCache, PredicateArg};
 use rpl_context::PatCtxt;
 use rpl_context::pat::{self, FnPattern};
+use rpl_meta::symbol_table::MetaVariable;
 use rustc_data_structures::fx::FxHashMap;
 use rustc_hir::def_id::DefId;
 use rustc_middle::mir;
@@ -75,7 +77,16 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
         );
         seed_from_env(&cx.ty, env);
         cx.check_with(|matched| {
-            if !self.check_constraints(fn_pat, item.def_id, body, matched, Some(&mir_ddg), Some(&mir_cfg)) {
+            if !self.check_constraints(
+                fn_pat,
+                item.def_id,
+                body,
+                matched,
+                env,
+                &fn_pat.constraints,
+                Some(&mir_ddg),
+                Some(&mir_cfg),
+            ) {
                 return;
             }
             let Some(adt_defs) = crate::collect_adt_def_bindings(&cx.ty) else {
@@ -128,7 +139,16 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
             ),
             adt_fields: Default::default(),
         };
-        if !self.check_constraints(fn_pat, item.def_id, body, &matched, None, None) {
+        if !self.check_constraints(
+            fn_pat,
+            item.def_id,
+            body,
+            &matched,
+            env,
+            &fn_pat.constraints,
+            None,
+            None,
+        ) {
             return None;
         }
         let normalized = NormalizedMatched::new(&matched, labels, &attr_map);
@@ -175,15 +195,50 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
             .map(|impl_| self.tcx.type_of(impl_).instantiate_identity())
     }
 
+    pub(crate) fn check_impl_constraints(
+        &self,
+        rust_items: &'pcx pat::RustItems<'pcx>,
+        impl_name: Symbol,
+        def_id: rustc_hir::def_id::LocalDefId,
+        fn_pat: &FnPattern<'pcx>,
+        matched: &crate::matches::Matched<'tcx>,
+        env: &MetaBindings<'tcx>,
+    ) -> bool {
+        let Some(impl_pat) = rust_items.impls.get(&impl_name) else {
+            return true;
+        };
+        if impl_pat.constraints.preds.is_empty() {
+            return true;
+        }
+        let body = self.body(def_id);
+        let (mir_cfg, mir_ddg) = self.graphs(body);
+        self.check_constraints(
+            fn_pat,
+            def_id,
+            body,
+            matched,
+            env,
+            &impl_pat.constraints,
+            Some(&mir_ddg),
+            Some(&mir_cfg),
+        )
+    }
+
     fn check_constraints(
         &self,
         fn_pat: &FnPattern<'pcx>,
         def_id: rustc_hir::def_id::LocalDefId,
         body: &mir::Body<'tcx>,
         matched: &crate::matches::Matched<'tcx>,
+        env: &MetaBindings<'tcx>,
+        constraints: &Constraints,
         mir_ddg: Option<&MirDataDepGraph>,
         mir_cfg: Option<&MirControlFlowGraph>,
     ) -> bool {
+        let eval_matched = overlay_matched(matched, env);
+        if mentioned_meta_unbound(constraints, fn_pat.symbol_table, &eval_matched) {
+            return false;
+        }
         let typing_env = ty::TypingEnv::post_analysis(self.tcx, body.source.def_id());
         let mut caches = self.body_caches.borrow_mut();
         let cache = caches
@@ -195,14 +250,83 @@ impl<'a, 'pcx, 'tcx> MatchCollectCtxt<'a, 'pcx, 'tcx> {
             def_id.into(),
             body,
             &fn_pat.expect_body().labels,
-            matched,
+            &eval_matched,
             cache,
             fn_pat.symbol_table,
             mir_ddg,
             mir_cfg,
         );
-        evaluator.evaluate_constraint(&fn_pat.constraints)
+        evaluator.evaluate_constraint(constraints)
     }
+}
+
+fn overlay_matched<'tcx>(
+    matched: &crate::matches::Matched<'tcx>,
+    env: &MetaBindings<'tcx>,
+) -> crate::matches::Matched<'tcx> {
+    let mut out = matched.clone();
+    for (idx, ty) in out.ty_vars.iter_enumerated_mut() {
+        if MetaBindings::should_skip_ty_binding(*ty)
+            && let Some(bound) = env.ty_vars[idx]
+        {
+            *ty = bound;
+        }
+    }
+    for (idx, konst) in out.const_vars.iter_enumerated_mut() {
+        if MetaBindings::should_skip_const_binding(*konst)
+            && let Some(bound) = env.const_vars[idx]
+        {
+            *konst = bound;
+        }
+    }
+    out
+}
+
+fn mentioned_meta_unbound(
+    constraints: &Constraints,
+    symbol_table: &pat::FnSymbolTable<'_>,
+    matched: &crate::matches::Matched<'_>,
+) -> bool {
+    for name in mentioned_meta_vars(constraints) {
+        let lookup = name.as_str();
+        let meta = symbol_table.meta_vars.get_meta_var_from_name(lookup).or_else(|| {
+            lookup
+                .strip_prefix('$')
+                .and_then(|n| symbol_table.meta_vars.get_meta_var_from_name(n))
+        });
+        match meta {
+            Some(MetaVariable::Type(idx, _)) => {
+                let ty_idx = pat::TyVarIdx::from_usize(idx);
+                if MetaBindings::should_skip_ty_binding(matched.ty_vars[ty_idx]) {
+                    return true;
+                }
+            },
+            Some(MetaVariable::Const(idx, _, _)) => {
+                let const_idx = pat::ConstVarIdx::from_usize(idx);
+                if MetaBindings::should_skip_const_binding(matched.const_vars[const_idx]) {
+                    return true;
+                }
+            },
+            Some(MetaVariable::Place(idx, _, _)) => {
+                let _ = idx;
+            },
+            Some(MetaVariable::AdtPat(_, _)) | None => {},
+        }
+    }
+    false
+}
+
+fn mentioned_meta_vars(constraints: &Constraints) -> impl Iterator<Item = Symbol> + '_ {
+    constraints.preds.iter().flat_map(|conj| {
+        conj.clauses.iter().flat_map(|clause| {
+            clause.terms.iter().flat_map(|term| {
+                term.args.iter().filter_map(|arg| match arg {
+                    PredicateArg::MetaVar(sym) => Some(*sym),
+                    _ => None,
+                })
+            })
+        })
+    })
 }
 
 fn seed_from_env<'pcx, 'tcx>(ty: &crate::MatchTyCtxt<'pcx, 'tcx>, env: &MetaBindings<'tcx>) {

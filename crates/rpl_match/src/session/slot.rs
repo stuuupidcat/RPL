@@ -169,15 +169,13 @@ pub fn collect_slot_descs<'pcx>(
         })
         .collect();
 
-    let mut next_idx = fn_slots.len();
-    for impl_pat in rust_items.impls.values() {
-        for fn_pat in impl_pat.fns.values() {
+    for (&impl_name, impl_pat) in &rust_items.impls {
+        for (&fn_name, fn_pat) in &impl_pat.fns {
             fn_slots.push(FnSlotDesc {
-                slot: MatchSlot::Fn(next_idx),
+                slot: MatchSlot::ImplFn { impl_name, fn_name },
                 fn_pat,
                 optional: fn_pat.name.as_str() == "_",
             });
-            next_idx += 1;
         }
     }
 

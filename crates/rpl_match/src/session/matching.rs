@@ -10,10 +10,11 @@ use std::cell::Cell;
 use rpl_constraints::Const;
 use rpl_context::pat::{self, ConstVarIdx, PlaceVarIdx, TyVarIdx};
 use rustc_data_structures::fx::{FxHashMap, FxIndexSet};
-use rustc_hir::def_id::LocalDefId;
+use rustc_hir::def_id::{DefId, LocalDefId};
 use rustc_index::IndexVec;
 use rustc_middle::mir::{self, PlaceRef};
 use rustc_middle::ty::Ty;
+use rustc_span::Symbol;
 
 use crate::CountedMatch;
 use crate::matches::StatementMatch;
@@ -200,6 +201,9 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
 
         for desc in self.fn_slots {
             for &item in &index.fns {
+                if !self.fn_item_in_domain(*desc, item) {
+                    continue;
+                }
                 let body = self.collect.tcx.optimized_mir(item.def_id);
                 if !desc.fn_pat.filter(self.collect.tcx, item.def_id, item.header, body) {
                     continue;
@@ -216,12 +220,27 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
         }
     }
 
+    fn fn_item_in_domain(&self, desc: FnSlotDesc<'pcx>, item: CrateFnItem) -> bool {
+        let MatchSlot::ImplFn { fn_name, .. } = desc.slot else {
+            return true;
+        };
+        if self.collect.tcx.impl_of_method(item.def_id.to_def_id()).is_none() {
+            return false;
+        }
+        let name = fn_name.as_str();
+        if !name.starts_with('$') && name != "_" {
+            return item.fn_name == Some(fn_name);
+        }
+        true
+    }
+
     fn match_candidates(&mut self) {
         let mut bindings = MetaBindings::new(self.rust_items.meta.as_ref());
         let mut used_defs = Vec::new();
         let mut assignments = Vec::new();
+        let mut impl_pins = FxHashMap::default();
         // Types commit when slots assign; do not cartesian-product ty_vars first.
-        self.match_adt_slots(0, &mut bindings, &mut used_defs, &mut assignments);
+        self.match_adt_slots(0, &mut bindings, &mut used_defs, &mut assignments, &mut impl_pins);
     }
 
     fn at_max_results(&mut self) -> bool {
@@ -239,12 +258,13 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
         bindings: &mut MetaBindings<'tcx>,
         used_defs: &mut Vec<LocalDefId>,
         assignments: &mut Vec<SlotAssignment<'tcx>>,
+        impl_pins: &mut FxHashMap<Symbol, DefId>,
     ) {
         if self.at_max_results() {
             return;
         }
         if slot_i >= self.adt_slots.len() {
-            self.match_fn_slots(0, bindings, used_defs, assignments);
+            self.match_fn_slots(0, bindings, used_defs, assignments, impl_pins);
             return;
         }
 
@@ -275,7 +295,7 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
                 slot: desc.slot,
                 candidate: SlotCandidate::Adt(probe.candidate.clone()),
             });
-            self.match_adt_slots(slot_i + 1, &mut trial, used_defs, assignments);
+            self.match_adt_slots(slot_i + 1, &mut trial, used_defs, assignments, impl_pins);
             assignments.pop();
             used_defs.pop();
             self.adt_defs.get_mut(&desc.slot).unwrap().matched.unmatch();
@@ -288,6 +308,7 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
         bindings: &mut MetaBindings<'tcx>,
         used_defs: &mut Vec<LocalDefId>,
         assignments: &mut Vec<SlotAssignment<'tcx>>,
+        impl_pins: &mut FxHashMap<Symbol, DefId>,
     ) {
         if self.at_max_results() {
             return;
@@ -303,14 +324,14 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
         if desc.optional {
             // Optional slot may be skipped entirely (e.g. Concurrent `fn _` among required slots).
             self.fn_skipped[&desc.slot].set(true);
-            self.match_fn_slots(slot_i + 1, bindings, used_defs, assignments);
+            self.match_fn_slots(slot_i + 1, bindings, used_defs, assignments, impl_pins);
             self.fn_skipped[&desc.slot].set(false);
 
             for def_id in def_cands {
                 if used_defs.contains(&def_id) {
                     continue;
                 }
-                self.try_fn_candidate(desc, def_id, slot_i, bindings, used_defs, assignments);
+                self.try_fn_candidate(desc, def_id, slot_i, bindings, used_defs, assignments, impl_pins);
             }
         } else {
             // Required fn with empty domain fails this prefix.
@@ -321,7 +342,7 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
                 if used_defs.contains(&def_id) {
                     continue;
                 }
-                self.try_fn_candidate(desc, def_id, slot_i, bindings, used_defs, assignments);
+                self.try_fn_candidate(desc, def_id, slot_i, bindings, used_defs, assignments, impl_pins);
             }
         }
     }
@@ -334,7 +355,18 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
         bindings: &mut MetaBindings<'tcx>,
         used_defs: &mut Vec<LocalDefId>,
         assignments: &mut Vec<SlotAssignment<'tcx>>,
+        impl_pins: &mut FxHashMap<Symbol, DefId>,
     ) {
+        if let MatchSlot::ImplFn { impl_name, .. } = desc.slot {
+            let Some(impl_did) = self.collect.tcx.impl_of_method(def_id.to_def_id()) else {
+                return;
+            };
+            if let Some(&pinned) = impl_pins.get(&impl_name)
+                && pinned != impl_did
+            {
+                return;
+            }
+        }
         let item = self.fn_items.get(&(desc.slot, def_id)).copied().unwrap_or(CrateFnItem {
             def_id,
             header: None,
@@ -344,7 +376,7 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
         let env = bindings.clone();
         let collect = self.collect;
         collect.match_fn_slot(self.rust_items, &env, desc.fn_pat, item, |cand| {
-            self.commit_fn_candidate(desc, def_id, slot_i, bindings, used_defs, assignments, cand);
+            self.commit_fn_candidate(desc, def_id, slot_i, bindings, used_defs, assignments, impl_pins, cand);
         });
     }
 
@@ -356,6 +388,7 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
         bindings: &mut MetaBindings<'tcx>,
         used_defs: &mut Vec<LocalDefId>,
         assignments: &mut Vec<SlotAssignment<'tcx>>,
+        impl_pins: &mut FxHashMap<Symbol, DefId>,
         cand: FnSlotCandidate<'tcx>,
     ) {
         let mut trial = bindings.clone();
@@ -375,16 +408,47 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
             return;
         }
 
+        let mut new_impl_pin = None;
+        if let MatchSlot::ImplFn { impl_name, .. } = desc.slot {
+            let Some(impl_did) = self.collect.tcx.impl_of_method(def_id.to_def_id()) else {
+                self.fn_defs.get_mut(&desc.slot).unwrap().matched.unmatch();
+                self.unenest_fn_matched(desc.slot, &cand);
+                return;
+            };
+            if !impl_pins.contains_key(&impl_name) {
+                impl_pins.insert(impl_name, impl_did);
+                new_impl_pin = Some(impl_name);
+            }
+            if !self.collect.check_impl_constraints(
+                self.rust_items,
+                impl_name,
+                def_id,
+                desc.fn_pat,
+                &cand.matched,
+                &trial,
+            ) {
+                if let Some(name) = new_impl_pin {
+                    impl_pins.remove(&name);
+                }
+                self.fn_defs.get_mut(&desc.slot).unwrap().matched.unmatch();
+                self.unenest_fn_matched(desc.slot, &cand);
+                return;
+            }
+        }
+
         used_defs.push(def_id);
         assignments.push(SlotAssignment {
             slot: desc.slot,
             candidate: SlotCandidate::Fn(cand.clone()),
         });
 
-        self.match_fn_slots(slot_i + 1, &mut trial, used_defs, assignments);
+        self.match_fn_slots(slot_i + 1, &mut trial, used_defs, assignments, impl_pins);
 
         assignments.pop();
         used_defs.pop();
+        if let Some(name) = new_impl_pin {
+            impl_pins.remove(&name);
+        }
         self.fn_defs.get_mut(&desc.slot).unwrap().matched.unmatch();
         self.unenest_fn_matched(desc.slot, &cand);
     }
