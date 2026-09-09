@@ -79,6 +79,23 @@ pub struct SessionResult<'tcx> {
     pub primary_fn: Option<FnMatchContext<'tcx>>,
 }
 
+/// Session match output, including whether [`super::config::SessionConfig::max_results`] stopped
+/// the search.
+#[derive(Debug, Clone)]
+pub struct SessionOutcome<'tcx> {
+    pub results: Vec<SessionResult<'tcx>>,
+    pub truncated: bool,
+}
+
+impl<'tcx> SessionOutcome<'tcx> {
+    pub fn empty() -> Self {
+        Self {
+            results: Vec::new(),
+            truncated: false,
+        }
+    }
+}
+
 impl<'tcx> SessionResult<'tcx> {
     pub fn fn_assignment(&self, slot: MatchSlot) -> Option<&FnSlotCandidate<'tcx>> {
         self.assignments.iter().find_map(|a| {
@@ -129,10 +146,46 @@ impl<'tcx> SessionResult<'tcx> {
             })
     }
 
-    /// Key for [`PatternOperation`](rpl_context::pat::PatternOperation) negative filtering:
-    /// compare matches within the same function using full [`NormalizedMatched`] equality.
-    pub fn operation_match_key(&self) -> Option<(LocalDefId, &NormalizedMatched<'tcx>)> {
-        self.primary_fn_candidate().map(|c| (c.def_id, &c.normalized))
+    /// Whether this result can participate in
+    /// [`PatternOperation`](rpl_context::pat::PatternOperation) subtraction (`p - q`). Results
+    /// with no function slot are never filtered.
+    pub fn has_operation_key(&self) -> bool {
+        self.primary_fn_candidate().is_some()
+    }
+
+    /// Negative filter for `p - q`: mapped SharedEnv plus alignable slot DefIds.
+    ///
+    /// Does **not** compare [`NormalizedMatched`] (MIR locations). Slots present on only
+    /// one side (e.g. a single-fn negative vs a multi-fn positive) are ignored.
+    pub fn subtracted_by(&self, neg: &Self) -> bool {
+        let Some(pos_primary) = self.primary_fn_candidate() else {
+            return false;
+        };
+        let Some(neg_primary) = neg.primary_fn_candidate() else {
+            return false;
+        };
+        if pos_primary.def_id != neg_primary.def_id {
+            return false;
+        }
+        if !self.bindings.equivalent_to(&neg.bindings) {
+            return false;
+        }
+        for a in &self.assignments {
+            let Some(neg_a) = neg.assignments.iter().find(|b| b.slot == a.slot) else {
+                continue;
+            };
+            if assignment_def_id(a) != assignment_def_id(neg_a) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
+fn assignment_def_id(a: &SlotAssignment<'_>) -> LocalDefId {
+    match &a.candidate {
+        SlotCandidate::Fn(c) => c.def_id,
+        SlotCandidate::Adt(c) => c.def_id,
     }
 }
 

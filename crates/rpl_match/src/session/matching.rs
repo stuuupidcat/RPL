@@ -23,7 +23,7 @@ use crate::session::collect::MatchCollectCtxt;
 use crate::session::config::SessionConfig;
 use crate::session::slot::{
     AdtSlotCandidate, AdtSlotDesc, CrateFnItem, CrateItemIndex, FnMatchContext, FnSlotCandidate, FnSlotDesc, MatchSlot,
-    SessionResult, SlotAssignment, SlotCandidate,
+    SessionOutcome, SessionResult, SlotAssignment, SlotCandidate,
 };
 
 /// Pattern local owned by a fn slot.
@@ -143,7 +143,7 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
         rust_items: &'pcx pat::RustItems<'pcx>,
         fn_slots: &'a [FnSlotDesc<'pcx>],
         adt_slots: &'a [AdtSlotDesc<'pcx>],
-    ) -> Vec<SessionResult<'tcx>> {
+    ) -> SessionOutcome<'tcx> {
         let meta = rust_items.meta.as_ref();
         let mut matching = Self {
             collect,
@@ -182,7 +182,10 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
                 "session matching truncated at max_results; results may be incomplete"
             );
         }
-        matching.results
+        SessionOutcome {
+            results: matching.results,
+            truncated: matching.truncated,
+        }
     }
 
     fn probe(&mut self, index: &CrateItemIndex) {
@@ -244,7 +247,7 @@ impl<'a, 'pcx, 'tcx> SessionMatching<'a, 'pcx, 'tcx> {
     }
 
     fn at_max_results(&mut self) -> bool {
-        if self.config.max_results > 0 && self.results.len() >= self.config.max_results {
+        if self.config.is_at_cap(self.results.len()) {
             self.truncated = true;
             true
         } else {

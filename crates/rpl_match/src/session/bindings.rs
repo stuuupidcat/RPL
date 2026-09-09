@@ -1,5 +1,5 @@
 use rpl_constraints::Const;
-use rpl_context::pat::{ConstVarIdx, NonLocalMetaVars, PlaceVarIdx, TyVarIdx};
+use rpl_context::pat::{ConstVarIdx, MatchedMap, NonLocalMetaVars, PlaceVarIdx, TyVarIdx};
 use rustc_data_structures::fx::FxHashMap;
 use rustc_hir::def_id::DefId;
 use rustc_index::IndexVec;
@@ -210,6 +210,17 @@ impl<'tcx> MetaBindings<'tcx> {
             && self.const_vars == other.const_vars
             && self.adt_fields == other.adt_fields
             && self.adt_defs == other.adt_defs
+    }
+
+    /// Project SharedEnv into another pattern's metavar index space (`MatchedMap`).
+    pub fn map(&self, map: &MatchedMap) -> Self {
+        Self {
+            ty_vars: IndexVec::from_fn_n(|i| self.ty_vars[map.ty_vars[i]], map.ty_vars.len()),
+            const_vars: IndexVec::from_fn_n(|i| self.const_vars[map.const_vars[i]], map.const_vars.len()),
+            place_vars: IndexVec::from_fn_n(|i| self.place_vars[map.place_vars[i]], map.place_vars.len()),
+            adt_fields: self.adt_fields.clone(),
+            adt_defs: self.adt_defs.clone(),
+        }
     }
 }
 

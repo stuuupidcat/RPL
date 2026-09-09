@@ -55,6 +55,6 @@ pub use fns::MatchFnCtxt;
 pub use place::MatchPlaceCtxt;
 pub use session::{
     BindingSnapshot, CrateItemIndex, FnSlotCandidate, MatchCollectCtxt, MatchSession, MatchSlot, MetaBindings,
-    MultiMatched, OwnedLintMatch, SessionConfig, SessionLintTarget, SessionResult,
+    MultiMatched, OwnedLintMatch, SessionConfig, SessionLintTarget, SessionOutcome, SessionResult,
 };
 pub use ty::{MatchTyCtxt, TryCmpAs};

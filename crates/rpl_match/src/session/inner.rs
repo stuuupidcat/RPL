@@ -1,10 +1,11 @@
 use rpl_context::pat::{self, PatternItem};
-use rustc_hir::def_id::LocalDefId;
 
 use crate::session::collect::MatchCollectCtxt;
 use crate::session::config::SessionConfig;
 use crate::session::matching::SessionMatching;
-use crate::session::slot::{CrateItemIndex, MatchSlot, SessionResult, SlotCandidate, collect_slot_descs};
+use crate::session::slot::{
+    CrateItemIndex, MatchSlot, SessionOutcome, SessionResult, SlotCandidate, collect_slot_descs,
+};
 
 /// Orchestrates candidate collection and multi-slot matching for one pattern item.
 pub struct MatchSession<'a, 'pcx, 'tcx> {
@@ -25,16 +26,17 @@ impl<'a, 'pcx, 'tcx> MatchSession<'a, 'pcx, 'tcx> {
         &self,
         index: &CrateItemIndex,
         rust_items: &'pcx pat::RustItems<'pcx>,
-    ) -> Vec<SessionResult<'tcx>> {
+    ) -> SessionOutcome<'tcx> {
         let (fn_slots, adt_slots) = collect_slot_descs(rust_items);
 
         if fn_slots.is_empty() && adt_slots.is_empty() {
-            return Vec::new();
+            return SessionOutcome::empty();
         }
 
-        let mut results = SessionMatching::run(&self.collect, self.config, index, rust_items, &fn_slots, &adt_slots);
-        self.enrich_results(index, &mut results);
-        Self::deduplicate_results(rust_items.attr.should_deduplicate(), results)
+        let mut outcome = SessionMatching::run(&self.collect, self.config, index, rust_items, &fn_slots, &adt_slots);
+        self.enrich_results(index, &mut outcome.results);
+        outcome.results = Self::deduplicate_results(rust_items.attr.should_deduplicate(), outcome.results);
+        outcome
     }
 
     fn deduplicate_results(deduplicate: bool, results: Vec<SessionResult<'tcx>>) -> Vec<SessionResult<'tcx>> {
@@ -70,12 +72,13 @@ impl<'a, 'pcx, 'tcx> MatchSession<'a, 'pcx, 'tcx> {
         &self,
         index: &CrateItemIndex,
         pat_item: &'pcx PatternItem<'pcx>,
-    ) -> Vec<SessionResult<'tcx>> {
+    ) -> SessionOutcome<'tcx> {
         match pat_item {
             PatternItem::RustItems(items) => self.match_rust_items(index, items),
             PatternItem::RPLPatternOperation(op) => {
-                let results = self.match_pattern_operation(index, op);
-                Self::deduplicate_results(op.attr.should_deduplicate(), results)
+                let mut outcome = self.match_pattern_operation(index, op);
+                outcome.results = Self::deduplicate_results(op.attr.should_deduplicate(), outcome.results);
+                outcome
             },
         }
     }
@@ -84,14 +87,15 @@ impl<'a, 'pcx, 'tcx> MatchSession<'a, 'pcx, 'tcx> {
         &self,
         index: &CrateItemIndex,
         op: &pat::PatternOperation<'pcx>,
-    ) -> Vec<SessionResult<'tcx>> {
+    ) -> SessionOutcome<'tcx> {
+        let mut truncated = false;
         let positive: Vec<_> = op
             .positive
             .iter()
             .flat_map(|(_, item, map)| {
-                self.match_pattern_item(index, item)
-                    .into_iter()
-                    .map(|result| result.map_bindings(map))
+                let out = self.match_pattern_item(index, item);
+                truncated |= out.truncated;
+                out.results.into_iter().map(|result| result.map_bindings(map))
             })
             .collect();
 
@@ -99,24 +103,23 @@ impl<'a, 'pcx, 'tcx> MatchSession<'a, 'pcx, 'tcx> {
             .negative
             .iter()
             .flat_map(|(_, item, map)| {
-                self.match_pattern_item(index, item)
-                    .into_iter()
-                    .map(|result| result.map_bindings(map))
+                let out = self.match_pattern_item(index, item);
+                truncated |= out.truncated;
+                out.results.into_iter().map(|result| result.map_bindings(map))
             })
             .collect();
 
-        positive
+        let results = positive
             .into_iter()
             .filter(|pos| {
-                let Some((pos_def, pos_norm)) = pos.operation_match_key() else {
+                if !pos.has_operation_key() {
                     return true;
-                };
-                !negative.iter().any(|neg| {
-                    neg.operation_match_key()
-                        .is_some_and(|(neg_def, neg_norm)| pos_def == neg_def && pos_norm == neg_norm)
-                })
+                }
+                !negative.iter().any(|neg| pos.subtracted_by(neg))
             })
-            .collect()
+            .collect();
+
+        SessionOutcome { results, truncated }
     }
 }
 
@@ -137,13 +140,13 @@ impl SessionResult<'_> {
             .collect();
         Self {
             assignments,
-            bindings: self.bindings,
+            bindings: self.bindings.map(map),
             primary_fn: self.primary_fn,
         }
     }
 
     /// Slot → DefId assignment key (order-sensitive by slot identity, not DefId set).
-    fn slot_def_signature(&self) -> Vec<(MatchSlot, LocalDefId)> {
+    fn slot_def_signature(&self) -> Vec<(MatchSlot, rustc_hir::def_id::LocalDefId)> {
         let mut sig: Vec<_> = self
             .assignments
             .iter()
